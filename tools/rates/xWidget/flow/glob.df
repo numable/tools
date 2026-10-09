@@ -1,0 +1,2095 @@
+{
+  "_note": "各国 10 年(mode=world)与利率总表(mode=board):美国财政部名义 / 实际曲线 + 德国央行 + 日本财务省。全部收盘口径。财政部当年文件取不到 = 失败(G26);德国 / 日本缺了只让那一行写 --。日本只有当月文件,故只有日变化。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出。切语言 = 整盘重取,数据缓存含 locale。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      },
+      "_note": "今年(按设备时区;跨年那几个小时差一天无妨:两年的文件都会取)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[parseNumber::(calc::(${y0}-1),0)]"
+      },
+      "_note": "去年。⚠️ 进 URL 的数字过 parseNumber(Android calc 返回 2025.0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "modeIn",
+        "value": "$[findNotEmpty::(${mode},world)]"
+      },
+      "_note": "入参落地(勿删)。mode = world(各国 10 年)/ board(利率总表)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bN",
+        "value": "$[if::(eq::(${modeIn},board),372,10)]"
+      },
+      "_note": "德国央行取几个**日历日**(周末也占一行):总表要往前 250 个交易日 ≈ 365 天;各国 10 年只要最近两个交易日,10 天兜住长假。"
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "nc",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "np",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y1}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y1}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "rc",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_real_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "rp",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y1}/all?type=daily_treasury_real_yield_curve&field_tdr_date_value=${y1}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "de",
+          "action": "request",
+          "params": {
+            "url": "https://api.statistiken.bundesbank.de/rest/data/BBSIS/D.I.ZAR.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?lastNObservations=${bN}&format=csv&lang=en",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000"
+          },
+          "_note": "德国央行 10 年(期限结构推算)。"
+        },
+        {
+          "id": "jp",
+          "action": "request",
+          "params": {
+            "url": "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/jgbcme.csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000"
+          },
+          "_note": "日本财务省当月 CSV。"
+        }
+      ],
+      "_note": "六个请求互不依赖,并发一次往返。德国 / 日本取不到只让那一行写 --,不让整张卡失败。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nok",
+        "value": "$[if::(startsWith::(findNotEmpty::(${nc},),Date),1,0)]"
+      },
+      "_note": "当年文件必须是 CSV(以列头 Date 开头);拿到的是错误页 / 空串 = 取数失败(G26),不许拿去年的数冒充最新。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${nok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nokP",
+        "value": "$[if::(startsWith::(findNotEmpty::(${np},),Date),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${nokP},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury (previous year) unavailable"
+          }
+        }
+      ],
+      "_note": "要算「1 年前」/ 一年走势的流,上一年文件同样必需;缺了宁可失败(宿主贴上次成功的那帧),也不画半截。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nA",
+        "value": "$[split::(${nc},\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nP",
+        "value": "$[split::(findNotEmpty::(${np},),\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ndC",
+        "value": "$[parseNumber::(calc::(length::(${nA})-1),0)]"
+      },
+      "_note": "当年数据行数(第 0 行是列头;末尾空串已被 split 去掉)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nc"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "np"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rL",
+        "value": "$[findNotEmpty::(if::(le::(1,${ndC}),index::(${nA},1),index::(${nP},calc::(1-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rD",
+        "value": "$[findNotEmpty::(if::(le::(2,${ndC}),index::(${nA},2),index::(${nP},calc::(2-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rM",
+        "value": "$[findNotEmpty::(if::(le::(22,${ndC}),index::(${nA},22),index::(${nP},calc::(22-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rY",
+        "value": "$[findNotEmpty::(if::(le::(251,${ndC}),index::(${nA},251),index::(${nP},calc::(251-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nP"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rok",
+        "value": "$[if::(startsWith::(findNotEmpty::(${rc},),Date),1,0)]"
+      },
+      "_note": "当年文件必须是 CSV(以列头 Date 开头);拿到的是错误页 / 空串 = 取数失败(G26),不许拿去年的数冒充最新。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${rok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rokP",
+        "value": "$[if::(startsWith::(findNotEmpty::(${rp},),Date),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rA",
+        "value": "$[split::(${rc},\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rP",
+        "value": "$[split::(findNotEmpty::(${rp},),\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rdC",
+        "value": "$[parseNumber::(calc::(length::(${rA})-1),0)]"
+      },
+      "_note": "当年数据行数(第 0 行是列头;末尾空串已被 split 去掉)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rc"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rp"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tL",
+        "value": "$[findNotEmpty::(if::(le::(1,${rdC}),index::(${rA},1),index::(${rP},calc::(1-${rdC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tD",
+        "value": "$[findNotEmpty::(if::(le::(2,${rdC}),index::(${rA},2),index::(${rP},calc::(2-${rdC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tM",
+        "value": "$[findNotEmpty::(if::(le::(22,${rdC}),index::(${rA},22),index::(${rP},calc::(22-${rdC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tY",
+        "value": "$[findNotEmpty::(if::(le::(251,${rdC}),index::(${rA},251),index::(${rP},calc::(251-${rdC}))),)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rP"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dL",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(gt::(length::(findNotEmpty::(${dL},)),9),connect::(subString::(${dL},0,2),-,subString::(${dL},3,5)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us3mL",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us3mD",
+        "value": "$[findNotEmpty::(index::(split::(${rD},\\,),4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us3mM",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us3mY",
+        "value": "$[findNotEmpty::(index::(split::(${rY},\\,),4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us2yL",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us2yD",
+        "value": "$[findNotEmpty::(index::(split::(${rD},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us2yM",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us2yY",
+        "value": "$[findNotEmpty::(index::(split::(${rY},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us10yL",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us10yD",
+        "value": "$[findNotEmpty::(index::(split::(${rD},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us10yM",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us10yY",
+        "value": "$[findNotEmpty::(index::(split::(${rY},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us30yL",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),14),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us30yD",
+        "value": "$[findNotEmpty::(index::(split::(${rD},\\,),14),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us30yM",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),14),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "us30yY",
+        "value": "$[findNotEmpty::(index::(split::(${rY},\\,),14),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usr10L",
+        "value": "$[findNotEmpty::(index::(split::(${tL},\\,),3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2s10L",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us2yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),calc::(${us10yL}-${us2yL}),)]"
+      },
+      "_note": "利差与收益率同一单位(百分点)存,变化走同一套 bp() 换算(×100 = 基点)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usr10D",
+        "value": "$[findNotEmpty::(index::(split::(${tD},\\,),3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2s10D",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us10yD},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us2yD},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),calc::(${us10yD}-${us2yD}),)]"
+      },
+      "_note": "利差与收益率同一单位(百分点)存,变化走同一套 bp() 换算(×100 = 基点)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usr10M",
+        "value": "$[findNotEmpty::(index::(split::(${tM},\\,),3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2s10M",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us10yM},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us2yM},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),calc::(${us10yM}-${us2yM}),)]"
+      },
+      "_note": "利差与收益率同一单位(百分点)存,变化走同一套 bp() 换算(×100 = 基点)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usr10Y",
+        "value": "$[findNotEmpty::(index::(split::(${tY},\\,),3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2s10Y",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us10yY},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us2yY},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),calc::(${us10yY}-${us2yY}),)]"
+      },
+      "_note": "利差与收益率同一单位(百分点)存,变化走同一套 bp() 换算(×100 = 基点)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rL"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rY"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tL"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tY"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usN",
+        "value": "$[calc::(parseNumber::(findNotEmpty::(index::(split::(${dL},/),2),0),0)*10000+parseNumber::(findNotEmpty::(index::(split::(${dL},/),0),0),0)*100+parseNumber::(findNotEmpty::(index::(split::(${dL},/),1),0),0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "deA",
+        "value": "$[split::(replaceAll::(findNotEmpty::(${de},),[0-9]+-[0-9]+-[0-9]+\\,[.]\\,[^\\n]*\\n?,),\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "deN",
+        "value": "$[parseNumber::(length::(${deA}),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "de"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "deL",
+        "value": "$[findNotEmpty::(index::(split::(index::(${deA},calc::(${deN}-1)),\\,),1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "deD",
+        "value": "$[findNotEmpty::(index::(split::(index::(${deA},calc::(${deN}-2)),\\,),1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "deM",
+        "value": "$[if::(gt::(${deN},31),findNotEmpty::(index::(split::(index::(${deA},calc::(${deN}-22)),\\,),1),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "deY",
+        "value": "$[if::(gt::(${deN},260),findNotEmpty::(index::(split::(index::(${deA},calc::(${deN}-251)),\\,),1),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "den1",
+        "value": "$[parseNumber::(replaceAll::(findNotEmpty::(index::(split::(index::(${deA},calc::(${deN}-1)),\\,),0),0),-,),0)]"
+      },
+      "_note": "最新 / 前一个交易日的日期 → 数字 yyyymmdd(跨国利差按同一天对齐用)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "den2",
+        "value": "$[parseNumber::(replaceAll::(findNotEmpty::(index::(split::(index::(${deA},calc::(${deN}-2)),\\,),0),0),-,),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "deA"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "de10L",
+        "value": "${deL}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "de10D",
+        "value": "${deD}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "de10M",
+        "value": "${deM}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "de10Y",
+        "value": "${deY}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpA",
+        "value": "$[split::(findNotEmpty::(${jp},),\\r?\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpN",
+        "value": "$[parseNumber::(length::(${jpA}),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jp"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpj",
+        "value": "$[if::(matches::(findNotEmpty::(index::(${jpA},calc::(${jpN}-1)),x),^20[0-9][0-9]/),1,if::(matches::(findNotEmpty::(index::(${jpA},calc::(${jpN}-2)),x),^20[0-9][0-9]/),2,if::(matches::(findNotEmpty::(index::(${jpA},calc::(${jpN}-3)),x),^20[0-9][0-9]/),3,if::(matches::(findNotEmpty::(index::(${jpA},calc::(${jpN}-4)),x),^20[0-9][0-9]/),4,0))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpL",
+        "value": "$[if::(gt::(${jpj},0),findNotEmpty::(index::(split::(index::(${jpA},calc::(${jpN}-${jpj})),\\,),10),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpn1",
+        "value": "$[if::(gt::(${jpj},0),calc::(parseNumber::(findNotEmpty::(index::(split::(index::(split::(index::(${jpA},calc::(${jpN}-${jpj})),\\,),0),/),0),0),0)*10000+parseNumber::(findNotEmpty::(index::(split::(index::(split::(index::(${jpA},calc::(${jpN}-${jpj})),\\,),0),/),1),0),0)*100+parseNumber::(findNotEmpty::(index::(split::(index::(split::(index::(${jpA},calc::(${jpN}-${jpj})),\\,),0),/),2),0),0)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpn2",
+        "value": "$[if::(gt::(${jpj},0),calc::(parseNumber::(findNotEmpty::(index::(split::(index::(split::(index::(${jpA},calc::(${jpN}-${jpj}-1)),\\,),0),/),0),0),0)*10000+parseNumber::(findNotEmpty::(index::(split::(index::(split::(index::(${jpA},calc::(${jpN}-${jpj}-1)),\\,),0),/),1),0),0)*100+parseNumber::(findNotEmpty::(index::(split::(index::(split::(index::(${jpA},calc::(${jpN}-${jpj}-1)),\\,),0),/),2),0),0)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpD",
+        "value": "$[if::(and::(gt::(${jpj},0),matches::(findNotEmpty::(index::(${jpA},calc::(${jpN}-${jpj}-1)),x),^20[0-9][0-9]/)),findNotEmpty::(index::(split::(index::(${jpA},calc::(${jpN}-${jpj}-1)),\\,),10),),)]"
+      },
+      "_note": "前一天也必须在本月文件里(月初第一天没有前一天 → 日变化写 --)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jpA"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jp10L",
+        "value": "${jpL}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jp10D",
+        "value": "${jpD}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jp10M",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jp10Y",
+        "value": ""
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${modeIn},world),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "w_us",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${us10yL},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w_de",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${de10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${de10L},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w_jp",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${jp10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${jp10L},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wusv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us10yD},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us10yL}-${us10yD})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wusn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wusv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${wusv},0),${wusv},calc::(0-${wusv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wust",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wusv},__none__),__none__),0,1),0),--,if::(eq::(${wusn},0),if::(eq::(${zh},1),持平,flat),if::(gt::(${wusv},0),if::(eq::(${zh},1),+${wusn} 基点,+${wusn} bp),if::(eq::(${zh},1),−${wusn} 基点,−${wusn} bp))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wusu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wusv},__none__),__none__),0,1),0),n,if::(gt::(${wusv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wusf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wusv},__none__),__none__),0,1),0),0,if::(eq::(${wusn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wdev",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${de10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${de10D},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${de10L}-${de10D})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wden",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wdev},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${wdev},0),${wdev},calc::(0-${wdev})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wdet",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wdev},__none__),__none__),0,1),0),--,if::(eq::(${wden},0),if::(eq::(${zh},1),持平,flat),if::(gt::(${wdev},0),if::(eq::(${zh},1),+${wden} 基点,+${wden} bp),if::(eq::(${zh},1),−${wden} 基点,−${wden} bp))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wdeu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wdev},__none__),__none__),0,1),0),n,if::(gt::(${wdev},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wdef",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wdev},__none__),__none__),0,1),0),0,if::(eq::(${wden},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wjpv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${jp10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${jp10D},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${jp10L}-${jp10D})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wjpn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wjpv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${wjpv},0),${wjpv},calc::(0-${wjpv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wjpt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wjpv},__none__),__none__),0,1),0),--,if::(eq::(${wjpn},0),if::(eq::(${zh},1),持平,flat),if::(gt::(${wjpv},0),if::(eq::(${zh},1),+${wjpn} 基点,+${wjpn} bp),if::(eq::(${zh},1),−${wjpn} 基点,−${wjpn} bp))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wjpu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wjpv},__none__),__none__),0,1),0),n,if::(gt::(${wjpv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wjpf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${wjpv},__none__),__none__),0,1),0),0,if::(eq::(${wjpn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w_us2",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${us2yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${us2yL},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "deS",
+            "value": "$[if::(eq::(${den1},${usN}),${deL},if::(eq::(${den2},${usN}),${deD},if::(lt::(${den1},${usN}),${deL},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "jpS",
+            "value": "$[if::(eq::(${jpn1},${usN}),${jpL},if::(eq::(${jpn2},${usN}),${jpD},if::(lt::(${jpn1},${usN}),${jpL},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xdev",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${deS},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${deS}-${us10yL})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xden",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xdev},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${xdev},0),${xdev},calc::(0-${xdev})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xdet",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xdev},__none__),__none__),0,1),0),--,if::(eq::(${xden},0),0,if::(gt::(${xdev},0),+${xden},−${xden})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xdeu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xdev},__none__),__none__),0,1),0),n,if::(gt::(${xdev},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xdef",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xdev},__none__),__none__),0,1),0),0,if::(eq::(${xden},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xjpv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${jpS},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${jpS}-${us10yL})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xjpn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xjpv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${xjpv},0),${xjpv},calc::(0-${xjpv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xjpt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xjpv},__none__),__none__),0,1),0),--,if::(eq::(${xjpn},0),0,if::(gt::(${xjpv},0),+${xjpn},−${xjpn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xjpu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xjpv},__none__),__none__),0,1),0),n,if::(gt::(${xjpv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xjpf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xjpv},__none__),__none__),0,1),0),0,if::(eq::(${xjpn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xdeT",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xdev},__none__),__none__),0,1),1),${xdet},--)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xjpT",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xjpv},__none__),__none__),0,1),1),${xjpt},--)]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${modeIn},board),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "b0v",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${us3mL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${us3mL},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0dv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us3mL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us3mD},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us3mL}-${us3mD})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0dn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0dv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b0dv},0),${b0dv},calc::(0-${b0dv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0dt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0dv},__none__),__none__),0,1),0),--,if::(eq::(${b0dn},0),0,if::(gt::(${b0dv},0),+${b0dn},−${b0dn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0du",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0dv},__none__),__none__),0,1),0),n,if::(gt::(${b0dv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0df",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0dv},__none__),__none__),0,1),0),0,if::(eq::(${b0dn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0mv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us3mL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us3mM},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us3mL}-${us3mM})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0mn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0mv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b0mv},0),${b0mv},calc::(0-${b0mv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0mt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0mv},__none__),__none__),0,1),0),--,if::(eq::(${b0mn},0),0,if::(gt::(${b0mv},0),+${b0mn},−${b0mn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0mu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0mv},__none__),__none__),0,1),0),n,if::(gt::(${b0mv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0mf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0mv},__none__),__none__),0,1),0),0,if::(eq::(${b0mn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0yv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us3mL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us3mY},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us3mL}-${us3mY})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0yn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0yv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b0yv},0),${b0yv},calc::(0-${b0yv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0yt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0yv},__none__),__none__),0,1),0),--,if::(eq::(${b0yn},0),0,if::(gt::(${b0yv},0),+${b0yn},−${b0yn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0yu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0yv},__none__),__none__),0,1),0),n,if::(gt::(${b0yv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0yf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b0yv},__none__),__none__),0,1),0),0,if::(eq::(${b0yn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1v",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${us2yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${us2yL},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1dv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us2yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us2yD},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us2yL}-${us2yD})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1dn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1dv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b1dv},0),${b1dv},calc::(0-${b1dv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1dt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1dv},__none__),__none__),0,1),0),--,if::(eq::(${b1dn},0),0,if::(gt::(${b1dv},0),+${b1dn},−${b1dn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1du",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1dv},__none__),__none__),0,1),0),n,if::(gt::(${b1dv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1df",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1dv},__none__),__none__),0,1),0),0,if::(eq::(${b1dn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1mv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us2yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us2yM},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us2yL}-${us2yM})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1mn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1mv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b1mv},0),${b1mv},calc::(0-${b1mv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1mt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1mv},__none__),__none__),0,1),0),--,if::(eq::(${b1mn},0),0,if::(gt::(${b1mv},0),+${b1mn},−${b1mn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1mu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1mv},__none__),__none__),0,1),0),n,if::(gt::(${b1mv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1mf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1mv},__none__),__none__),0,1),0),0,if::(eq::(${b1mn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1yv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us2yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us2yY},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us2yL}-${us2yY})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1yn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1yv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b1yv},0),${b1yv},calc::(0-${b1yv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1yt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1yv},__none__),__none__),0,1),0),--,if::(eq::(${b1yn},0),0,if::(gt::(${b1yv},0),+${b1yn},−${b1yn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1yu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1yv},__none__),__none__),0,1),0),n,if::(gt::(${b1yv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1yf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b1yv},__none__),__none__),0,1),0),0,if::(eq::(${b1yn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2v",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${us10yL},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2dv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us10yD},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us10yL}-${us10yD})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2dn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2dv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b2dv},0),${b2dv},calc::(0-${b2dv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2dt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2dv},__none__),__none__),0,1),0),--,if::(eq::(${b2dn},0),0,if::(gt::(${b2dv},0),+${b2dn},−${b2dn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2du",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2dv},__none__),__none__),0,1),0),n,if::(gt::(${b2dv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2df",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2dv},__none__),__none__),0,1),0),0,if::(eq::(${b2dn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2mv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us10yM},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us10yL}-${us10yM})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2mn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2mv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b2mv},0),${b2mv},calc::(0-${b2mv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2mt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2mv},__none__),__none__),0,1),0),--,if::(eq::(${b2mn},0),0,if::(gt::(${b2mv},0),+${b2mn},−${b2mn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2mu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2mv},__none__),__none__),0,1),0),n,if::(gt::(${b2mv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2mf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2mv},__none__),__none__),0,1),0),0,if::(eq::(${b2mn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2yv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us10yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us10yY},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us10yL}-${us10yY})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2yn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2yv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b2yv},0),${b2yv},calc::(0-${b2yv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2yt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2yv},__none__),__none__),0,1),0),--,if::(eq::(${b2yn},0),0,if::(gt::(${b2yv},0),+${b2yn},−${b2yn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2yu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2yv},__none__),__none__),0,1),0),n,if::(gt::(${b2yv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2yf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b2yv},__none__),__none__),0,1),0),0,if::(eq::(${b2yn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3v",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${us30yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${us30yL},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3dv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us30yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us30yD},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us30yL}-${us30yD})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3dn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3dv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b3dv},0),${b3dv},calc::(0-${b3dv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3dt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3dv},__none__),__none__),0,1),0),--,if::(eq::(${b3dn},0),0,if::(gt::(${b3dv},0),+${b3dn},−${b3dn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3du",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3dv},__none__),__none__),0,1),0),n,if::(gt::(${b3dv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3df",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3dv},__none__),__none__),0,1),0),0,if::(eq::(${b3dn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3mv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us30yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us30yM},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us30yL}-${us30yM})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3mn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3mv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b3mv},0),${b3mv},calc::(0-${b3mv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3mt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3mv},__none__),__none__),0,1),0),--,if::(eq::(${b3mn},0),0,if::(gt::(${b3mv},0),+${b3mn},−${b3mn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3mu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3mv},__none__),__none__),0,1),0),n,if::(gt::(${b3mv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3mf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3mv},__none__),__none__),0,1),0),0,if::(eq::(${b3mn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3yv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${us30yL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${us30yY},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${us30yL}-${us30yY})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3yn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3yv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b3yv},0),${b3yv},calc::(0-${b3yv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3yt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3yv},__none__),__none__),0,1),0),--,if::(eq::(${b3yn},0),0,if::(gt::(${b3yv},0),+${b3yn},−${b3yn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3yu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3yv},__none__),__none__),0,1),0),n,if::(gt::(${b3yv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3yf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b3yv},__none__),__none__),0,1),0),0,if::(eq::(${b3yn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4v",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${usr10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${usr10L},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4dv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${usr10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${usr10D},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${usr10L}-${usr10D})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4dn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4dv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b4dv},0),${b4dv},calc::(0-${b4dv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4dt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4dv},__none__),__none__),0,1),0),--,if::(eq::(${b4dn},0),0,if::(gt::(${b4dv},0),+${b4dn},−${b4dn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4du",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4dv},__none__),__none__),0,1),0),n,if::(gt::(${b4dv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4df",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4dv},__none__),__none__),0,1),0),0,if::(eq::(${b4dn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4mv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${usr10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${usr10M},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${usr10L}-${usr10M})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4mn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4mv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b4mv},0),${b4mv},calc::(0-${b4mv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4mt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4mv},__none__),__none__),0,1),0),--,if::(eq::(${b4mn},0),0,if::(gt::(${b4mv},0),+${b4mn},−${b4mn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4mu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4mv},__none__),__none__),0,1),0),n,if::(gt::(${b4mv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4mf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4mv},__none__),__none__),0,1),0),0,if::(eq::(${b4mn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4yv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${usr10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${usr10Y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${usr10L}-${usr10Y})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4yn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4yv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b4yv},0),${b4yv},calc::(0-${b4yv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4yt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4yv},__none__),__none__),0,1),0),--,if::(eq::(${b4yn},0),0,if::(gt::(${b4yv},0),+${b4yn},−${b4yn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4yu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4yv},__none__),__none__),0,1),0),n,if::(gt::(${b4yv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4yf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b4yv},__none__),__none__),0,1),0),0,if::(eq::(${b4yn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5v",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${s2s10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),if::(ge::(${s2s10L},0),+parseNumber::(round::(calc::(${s2s10L}*100)),0),−parseNumber::(round::(calc::((0-${s2s10L})*100)),0)),)]"
+          },
+          "_note": "利差这一行的「值」也写基点(+48),与右边三列同一单位。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5dv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${s2s10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${s2s10D},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${s2s10L}-${s2s10D})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5dn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5dv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b5dv},0),${b5dv},calc::(0-${b5dv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5dt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5dv},__none__),__none__),0,1),0),--,if::(eq::(${b5dn},0),0,if::(gt::(${b5dv},0),+${b5dn},−${b5dn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5du",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5dv},__none__),__none__),0,1),0),n,if::(gt::(${b5dv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5df",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5dv},__none__),__none__),0,1),0),0,if::(eq::(${b5dn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5mv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${s2s10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${s2s10M},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${s2s10L}-${s2s10M})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5mn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5mv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b5mv},0),${b5mv},calc::(0-${b5mv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5mt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5mv},__none__),__none__),0,1),0),--,if::(eq::(${b5mn},0),0,if::(gt::(${b5mv},0),+${b5mn},−${b5mn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5mu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5mv},__none__),__none__),0,1),0),n,if::(gt::(${b5mv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5mf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5mv},__none__),__none__),0,1),0),0,if::(eq::(${b5mn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5yv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${s2s10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${s2s10Y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${s2s10L}-${s2s10Y})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5yn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5yv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b5yv},0),${b5yv},calc::(0-${b5yv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5yt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5yv},__none__),__none__),0,1),0),--,if::(eq::(${b5yn},0),0,if::(gt::(${b5yv},0),+${b5yn},−${b5yn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5yu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5yv},__none__),__none__),0,1),0),n,if::(gt::(${b5yv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b5yf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b5yv},__none__),__none__),0,1),0),0,if::(eq::(${b5yn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6v",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${de10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${de10L},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6dv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${de10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${de10D},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${de10L}-${de10D})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6dn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6dv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b6dv},0),${b6dv},calc::(0-${b6dv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6dt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6dv},__none__),__none__),0,1),0),--,if::(eq::(${b6dn},0),0,if::(gt::(${b6dv},0),+${b6dn},−${b6dn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6du",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6dv},__none__),__none__),0,1),0),n,if::(gt::(${b6dv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6df",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6dv},__none__),__none__),0,1),0),0,if::(eq::(${b6dn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6mv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${de10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${de10M},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${de10L}-${de10M})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6mn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6mv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b6mv},0),${b6mv},calc::(0-${b6mv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6mt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6mv},__none__),__none__),0,1),0),--,if::(eq::(${b6mn},0),0,if::(gt::(${b6mv},0),+${b6mn},−${b6mn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6mu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6mv},__none__),__none__),0,1),0),n,if::(gt::(${b6mv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6mf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6mv},__none__),__none__),0,1),0),0,if::(eq::(${b6mn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6yv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${de10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${de10Y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${de10L}-${de10Y})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6yn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6yv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b6yv},0),${b6yv},calc::(0-${b6yv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6yt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6yv},__none__),__none__),0,1),0),--,if::(eq::(${b6yn},0),0,if::(gt::(${b6yv},0),+${b6yn},−${b6yn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6yu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6yv},__none__),__none__),0,1),0),n,if::(gt::(${b6yv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b6yf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b6yv},__none__),__none__),0,1),0),0,if::(eq::(${b6yn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7v",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${jp10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${jp10L},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7dv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${jp10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${jp10D},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${jp10L}-${jp10D})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7dn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7dv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b7dv},0),${b7dv},calc::(0-${b7dv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7dt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7dv},__none__),__none__),0,1),0),--,if::(eq::(${b7dn},0),0,if::(gt::(${b7dv},0),+${b7dn},−${b7dn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7du",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7dv},__none__),__none__),0,1),0),n,if::(gt::(${b7dv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7df",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7dv},__none__),__none__),0,1),0),0,if::(eq::(${b7dn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7mv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${jp10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${jp10M},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${jp10L}-${jp10M})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7mn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7mv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b7mv},0),${b7mv},calc::(0-${b7mv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7mt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7mv},__none__),__none__),0,1),0),--,if::(eq::(${b7mn},0),0,if::(gt::(${b7mv},0),+${b7mn},−${b7mn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7mu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7mv},__none__),__none__),0,1),0),n,if::(gt::(${b7mv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7mf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7mv},__none__),__none__),0,1),0),0,if::(eq::(${b7mn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7yv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${jp10L},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${jp10Y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${jp10L}-${jp10Y})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7yn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7yv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${b7yv},0),${b7yv},calc::(0-${b7yv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7yt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7yv},__none__),__none__),0,1),0),--,if::(eq::(${b7yn},0),0,if::(gt::(${b7yv},0),+${b7yn},−${b7yn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7yu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7yv},__none__),__none__),0,1),0),n,if::(gt::(${b7yv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b7yf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${b7yv},__none__),__none__),0,1),0),0,if::(eq::(${b7yn},0),1,0))]"
+          }
+        }
+      ]
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "w_us",
+          "w_de",
+          "w_jp",
+          "w_us2",
+          "wust",
+          "wusu",
+          "wusf",
+          "wdet",
+          "wdeu",
+          "wdef",
+          "wjpt",
+          "wjpu",
+          "wjpf",
+          "xdeT",
+          "xjpT",
+          "b0v",
+          "b0dt",
+          "b0du",
+          "b0df",
+          "b0mt",
+          "b0mu",
+          "b0mf",
+          "b0yt",
+          "b0yu",
+          "b0yf",
+          "b1v",
+          "b1dt",
+          "b1du",
+          "b1df",
+          "b1mt",
+          "b1mu",
+          "b1mf",
+          "b1yt",
+          "b1yu",
+          "b1yf",
+          "b2v",
+          "b2dt",
+          "b2du",
+          "b2df",
+          "b2mt",
+          "b2mu",
+          "b2mf",
+          "b2yt",
+          "b2yu",
+          "b2yf",
+          "b3v",
+          "b3dt",
+          "b3du",
+          "b3df",
+          "b3mt",
+          "b3mu",
+          "b3mf",
+          "b3yt",
+          "b3yu",
+          "b3yf",
+          "b4v",
+          "b4dt",
+          "b4du",
+          "b4df",
+          "b4mt",
+          "b4mu",
+          "b4mf",
+          "b4yt",
+          "b4yu",
+          "b4yf",
+          "b5v",
+          "b5dt",
+          "b5du",
+          "b5df",
+          "b5mt",
+          "b5mu",
+          "b5mf",
+          "b5yt",
+          "b5yu",
+          "b5yf",
+          "b6v",
+          "b6dt",
+          "b6du",
+          "b6df",
+          "b6mt",
+          "b6mu",
+          "b6mf",
+          "b6yt",
+          "b6yu",
+          "b6yf",
+          "b7v",
+          "b7dt",
+          "b7du",
+          "b7df",
+          "b7mt",
+          "b7mu",
+          "b7mf",
+          "b7yt",
+          "b7yu",
+          "b7yf"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,389 @@
+{
+  "_note": "10 年实际利率(TIPS,美国财政部实际收益率曲线)+ 通胀预期近似值(名义 − 实际)。收盘口径。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出。切语言 = 整盘重取,数据缓存含 locale。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      },
+      "_note": "今年(按设备时区;跨年那几个小时差一天无妨:两年的文件都会取)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[parseNumber::(calc::(${y0}-1),0)]"
+      },
+      "_note": "去年。⚠️ 进 URL 的数字过 parseNumber(Android calc 返回 2025.0)。"
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "rc",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_real_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "rp",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y1}/all?type=daily_treasury_real_yield_curve&field_tdr_date_value=${y1}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "nc",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "np",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y1}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y1}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        }
+      ],
+      "_note": "实际曲线 + 名义曲线,各当年 + 上一年,四个请求并发。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rok",
+        "value": "$[if::(startsWith::(findNotEmpty::(${rc},),Date),1,0)]"
+      },
+      "_note": "当年文件必须是 CSV(以列头 Date 开头);拿到的是错误页 / 空串 = 取数失败(G26),不许拿去年的数冒充最新。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${rok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rokP",
+        "value": "$[if::(startsWith::(findNotEmpty::(${rp},),Date),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rA",
+        "value": "$[split::(${rc},\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rP",
+        "value": "$[split::(findNotEmpty::(${rp},),\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rdC",
+        "value": "$[parseNumber::(calc::(length::(${rA})-1),0)]"
+      },
+      "_note": "当年数据行数(第 0 行是列头;末尾空串已被 split 去掉)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rc"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rp"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nok",
+        "value": "$[if::(startsWith::(findNotEmpty::(${nc},),Date),1,0)]"
+      },
+      "_note": "当年文件必须是 CSV(以列头 Date 开头);拿到的是错误页 / 空串 = 取数失败(G26),不许拿去年的数冒充最新。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${nok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nokP",
+        "value": "$[if::(startsWith::(findNotEmpty::(${np},),Date),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nA",
+        "value": "$[split::(${nc},\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nP",
+        "value": "$[split::(findNotEmpty::(${np},),\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ndC",
+        "value": "$[parseNumber::(calc::(length::(${nA})-1),0)]"
+      },
+      "_note": "当年数据行数(第 0 行是列头;末尾空串已被 split 去掉)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nc"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "np"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rL",
+        "value": "$[findNotEmpty::(if::(le::(1,${rdC}),index::(${rA},1),index::(${rP},calc::(1-${rdC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rD",
+        "value": "$[findNotEmpty::(if::(le::(2,${rdC}),index::(${rA},2),index::(${rP},calc::(2-${rdC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nL",
+        "value": "$[findNotEmpty::(if::(le::(1,${ndC}),index::(${nA},1),index::(${nP},calc::(1-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "rP"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nP"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dL",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dN",
+        "value": "$[findNotEmpty::(index::(split::(${nL},\\,),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r10",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r10d",
+        "value": "$[findNotEmpty::(index::(split::(${rD},\\,),3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n10",
+        "value": "$[findNotEmpty::(index::(split::(${nL},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(gt::(length::(findNotEmpty::(${dL},)),9),connect::(subString::(${dL},0,2),-,subString::(${dL},3,5)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r10t",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${r10},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${r10},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n10t",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${n10},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${n10},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${r10},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${r10d},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${r10}-${r10d})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${cv},0),${cv},calc::(0-${cv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ct",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cv},__none__),__none__),0,1),0),--,if::(eq::(${cn},0),if::(eq::(${zh},1),持平,flat),if::(gt::(${cv},0),if::(eq::(${zh},1),+${cn} 基点,+${cn} bp),if::(eq::(${zh},1),−${cn} 基点,−${cn} bp))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cv},__none__),__none__),0,1),0),n,if::(gt::(${cv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cv},__none__),__none__),0,1),0),0,if::(eq::(${cn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bei",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${n10},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${r10},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(connect::(k,${dL}),connect::(k,${dN}))),parseNumber::(calc::(${n10}-${r10}),0.00),--)]"
+      },
+      "_note": "通胀预期(近似)= 同一天的名义 10 年 − 实际 10 年;两份文件最新一天不是同一天时写 --,不拿两天的数相减。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "r10t",
+          "n10t",
+          "bei",
+          "ct",
+          "cu",
+          "cf"
+        ]
+      }
+    }
+  ]
+}

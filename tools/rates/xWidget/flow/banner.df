@@ -1,0 +1,600 @@
+{
+  "_note": "工具页海报专用(tools/infosource/gen_rates.py banner_df;cell 在 tools/banner/dyn_fin.py b_rates),组件不用。美国财政部名义曲线 CSV(收盘口径):10 年 + 日变化 + 2–10 年利差,今天与约 1 个月前(往前 21 个交易日)两条曲线。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出。切语言 = 整盘重取,数据缓存含 locale。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      },
+      "_note": "今年(按设备时区;跨年那几个小时差一天无妨:两年的文件都会取)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[parseNumber::(calc::(${y0}-1),0)]"
+      },
+      "_note": "去年。⚠️ 进 URL 的数字过 parseNumber(Android calc 返回 2025.0)。"
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "nc",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "np",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y1}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y1}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        }
+      ],
+      "_note": "当年 + 上一年两份,并发(年初当年文件不足 22 行时「1 个月前」要从上一年接着数)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nok",
+        "value": "$[if::(startsWith::(findNotEmpty::(${nc},),Date),1,0)]"
+      },
+      "_note": "当年文件必须是 CSV(以列头 Date 开头);拿到的是错误页 / 空串 = 取数失败(G26),不许拿去年的数冒充最新。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${nok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nokP",
+        "value": "$[if::(startsWith::(findNotEmpty::(${np},),Date),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nA",
+        "value": "$[split::(${nc},\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nP",
+        "value": "$[split::(findNotEmpty::(${np},),\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ndC",
+        "value": "$[parseNumber::(calc::(length::(${nA})-1),0)]"
+      },
+      "_note": "当年数据行数(第 0 行是列头;末尾空串已被 split 去掉)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nc"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "np"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rL",
+        "value": "$[findNotEmpty::(if::(le::(1,${ndC}),index::(${nA},1),index::(${nP},calc::(1-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rP",
+        "value": "$[findNotEmpty::(if::(le::(2,${ndC}),index::(${nA},2),index::(${nP},calc::(2-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rM",
+        "value": "$[findNotEmpty::(if::(le::(22,${ndC}),index::(${nA},22),index::(${nP},calc::(22-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dL",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P10y",
+        "value": "$[findNotEmpty::(index::(split::(${rP},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L3m",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M3m",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L6m",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),6),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M6m",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),6),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L1y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),7),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M1y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),7),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L2y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M2y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L5y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),10),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M5y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),10),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L10y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M10y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L30y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),14),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M30y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),14),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(gt::(length::(findNotEmpty::(${dL},)),9),connect::(subString::(${dL},0,2),-,subString::(${dL},3,5)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t10",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${L10y},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dcv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${P10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${L10y}-${P10y})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dcn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${dcv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${dcv},0),${dcv},calc::(0-${dcv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dct",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${dcv},__none__),__none__),0,1),0),--,if::(eq::(${dcn},0),if::(eq::(${zh},1),持平,flat),if::(gt::(${dcv},0),if::(eq::(${zh},1),+${dcn} 基点,+${dcn} bp),if::(eq::(${zh},1),−${dcn} 基点,−${dcn} bp))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dcu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${dcv},__none__),__none__),0,1),0),n,if::(gt::(${dcv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dcf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${dcv},__none__),__none__),0,1),0),0,if::(eq::(${dcn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "spv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${L2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${L10y}-${L2y})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "spT",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${spv},__none__),__none__),0,1),0),--,if::(gt::(${spv},0),+parseNumber::(${spv},0),if::(lt::(${spv},0),−parseNumber::(calc::(0-${spv}),0),0)))]"
+      },
+      "_note": "利差带符号写:+48 / −35 / 0(单位「基点」在 RCN 里另一个 span)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "inv",
+        "value": "$[if::(and::(eq::(if::(eq::(findNotEmpty::(${spv},__none__),__none__),0,1),1),lt::(${spv},0)),1,0)]"
+      },
+      "_note": "倒挂 = 2 年 > 10 年(事实,不解读)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMtm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dM},/),0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMtd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dM},/),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMt",
+        "value": "$[if::(eq::(${zh},1),${dMtm} 月 ${dMtd} 日,index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(${dMtm}-1)) ${dMtd})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cLo",
+        "value": "$[min::(findNotEmpty::(${L3m},99),findNotEmpty::(${L6m},99),findNotEmpty::(${L1y},99),findNotEmpty::(${L2y},99),findNotEmpty::(${L5y},99),findNotEmpty::(${L10y},99),findNotEmpty::(${L30y},99),findNotEmpty::(${M3m},99),findNotEmpty::(${M6m},99),findNotEmpty::(${M1y},99),findNotEmpty::(${M2y},99),findNotEmpty::(${M5y},99),findNotEmpty::(${M10y},99),findNotEmpty::(${M30y},99))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cHi",
+        "value": "$[max::(findNotEmpty::(${L3m},-99),findNotEmpty::(${L6m},-99),findNotEmpty::(${L1y},-99),findNotEmpty::(${L2y},-99),findNotEmpty::(${L5y},-99),findNotEmpty::(${L10y},-99),findNotEmpty::(${L30y},-99),findNotEmpty::(${M3m},-99),findNotEmpty::(${M6m},-99),findNotEmpty::(${M1y},-99),findNotEmpty::(${M2y},-99),findNotEmpty::(${M5y},-99),findNotEmpty::(${M10y},-99),findNotEmpty::(${M30y},-99))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cPad",
+        "value": "$[max::(0.05,calc::((${cHi}-${cLo})*0.12))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cLo2",
+        "value": "$[calc::(${cLo}-${cPad})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cRng",
+        "value": "$[calc::(${cHi}-${cLo}+2*${cPad})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL3m",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L3m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${L3m}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL6m",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L6m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${L6m}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL1y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L1y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${L1y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL2y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${L2y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL5y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L5y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${L5y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL10y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${L10y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL30y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L30y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${L30y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM3m",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M3m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${M3m}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM6m",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M6m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${M6m}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM1y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M1y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${M1y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM2y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${M2y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM5y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M5y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${M5y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM10y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${M10y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM30y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M30y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((88-(${M30y}-${cLo2})/${cRng}*88)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cLPts",
+        "value": "[0.0,${yL3m},26.4,${yL6m},52.7,${yL1y},79.1,${yL2y},113.9,${yL5y},140.2,${yL10y},182.0,${yL30y}]"
+      },
+      "_note": "折线点串给 line.points(普通内插,不进方法参数,逗号不用转义)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cMPts",
+        "value": "[0.0,${yM3m},26.4,${yM6m},52.7,${yM1y},79.1,${yM2y},113.9,${yM5y},140.2,${yM10y},182.0,${yM30y}]"
+      },
+      "_note": "折线点串给 line.points(普通内插,不进方法参数,逗号不用转义)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cOk",
+        "value": "$[if::(and::(eq::(if::(eq::(findNotEmpty::(${yL3m},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yL30y},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yM3m},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yM30y},__none__),__none__),0,1),1)),1,0)]"
+      },
+      "_note": "两条线的首尾点都在才画(中间某个期限缺数时点串里会有空值,宁可不画)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dotY",
+        "value": "$[calc::(findNotEmpty::(${yL30y},0)+4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dotD",
+        "value": "M178.5 ${dotY} a3.5 3.5 0 1 0 7 0 a3.5 3.5 0 1 0 -7 0"
+      },
+      "_note": "今天那条线末端圆点(path 段,RCN 里写 M0 0${dotD}):圆点 cell 比图区上下各多 4pt,不拼 ${x}pt 坐标(空数据时整张图会渲染失败)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(and::(eq::(${cOk},1),eq::(if::(eq::(findNotEmpty::(${t10},__none__),__none__),0,1),1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${ok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury curve incomplete"
+          }
+        }
+      ],
+      "_note": "曲线或 10 年缺数 = 失败(G26):宿主贴上次成功的那帧,首次没有就是静态图。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nP"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ok",
+          "at",
+          "t10",
+          "dct",
+          "dcu",
+          "dcf",
+          "spT",
+          "inv",
+          "dMt",
+          "cLPts",
+          "cMPts",
+          "dotD"
+        ]
+      }
+    }
+  ]
+}

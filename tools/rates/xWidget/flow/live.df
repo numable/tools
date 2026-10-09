@@ -1,0 +1,1169 @@
+{
+  "_note": "美债 10 年(财政部收盘):10 年为主数,5 / 30 年为辅;日变化 = 最新两行相减,近 1 个月迷你线 = 最近 22 个收盘。文件名沿用 live(三张组件的 depends 指向它)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出。切语言 = 整盘重取,数据缓存含 locale。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      },
+      "_note": "今年(按设备时区;跨年那几个小时差一天无妨:两年的文件都会取)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[parseNumber::(calc::(${y0}-1),0)]"
+      },
+      "_note": "去年。⚠️ 进 URL 的数字过 parseNumber(Android calc 返回 2025.0)。"
+    },
+    {
+      "id": "tc",
+      "action": "request",
+      "params": {
+        "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+        "method": "GET",
+        "formatType": "string",
+        "timeout": "10000",
+        "header": {
+          "User-Agent": "Numable/1.0"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tok",
+        "value": "$[if::(startsWith::(findNotEmpty::(${tc},),Date),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${tok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury unavailable"
+          }
+        }
+      ],
+      "_note": "当年文件必须是 CSV(以列头 Date 开头);拿到的是错误页 / 空串 = 取数失败(G26)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tA",
+        "value": "$[split::(replaceAll::(${tc},([0-9]+/[0-9]+/[0-9]+)\\,(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)([^\\,\\n]*)\\,(?:[^\\,\\n]*\\,)([^\\,\\n]*)\\,(?:[^\\,\\n]*\\,)([^\\,\\n]*)[^\\n]*,$1~$2~$3~$4),\\n)]"
+      },
+      "_note": "每行压成「MM/DD/YYYY~5 年~10 年~30 年」再切行(第 0 行是列头):原文留在数据域里每个节点都要复制一遍(df-perf)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tc"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r1",
+        "value": "$[findNotEmpty::(index::(${tA},1),)]"
+      },
+      "_note": "最新一行(CSV 倒序)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "td1",
+        "value": "$[findNotEmpty::(index::(split::(${r1},~),0),)]"
+      },
+      "_note": "最新一行的日期 MM/DD/YYYY。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fvxR",
+        "value": "$[findNotEmpty::(index::(split::(${r1},~),1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fvxV",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${fvxR},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${fvxR},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tnxR",
+        "value": "$[findNotEmpty::(index::(split::(${r1},~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tnxV",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${tnxR},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${tnxR},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tyxR",
+        "value": "$[findNotEmpty::(index::(split::(${r1},~),3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tyxV",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${tyxR},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${tyxR},0.00),)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${tnxV},__none__),__none__),0,1),1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury 10y missing"
+          }
+        }
+      ],
+      "_note": "主数 10 年取不到 = 取数失败(G26)。5 / 30 年缺了只让那一格写 --。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv1",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},1),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv2",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},2),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv3",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},3),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv4",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},4),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv5",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},5),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv6",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},6),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv7",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},7),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv8",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},8),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv9",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},9),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv10",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},10),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv11",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},11),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv12",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},12),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv13",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},13),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv14",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},14),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv15",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},15),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv16",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},16),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv17",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},17),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv18",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},18),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv19",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},19),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv20",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},20),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv21",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},21),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv22",
+        "value": "$[findNotEmpty::(index::(split::(findNotEmpty::(index::(${tA},22),),~),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bpv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${tv1},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${tv2},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${tv1}-${tv2})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bpn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${bpv},0),${bpv},calc::(0-${bpv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bpt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),0),--,if::(eq::(${bpn},0),if::(eq::(${zh},1),持平,flat),if::(gt::(${bpv},0),if::(eq::(${zh},1),+${bpn} 基点,+${bpn} bp),if::(eq::(${zh},1),−${bpn} 基点,−${bpn} bp))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bpu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),0),n,if::(gt::(${bpv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bpf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),0),0,if::(eq::(${bpn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bps",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),0),--,if::(eq::(${bpn},0),0,if::(gt::(${bpv},0),+${bpn},−${bpn})))]"
+      },
+      "_note": "微档底行的短写法(「+5」,单位在词表里)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(gt::(length::(findNotEmpty::(${td1},)),9),connect::(subString::(${td1},0,2),-,subString::(${td1},3,5)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lLo",
+        "value": "$[min::(findNotEmpty::(${tv22},${tv1}),findNotEmpty::(${tv21},${tv1}),findNotEmpty::(${tv20},${tv1}),findNotEmpty::(${tv19},${tv1}),findNotEmpty::(${tv18},${tv1}),findNotEmpty::(${tv17},${tv1}),findNotEmpty::(${tv16},${tv1}),findNotEmpty::(${tv15},${tv1}),findNotEmpty::(${tv14},${tv1}),findNotEmpty::(${tv13},${tv1}),findNotEmpty::(${tv12},${tv1}),findNotEmpty::(${tv11},${tv1}),findNotEmpty::(${tv10},${tv1}),findNotEmpty::(${tv9},${tv1}),findNotEmpty::(${tv8},${tv1}),findNotEmpty::(${tv7},${tv1}),findNotEmpty::(${tv6},${tv1}),findNotEmpty::(${tv5},${tv1}),findNotEmpty::(${tv4},${tv1}),findNotEmpty::(${tv3},${tv1}),findNotEmpty::(${tv2},${tv1}),findNotEmpty::(${tv1},${tv1}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lHi",
+        "value": "$[max::(findNotEmpty::(${tv22},${tv1}),findNotEmpty::(${tv21},${tv1}),findNotEmpty::(${tv20},${tv1}),findNotEmpty::(${tv19},${tv1}),findNotEmpty::(${tv18},${tv1}),findNotEmpty::(${tv17},${tv1}),findNotEmpty::(${tv16},${tv1}),findNotEmpty::(${tv15},${tv1}),findNotEmpty::(${tv14},${tv1}),findNotEmpty::(${tv13},${tv1}),findNotEmpty::(${tv12},${tv1}),findNotEmpty::(${tv11},${tv1}),findNotEmpty::(${tv10},${tv1}),findNotEmpty::(${tv9},${tv1}),findNotEmpty::(${tv8},${tv1}),findNotEmpty::(${tv7},${tv1}),findNotEmpty::(${tv6},${tv1}),findNotEmpty::(${tv5},${tv1}),findNotEmpty::(${tv4},${tv1}),findNotEmpty::(${tv3},${tv1}),findNotEmpty::(${tv2},${tv1}),findNotEmpty::(${tv1},${tv1}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lOk",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${tv22},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${tv1},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),gt::(${lHi},${lLo})),1,0)]"
+      },
+      "_note": "线画不画:凑得满 22 个收盘(年初几天凑不满就不画)、不是一条平线。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y0",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv22},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y1",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv21},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y2",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv20},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y3",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv19},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y4",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv18},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y5",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv17},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y6",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv16},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y7",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv15},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y8",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv14},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y9",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv13},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y10",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv12},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y11",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv11},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y12",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv10},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y13",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv9},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y14",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv8},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y15",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv7},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y16",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv6},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y17",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv5},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y18",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv4},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y19",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv3},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y20",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv2},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21y21",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv1},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21P",
+        "value": "2.0,${l21y0},4.5,${l21y1},7.0,${l21y2},9.4,${l21y3},11.9,${l21y4},14.4,${l21y5},16.9,${l21y6},19.3,${l21y7},21.8,${l21y8},24.3,${l21y9},26.8,${l21y10},29.2,${l21y11},31.7,${l21y12},34.2,${l21y13},36.7,${l21y14},39.1,${l21y15},41.6,${l21y16},44.1,${l21y17},46.6,${l21y18},49.0,${l21y19},51.5,${l21y20},54.0,${l21y21}"
+      },
+      "_note": "折线点串(56×26 图区;普通内插,逗号不用转义)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y0"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y1"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y3"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y4"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y5"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y6"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y7"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y8"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y9"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y10"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y11"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y12"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y13"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y14"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y15"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y16"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y17"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y18"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y19"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y20"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l21y21"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y0",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv22},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y1",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv21},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y2",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv20},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y3",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv19},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y4",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv18},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y5",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv17},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y6",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv16},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y7",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv15},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y8",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv14},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y9",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv13},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y10",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv12},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y11",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv11},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y12",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv10},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y13",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv9},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y14",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv8},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y15",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv7},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y16",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv6},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y17",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv5},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y18",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv4},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y19",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv3},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y20",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv2},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22y21",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-findNotEmpty::(${tv1},${tv1}))/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22P",
+        "value": "2.0,${l22y0},4.4,${l22y1},6.8,${l22y2},9.1,${l22y3},11.5,${l22y4},13.9,${l22y5},16.3,${l22y6},18.7,${l22y7},21.0,${l22y8},23.4,${l22y9},25.8,${l22y10},28.2,${l22y11},30.6,${l22y12},33.0,${l22y13},35.3,${l22y14},37.7,${l22y15},40.1,${l22y16},42.5,${l22y17},44.9,${l22y18},47.2,${l22y19},49.6,${l22y20},52.0,${l22y21}"
+      },
+      "_note": "折线点串(54×26 图区;普通内插,逗号不用转义)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y0"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y1"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y3"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y4"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y5"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y6"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y7"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y8"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y9"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y10"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y11"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y12"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y13"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y14"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y15"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y16"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y17"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y18"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y19"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y20"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "l22y21"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21Y",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-${tv1})/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22Y",
+        "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lHi}-${tv1})/(${lHi}-${lLo})*22),0.0),13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t10s",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${tnxV},__none__),__none__),0,1),1),${tnxV},--)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "r1"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv1"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv3"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv4"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv5"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv6"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv7"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv8"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv9"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv10"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv11"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv12"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv13"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv14"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv15"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv16"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv17"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv18"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv19"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv20"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv21"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tv22"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "tnxV",
+          "fvxV",
+          "tyxV",
+          "bpt",
+          "bps",
+          "bpu",
+          "bpf",
+          "lOk",
+          "l21P",
+          "l22P",
+          "l21Y",
+          "l22Y",
+          "t10s"
+        ]
+      }
+    }
+  ]
+}

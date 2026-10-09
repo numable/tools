@@ -53,6 +53,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Time Progress](tools/moment) · 时间进度 | `moment` | 52 | offline · 不联网 | — |
 | [Dose Log](tools/pill) · 服药记录 | `pill` | 46 | offline · 不联网 | — |
 | [Package Stats](tools/pkgstats) · 开源包下载量 | `pkgstats` | 16 | public API · 公开接口 | `api.npmjs.org` `registry.npmjs.org` `pypistats.org` `pypi.org` `crates.io` |
+| [Rates](tools/rates) · 利率 | `rates` | 4 | public API · 公开接口 | `home.treasury.gov` `www.mof.go.jp` `api.statistiken.bundesbank.de` |
 | [Release Watch](tools/releases) · 开源项目发布 | `releases` | 13 | public API · 公开接口 | `github.com` |
 | [SEC Filings](tools/secfilings) · 美股公告 | `secfilings` | 14 | public API · 公开接口 | `www.sec.gov` |
 | [Service Status](tools/status) · 服务状态 | `status` | 20 | public API · 公开接口 | `www.githubstatus.com` `status.claude.com` `status.openai.com` `www.vercel-status.com` `status.cursor.com` `status.npmjs.org` `www.dockerstatus.com` `bitbucket.status.atlassian.com` `status.circleci.com` `www.netlifystatus.com` `status.supabase.com` `status.render.com` `status.digitalocean.com` `status.mongodb.com` `status.sentry.io` `status.datadoghq.com` `linearstatus.com` `www.notion-status.com` `status.figma.com` `status.postman.com` `discordstatus.com` `www.redditstatus.com` |

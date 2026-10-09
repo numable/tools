@@ -1,0 +1,1346 @@
+{
+  "_note": "美债名义收益率曲线(美国财政部官方 CSV,收盘口径):mode=curve 出今天与约 1 个月前两条曲线 + 2–10 年利差;mode=spread 另出 2–10 年利差一年走势(26 个点)。「1 个月前 / 1 年前」= 往前 21 / 250 个交易日,对比日写在卡上。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出。切语言 = 整盘重取,数据缓存含 locale。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      },
+      "_note": "今年(按设备时区;跨年那几个小时差一天无妨:两年的文件都会取)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[parseNumber::(calc::(${y0}-1),0)]"
+      },
+      "_note": "去年。⚠️ 进 URL 的数字过 parseNumber(Android calc 返回 2025.0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "modeIn",
+        "value": "$[findNotEmpty::(${mode},curve)]"
+      },
+      "_note": "入参落地(勿删)。mode = curve(曲线)/ spread(利差走势)。"
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "nc",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "np",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y1}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y1}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        }
+      ],
+      "_note": "当年 + 上一年两份,并发。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nok",
+        "value": "$[if::(startsWith::(findNotEmpty::(${nc},),Date),1,0)]"
+      },
+      "_note": "当年文件必须是 CSV(以列头 Date 开头);拿到的是错误页 / 空串 = 取数失败(G26),不许拿去年的数冒充最新。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${nok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nokP",
+        "value": "$[if::(startsWith::(findNotEmpty::(${np},),Date),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${nokP},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury (previous year) unavailable"
+          }
+        }
+      ],
+      "_note": "要算「1 年前」/ 一年走势的流,上一年文件同样必需;缺了宁可失败(宿主贴上次成功的那帧),也不画半截。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nA",
+        "value": "$[split::(${nc},\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nP",
+        "value": "$[split::(findNotEmpty::(${np},),\\n)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ndC",
+        "value": "$[parseNumber::(calc::(length::(${nA})-1),0)]"
+      },
+      "_note": "当年数据行数(第 0 行是列头;末尾空串已被 split 去掉)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rL",
+        "value": "$[findNotEmpty::(if::(le::(1,${ndC}),index::(${nA},1),index::(${nP},calc::(1-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rM",
+        "value": "$[findNotEmpty::(if::(le::(22,${ndC}),index::(${nA},22),index::(${nP},calc::(22-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rY",
+        "value": "$[findNotEmpty::(if::(le::(251,${ndC}),index::(${nA},251),index::(${nP},calc::(251-${ndC}))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dL",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dY",
+        "value": "$[findNotEmpty::(index::(split::(${rY},\\,),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L3m",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M3m",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L6m",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),6),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M6m",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),6),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L1y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),7),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M1y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),7),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L2y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M2y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L5y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),10),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M5y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),10),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L10y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M10y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L30y",
+        "value": "$[findNotEmpty::(index::(split::(${rL},\\,),14),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M30y",
+        "value": "$[findNotEmpty::(index::(split::(${rM},\\,),14),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "Y2y",
+        "value": "$[findNotEmpty::(index::(split::(${rY},\\,),8),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "Y10y",
+        "value": "$[findNotEmpty::(index::(split::(${rY},\\,),12),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(gt::(length::(findNotEmpty::(${dL},)),9),connect::(subString::(${dL},0,2),-,subString::(${dL},3,5)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t10",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${L10y},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${L2y},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "spv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${L2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${L10y}-${L2y})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "spn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${spv},__none__),__none__),0,1),1),parseNumber::(${spv},0),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "spT",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${spv},__none__),__none__),0,1),0),--,if::(gt::(${spv},0),+${spn},if::(lt::(${spv},0),−parseNumber::(calc::(0-${spv}),0),0)))]"
+      },
+      "_note": "利差带符号写:+48 / −35 / 0(单位「基点」在 RCN 里另一个 span)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "inv",
+        "value": "$[if::(and::(eq::(if::(eq::(findNotEmpty::(${spv},__none__),__none__),0,1),1),lt::(${spv},0)),1,0)]"
+      },
+      "_note": "倒挂 = 2 年 > 10 年(事实,不解读)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ysv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${Y10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${Y2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${Y10y}-${Y2y})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ysT",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${ysv},__none__),__none__),0,1),0),--,if::(gt::(${ysv},0),+parseNumber::(${ysv},0),if::(lt::(${ysv},0),−parseNumber::(calc::(0-${ysv}),0),0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMtm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dM},/),0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMtd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dM},/),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMt",
+        "value": "$[if::(eq::(${zh},1),${dMtm} 月 ${dMtd} 日,index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(${dMtm}-1)) ${dMtd})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dLtm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dL},/),0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dLtd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dL},/),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dLt",
+        "value": "$[if::(eq::(${zh},1),${dLtm} 月 ${dLtd} 日,index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(${dLtm}-1)) ${dLtd})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dYy",
+        "value": "$[findNotEmpty::(index::(split::(${dY},/),2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dYm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dY},/),0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dYt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${dYy},__none__),__none__),0,1),0),,if::(eq::(${zh},1),${dYy} 年 ${dYm} 月,index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(${dYm}-1)) ${dYy}))]"
+      },
+      "_note": "走势左端带年份(「2025 年 10 月」/「Oct 2025」):右端是「10 月 6 日」,不带年份两端会读成同一天。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cLo",
+        "value": "$[min::(findNotEmpty::(${L3m},99),findNotEmpty::(${L6m},99),findNotEmpty::(${L1y},99),findNotEmpty::(${L2y},99),findNotEmpty::(${L5y},99),findNotEmpty::(${L10y},99),findNotEmpty::(${L30y},99),findNotEmpty::(${M3m},99),findNotEmpty::(${M6m},99),findNotEmpty::(${M1y},99),findNotEmpty::(${M2y},99),findNotEmpty::(${M5y},99),findNotEmpty::(${M10y},99),findNotEmpty::(${M30y},99))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cHi",
+        "value": "$[max::(findNotEmpty::(${L3m},-99),findNotEmpty::(${L6m},-99),findNotEmpty::(${L1y},-99),findNotEmpty::(${L2y},-99),findNotEmpty::(${L5y},-99),findNotEmpty::(${L10y},-99),findNotEmpty::(${L30y},-99),findNotEmpty::(${M3m},-99),findNotEmpty::(${M6m},-99),findNotEmpty::(${M1y},-99),findNotEmpty::(${M2y},-99),findNotEmpty::(${M5y},-99),findNotEmpty::(${M10y},-99),findNotEmpty::(${M30y},-99))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cPad",
+        "value": "$[max::(0.05,calc::((${cHi}-${cLo})*0.12))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cLo2",
+        "value": "$[calc::(${cLo}-${cPad})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cRng",
+        "value": "$[calc::(${cHi}-${cLo}+2*${cPad})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL3m",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L3m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L3m}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL6m",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L6m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L6m}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL1y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L1y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L1y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL2y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L2y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL5y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L5y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L5y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL10y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L10y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yL30y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L30y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L30y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM3m",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M3m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M3m}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM6m",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M6m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M6m}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM1y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M1y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M1y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM2y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M2y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM5y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M5y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M5y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM10y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M10y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yM30y",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M30y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M30y}-${cLo2})/${cRng}*74)*100))/100),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cLPts",
+        "value": "[0.0,${yL3m},28.1,${yL6m},56.2,${yL1y},84.3,${yL2y},121.4,${yL5y},149.5,${yL10y},194.0,${yL30y}]"
+      },
+      "_note": "折线点串给 line.points(普通内插,不进方法参数,逗号不用转义)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cMPts",
+        "value": "[0.0,${yM3m},28.1,${yM6m},56.2,${yM1y},84.3,${yM2y},121.4,${yM5y},149.5,${yM10y},194.0,${yM30y}]"
+      },
+      "_note": "折线点串给 line.points(普通内插,不进方法参数,逗号不用转义)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cOk",
+        "value": "$[if::(and::(eq::(if::(eq::(findNotEmpty::(${yL3m},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yL30y},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yM3m},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yM30y},__none__),__none__),0,1),1)),1,0)]"
+      },
+      "_note": "两条线的首尾点都在才画(中间某个期限缺数时点串里会有空值,宁可不画)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dotY",
+        "value": "$[calc::(40+findNotEmpty::(${yL30y},0)-3)]"
+      },
+      "_note": "今天那条线末端圆点的 y(RCN 坐标里不许写内插减法)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${modeIn},spread),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "sA",
+            "value": "$[split::(replaceAll::(${nc},[0-9]+/[0-9]+/[0-9]+\\,(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)([^\\,\\n]*)\\,(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)([^\\,\\n]*)[^\\n]*,$1~$2),\\n)]"
+          },
+          "_note": "原文每行压成「2 年~10 年」两列再切行(列头行不匹配、原样留在第 0 行,行号与 nA 一致):之后 26 个点每个节点只复制一个小数组。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sP",
+            "value": "$[split::(replaceAll::(${np},[0-9]+/[0-9]+/[0-9]+\\,(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)([^\\,\\n]*)\\,(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)(?:[^\\,\\n]*\\,)([^\\,\\n]*)[^\\n]*,$1~$2),\\n)]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "nA"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "nP"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "nc"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "np"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s0",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(1,${ndC}),index::(${sA},1),index::(${sP},calc::(1-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(1,${ndC}),index::(${sA},1),index::(${sP},calc::(1-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(1,${ndC}),index::(${sA},1),index::(${sP},calc::(1-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(1,${ndC}),index::(${sA},1),index::(${sP},calc::(1-${ndC}))),),~),0))*100)),),__none__)]"
+          },
+          "_note": "第 1 + 10k 行的 10 年 − 2 年(基点)。缺数(早年 CSV 某些列为空)用后一个点补,不让折线断成 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s1",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(11,${ndC}),index::(${sA},11),index::(${sP},calc::(11-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(11,${ndC}),index::(${sA},11),index::(${sP},calc::(11-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(11,${ndC}),index::(${sA},11),index::(${sP},calc::(11-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(11,${ndC}),index::(${sA},11),index::(${sP},calc::(11-${ndC}))),),~),0))*100)),),${s0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s2",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(21,${ndC}),index::(${sA},21),index::(${sP},calc::(21-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(21,${ndC}),index::(${sA},21),index::(${sP},calc::(21-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(21,${ndC}),index::(${sA},21),index::(${sP},calc::(21-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(21,${ndC}),index::(${sA},21),index::(${sP},calc::(21-${ndC}))),),~),0))*100)),),${s1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s3",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(31,${ndC}),index::(${sA},31),index::(${sP},calc::(31-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(31,${ndC}),index::(${sA},31),index::(${sP},calc::(31-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(31,${ndC}),index::(${sA},31),index::(${sP},calc::(31-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(31,${ndC}),index::(${sA},31),index::(${sP},calc::(31-${ndC}))),),~),0))*100)),),${s2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s4",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(41,${ndC}),index::(${sA},41),index::(${sP},calc::(41-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(41,${ndC}),index::(${sA},41),index::(${sP},calc::(41-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(41,${ndC}),index::(${sA},41),index::(${sP},calc::(41-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(41,${ndC}),index::(${sA},41),index::(${sP},calc::(41-${ndC}))),),~),0))*100)),),${s3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s5",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(51,${ndC}),index::(${sA},51),index::(${sP},calc::(51-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(51,${ndC}),index::(${sA},51),index::(${sP},calc::(51-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(51,${ndC}),index::(${sA},51),index::(${sP},calc::(51-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(51,${ndC}),index::(${sA},51),index::(${sP},calc::(51-${ndC}))),),~),0))*100)),),${s4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s6",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(61,${ndC}),index::(${sA},61),index::(${sP},calc::(61-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(61,${ndC}),index::(${sA},61),index::(${sP},calc::(61-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(61,${ndC}),index::(${sA},61),index::(${sP},calc::(61-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(61,${ndC}),index::(${sA},61),index::(${sP},calc::(61-${ndC}))),),~),0))*100)),),${s5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s7",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(71,${ndC}),index::(${sA},71),index::(${sP},calc::(71-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(71,${ndC}),index::(${sA},71),index::(${sP},calc::(71-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(71,${ndC}),index::(${sA},71),index::(${sP},calc::(71-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(71,${ndC}),index::(${sA},71),index::(${sP},calc::(71-${ndC}))),),~),0))*100)),),${s6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s8",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(81,${ndC}),index::(${sA},81),index::(${sP},calc::(81-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(81,${ndC}),index::(${sA},81),index::(${sP},calc::(81-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(81,${ndC}),index::(${sA},81),index::(${sP},calc::(81-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(81,${ndC}),index::(${sA},81),index::(${sP},calc::(81-${ndC}))),),~),0))*100)),),${s7})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s9",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(91,${ndC}),index::(${sA},91),index::(${sP},calc::(91-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(91,${ndC}),index::(${sA},91),index::(${sP},calc::(91-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(91,${ndC}),index::(${sA},91),index::(${sP},calc::(91-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(91,${ndC}),index::(${sA},91),index::(${sP},calc::(91-${ndC}))),),~),0))*100)),),${s8})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s10",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(101,${ndC}),index::(${sA},101),index::(${sP},calc::(101-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(101,${ndC}),index::(${sA},101),index::(${sP},calc::(101-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(101,${ndC}),index::(${sA},101),index::(${sP},calc::(101-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(101,${ndC}),index::(${sA},101),index::(${sP},calc::(101-${ndC}))),),~),0))*100)),),${s9})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s11",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(111,${ndC}),index::(${sA},111),index::(${sP},calc::(111-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(111,${ndC}),index::(${sA},111),index::(${sP},calc::(111-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(111,${ndC}),index::(${sA},111),index::(${sP},calc::(111-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(111,${ndC}),index::(${sA},111),index::(${sP},calc::(111-${ndC}))),),~),0))*100)),),${s10})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s12",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(121,${ndC}),index::(${sA},121),index::(${sP},calc::(121-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(121,${ndC}),index::(${sA},121),index::(${sP},calc::(121-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(121,${ndC}),index::(${sA},121),index::(${sP},calc::(121-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(121,${ndC}),index::(${sA},121),index::(${sP},calc::(121-${ndC}))),),~),0))*100)),),${s11})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s13",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(131,${ndC}),index::(${sA},131),index::(${sP},calc::(131-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(131,${ndC}),index::(${sA},131),index::(${sP},calc::(131-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(131,${ndC}),index::(${sA},131),index::(${sP},calc::(131-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(131,${ndC}),index::(${sA},131),index::(${sP},calc::(131-${ndC}))),),~),0))*100)),),${s12})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s14",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(141,${ndC}),index::(${sA},141),index::(${sP},calc::(141-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(141,${ndC}),index::(${sA},141),index::(${sP},calc::(141-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(141,${ndC}),index::(${sA},141),index::(${sP},calc::(141-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(141,${ndC}),index::(${sA},141),index::(${sP},calc::(141-${ndC}))),),~),0))*100)),),${s13})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s15",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(151,${ndC}),index::(${sA},151),index::(${sP},calc::(151-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(151,${ndC}),index::(${sA},151),index::(${sP},calc::(151-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(151,${ndC}),index::(${sA},151),index::(${sP},calc::(151-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(151,${ndC}),index::(${sA},151),index::(${sP},calc::(151-${ndC}))),),~),0))*100)),),${s14})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s16",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(161,${ndC}),index::(${sA},161),index::(${sP},calc::(161-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(161,${ndC}),index::(${sA},161),index::(${sP},calc::(161-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(161,${ndC}),index::(${sA},161),index::(${sP},calc::(161-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(161,${ndC}),index::(${sA},161),index::(${sP},calc::(161-${ndC}))),),~),0))*100)),),${s15})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s17",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(171,${ndC}),index::(${sA},171),index::(${sP},calc::(171-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(171,${ndC}),index::(${sA},171),index::(${sP},calc::(171-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(171,${ndC}),index::(${sA},171),index::(${sP},calc::(171-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(171,${ndC}),index::(${sA},171),index::(${sP},calc::(171-${ndC}))),),~),0))*100)),),${s16})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s18",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(181,${ndC}),index::(${sA},181),index::(${sP},calc::(181-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(181,${ndC}),index::(${sA},181),index::(${sP},calc::(181-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(181,${ndC}),index::(${sA},181),index::(${sP},calc::(181-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(181,${ndC}),index::(${sA},181),index::(${sP},calc::(181-${ndC}))),),~),0))*100)),),${s17})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s19",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(191,${ndC}),index::(${sA},191),index::(${sP},calc::(191-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(191,${ndC}),index::(${sA},191),index::(${sP},calc::(191-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(191,${ndC}),index::(${sA},191),index::(${sP},calc::(191-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(191,${ndC}),index::(${sA},191),index::(${sP},calc::(191-${ndC}))),),~),0))*100)),),${s18})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s20",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(201,${ndC}),index::(${sA},201),index::(${sP},calc::(201-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(201,${ndC}),index::(${sA},201),index::(${sP},calc::(201-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(201,${ndC}),index::(${sA},201),index::(${sP},calc::(201-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(201,${ndC}),index::(${sA},201),index::(${sP},calc::(201-${ndC}))),),~),0))*100)),),${s19})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s21",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(211,${ndC}),index::(${sA},211),index::(${sP},calc::(211-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(211,${ndC}),index::(${sA},211),index::(${sP},calc::(211-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(211,${ndC}),index::(${sA},211),index::(${sP},calc::(211-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(211,${ndC}),index::(${sA},211),index::(${sP},calc::(211-${ndC}))),),~),0))*100)),),${s20})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s22",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(221,${ndC}),index::(${sA},221),index::(${sP},calc::(221-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(221,${ndC}),index::(${sA},221),index::(${sP},calc::(221-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(221,${ndC}),index::(${sA},221),index::(${sP},calc::(221-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(221,${ndC}),index::(${sA},221),index::(${sP},calc::(221-${ndC}))),),~),0))*100)),),${s21})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s23",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(231,${ndC}),index::(${sA},231),index::(${sP},calc::(231-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(231,${ndC}),index::(${sA},231),index::(${sP},calc::(231-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(231,${ndC}),index::(${sA},231),index::(${sP},calc::(231-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(231,${ndC}),index::(${sA},231),index::(${sP},calc::(231-${ndC}))),),~),0))*100)),),${s22})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s24",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(241,${ndC}),index::(${sA},241),index::(${sP},calc::(241-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(241,${ndC}),index::(${sA},241),index::(${sP},calc::(241-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(241,${ndC}),index::(${sA},241),index::(${sP},calc::(241-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(241,${ndC}),index::(${sA},241),index::(${sP},calc::(241-${ndC}))),),~),0))*100)),),${s23})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s25",
+            "value": "$[findNotEmpty::(if::(and::(eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(251,${ndC}),index::(${sA},251),index::(${sP},calc::(251-${ndC}))),),~),1),x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(index::(split::(findNotEmpty::(if::(le::(251,${ndC}),index::(${sA},251),index::(${sP},calc::(251-${ndC}))),),~),0),x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((index::(split::(findNotEmpty::(if::(le::(251,${ndC}),index::(${sA},251),index::(${sP},calc::(251-${ndC}))),),~),1)-index::(split::(findNotEmpty::(if::(le::(251,${ndC}),index::(${sA},251),index::(${sP},calc::(251-${ndC}))),),~),0))*100)),),${s24})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sLo",
+            "value": "$[min::(findNotEmpty::(${s0},0),findNotEmpty::(${s1},0),findNotEmpty::(${s2},0),findNotEmpty::(${s3},0),findNotEmpty::(${s4},0),findNotEmpty::(${s5},0),findNotEmpty::(${s6},0),findNotEmpty::(${s7},0),findNotEmpty::(${s8},0),findNotEmpty::(${s9},0),findNotEmpty::(${s10},0),findNotEmpty::(${s11},0),findNotEmpty::(${s12},0),findNotEmpty::(${s13},0),findNotEmpty::(${s14},0),findNotEmpty::(${s15},0),findNotEmpty::(${s16},0),findNotEmpty::(${s17},0),findNotEmpty::(${s18},0),findNotEmpty::(${s19},0),findNotEmpty::(${s20},0),findNotEmpty::(${s21},0),findNotEmpty::(${s22},0),findNotEmpty::(${s23},0),findNotEmpty::(${s24},0),findNotEmpty::(${s25},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sHi",
+            "value": "$[max::(findNotEmpty::(${s0},0),findNotEmpty::(${s1},0),findNotEmpty::(${s2},0),findNotEmpty::(${s3},0),findNotEmpty::(${s4},0),findNotEmpty::(${s5},0),findNotEmpty::(${s6},0),findNotEmpty::(${s7},0),findNotEmpty::(${s8},0),findNotEmpty::(${s9},0),findNotEmpty::(${s10},0),findNotEmpty::(${s11},0),findNotEmpty::(${s12},0),findNotEmpty::(${s13},0),findNotEmpty::(${s14},0),findNotEmpty::(${s15},0),findNotEmpty::(${s16},0),findNotEmpty::(${s17},0),findNotEmpty::(${s18},0),findNotEmpty::(${s19},0),findNotEmpty::(${s20},0),findNotEmpty::(${s21},0),findNotEmpty::(${s22},0),findNotEmpty::(${s23},0),findNotEmpty::(${s24},0),findNotEmpty::(${s25},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sPad",
+            "value": "$[max::(4,calc::((${sHi}-${sLo})*0.12))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sLo2",
+            "value": "$[calc::(${sLo}-${sPad})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sRng",
+            "value": "$[calc::(${sHi}-${sLo}+2*${sPad})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s0},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s1},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s2},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q3",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s3},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q4",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s4},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q5",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s5},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q6",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s6},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q7",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s7},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q8",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s8},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q9",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s9},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q10",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s10},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q11",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s11},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q12",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s12},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q13",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s13},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q14",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s14},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q15",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s15},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q16",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s16},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q17",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s17},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q18",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s18},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q19",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s19},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q20",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s20},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q21",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s21},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q22",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s22},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q23",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s23},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q24",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s24},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q25",
+            "value": "$[calc::(round::(calc::((74-(findNotEmpty::(${s25},0)-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0",
+            "value": "$[parseNumber::(calc::(2+${q0}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1",
+            "value": "$[parseNumber::(calc::(2+${q1}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2",
+            "value": "$[parseNumber::(calc::(2+${q2}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3",
+            "value": "$[parseNumber::(calc::(2+${q3}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r4",
+            "value": "$[parseNumber::(calc::(2+${q4}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r5",
+            "value": "$[parseNumber::(calc::(2+${q5}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r6",
+            "value": "$[parseNumber::(calc::(2+${q6}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r7",
+            "value": "$[parseNumber::(calc::(2+${q7}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r8",
+            "value": "$[parseNumber::(calc::(2+${q8}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r9",
+            "value": "$[parseNumber::(calc::(2+${q9}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r10",
+            "value": "$[parseNumber::(calc::(2+${q10}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r11",
+            "value": "$[parseNumber::(calc::(2+${q11}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r12",
+            "value": "$[parseNumber::(calc::(2+${q12}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r13",
+            "value": "$[parseNumber::(calc::(2+${q13}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r14",
+            "value": "$[parseNumber::(calc::(2+${q14}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r15",
+            "value": "$[parseNumber::(calc::(2+${q15}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r16",
+            "value": "$[parseNumber::(calc::(2+${q16}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r17",
+            "value": "$[parseNumber::(calc::(2+${q17}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r18",
+            "value": "$[parseNumber::(calc::(2+${q18}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r19",
+            "value": "$[parseNumber::(calc::(2+${q19}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r20",
+            "value": "$[parseNumber::(calc::(2+${q20}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r21",
+            "value": "$[parseNumber::(calc::(2+${q21}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r22",
+            "value": "$[parseNumber::(calc::(2+${q22}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r23",
+            "value": "$[parseNumber::(calc::(2+${q23}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r24",
+            "value": "$[parseNumber::(calc::(2+${q24}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r25",
+            "value": "$[parseNumber::(calc::(2+${q25}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sPts",
+            "value": "[0.0,${q25},7.8,${q24},15.5,${q23},23.3,${q22},31.0,${q21},38.8,${q20},46.6,${q19},54.3,${q18},62.1,${q17},69.8,${q16},77.6,${q15},85.4,${q14},93.1,${q13},100.9,${q12},108.6,${q11},116.4,${q10},124.2,${q9},131.9,${q8},139.7,${q7},147.4,${q6},155.2,${q5},163.0,${q4},170.7,${q3},178.5,${q2},186.2,${q1},194.0,${q0}]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zY",
+            "value": "$[calc::(round::(calc::((74-(0-${sLo2})/${sRng}*74)*100))/100)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zAbs",
+            "value": "$[calc::(40+${zY})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zOn",
+            "value": "$[if::(and::(lt::(${sLo2},0),gt::(calc::(${sLo2}+${sRng}),0)),1,0)]"
+          },
+          "_note": "零线只在量程跨过 0 时画。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sDot",
+            "value": "$[calc::(40+${q0}-3)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s21P",
+            "value": "2.0,${r25},4.1,${r24},6.2,${r23},8.2,${r22},10.3,${r21},12.4,${r20},14.5,${r19},16.6,${r18},18.6,${r17},20.7,${r16},22.8,${r15},24.9,${r14},27.0,${r13},29.0,${r12},31.1,${r11},33.2,${r10},35.3,${r9},37.4,${r8},39.4,${r7},41.5,${r6},43.6,${r5},45.7,${r4},47.8,${r3},49.8,${r2},51.9,${r1},54.0,${r0}"
+          },
+          "_note": "21 档迷你线点串(56×26 图区,由 42 档的纵坐标等比缩放)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "z21",
+            "value": "$[parseNumber::(calc::(2+${zY}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s21Y",
+            "value": "$[parseNumber::(calc::(2+${q0}*22/74),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sOk",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${s0},__none__),__none__),0,1),1),1,0)]"
+          }
+        }
+      ],
+      "_note": "曲线组件不需要这一段:跳过它省掉约 60 个节点。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nP"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "nc"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "np"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "t10",
+          "t2",
+          "spT",
+          "inv",
+          "ysT",
+          "dMt",
+          "dYt",
+          "dLt",
+          "cLPts",
+          "cMPts",
+          "cOk",
+          "dotY",
+          "sPts",
+          "zAbs",
+          "zOn",
+          "sDot",
+          "sOk",
+          "s21P",
+          "z21",
+          "s21Y"
+        ]
+      }
+    }
+  ]
+}

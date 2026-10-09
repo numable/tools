@@ -1,0 +1,111 @@
+{
+  "_note": "财政部名义 + 实际曲线,当年 + 上一年四份 CSV 原文(~50KB)。当年名义取不到 = 失败。原样取回,解析与首屏缓存在页面 JS 的 flowCached 里做(与 macro 同法)。",
+  "_lintCache": "exempt",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[formatDate::(${@time.nowMs},yyyy)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[parseNumber::(calc::(${y0}-1),0)]"
+      }
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "nc",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "np",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y1}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y1}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "rc",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y0}/all?type=daily_treasury_real_yield_curve&field_tdr_date_value=${y0}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        },
+        {
+          "id": "rp",
+          "action": "request",
+          "params": {
+            "url": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${y1}/all?type=daily_treasury_real_yield_curve&field_tdr_date_value=${y1}&page&_format=csv",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable/1.0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(findNotEmpty::(${nc},),Date),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "treasury unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "nc",
+          "np",
+          "rc",
+          "rp"
+        ]
+      }
+    }
+  ]
+}
