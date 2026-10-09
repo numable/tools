@@ -49,11 +49,12 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Search Console](tools/gsc) · Google 搜索表现 | `gsc` | 53 | your own key · 用户自带凭证 | `searchconsole.googleapis.com` |
 | [Hacker News](tools/hacker) · Hacker News | `hacker` | 50 | public API · 公开接口 | `hn.algolia.com` |
 | [Hugging Face Papers](tools/hfpapers) · HF 每日论文 | `hfpapers` | 10 | public API · 公开接口 | `huggingface.co` |
+| [Ledger](tools/ledger) · 记账 | `ledger` | 1 | offline · 不联网 | — |
 | [Lobsters](tools/lobsters) · Lobsters | `lobsters` | 10 | public API · 公开接口 | `lobste.rs` |
-| [Time Progress](tools/moment) · 时间进度 | `moment` | 52 | offline · 不联网 | — |
+| [Time Progress](tools/moment) · 时间进度 | `moment` | 53 | offline · 不联网 | — |
 | [Dose Log](tools/pill) · 服药记录 | `pill` | 46 | offline · 不联网 | — |
-| [Package Stats](tools/pkgstats) · 开源包下载量 | `pkgstats` | 16 | public API · 公开接口 | `api.npmjs.org` `registry.npmjs.org` `pypistats.org` `pypi.org` `crates.io` |
-| [Rates](tools/rates) · 利率 | `rates` | 4 | public API · 公开接口 | `home.treasury.gov` `www.mof.go.jp` `api.statistiken.bundesbank.de` |
+| [Package Stats](tools/pkgstats) · 开源包下载量 | `pkgstats` | 17 | public API · 公开接口 | `api.npmjs.org` `registry.npmjs.org` `pypistats.org` `pypi.org` `crates.io` `hub.docker.com` `formulae.brew.sh` |
+| [Rates](tools/rates) · 利率 | `rates` | 5 | public API · 公开接口 | `home.treasury.gov` `www.mof.go.jp` `api.statistiken.bundesbank.de` `yield.chinabond.com.cn` `stats.bis.org` |
 | [Release Watch](tools/releases) · 开源项目发布 | `releases` | 13 | public API · 公开接口 | `github.com` |
 | [SEC Filings](tools/secfilings) · 美股公告 | `secfilings` | 14 | public API · 公开接口 | `www.sec.gov` |
 | [Service Status](tools/status) · 服务状态 | `status` | 20 | public API · 公开接口 | `www.githubstatus.com` `status.claude.com` `status.openai.com` `www.vercel-status.com` `status.cursor.com` `status.npmjs.org` `www.dockerstatus.com` `bitbucket.status.atlassian.com` `status.circleci.com` `www.netlifystatus.com` `status.supabase.com` `status.render.com` `status.digitalocean.com` `status.mongodb.com` `status.sentry.io` `status.datadoghq.com` `linearstatus.com` `www.notion-status.com` `status.figma.com` `status.postman.com` `discordstatus.com` `www.redditstatus.com` |

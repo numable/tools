@@ -56,10 +56,46 @@
     {
       "op": "set",
       "props": {
-        "key": "isN",
-        "value": "$[if::(eq::(${isC},1),0,if::(eq::(${isP},1),0,1))]"
+        "key": "isD",
+        "value": "$[if::(eq::(${e0},docker),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isB",
+        "value": "$[if::(eq::(${e0},brew),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isK",
+        "value": "$[if::(eq::(${e0},cask),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isH",
+        "value": "$[if::(eq::(${isB},1),1,if::(eq::(${isK},1),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isS",
+        "value": "$[if::(eq::(${isD},1),0,if::(eq::(${isH},1),0,1))]"
       },
-      "_note": "生态三选一:不认识的值一律按 npm。"
+      "_note": "1 = 有逐日序列的生态(npm / PyPI / crates.io);Docker Hub 与 Homebrew 为 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isN",
+        "value": "$[if::(eq::(${isC},1),0,if::(eq::(${isP},1),0,if::(eq::(${isS},1),1,0)))]"
+      },
+      "_note": "生态五选一:不认识的值一律按 npm(docker / brew / cask 见 ECO_NODES)。"
     },
     {
       "op": "set",
@@ -67,13 +103,28 @@
         "key": "p",
         "value": "$[if::(eq::(${isN},1),${pIn},toLowerCase::(${pIn}))]"
       },
-      "_note": "PyPI / crates.io 的包名不分大小写,统一小写;npm 保留原样(npm 本来就只允许小写,且 scoped 包带 @ 与 /)。"
+      "_note": "PyPI / crates.io / Docker Hub / Homebrew 的名字不分大小写(Docker 仓库名只允许小写),统一小写;npm 保留原样(npm 本来就只允许小写,且 scoped 包带 @ 与 /)。"
     },
     {
       "op": "set",
       "props": {
         "key": "hasP",
         "value": "$[if::(gt::(length::(${p}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dRepo",
+        "value": "$[if::(gt::(length::(split::(${p},/)),1),${p},connect::(library/,${p}))]"
+      },
+      "_note": "Docker Hub 仓库路径:官方镜像(nginx)在 library/ 下,用户仓库本来就带 <命名空间>/。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hT",
+        "value": "$[if::(eq::(${isK},1),cask,formula)]"
       }
     },
     {
@@ -238,6 +289,76 @@
       "_note": "include=default_version 把响应从 400KB+ 收到约 3KB,versions[0] 就是默认版本(带 created_at)。"
     },
     {
+      "op": "if",
+      "props": {
+        "val": "${isD}"
+      },
+      "items": [
+        {
+          "id": "rD",
+          "action": "request",
+          "params": {
+            "url": "https://hub.docker.com/v2/repositories/${dRepo}/",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "Docker Hub:pull_count = 累计拉取(实时累计,没有逐日 / 逐周);star_count;last_updated = 最近一次推送。官方镜像响应带整份 README(nginx 约 17KB),没有字段裁剪参数。不存在的仓库回 404 + {message}。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${isH}"
+      },
+      "items": [
+        {
+          "id": "rH",
+          "action": "request",
+          "params": {
+            "url": "https://formulae.brew.sh/api/${hT}/${p}.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "Homebrew:formula / cask 各一份 JSON,analytics.install.{30d,90d,365d}.<名字> = 三个窗口的安装总数(还有「<名字> --HEAD」等变体,只取本名那一项);没有逐日数据,也没有版本发布日期。不存在时回 404 网页(不是 JSON)→ 解析为空 → 流失败。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${isD},1),if::(eq::(${vIn},1),1,0),0)]"
+      },
+      "items": [
+        {
+          "id": "tD",
+          "action": "request",
+          "params": {
+            "url": "https://hub.docker.com/v2/repositories/${dRepo}/tags",
+            "method": "GET",
+            "queryParams": {
+              "page_size": "10",
+              "ordering": "last_updated"
+            },
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "Docker 版本:最近推送的 10 个 tag(约 55KB;每个 tag 带各架构镜像清单,压不小)。取其中第一个以版本号开头的(1.30.5-trixie-perl → 1.30.5),它的 last_updated 当推送日。⚠️ 这是「最近推送的版本」不是「最高版本」:nginx 同时维护 1.30(stable)与 1.31(mainline),哪条线后推就显示哪条;组件文案写「最近推送」。"
+    },
+    {
       "op": "set",
       "props": {
         "key": "_b",
@@ -249,7 +370,7 @@
       "op": "set",
       "props": {
         "key": "miss",
-        "value": "$[if::(eq::(${isN},1),if::(gt::(length::(${rN.downloads}),0),0,1),if::(eq::(${isP},1),if::(gt::(length::(${rP.data}),0),0,1),if::(gt::(length::(${rC.meta.extra_downloads}),0),0,1)))]"
+        "value": "$[if::(eq::(${isS},0),if::(eq::(${isD},1),if::(gt::(length::(${rD.name}),0),0,1),if::(gt::(length::(${rH.generated_date}),0),0,1)),if::(eq::(${isN},1),if::(gt::(length::(${rN.downloads}),0),0,1),if::(eq::(${isP},1),if::(gt::(length::(${rP.data}),0),0,1),if::(gt::(length::(${rC.meta.extra_downloads}),0),0,1))))]"
       }
     },
     {
@@ -325,6 +446,50 @@
               }
             }
           ]
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${isD}"
+          },
+          "items": [
+            {
+              "id": "rD",
+              "action": "request",
+              "params": {
+                "url": "https://hub.docker.com/v2/repositories/${dRepo}/",
+                "method": "GET",
+                "formatType": "json",
+                "header": {
+                  "Accept": "application/json"
+                },
+                "timeout": "10000"
+              }
+            }
+          ],
+          "_note": "Docker Hub:pull_count = 累计拉取(实时累计,没有逐日 / 逐周);star_count;last_updated = 最近一次推送。官方镜像响应带整份 README(nginx 约 17KB),没有字段裁剪参数。不存在的仓库回 404 + {message}。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${isH}"
+          },
+          "items": [
+            {
+              "id": "rH",
+              "action": "request",
+              "params": {
+                "url": "https://formulae.brew.sh/api/${hT}/${p}.json",
+                "method": "GET",
+                "formatType": "json",
+                "header": {
+                  "Accept": "application/json"
+                },
+                "timeout": "10000"
+              }
+            }
+          ],
+          "_note": "Homebrew:formula / cask 各一份 JSON,analytics.install.{30d,90d,365d}.<名字> = 三个窗口的安装总数(还有「<名字> --HEAD」等变体,只取本名那一项);没有逐日数据,也没有版本发布日期。不存在时回 404 网页(不是 JSON)→ 解析为空 → 流失败。"
         }
       ],
       "_note": "只重试一次:包不存在(404)时第二次同样拿不到,流照常走 error 出口,不会无限等。"
@@ -336,6 +501,93 @@
         "value": "1"
       },
       "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o30",
+        "value": "${rH.analytics.install.30d}"
+      },
+      "_note": "Homebrew 三个窗口各是一张「名字 → 次数」的表(本名 + --HEAD 等变体),用 get 按本名取。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o90",
+        "value": "${rH.analytics.install.90d}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o365",
+        "value": "${rH.analytics.install.365d}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hOk",
+        "value": "$[if::(eq::(${isH},1),if::(gt::(length::(${rH.generated_date}),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h30",
+        "value": "$[if::(eq::(${hOk},1),findNotEmpty::(get::(${o30},${p}),get::(${o30},[${p}]),0),)]"
+      },
+      "_note": "名单里没有本名 = 这个窗口里没人装过(新上架的 cask 常见)→ 记 0,不当失败。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h90",
+        "value": "$[if::(eq::(${hOk},1),findNotEmpty::(get::(${o90},${p}),get::(${o90},[${p}]),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h365",
+        "value": "$[if::(eq::(${hOk},1),findNotEmpty::(get::(${o365},${p}),get::(${o365},[${p}]),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dOk",
+        "value": "$[if::(eq::(${isD},1),if::(gt::(length::(${rD.name}),0),1,0),0)]"
+      },
+      "_note": "⚠️ 判字符串字段 name:pull_count 是数字,length 对数字恒 0(会把取到了判成没取到)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dPull",
+        "value": "$[if::(eq::(${dOk},1),findNotEmpty::(${rD.pull_count},0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "main",
+        "value": "$[if::(eq::(${isD},1),${dPull},if::(eq::(${isH},1),${h30},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tNow",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "today",
+        "value": "$[formatDate::(${tNow},yyyy-MM-dd)]"
+      }
     },
     {
       "op": "set",
@@ -440,9 +692,9 @@
       "op": "set",
       "props": {
         "key": "endD",
-        "value": "$[if::(eq::(${isC},1),index::(${dC},calc::(${nC}-2)),if::(eq::(${isP},1),index::(${dP},calc::(${nP}-1)),${rN.end}))]"
+        "value": "$[if::(eq::(${isD},1),if::(eq::(${dOk},1),${today},),if::(eq::(${isH},1),if::(eq::(${hOk},1),subString::(${rH.generated_date},0,10),),if::(eq::(${isC},1),index::(${dC},calc::(${nC}-2)),if::(eq::(${isP},1),index::(${dP},calc::(${nP}-1)),${rN.end}))))]"
       },
-      "_note": "数据截至日(yyyy-MM-dd)。三个源都有 1~4 天延迟,组件上显示的是它,不是取数时刻。"
+      "_note": "数据截至日(yyyy-MM-dd)。npm / PyPI / crates.io 都有 1~4 天延迟,组件上显示的是它,不是取数时刻。Docker Hub 的累计拉取是实时数 → 取数当天;Homebrew 取 JSON 的 generated_date(统计生成日)。"
     },
     {
       "op": "set",
@@ -450,6 +702,14 @@
         "key": "ok",
         "value": "$[if::(gt::(length::(${endD}),0),1,0)]"
       }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "okS",
+        "value": "$[if::(eq::(${isS},1),${ok},0)]"
+      },
+      "_note": "有逐日序列且取到了:只属于逐日序列的量(前 7 天 / 近 30 天 / 最近一天)按它出数。"
     },
     {
       "op": "if",
@@ -1559,8 +1819,9 @@
       "op": "set",
       "props": {
         "key": "wk",
-        "value": "$[sum::(${wkA})]"
-      }
+        "value": "$[if::(eq::(${isS},1),sum::(${wkA}),${main})]"
+      },
+      "_note": "主值:逐日生态 = 近 7 天合计;Docker Hub = 累计拉取;Homebrew = 近 30 天安装(渲染层按 kind 换标签)。"
     },
     {
       "op": "set",
@@ -1601,42 +1862,42 @@
       "op": "set",
       "props": {
         "key": "pwZ",
-        "value": "$[if::(eq::(${ok},1),if::(ge::(${pw},100000000),connect::(if::(ge::(calc::(${pw}/100000000),100),parseNumber::(round::(calc::(${pw}/100000000)),0),if::(ge::(calc::(${pw}/100000000),10),parseNumber::(calc::(${pw}/100000000),0.#),parseNumber::(calc::(${pw}/100000000),0.##))),${uY}),if::(ge::(${pw},10000),connect::(if::(ge::(calc::(${pw}/10000),100),parseNumber::(round::(calc::(${pw}/10000)),0),if::(ge::(calc::(${pw}/10000),10),parseNumber::(calc::(${pw}/10000),0.#),parseNumber::(calc::(${pw}/10000),0.##))),${uW}),parseNumber::(round::(${pw}),0))),)]"
+        "value": "$[if::(eq::(${okS},1),if::(ge::(${pw},100000000),connect::(if::(ge::(calc::(${pw}/100000000),100),parseNumber::(round::(calc::(${pw}/100000000)),0),if::(ge::(calc::(${pw}/100000000),10),parseNumber::(calc::(${pw}/100000000),0.#),parseNumber::(calc::(${pw}/100000000),0.##))),${uY}),if::(ge::(${pw},10000),connect::(if::(ge::(calc::(${pw}/10000),100),parseNumber::(round::(calc::(${pw}/10000)),0),if::(ge::(calc::(${pw}/10000),10),parseNumber::(calc::(${pw}/10000),0.#),parseNumber::(calc::(${pw}/10000),0.##))),${uW}),parseNumber::(round::(${pw}),0))),)]"
       }
     },
     {
       "op": "set",
       "props": {
         "key": "pwE",
-        "value": "$[if::(eq::(${ok},1),if::(ge::(${pw},1000000000),connect::(if::(ge::(calc::(${pw}/1000000000),100),parseNumber::(round::(calc::(${pw}/1000000000)),0),if::(ge::(calc::(${pw}/1000000000),10),parseNumber::(calc::(${pw}/1000000000),0.#),parseNumber::(calc::(${pw}/1000000000),0.##))),B),if::(ge::(${pw},1000000),connect::(if::(ge::(calc::(${pw}/1000000),100),parseNumber::(round::(calc::(${pw}/1000000)),0),if::(ge::(calc::(${pw}/1000000),10),parseNumber::(calc::(${pw}/1000000),0.#),parseNumber::(calc::(${pw}/1000000),0.##))),M),if::(ge::(${pw},1000),connect::(if::(ge::(calc::(${pw}/1000),100),parseNumber::(round::(calc::(${pw}/1000)),0),if::(ge::(calc::(${pw}/1000),10),parseNumber::(calc::(${pw}/1000),0.#),parseNumber::(calc::(${pw}/1000),0.##))),K),parseNumber::(round::(${pw}),0)))),)]"
+        "value": "$[if::(eq::(${okS},1),if::(ge::(${pw},1000000000),connect::(if::(ge::(calc::(${pw}/1000000000),100),parseNumber::(round::(calc::(${pw}/1000000000)),0),if::(ge::(calc::(${pw}/1000000000),10),parseNumber::(calc::(${pw}/1000000000),0.#),parseNumber::(calc::(${pw}/1000000000),0.##))),B),if::(ge::(${pw},1000000),connect::(if::(ge::(calc::(${pw}/1000000),100),parseNumber::(round::(calc::(${pw}/1000000)),0),if::(ge::(calc::(${pw}/1000000),10),parseNumber::(calc::(${pw}/1000000),0.#),parseNumber::(calc::(${pw}/1000000),0.##))),M),if::(ge::(${pw},1000),connect::(if::(ge::(calc::(${pw}/1000),100),parseNumber::(round::(calc::(${pw}/1000)),0),if::(ge::(calc::(${pw}/1000),10),parseNumber::(calc::(${pw}/1000),0.#),parseNumber::(calc::(${pw}/1000),0.##))),K),parseNumber::(round::(${pw}),0)))),)]"
       }
     },
     {
       "op": "set",
       "props": {
         "key": "moZ",
-        "value": "$[if::(eq::(${ok},1),if::(ge::(${mo},100000000),connect::(if::(ge::(calc::(${mo}/100000000),100),parseNumber::(round::(calc::(${mo}/100000000)),0),if::(ge::(calc::(${mo}/100000000),10),parseNumber::(calc::(${mo}/100000000),0.#),parseNumber::(calc::(${mo}/100000000),0.##))),${uY}),if::(ge::(${mo},10000),connect::(if::(ge::(calc::(${mo}/10000),100),parseNumber::(round::(calc::(${mo}/10000)),0),if::(ge::(calc::(${mo}/10000),10),parseNumber::(calc::(${mo}/10000),0.#),parseNumber::(calc::(${mo}/10000),0.##))),${uW}),parseNumber::(round::(${mo}),0))),)]"
+        "value": "$[if::(eq::(${okS},1),if::(ge::(${mo},100000000),connect::(if::(ge::(calc::(${mo}/100000000),100),parseNumber::(round::(calc::(${mo}/100000000)),0),if::(ge::(calc::(${mo}/100000000),10),parseNumber::(calc::(${mo}/100000000),0.#),parseNumber::(calc::(${mo}/100000000),0.##))),${uY}),if::(ge::(${mo},10000),connect::(if::(ge::(calc::(${mo}/10000),100),parseNumber::(round::(calc::(${mo}/10000)),0),if::(ge::(calc::(${mo}/10000),10),parseNumber::(calc::(${mo}/10000),0.#),parseNumber::(calc::(${mo}/10000),0.##))),${uW}),parseNumber::(round::(${mo}),0))),)]"
       }
     },
     {
       "op": "set",
       "props": {
         "key": "moE",
-        "value": "$[if::(eq::(${ok},1),if::(ge::(${mo},1000000000),connect::(if::(ge::(calc::(${mo}/1000000000),100),parseNumber::(round::(calc::(${mo}/1000000000)),0),if::(ge::(calc::(${mo}/1000000000),10),parseNumber::(calc::(${mo}/1000000000),0.#),parseNumber::(calc::(${mo}/1000000000),0.##))),B),if::(ge::(${mo},1000000),connect::(if::(ge::(calc::(${mo}/1000000),100),parseNumber::(round::(calc::(${mo}/1000000)),0),if::(ge::(calc::(${mo}/1000000),10),parseNumber::(calc::(${mo}/1000000),0.#),parseNumber::(calc::(${mo}/1000000),0.##))),M),if::(ge::(${mo},1000),connect::(if::(ge::(calc::(${mo}/1000),100),parseNumber::(round::(calc::(${mo}/1000)),0),if::(ge::(calc::(${mo}/1000),10),parseNumber::(calc::(${mo}/1000),0.#),parseNumber::(calc::(${mo}/1000),0.##))),K),parseNumber::(round::(${mo}),0)))),)]"
+        "value": "$[if::(eq::(${okS},1),if::(ge::(${mo},1000000000),connect::(if::(ge::(calc::(${mo}/1000000000),100),parseNumber::(round::(calc::(${mo}/1000000000)),0),if::(ge::(calc::(${mo}/1000000000),10),parseNumber::(calc::(${mo}/1000000000),0.#),parseNumber::(calc::(${mo}/1000000000),0.##))),B),if::(ge::(${mo},1000000),connect::(if::(ge::(calc::(${mo}/1000000),100),parseNumber::(round::(calc::(${mo}/1000000)),0),if::(ge::(calc::(${mo}/1000000),10),parseNumber::(calc::(${mo}/1000000),0.#),parseNumber::(calc::(${mo}/1000000),0.##))),M),if::(ge::(${mo},1000),connect::(if::(ge::(calc::(${mo}/1000),100),parseNumber::(round::(calc::(${mo}/1000)),0),if::(ge::(calc::(${mo}/1000),10),parseNumber::(calc::(${mo}/1000),0.#),parseNumber::(calc::(${mo}/1000),0.##))),K),parseNumber::(round::(${mo}),0)))),)]"
       }
     },
     {
       "op": "set",
       "props": {
         "key": "d1Z",
-        "value": "$[if::(eq::(${ok},1),if::(ge::(${d1},100000000),connect::(if::(ge::(calc::(${d1}/100000000),100),parseNumber::(round::(calc::(${d1}/100000000)),0),if::(ge::(calc::(${d1}/100000000),10),parseNumber::(calc::(${d1}/100000000),0.#),parseNumber::(calc::(${d1}/100000000),0.##))),${uY}),if::(ge::(${d1},10000),connect::(if::(ge::(calc::(${d1}/10000),100),parseNumber::(round::(calc::(${d1}/10000)),0),if::(ge::(calc::(${d1}/10000),10),parseNumber::(calc::(${d1}/10000),0.#),parseNumber::(calc::(${d1}/10000),0.##))),${uW}),parseNumber::(round::(${d1}),0))),)]"
+        "value": "$[if::(eq::(${okS},1),if::(ge::(${d1},100000000),connect::(if::(ge::(calc::(${d1}/100000000),100),parseNumber::(round::(calc::(${d1}/100000000)),0),if::(ge::(calc::(${d1}/100000000),10),parseNumber::(calc::(${d1}/100000000),0.#),parseNumber::(calc::(${d1}/100000000),0.##))),${uY}),if::(ge::(${d1},10000),connect::(if::(ge::(calc::(${d1}/10000),100),parseNumber::(round::(calc::(${d1}/10000)),0),if::(ge::(calc::(${d1}/10000),10),parseNumber::(calc::(${d1}/10000),0.#),parseNumber::(calc::(${d1}/10000),0.##))),${uW}),parseNumber::(round::(${d1}),0))),)]"
       }
     },
     {
       "op": "set",
       "props": {
         "key": "d1E",
-        "value": "$[if::(eq::(${ok},1),if::(ge::(${d1},1000000000),connect::(if::(ge::(calc::(${d1}/1000000000),100),parseNumber::(round::(calc::(${d1}/1000000000)),0),if::(ge::(calc::(${d1}/1000000000),10),parseNumber::(calc::(${d1}/1000000000),0.#),parseNumber::(calc::(${d1}/1000000000),0.##))),B),if::(ge::(${d1},1000000),connect::(if::(ge::(calc::(${d1}/1000000),100),parseNumber::(round::(calc::(${d1}/1000000)),0),if::(ge::(calc::(${d1}/1000000),10),parseNumber::(calc::(${d1}/1000000),0.#),parseNumber::(calc::(${d1}/1000000),0.##))),M),if::(ge::(${d1},1000),connect::(if::(ge::(calc::(${d1}/1000),100),parseNumber::(round::(calc::(${d1}/1000)),0),if::(ge::(calc::(${d1}/1000),10),parseNumber::(calc::(${d1}/1000),0.#),parseNumber::(calc::(${d1}/1000),0.##))),K),parseNumber::(round::(${d1}),0)))),)]"
+        "value": "$[if::(eq::(${okS},1),if::(ge::(${d1},1000000000),connect::(if::(ge::(calc::(${d1}/1000000000),100),parseNumber::(round::(calc::(${d1}/1000000000)),0),if::(ge::(calc::(${d1}/1000000000),10),parseNumber::(calc::(${d1}/1000000000),0.#),parseNumber::(calc::(${d1}/1000000000),0.##))),B),if::(ge::(${d1},1000000),connect::(if::(ge::(calc::(${d1}/1000000),100),parseNumber::(round::(calc::(${d1}/1000000)),0),if::(ge::(calc::(${d1}/1000000),10),parseNumber::(calc::(${d1}/1000000),0.#),parseNumber::(calc::(${d1}/1000000),0.##))),M),if::(ge::(${d1},1000),connect::(if::(ge::(calc::(${d1}/1000),100),parseNumber::(round::(calc::(${d1}/1000)),0),if::(ge::(calc::(${d1}/1000),10),parseNumber::(calc::(${d1}/1000),0.#),parseNumber::(calc::(${d1}/1000),0.##))),K),parseNumber::(round::(${d1}),0)))),)]"
       }
     },
     {
@@ -1876,7 +2137,7 @@
       "op": "set",
       "props": {
         "key": "ecoL",
-        "value": "$[if::(eq::(${isC},1),crates.io,if::(eq::(${isP},1),PyPI,npm))]"
+        "value": "$[if::(eq::(${isD},1),Docker Hub,if::(eq::(${isH},1),Homebrew,if::(eq::(${isC},1),crates.io,if::(eq::(${isP},1),PyPI,npm))))]"
       }
     },
     {
@@ -2636,15 +2897,318 @@
     {
       "op": "set",
       "props": {
+        "key": "tn0",
+        "value": "$[get::(index::(${tD.results},0),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv0",
+        "value": "$[index::(split::(replaceAll::(${tn0},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to0",
+        "value": "$[if::(matches::(${tv0},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu0",
+        "value": "$[get::(index::(${tD.results},0),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn1",
+        "value": "$[get::(index::(${tD.results},1),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv1",
+        "value": "$[index::(split::(replaceAll::(${tn1},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to1",
+        "value": "$[if::(matches::(${tv1},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu1",
+        "value": "$[get::(index::(${tD.results},1),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn2",
+        "value": "$[get::(index::(${tD.results},2),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv2",
+        "value": "$[index::(split::(replaceAll::(${tn2},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to2",
+        "value": "$[if::(matches::(${tv2},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu2",
+        "value": "$[get::(index::(${tD.results},2),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn3",
+        "value": "$[get::(index::(${tD.results},3),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv3",
+        "value": "$[index::(split::(replaceAll::(${tn3},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to3",
+        "value": "$[if::(matches::(${tv3},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu3",
+        "value": "$[get::(index::(${tD.results},3),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn4",
+        "value": "$[get::(index::(${tD.results},4),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv4",
+        "value": "$[index::(split::(replaceAll::(${tn4},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to4",
+        "value": "$[if::(matches::(${tv4},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu4",
+        "value": "$[get::(index::(${tD.results},4),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn5",
+        "value": "$[get::(index::(${tD.results},5),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv5",
+        "value": "$[index::(split::(replaceAll::(${tn5},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to5",
+        "value": "$[if::(matches::(${tv5},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu5",
+        "value": "$[get::(index::(${tD.results},5),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn6",
+        "value": "$[get::(index::(${tD.results},6),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv6",
+        "value": "$[index::(split::(replaceAll::(${tn6},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to6",
+        "value": "$[if::(matches::(${tv6},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu6",
+        "value": "$[get::(index::(${tD.results},6),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn7",
+        "value": "$[get::(index::(${tD.results},7),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv7",
+        "value": "$[index::(split::(replaceAll::(${tn7},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to7",
+        "value": "$[if::(matches::(${tv7},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu7",
+        "value": "$[get::(index::(${tD.results},7),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn8",
+        "value": "$[get::(index::(${tD.results},8),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv8",
+        "value": "$[index::(split::(replaceAll::(${tn8},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to8",
+        "value": "$[if::(matches::(${tv8},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu8",
+        "value": "$[get::(index::(${tD.results},8),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tn9",
+        "value": "$[get::(index::(${tD.results},9),name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tv9",
+        "value": "$[index::(split::(replaceAll::(${tn9},^v,),[^0-9.]),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "to9",
+        "value": "$[if::(matches::(${tv9},^[0-9]+[.][0-9][0-9.]*$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tu9",
+        "value": "$[get::(index::(${tD.results},9),last_updated)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dkV",
+        "value": "$[if::(eq::(${isD},1),if::(eq::(${to0},1),${tv0},if::(eq::(${to1},1),${tv1},if::(eq::(${to2},1),${tv2},if::(eq::(${to3},1),${tv3},if::(eq::(${to4},1),${tv4},if::(eq::(${to5},1),${tv5},if::(eq::(${to6},1),${tv6},if::(eq::(${to7},1),${tv7},if::(eq::(${to8},1),${tv8},if::(eq::(${to9},1),${tv9},)))))))))),)]"
+      },
+      "_note": "最近推送的 10 个 tag 里一个版本号都没有(只推 latest 的仓库)→ 空,组件显示「--」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dkD",
+        "value": "$[if::(eq::(${isD},1),if::(eq::(${to0},1),${tu0},if::(eq::(${to1},1),${tu1},if::(eq::(${to2},1),${tu2},if::(eq::(${to3},1),${tu3},if::(eq::(${to4},1),${tu4},if::(eq::(${to5},1),${tu5},if::(eq::(${to6},1),${tu6},if::(eq::(${to7},1),${tu7},if::(eq::(${to8},1),${tu8},if::(eq::(${to9},1),${tu9},)))))))))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hVer",
+        "value": "$[if::(eq::(${isB},1),${rH.versions.stable},index::(split::(${rH.version},\\,),0))]"
+      },
+      "_note": "Homebrew 版本:formula 取 versions.stable;cask 的 version 可能带「,构建号」(4.39.1,abc123),只留逗号前。没有发布日期。"
+    },
+    {
+      "op": "set",
+      "props": {
         "key": "verV",
-        "value": "$[if::(eq::(${isC},1),${vC.crate.default_version},if::(eq::(${isP},1),${pyV},${vN.version}))]"
+        "value": "$[if::(eq::(${isD},1),${dkV},if::(eq::(${isH},1),${hVer},if::(eq::(${isC},1),${vC.crate.default_version},if::(eq::(${isP},1),${pyV},${vN.version}))))]"
       }
     },
     {
       "op": "set",
       "props": {
         "key": "relD0",
-        "value": "$[if::(eq::(${isC},1),${vC.versions[0].created_at},if::(eq::(${isP},1),${pyD},${npmD}))]"
+        "value": "$[if::(eq::(${isD},1),${dkD},if::(eq::(${isH},1),,if::(eq::(${isC},1),${vC.versions[0].created_at},if::(eq::(${isP},1),${pyD},${npmD}))))]"
       }
     },
     {
@@ -2763,6 +3327,184 @@
         "value": "$[if::(le::(${vLen},7),0,if::(le::(${vLen},10),1,2))]"
       },
       "_note": "版本号字号档:≤7 字符大字 / ≤10 中字 / 更长小字(2.34.0.post1 这类)。RCN 字号只认变量,档位在这里判好,渲染层按档走 op:if。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kind",
+        "value": "$[if::(eq::(${isD},1),d,if::(eq::(${isH},1),b,s))]"
+      },
+      "_note": "表现档:s = 逐日序列(npm / PyPI / crates.io)· d = Docker Hub(累计拉取)· b = Homebrew(30 / 90 / 365 天安装)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "okD",
+        "value": "$[if::(eq::(${isD},1),${ok},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "okH",
+        "value": "$[if::(eq::(${isH},1),${ok},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "star",
+        "value": "${rD.star_count}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "stZ",
+        "value": "$[if::(eq::(${okD},1),if::(ge::(${star},100000000),connect::(if::(ge::(calc::(${star}/100000000),100),parseNumber::(round::(calc::(${star}/100000000)),0),if::(ge::(calc::(${star}/100000000),10),parseNumber::(calc::(${star}/100000000),0.#),parseNumber::(calc::(${star}/100000000),0.##))),${uY}),if::(ge::(${star},10000),connect::(if::(ge::(calc::(${star}/10000),100),parseNumber::(round::(calc::(${star}/10000)),0),if::(ge::(calc::(${star}/10000),10),parseNumber::(calc::(${star}/10000),0.#),parseNumber::(calc::(${star}/10000),0.##))),${uW}),parseNumber::(round::(${star}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "stE",
+        "value": "$[if::(eq::(${okD},1),if::(ge::(${star},1000000000),connect::(if::(ge::(calc::(${star}/1000000000),100),parseNumber::(round::(calc::(${star}/1000000000)),0),if::(ge::(calc::(${star}/1000000000),10),parseNumber::(calc::(${star}/1000000000),0.#),parseNumber::(calc::(${star}/1000000000),0.##))),B),if::(ge::(${star},1000000),connect::(if::(ge::(calc::(${star}/1000000),100),parseNumber::(round::(calc::(${star}/1000000)),0),if::(ge::(calc::(${star}/1000000),10),parseNumber::(calc::(${star}/1000000),0.#),parseNumber::(calc::(${star}/1000000),0.##))),M),if::(ge::(${star},1000),connect::(if::(ge::(calc::(${star}/1000),100),parseNumber::(round::(calc::(${star}/1000)),0),if::(ge::(calc::(${star}/1000),10),parseNumber::(calc::(${star}/1000),0.#),parseNumber::(calc::(${star}/1000),0.##))),K),parseNumber::(round::(${star}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updD",
+        "value": "$[if::(eq::(${okD},1),subString::(findNotEmpty::(${rD.last_updated},),0,10),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasU",
+        "value": "$[if::(eq::(length::(${updD}),10),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updT",
+        "value": "$[if::(eq::(${hasU},1),parseDate::(${updD},yyyy-MM-dd),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updAgo",
+        "value": "$[if::(eq::(${hasU},1),max::(0,floor::(calc::((${tNow}-${updT})/86400000))),)]"
+      },
+      "_note": "最近一次推送至今的天数。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updToday",
+        "value": "$[if::(eq::(${hasU},1),if::(eq::(${updAgo},0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updMMo",
+        "value": "$[parseNumber::(subString::(${updD},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updMDy",
+        "value": "$[parseNumber::(subString::(${updD},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updMMe",
+        "value": "$[index::(${MONE},calc::(${updMMo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updMZ",
+        "value": "${updMMo}月${updMDy}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updME",
+        "value": "${updMMe} ${updMDy}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updM",
+        "value": "$[if::(eq::(${hasU},1),if::(startsWith::(${@app.language},zh),${updMZ},${updME}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "regY",
+        "value": "$[if::(eq::(${okD},1),subString::(findNotEmpty::(${rD.date_registered},),0,4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avg",
+        "value": "$[if::(eq::(${okH},1),calc::(${h30}/30),)]"
+      },
+      "_note": "近 30 天日均安装 = 30 天总数 ÷ 30(源只给总数)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q90Z",
+        "value": "$[if::(eq::(${okH},1),if::(ge::(${h90},100000000),connect::(if::(ge::(calc::(${h90}/100000000),100),parseNumber::(round::(calc::(${h90}/100000000)),0),if::(ge::(calc::(${h90}/100000000),10),parseNumber::(calc::(${h90}/100000000),0.#),parseNumber::(calc::(${h90}/100000000),0.##))),${uY}),if::(ge::(${h90},10000),connect::(if::(ge::(calc::(${h90}/10000),100),parseNumber::(round::(calc::(${h90}/10000)),0),if::(ge::(calc::(${h90}/10000),10),parseNumber::(calc::(${h90}/10000),0.#),parseNumber::(calc::(${h90}/10000),0.##))),${uW}),parseNumber::(round::(${h90}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q90E",
+        "value": "$[if::(eq::(${okH},1),if::(ge::(${h90},1000000000),connect::(if::(ge::(calc::(${h90}/1000000000),100),parseNumber::(round::(calc::(${h90}/1000000000)),0),if::(ge::(calc::(${h90}/1000000000),10),parseNumber::(calc::(${h90}/1000000000),0.#),parseNumber::(calc::(${h90}/1000000000),0.##))),B),if::(ge::(${h90},1000000),connect::(if::(ge::(calc::(${h90}/1000000),100),parseNumber::(round::(calc::(${h90}/1000000)),0),if::(ge::(calc::(${h90}/1000000),10),parseNumber::(calc::(${h90}/1000000),0.#),parseNumber::(calc::(${h90}/1000000),0.##))),M),if::(ge::(${h90},1000),connect::(if::(ge::(calc::(${h90}/1000),100),parseNumber::(round::(calc::(${h90}/1000)),0),if::(ge::(calc::(${h90}/1000),10),parseNumber::(calc::(${h90}/1000),0.#),parseNumber::(calc::(${h90}/1000),0.##))),K),parseNumber::(round::(${h90}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1Z",
+        "value": "$[if::(eq::(${okH},1),if::(ge::(${h365},100000000),connect::(if::(ge::(calc::(${h365}/100000000),100),parseNumber::(round::(calc::(${h365}/100000000)),0),if::(ge::(calc::(${h365}/100000000),10),parseNumber::(calc::(${h365}/100000000),0.#),parseNumber::(calc::(${h365}/100000000),0.##))),${uY}),if::(ge::(${h365},10000),connect::(if::(ge::(calc::(${h365}/10000),100),parseNumber::(round::(calc::(${h365}/10000)),0),if::(ge::(calc::(${h365}/10000),10),parseNumber::(calc::(${h365}/10000),0.#),parseNumber::(calc::(${h365}/10000),0.##))),${uW}),parseNumber::(round::(${h365}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1E",
+        "value": "$[if::(eq::(${okH},1),if::(ge::(${h365},1000000000),connect::(if::(ge::(calc::(${h365}/1000000000),100),parseNumber::(round::(calc::(${h365}/1000000000)),0),if::(ge::(calc::(${h365}/1000000000),10),parseNumber::(calc::(${h365}/1000000000),0.#),parseNumber::(calc::(${h365}/1000000000),0.##))),B),if::(ge::(${h365},1000000),connect::(if::(ge::(calc::(${h365}/1000000),100),parseNumber::(round::(calc::(${h365}/1000000)),0),if::(ge::(calc::(${h365}/1000000),10),parseNumber::(calc::(${h365}/1000000),0.#),parseNumber::(calc::(${h365}/1000000),0.##))),M),if::(ge::(${h365},1000),connect::(if::(ge::(calc::(${h365}/1000),100),parseNumber::(round::(calc::(${h365}/1000)),0),if::(ge::(calc::(${h365}/1000),10),parseNumber::(calc::(${h365}/1000),0.#),parseNumber::(calc::(${h365}/1000),0.##))),K),parseNumber::(round::(${h365}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avZ",
+        "value": "$[if::(eq::(${okH},1),if::(ge::(${avg},100000000),connect::(if::(ge::(calc::(${avg}/100000000),100),parseNumber::(round::(calc::(${avg}/100000000)),0),if::(ge::(calc::(${avg}/100000000),10),parseNumber::(calc::(${avg}/100000000),0.#),parseNumber::(calc::(${avg}/100000000),0.##))),${uY}),if::(ge::(${avg},10000),connect::(if::(ge::(calc::(${avg}/10000),100),parseNumber::(round::(calc::(${avg}/10000)),0),if::(ge::(calc::(${avg}/10000),10),parseNumber::(calc::(${avg}/10000),0.#),parseNumber::(calc::(${avg}/10000),0.##))),${uW}),parseNumber::(round::(${avg}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avE",
+        "value": "$[if::(eq::(${okH},1),if::(ge::(${avg},1000000000),connect::(if::(ge::(calc::(${avg}/1000000000),100),parseNumber::(round::(calc::(${avg}/1000000000)),0),if::(ge::(calc::(${avg}/1000000000),10),parseNumber::(calc::(${avg}/1000000000),0.#),parseNumber::(calc::(${avg}/1000000000),0.##))),B),if::(ge::(${avg},1000000),connect::(if::(ge::(calc::(${avg}/1000000),100),parseNumber::(round::(calc::(${avg}/1000000)),0),if::(ge::(calc::(${avg}/1000000),10),parseNumber::(calc::(${avg}/1000000),0.#),parseNumber::(calc::(${avg}/1000000),0.##))),M),if::(ge::(${avg},1000),connect::(if::(ge::(calc::(${avg}/1000),100),parseNumber::(round::(calc::(${avg}/1000)),0),if::(ge::(calc::(${avg}/1000),10),parseNumber::(calc::(${avg}/1000),0.#),parseNumber::(calc::(${avg}/1000),0.##))),K),parseNumber::(round::(${avg}),0)))),)]"
+      }
     },
     {
       "op": "set",
@@ -2909,6 +3651,90 @@
       "props": {
         "key": "vSz",
         "value": "$[findNotEmpty::(${vSz},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "stZ",
+        "value": "$[findNotEmpty::(${stZ},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "stE",
+        "value": "$[findNotEmpty::(${stE},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updAgo",
+        "value": "$[findNotEmpty::(${updAgo},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updToday",
+        "value": "$[findNotEmpty::(${updToday},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "updM",
+        "value": "$[findNotEmpty::(${updM},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "regY",
+        "value": "$[findNotEmpty::(${regY},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q90Z",
+        "value": "$[findNotEmpty::(${q90Z},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q90E",
+        "value": "$[findNotEmpty::(${q90E},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1Z",
+        "value": "$[findNotEmpty::(${y1Z},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1E",
+        "value": "$[findNotEmpty::(${y1E},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avZ",
+        "value": "$[findNotEmpty::(${avZ},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avE",
+        "value": "$[findNotEmpty::(${avE},--)]"
       }
     },
     {
@@ -3075,6 +3901,21 @@
           "anyMiss",
           "p21",
           "y21",
+          "isS",
+          "kind",
+          "stZ",
+          "stE",
+          "hasU",
+          "updAgo",
+          "updToday",
+          "updM",
+          "regY",
+          "q90Z",
+          "q90E",
+          "y1Z",
+          "y1E",
+          "avZ",
+          "avE",
           "w11Z",
           "vfZ",
           "vfE"

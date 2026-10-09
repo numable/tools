@@ -315,13 +315,20 @@ async function bootEnv(onChange) {
   addEventListener("themechange", function () { onChange && onChange("theme"); });
 }
 
-/* ── 生态 ── */
-var ECO = { npm: "npm", pypi: "PyPI", crates: "crates.io" };
+/* ── 生态 ──
+   docker / brew / cask(2026-10-09)没有逐日数据:Docker Hub 只有累计拉取,Homebrew 只有近 30 / 90 / 365 天安装。
+   它们不走 series(),走 nsModel();页面按 m.k("d" / "b")换一套表现,不画走势、不报较上周。 */
+var ECO = { npm: "npm", pypi: "PyPI", crates: "crates.io", docker: "Docker Hub", brew: "Homebrew", cask: "Homebrew Cask" };
 function normE(e) { e = String(e || "").toLowerCase(); return ECO[e] ? e : "npm"; }
 function normN(e, n) { n = String(n || "").trim(); return e === "npm" ? n : n.toLowerCase(); }
+function isSer(e) { return e === "npm" || e === "pypi" || e === "crates"; }
 function pyName(n) { return String(n).toLowerCase().replace(/[._]+/g, "-"); }
+function dRepo(n) { return n.indexOf("/") > 0 ? n : "library/" + n; }
 function regUrl(e, n) { return e === "npm" ? "https://www.npmjs.com/package/" + n
-  : e === "pypi" ? "https://pypi.org/project/" + n + "/" : "https://crates.io/crates/" + n; }
+  : e === "pypi" ? "https://pypi.org/project/" + n + "/"
+  : e === "docker" ? (n.indexOf("/") > 0 ? "https://hub.docker.com/r/" + n : "https://hub.docker.com/_/" + n)
+  : e === "brew" ? "https://formulae.brew.sh/formula/" + n : e === "cask" ? "https://formulae.brew.sh/cask/" + n
+  : "https://crates.io/crates/" + n; }
 
 /* ── 关注列表:data.ps_list(组件 board.df 读同一个键;顺序 = 首页与「关注列表」组件的显示顺序)── */
 var DEF = [{ e: "npm", n: "react" }, { e: "pypi", n: "requests" }, { e: "crates", n: "serde" }];
@@ -372,6 +379,22 @@ async function series(e, n, long) {
   var c = ks.map(function (k) { return { d: k, v: acc[k] }; }).slice(long ? -90 : -30);
   return { days: c, end: c[c.length - 1].d };
 }
+/* Docker Hub / Homebrew:一次取回就是全部数字(没有序列)。404:Docker 回 {message},Homebrew 回网页(解析失败)→ notfound。 */
+async function nsModel(e, n) {
+  if (e === "docker") {
+    var j = await retry(function () { return rawJ("docker", "repositories/" + dRepo(n) + "/"); });
+    if (!j || !j.name) throw new Error("notfound");
+    return { k: "d", main: +j.pull_count || 0, stars: +j.star_count || 0, upd: String(j.last_updated || "").slice(0, 10),
+      reg: String(j.date_registered || "").slice(0, 10), end: isoDay(new Date()) };
+  }
+  var s = await retry(function () { return raw("brew", (e === "cask" ? "cask/" : "formula/") + n + ".json"); }), h;
+  try { h = JSON.parse(s); } catch (x) { throw new Error("notfound"); }
+  var a = (h && h.analytics) || {}, ins = a.install || {}, req = a.install_on_request || {};
+  function g(o, w) { var t = o[w]; return t && t[n] != null ? +t[n] : 0; }
+  if (!h || !h.generated_date) throw new Error("notfound");
+  return { k: "b", main: g(ins, "30d"), d90: g(ins, "90d"), d365: g(ins, "365d"),
+    req30: e === "brew" && req["30d"] ? g(req, "30d") : null, end: String(h.generated_date).slice(0, 10) };
+}
 /* 缺天判据(与组件 pkg.df / board.df / cmp.df 同一条):某天为 0,且最近 30 天里非零日的中位数 ≥ 100
    → 视为「数据源当天没有统计」,不是「没人下载」。小包真的一天 0 下载不受影响。
    npm 的逐日统计会整天缺失(2026-09 实测 react 两周缺 3 天),不处理的话环比会报出假下跌。 */
@@ -402,10 +425,31 @@ function fillGaps(v) { var miss = gapMask(v), out = [], last = null;
   var first = null; for (var j = 0; j < out.length; j++) if (out[j] != null) { first = out[j]; break; }
   return out.map(function (x) { return x == null ? (first || 0) : x; }); }
 
+/* Docker:最近推送的 tag 里以版本号开头的(1.30.5-trixie-perl → 1.30.5),按推送先后去重 → 最近推送的版本。
+   ⚠️ 不是「最高版本」:nginx 同时维护 stable 与 mainline 两条线,哪条后推哪条在前。 */
+function dkVer(tags) { var out = [], seen = {};
+  (tags || []).forEach(function (x) { var m = /^v?(\d+(\.\d+)+)/.exec(String(x.name || ""));
+    /* 1.30 是 1.30.5 的别名 tag(同一次推送),已有更细的版本号就不再列 */
+    if (m && !seen[m[1]] && !Object.keys(seen).some(function (k) { return k.indexOf(m[1] + ".") === 0; })) {
+      seen[m[1]] = 1; out.push({ v: m[1], date: String(x.last_updated || "").slice(0, 10) }); } });
+  return out; }
 /* 元数据:最新版本 / 发布日 / 简介 / 主页 / 仓库;hist = 最近 5 个正式版(PyPI / crates.io)。
    npm 不做发布记录:带时间的版本表只在完整文档里,react 一份 2.9MB,为一个列表每天拉它不值当。 */
 function isRel(v) { return /^\d+(\.\d+)*$/.test(String(v || "")); }
 async function meta(e, n, withHist) {
+  if (e === "docker") {
+    var dj = await retry(function () { return rawJ("docker", "repositories/" + dRepo(n) + "/"); }), dh = [];
+    try { var tg = await rawJ("docker", "repositories/" + dRepo(n) + "/tags?page_size=" + (withHist ? 25 : 10) + "&ordering=last_updated");
+      dh = dkVer(tg.results); } catch (x) { dh = []; }
+    return { v: dh[0] ? dh[0].v : "", date: dh[0] ? dh[0].date : "", desc: dj.description || "", home: "", repo: "",
+      hist: withHist && dh.length ? dh.slice(0, 5) : null, pushed: 1 };
+  }
+  if (e === "brew" || e === "cask") {
+    var hs = await retry(function () { return raw("brew", (e === "cask" ? "cask/" : "formula/") + n + ".json"); }), hj;
+    try { hj = JSON.parse(hs); } catch (x) { throw new Error("notfound"); }
+    var hv = e === "cask" ? String(hj.version || "").split(",")[0] : ((hj.versions && hj.versions.stable) || "");
+    return { v: hv, date: "", desc: hj.desc || "", home: hj.homepage || "", repo: "", hist: null, nodate: 1 };
+  }
   if (e === "npm") {
     var l = await retry(function () { return rawJ("reg", n + "/latest"); });
     var date = "";
@@ -490,27 +534,32 @@ function sparkSvg(vals, w, h) {
 }
 
 i18n({
-  zh: { title: "开源包下载量", watching: "关注列表", manage: "管理", addPkg: "添加包", addPkgS: "搜索 npm、PyPI、crates.io",
+  zh: { title: "开源包下载量", watching: "关注列表", manage: "管理", addPkg: "添加包", addPkgS: "搜索 npm、PyPI、crates.io、Docker Hub、Homebrew",
+    kD: "累计拉取", kB: "30 天安装",
     pickT: "添加组件", pickS: "关注列表 · 两包对比",
     subN: "关注 %s 个开源包", ovT: "本周概况", nPkg: "%s 个包", nUp: "%s 涨", nDn: "%s 跌", nFlat: "%s 持平",
     relN: "本周 %s 个发了新版本：", relNone: "本周没有发新版本", newV: "新版 %s",
     best: "涨得最快", worst: "跌得最多", none: "--",
     emptyT: "还没有关注任何开源包", emptyS: "搜索 npm、PyPI 或 crates.io 上的开源包，加进来每天看一眼。",
-    foot: "数据来自 npm、pypistats.org（PyPI，不含镜像）与 crates.io 的公开下载统计，通常滞后 1–4 天；「近 7 天」按各源最新一天往前数，涨跌按有统计的日子的日均比较。只在这台设备上读取，不会上传到我们的服务器。" },
-  en: { title: "Package Downloads", watching: "Watching", manage: "Manage", addPkg: "Add a package", addPkgS: "Search npm, PyPI, crates.io",
+    foot: "数据来自 npm、pypistats.org（PyPI，不含镜像）与 crates.io 的公开下载统计，通常滞后 1–4 天；「近 7 天」按各源最新一天往前数，涨跌按有统计的日子的日均比较。Docker Hub 只公开累计拉取量、Homebrew 只公开近 30 / 90 / 365 天安装量，它们不算涨跌。只在这台设备上读取，不会上传到我们的服务器。" },
+  en: { title: "Package Downloads", watching: "Watching", manage: "Manage", addPkg: "Add a package", addPkgS: "Search npm, PyPI, crates.io, Docker Hub, Homebrew",
+    kD: "Total pulls", kB: "30-day installs",
     pickT: "Add widgets", pickS: "Watchlist · Compare two",
     subN: "Watching %s packages", ovT: "This week", nPkg: "%s packages", nUp: "%s up", nDn: "%s down", nFlat: "%s flat",
     relN: "%s released this week: ", relNone: "No releases this week", newV: "New %s",
     best: "Fastest growing", worst: "Biggest drop", none: "--",
     emptyT: "No packages yet", emptyS: "Search npm, PyPI or crates.io and add the packages you want to check daily.",
-    foot: "Data comes from the public download stats of npm, pypistats.org (PyPI, without mirrors) and crates.io, usually 1–4 days behind. \"Last 7 days\" counts back from each source's latest day; changes compare the daily average of days with data. Everything is read on this device and never uploaded to our servers." }
+    foot: "Data comes from the public download stats of npm, pypistats.org (PyPI, without mirrors) and crates.io, usually 1–4 days behind. \"Last 7 days\" counts back from each source's latest day; changes compare the daily average of days with data. Docker Hub only publishes total pulls and Homebrew only 30 / 90 / 365-day installs, so they show no change. Everything is read on this device and never uploaded to our servers." }
 });
 var S = { wl: [], m: {}, meta: {}, err: {}, busy: false };
 function key(x) { return x.e + ":" + x.n; }
-function relAgo(x) { var mt = S.meta[key(x)]; return mt && mt.v && mt.date ? daysAgo(mt.date) : null; }
+/* Docker 不算「发了新版本」:基础镜像一更新,已有版本的 tag 也会被重推,推送日 ≠ 发版日 */
+function relAgo(x) { var mt = S.meta[key(x)]; return x.e !== "docker" && mt && mt.v && mt.date ? daysAgo(mt.date) : null; }
 function paintHead() {
-  var ends = [];
-  S.wl.forEach(function (x) { var m = S.m[key(x)]; if (m) ends.push(m.end); });
+  var ends = [], ends2 = [];
+  /* 时效锚优先取逐日生态的截至日;Docker(取数当天)/ Homebrew(统计生成日)只在没有逐日生态时用 */
+  S.wl.forEach(function (x) { var m = S.m[key(x)]; if (m) (m.k ? ends2 : ends).push(m.end); });
+  if (!ends.length) ends = ends2;
   ends.sort(); var end = ends[ends.length - 1];
   xbAt.set("at", end || null, { day: 1 });   /* 数据只有日粒度:MM-DD = 各源最新一天(通常滞后 1~4 天) */
   $("sub").textContent = t("subN", S.wl.length);
@@ -522,7 +571,7 @@ function paintOv() {
   var up = 0, dn = 0, fl = 0, best = null, worst = null, rel = [], metaN = 0;
   S.wl.forEach(function (x) { var m = S.m[key(x)];
     if (m) { var d = dir(m.chg); if (d === "up") up++; else if (d === "dn") dn++; else if (d === "flat") fl++;
-      if (m.chg !== null) { if (!best || m.chg > best.c) best = { n: x.n, c: m.chg }; if (!worst || m.chg < worst.c) worst = { n: x.n, c: m.chg }; } }
+      if (m.chg != null) { if (!best || m.chg > best.c) best = { n: x.n, c: m.chg }; if (!worst || m.chg < worst.c) worst = { n: x.n, c: m.chg }; } }
     if (S.meta[key(x)]) metaN++;
     var a = relAgo(x); if (a != null && a <= 7) rel.push(x.n + " " + S.meta[key(x)].v); });
   var h = '<div class="card sum"><div class="l1"><b>' + esc(t("nPkg", S.wl.length)) + "</b>" +
@@ -548,9 +597,11 @@ function paintList() {
       '<div class="l"><b>' + esc(x.n) + '</b><div class="m"><span class="eco">' + esc(ECO[x.e]) + "</span>" +
       (a != null && a <= 7 ? '<span class="nv">' + esc(t("newV", mt.v)) + "</span>" : "") +
       (S.err[key(x)] && !m ? '<span class="c-dn">' + esc(t("failCold")) + "</span>" : "") + "</div></div>" +
-      (m ? sparkSvg(m.spark, 64, 28) : '<svg class="spk" width="64" height="28"></svg>') +
-      '<div class="r"><b>' + (m ? esc(cmp(m.wk)) : '<span class="sk">0000</span>') + "</b>" +
-      '<span class="pill ' + d + '">' + esc(m ? (d === "flat" ? t("flatS") : pctTxt(m.chg)) : "--") + "</span></div>" +
+      (m && !m.k ? sparkSvg(m.spark, 64, 28) : '<svg class="spk" width="64" height="28"></svg>') +
+      '<div class="r"><b>' + (m ? esc(cmp(m.k ? m.main : m.wk)) : '<span class="sk">0000</span>') + "</b>" +
+      /* Docker / Homebrew 没有较上周:胶囊写主值是什么(累计拉取 / 30 天安装),中性灰 */
+      (m && m.k ? '<span class="pill">' + esc(t(m.k === "d" ? "kD" : "kB")) + "</span></div>"
+        : '<span class="pill ' + d + '">' + esc(m ? (d === "flat" ? t("flatS") : pctTxt(m.chg)) : "--") + "</span></div>") +
       '<span class="chev">›</span></div>';
   });
   $("list").innerHTML = '<div class="list">' + h + "</div>";
@@ -561,7 +612,8 @@ function model(s) { var st = stats(s); st.spark = fillGaps(s.days.map(function (
 async function loadOne(x, force) {
   var k = ckey("30", x.e, x.n), c = force ? null : await cacheGet(k);
   if (c) { S.m[key(x)] = c.d; if (!c.stale) return; }
-  try { var s = await series(x.e, x.n, false); var m = model(s); S.m[key(x)] = m; delete S.err[key(x)]; cachePut(k, m); }
+  try { var m = isSer(x.e) ? model(await series(x.e, x.n, false)) : await nsModel(x.e, x.n);
+    S.m[key(x)] = m; delete S.err[key(x)]; cachePut(k, m); }
   catch (e) { S.err[key(x)] = 1; }
 }
 async function loadMeta(x, force) {
@@ -591,7 +643,9 @@ async function refresh(force) {
   $("mg").onclick = function () { go("/manage"); };
   $("addPkg").onclick = function () { go("/manage"); };
   /* 两包对比默认拿关注列表前两个(不足两个用 react / vue);加上之后长按编辑可以换 */
-  $("pickw").onclick = function () { haptic(); var a = S.wl[0] || { e: "npm", n: "react" }, b = S.wl[1] || { e: "npm", n: a.n === "vue" ? "react" : "vue" };
+  /* 两包对比只比逐日序列:Docker Hub / Homebrew 不进默认对 */
+  $("pickw").onclick = function () { haptic(); var sw = S.wl.filter(function (x) { return isSer(x.e); });
+    var a = sw[0] || { e: "npm", n: "react" }, b = sw[1] || { e: "npm", n: a.n === "vue" ? "react" : "vue" };
     xbridge.pickWidgets([{ id: "board" }, { id: "cmp", params: { eco: a.e, pkg: a.n, eco2: b.e, pkg2: b.n } }]); };
   $("list").addEventListener("click", function (e) { var r = e.target.closest(".row"); if (!r) return;
     go("/pkg?eco=" + encodeURIComponent(r.getAttribute("data-e")) + "&name=" + encodeURIComponent(r.getAttribute("data-n"))); });

@@ -42,6 +42,7 @@ svg{display:block}
 .kv{display:flex;gap:24px;margin-top:6px}
 .kv div{font-size:15px;font-weight:700}
 .kv i{display:block;font-style:normal;font-size:11px;color:var(--sub);font-weight:400}
+.note{color:var(--sub);font-size:11px;line-height:1.6;padding:9px 14px 11px;border-top:1px solid var(--line)}
 .ax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--sub);margin-top:4px}
 
 .about{color:var(--sub);font-size:13px;margin:6px 0 0;line-height:1.6}
@@ -251,7 +252,7 @@ var I18N = {
   "loading": "正在读取…",
   "fail": "暂时取不到数据，稍后点右上角重试",
   "pickT": "添加组件",
-  "foot": "数据来源：美国财政部（名义与实际收益率曲线，收盘口径）· 德国央行（期限结构推算的联邦债券收益率）· 日本财务省（当月日本国债收益率）。「1 个月 / 1 年」按往前 21 / 250 个交易日计。美联储利率见「宏观日历」。仅供参考，不构成投资建议。",
+  "foot": "数据来源：美国财政部（名义与实际收益率曲线，收盘口径）· 德国央行（期限结构推算的联邦债券收益率）· 日本财务省（当月日本国债收益率）· 中国财政部（中国国债收益率曲线，中央国债登记结算公司编制）· 国际清算银行 BIS（各国央行政策利率）。「1 个月 / 1 年」按往前 21 / 250 个交易日计。美联储利率见「宏观日历」。仅供参考，不构成投资建议。",
   "title": "利率",
   "secChart": "走势",
   "y1": "近一年",
@@ -266,13 +267,15 @@ var I18N = {
   "wReal": "实际利率",
   "wSpread": "2–10 年利差",
   "wWorld": "各国 10 年",
-  "wBoard": "利率总表"
+  "wBoard": "利率总表",
+  "wCn10": "中国 10 年",
+  "wCnCurve": "中国国债曲线"
  },
  "en": {
   "loading": "Loading…",
   "fail": "Couldn't load data. Tap the time at top right to retry.",
   "pickT": "Add widgets",
-  "foot": "Sources: US Treasury (nominal and real yield curves, at the close) · Bundesbank (term-structure estimates of federal bond yields) · Japan Ministry of Finance (current-month JGB yields). \"1M / 1Y\" means 21 / 250 trading days back. For the Fed's rate, see Macro Calendar. For reference only, not investment advice.",
+  "foot": "Sources: US Treasury (nominal and real yield curves, at the close) · Bundesbank (term-structure estimates of federal bond yields) · Japan Ministry of Finance (current-month JGB yields) · China Ministry of Finance (government bond yield curve, compiled by ChinaBond) · BIS (central bank policy rates). \"1M / 1Y\" means 21 / 250 trading days back. For the Fed's rate, see Macro Calendar. For reference only, not investment advice.",
   "title": "Rates",
   "secChart": "Trend",
   "y1": "Past year",
@@ -287,13 +290,16 @@ var I18N = {
   "wReal": "Real yield",
   "wSpread": "2s10s spread",
   "wWorld": "10Y yields",
-  "wBoard": "Rates board"
+  "wBoard": "Rates board",
+  "wCn10": "China 10Y",
+  "wCnCurve": "China yield curve"
  }
 };
-var SERIES = [{"id": "us1m", "zh": "美债 1 个月", "en": "US 1-month", "src": "n", "k": "1m", "w": null}, {"id": "us3m", "zh": "美债 3 个月", "en": "US 3-month", "src": "n", "k": "3m", "w": "board"}, {"id": "us6m", "zh": "美债 6 个月", "en": "US 6-month", "src": "n", "k": "6m", "w": null}, {"id": "us1y", "zh": "美债 1 年", "en": "US 1-year", "src": "n", "k": "1y", "w": null}, {"id": "us2y", "zh": "美债 2 年", "en": "US 2-year", "src": "n", "k": "2y", "w": "board"}, {"id": "us5y", "zh": "美债 5 年", "en": "US 5-year", "src": "n", "k": "5y", "w": null}, {"id": "us7y", "zh": "美债 7 年", "en": "US 7-year", "src": "n", "k": "7y", "w": null}, {"id": "us10y", "zh": "美债 10 年", "en": "US 10-year", "src": "n", "k": "10y", "w": "us10"}, {"id": "us20y", "zh": "美债 20 年", "en": "US 20-year", "src": "n", "k": "20y", "w": null}, {"id": "us30y", "zh": "美债 30 年", "en": "US 30-year", "src": "n", "k": "30y", "w": "board"}, {"id": "usr5", "zh": "5 年实际利率", "en": "5-year real yield", "src": "r", "k": "5y", "w": null}, {"id": "usr10", "zh": "10 年实际利率", "en": "10-year real yield", "src": "r", "k": "10y", "w": "real"}, {"id": "usr30", "zh": "30 年实际利率", "en": "30-year real yield", "src": "r", "k": "30y", "w": null}, {"id": "bei10", "zh": "10 年通胀预期", "en": "10-year inflation expectation", "src": "bei", "k": "10y", "w": "real"}, {"id": "s2s10", "zh": "2–10 年利差", "en": "2s10s spread", "src": "sp", "k": "2y:10y", "w": "spread"}, {"id": "s3m10", "zh": "3 个月–10 年利差", "en": "3m10y spread", "src": "sp", "k": "3m:10y", "w": null}, {"id": "de2", "zh": "德国 2 年", "en": "Germany 2-year", "src": "de", "k": "02", "w": null}, {"id": "de5", "zh": "德国 5 年", "en": "Germany 5-year", "src": "de", "k": "05", "w": null}, {"id": "de10", "zh": "德国 10 年", "en": "Germany 10-year", "src": "de", "k": "10", "w": "world"}, {"id": "de30", "zh": "德国 30 年", "en": "Germany 30-year", "src": "de", "k": "30", "w": null}, {"id": "jp2", "zh": "日本 2 年", "en": "Japan 2-year", "src": "jp", "k": "2", "w": null}, {"id": "jp5", "zh": "日本 5 年", "en": "Japan 5-year", "src": "jp", "k": "5", "w": null}, {"id": "jp10", "zh": "日本 10 年", "en": "Japan 10-year", "src": "jp", "k": "10", "w": "world"}, {"id": "jp30", "zh": "日本 30 年", "en": "Japan 30-year", "src": "jp", "k": "30", "w": null}], ABOUT = {"n": {"zh": "美国政府按这个期限借钱要付的年利率（财政部每天收盘后公布的平价收益率）。全球很多资产的定价都以美债收益率为基准。", "en": "What the US government pays to borrow for this term (the Treasury's daily par yield, published after the close). Many assets worldwide are priced off Treasury yields."}, "r": {"zh": "通胀保值国债（TIPS）的收益率，即扣除通胀后的利率。", "en": "The yield on inflation-protected Treasuries (TIPS), meaning the rate after inflation."}, "bei": {"zh": "普通国债与通胀保值国债同期限的收益率差，大致反映市场预期的未来平均通胀。这里用同一天的名义 10 年减实际 10 年近似。", "en": "Nominal minus TIPS yield for the same term, a rough gauge of the inflation the market expects. Approximated here as the same day's nominal 10-year minus real 10-year."}, "sp": {"zh": "长期收益率减短期收益率的差。小于零叫「倒挂」，即短期利率高于长期利率。", "en": "Long-term minus short-term yield. Below zero is called an inversion: short-term rates are above long-term rates."}, "de": {"zh": "由德国央行根据联邦债券价格推算的收益率（期限结构推算值，与某一只债的成交价会差几个基点），是欧元区利率的主要参照。", "en": "Estimated by the Bundesbank from federal bond prices (a term-structure estimate, a few bp off any single bond's quote); the main euro-area benchmark."}, "jp": {"zh": "日本财务省公布的日本国债收益率。财务省只按月提供文件，这里只有本月的数据。", "en": "Japanese government bond yield published by Japan's Ministry of Finance. It only offers the current month as a file, so only this month is shown."}}, BYID = {};
+var SERIES = [{"id": "us1m", "zh": "美债 1 个月", "en": "US 1-month", "src": "n", "k": "1m", "w": null}, {"id": "us3m", "zh": "美债 3 个月", "en": "US 3-month", "src": "n", "k": "3m", "w": "board"}, {"id": "us6m", "zh": "美债 6 个月", "en": "US 6-month", "src": "n", "k": "6m", "w": null}, {"id": "us1y", "zh": "美债 1 年", "en": "US 1-year", "src": "n", "k": "1y", "w": null}, {"id": "us2y", "zh": "美债 2 年", "en": "US 2-year", "src": "n", "k": "2y", "w": "board"}, {"id": "us5y", "zh": "美债 5 年", "en": "US 5-year", "src": "n", "k": "5y", "w": null}, {"id": "us7y", "zh": "美债 7 年", "en": "US 7-year", "src": "n", "k": "7y", "w": null}, {"id": "us10y", "zh": "美债 10 年", "en": "US 10-year", "src": "n", "k": "10y", "w": "us10"}, {"id": "us20y", "zh": "美债 20 年", "en": "US 20-year", "src": "n", "k": "20y", "w": null}, {"id": "us30y", "zh": "美债 30 年", "en": "US 30-year", "src": "n", "k": "30y", "w": "board"}, {"id": "usr5", "zh": "5 年实际利率", "en": "5-year real yield", "src": "r", "k": "5y", "w": null}, {"id": "usr10", "zh": "10 年实际利率", "en": "10-year real yield", "src": "r", "k": "10y", "w": "real"}, {"id": "usr30", "zh": "30 年实际利率", "en": "30-year real yield", "src": "r", "k": "30y", "w": null}, {"id": "bei10", "zh": "10 年通胀预期", "en": "10-year inflation expectation", "src": "bei", "k": "10y", "w": "real"}, {"id": "s2s10", "zh": "2–10 年利差", "en": "2s10s spread", "src": "sp", "k": "2y:10y", "w": "spread"}, {"id": "s3m10", "zh": "3 个月–10 年利差", "en": "3m10y spread", "src": "sp", "k": "3m:10y", "w": null}, {"id": "de2", "zh": "德国 2 年", "en": "Germany 2-year", "src": "de", "k": "02", "w": null}, {"id": "de5", "zh": "德国 5 年", "en": "Germany 5-year", "src": "de", "k": "05", "w": null}, {"id": "de10", "zh": "德国 10 年", "en": "Germany 10-year", "src": "de", "k": "10", "w": "world"}, {"id": "de30", "zh": "德国 30 年", "en": "Germany 30-year", "src": "de", "k": "30", "w": null}, {"id": "jp2", "zh": "日本 2 年", "en": "Japan 2-year", "src": "jp", "k": "2", "w": null}, {"id": "jp5", "zh": "日本 5 年", "en": "Japan 5-year", "src": "jp", "k": "5", "w": null}, {"id": "jp10", "zh": "日本 10 年", "en": "Japan 10-year", "src": "jp", "k": "10", "w": "world"}, {"id": "jp30", "zh": "日本 30 年", "en": "Japan 30-year", "src": "jp", "k": "30", "w": null}, {"id": "cn3m", "zh": "中国 3 个月", "en": "China 3-month", "src": "cn", "k": "3m", "w": null}, {"id": "cn6m", "zh": "中国 6 个月", "en": "China 6-month", "src": "cn", "k": "6m", "w": null}, {"id": "cn1y", "zh": "中国 1 年", "en": "China 1-year", "src": "cn", "k": "1y", "w": null}, {"id": "cn2y", "zh": "中国 2 年", "en": "China 2-year", "src": "cn", "k": "2y", "w": null}, {"id": "cn3y", "zh": "中国 3 年", "en": "China 3-year", "src": "cn", "k": "3y", "w": null}, {"id": "cn5y", "zh": "中国 5 年", "en": "China 5-year", "src": "cn", "k": "5y", "w": null}, {"id": "cn7y", "zh": "中国 7 年", "en": "China 7-year", "src": "cn", "k": "7y", "w": null}, {"id": "cn10y", "zh": "中国 10 年", "en": "China 10-year", "src": "cn", "k": "10y", "w": "cn10"}, {"id": "cn30y", "zh": "中国 30 年", "en": "China 30-year", "src": "cn", "k": "30y", "w": null}, {"id": "cs2s10", "zh": "中国 2–10 年利差", "en": "China 2s10s spread", "src": "cnsp", "k": "2y:10y", "w": "cncurve"}], ABOUT = {"n": {"zh": "美国政府按这个期限借钱要付的年利率（财政部每天收盘后公布的平价收益率）。全球很多资产的定价都以美债收益率为基准。", "en": "What the US government pays to borrow for this term (the Treasury's daily par yield, published after the close). Many assets worldwide are priced off Treasury yields."}, "r": {"zh": "通胀保值国债（TIPS）的收益率，即扣除通胀后的利率。", "en": "The yield on inflation-protected Treasuries (TIPS), meaning the rate after inflation."}, "bei": {"zh": "普通国债与通胀保值国债同期限的收益率差，大致反映市场预期的未来平均通胀。这里用同一天的名义 10 年减实际 10 年近似。", "en": "Nominal minus TIPS yield for the same term, a rough gauge of the inflation the market expects. Approximated here as the same day's nominal 10-year minus real 10-year."}, "sp": {"zh": "长期收益率减短期收益率的差。小于零叫「倒挂」，即短期利率高于长期利率。", "en": "Long-term minus short-term yield. Below zero is called an inversion: short-term rates are above long-term rates."}, "de": {"zh": "由德国央行根据联邦债券价格推算的收益率（期限结构推算值，与某一只债的成交价会差几个基点），是欧元区利率的主要参照。", "en": "Estimated by the Bundesbank from federal bond prices (a term-structure estimate, a few bp off any single bond's quote); the main euro-area benchmark."}, "cn": {"zh": "财政部公布的中国国债收益率曲线（中央国债登记结算公司编制，收盘口径，两位小数）。国内多数人民币资产的定价以它为参照。", "en": "China government bond yield from the Ministry of Finance's yield curve (compiled by ChinaBond, at the close, two decimals). The reference for most renminbi assets."}, "cnsp": {"zh": "中国 10 年期减 2 年期国债收益率的差。小于零叫「倒挂」，即短期利率高于长期利率。", "en": "China 10-year minus 2-year government bond yield. Below zero is called an inversion."}, "jp": {"zh": "日本财务省公布的日本国债收益率。财务省只按月提供文件，这里只有本月的数据。", "en": "Japanese government bond yield published by Japan's Ministry of Finance. It only offers the current month as a file, so only this month is shown."}}, BYID = {};
 SERIES.forEach(function(x){ BYID[x.id] = x; });
 var NCOL = {"1m":1,"3m":4,"6m":6,"1y":7,"2y":8,"3y":9,"5y":10,"7y":11,"10y":12,"20y":13,"30y":14}, RCOL = {"5y":1,"7y":2,"10y":3,"20y":4,"30y":5};
 var JCOL = {"2":2,"5":5,"10":10,"30":14};
+var CN = null, POLC = ["US", "XM", "JP", "GB", "CN", "CA", "CH", "AU", "KR", "IN", "BR", "MX"];
 var LANG = "en", SCHEMA = 1, UPC = "";
 var MONS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
 function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
@@ -372,6 +378,39 @@ async function deFetch(){
   ["02","05","10","30"].forEach(function(k){ out[k] = bbkRows(d && d["d"+k]); if (out[k].length) any = true; });
   return any ? out : null;
 }
+var CNF = {"3m":"threeMonth","6m":"sixMonth","1y":"oneYear","2y":"twoYear","3y":"threeYear","5y":"fiveYear","7y":"sevenYear","10y":"tenYear","30y":"thirtyYear"};
+/* 中国国债:两段 heList(各按日期倒序)→ 最新在前、按日期去重 */
+async function cnFetch(){
+  var d = await xbridge.runDataFlow("cn", {}, 30000).then(un), seen = {}, out = [];
+  [d && d.cb, d && d.ca].forEach(function(x){ ((x && x.heList) || []).forEach(function(r){
+    if (!r || !/^\d{4}-\d\d-\d\d$/.test(r.workTime||"") || seen[r.workTime]) return; seen[r.workTime] = 1;
+    var v = {}; for (var k in CNF) v[k] = num(r[CNF[k]]); out.push({ d: r.workTime, v: v });
+  }); });
+  out.sort(function(a, b){ return a.d < b.d ? 1 : -1; });
+  return out.length ? out : null;
+}
+/* 央行政策利率:BIS 日频 + 月频 CSV → 每家 {r 当前, d 数据日, mv 上次调整(基点), when 调整日 / 月, exact 是否确切到日} */
+function polRows(txt, freq){
+  var by = {};
+  String(txt||"").split(/\r?\n/).forEach(function(line){ var p = line.split(",");
+    if (p[0] !== freq || p.length < 4) return; var v = num(p[3]); if (v==null) return;
+    (by[p[1]] = by[p[1]] || []).push({ d: p[2], v: v }); });
+  return by;
+}
+function lastMove(arr, L){ /* arr 旧 → 新;返回末尾那段等于 L 的第一个点与它之前的值 */
+  var i = arr.length - 1; if (i < 0 || arr[i].v !== L) return null;
+  while (i > 0 && arr[i-1].v === L) i--;
+  return i > 0 ? { when: arr[i].d, prev: arr[i-1].v } : { none: true };
+}
+async function polFetch(){
+  var d = await xbridge.runDataFlow("pol", {}, 25000).then(un); if (!d) return null;
+  var D = polRows(d.d, "D"), Mo = polRows(d.m, "M"), out = {}, any = false;
+  POLC.forEach(function(c){ var a = D[c]; if (!a || !a.length) return; var L = a[a.length-1].v, x = lastMove(a, L), r = { r: L, d: a[a.length-1].d };
+    if (x && !x.none){ r.mv = Math.round((L - x.prev)*100); r.when = x.when; r.exact = 1; }
+    else { var y = Mo[c] ? lastMove(Mo[c], L) : null; if (y && !y.none){ r.mv = Math.round((L - y.prev)*100); r.when = y.when; } else if (y) r.none = 1; }
+    out[c] = r; any = true; });
+  return any ? out : null;
+}
 async function jpFetch(){ var d = await xbridge.runDataFlow("jp", {}, 20000).then(un); var r = mofRows(d && d.raw); return r.length ? r : null; }
 /* 一个序列 → 最新在前的 [{d, v}](收益率,百分点;利差也按百分点存) */
 function series(id, TS, DE, JP){
@@ -386,6 +425,8 @@ function series(id, TS, DE, JP){
     return TS.n.map(function(r){ var a = r.v[NCOL["10y"]], b = rm[r.d]; return { d: r.d, v: (a==null||b==null) ? null : a - b }; }).filter(ok);
   }
   if (s.src==="de") return (DE && DE[s.k]) || [];
+  if (s.src==="cn") return (CN || []).map(function(r){ return { d: r.d, v: r.v[s.k] }; }).filter(ok);
+  if (s.src==="cnsp") return (CN || []).map(function(r){ var a = r.v["2y"], b = r.v["10y"]; return { d: r.d, v: (a==null||b==null) ? null : b - a }; }).filter(ok);
   if (s.src==="jp") return (JP || []).map(function(r){ return { d: r.d, v: r.v[JCOL[s.k]] }; }).filter(ok);
   return [];
 }
@@ -399,7 +440,7 @@ function bpTxt(v, unit){
 }
 function bpCell(v){ return '<span class="c '+dirCls(v)+'">'+esc(bpTxt(v, false))+'</span>'; }
 function p2(v){ return v==null ? "—" : v.toFixed(2); }
-function isSp(id){ var s = BYID[id]; return s && s.src==="sp"; }
+function isSp(id){ var s = BYID[id]; return s && (s.src==="sp" || s.src==="cnsp"); }
 function valTxt(id, v){ if (v==null) return "—"; if (isSp(id)){ var b = Math.round(v*100); return (b>0?"+":b<0?"−":"")+Math.abs(b); } return v.toFixed(2)+"%"; }
 function dShort(d){ if (!d) return ""; var p = d.split("-"); return zh() ? (+p[1])+" 月 "+(+p[2])+" 日" : MONS[+p[1]-1]+" "+(+p[2]); }
 function dLong(d){ if (!d) return ""; var p = d.split("-"); return zh() ? p[0]+" 年 "+(+p[1])+" 月 "+(+p[2])+" 日" : MONS[+p[1]-1]+" "+(+p[2])+", "+p[0]; }
@@ -423,7 +464,7 @@ function paintI18n(){ document.querySelectorAll("[data-i]").forEach(function(el)
 function paintAt(ts){ xbAt.set("xbAt", ts || null); }
 
 var Q = new URLSearchParams(location.search), ID = Q.get("id") || "us10y", TS = null, DE = null, JP = null, seq = 0;
-var WN = {us10:"wUs10", real:"wReal", spread:"wSpread", world:"wWorld", board:"wBoard"};
+var WN = {us10:"wUs10", real:"wReal", spread:"wSpread", world:"wWorld", board:"wBoard", cn10:"wCn10", cncurve:"wCnCurve"};
 function paintHead(){
   var s = BYID[ID]; document.getElementById("ttl").textContent = s ? nm(ID) : (Q.get("name") || "");
   document.getElementById("about").textContent = s ? (zh() ? ABOUT[s.src].zh : ABOUT[s.src].en) : "";
@@ -448,9 +489,10 @@ function paint(){
 async function refresh(force){
   var my = ++seq, s = BYID[ID] || {}, ps = [];
   var cb = function(set){ return function(m, ts, failed){ if (my !== seq) return; if (failed && m===null && window["__has_"+set]) return;
-    if (m) window["__has_"+set] = 1; if (set==="ts"){ TS = m; paintAt(ts); } else if (set==="de") DE = m; else JP = m; paint(); }; };
+    if (m) window["__has_"+set] = 1; if (set==="ts"){ TS = m; paintAt(ts); } else if (set==="de") DE = m; else if (set==="cn"){ CN = m; paintAt(ts); } else JP = m; paint(); }; };
   if (s.src==="de") ps.push(flowCached("c.de", 3600000, 7*86400000, deFetch, cb("de"), force));
   else if (s.src==="jp") ps.push(flowCached("c.jp", 3600000, 7*86400000, jpFetch, cb("jp"), force));
+  else if (s.src==="cn" || s.src==="cnsp") ps.push(flowCached("c.cn", 3600000, 7*86400000, cnFetch, cb("cn"), force));
   else ps.push(flowCached("c.tsy", 3600000, 7*86400000, tsyFetch, cb("ts"), force));
   await Promise.all(ps);
 }

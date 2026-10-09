@@ -1,0 +1,92 @@
+{
+  "_note": "中国国债(财政部中国国债收益率曲线)约 13 个月:拆成两个并发请求(服务端耗时随行数涨,一次取一年要 6–9 秒),各约 30–37KB。取不到 = 失败(这一块显示失败态,不拖垮整页)。原样取回,解析与首屏缓存在页面 JS 的 flowCached 里做(与 macro 同法)。",
+  "_lintCache": "exempt",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "a0",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-34560000000),yyyy-MM-dd)]"
+      },
+      "_note": "400 个日历日:中国一年约 245 个交易日,「1 年」按往前 250 个交易日计(与美债同口径)要多取一点。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a1",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-15552000000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b0",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-15638400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b1",
+        "value": "$[formatDate::(calc::(${@time.nowMs}+86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "ca",
+          "action": "request",
+          "params": {
+            "url": "https://yield.chinabond.com.cn/cbweb-czb-web/czb/historyQuery?startDate=${a0}&endDate=${a1}&gjqx=0&locale=cn_ZH&qxmc=1",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        },
+        {
+          "id": "cb",
+          "action": "request",
+          "params": {
+            "url": "https://yield.chinabond.com.cn/cbweb-czb-web/czb/historyQuery?startDate=${b0}&endDate=${b1}&gjqx=0&locale=cn_ZH&qxmc=1",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${cb.heList[0].workTime},__none__),__none__),0,1),1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "chinabond unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ca",
+          "cb"
+        ]
+      }
+    }
+  ]
+}

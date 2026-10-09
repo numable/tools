@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "_note": "Docker Hub:p = `repositories/<命名空间>/<仓库>/`(官方镜像命名空间 library;累计拉取 / 星标 / 最近推送)/ `repositories/<…>/tags?page_size=25&ordering=last_updated`(最近推送的 tag,约 130KB)/ `search/repositories/?query=…&page_size=…`(搜索)。只有累计拉取,没有逐日数据。\n通用「原样取回」流:入参 p = host 之后的路径(含查询串),响应原文交给 H5 页用 JS 解析。host 写死在 URL 字面量里(G3 能静态认出),页面拿它打不到别的域(同 crypto/okx.df)。",
+  "_lintCache": "exempt",
+  "_noteCache": "首屏缓存在 H5 页里做(G23 三态:页面把解析后的精简模型写进 data.c.ps.*,带结构版本与时间戳,先渲旧数据再后台校新)。本流只负责原样取回,搜索类调用更不该缓存。",
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "pIn",
+        "value": "${p}"
+      },
+      "_note": "⚠️ 入参落地(勿删):URL 与方法参数里的 ${} 看不见 flow 入参。"
+    },
+    {
+      "id": "r",
+      "action": "request",
+      "params": {
+        "url": "https://hub.docker.com/v2/${pIn}",
+        "method": "GET",
+        "formatType": "string",
+        "header": {
+          "Accept": "application/json"
+        },
+        "timeout": "12000"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "请求屏障(勿删):request 之后紧邻的节点读不到响应。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "raw",
+        "value": "$[findNotEmpty::(${r},)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "raw"
+        ]
+      }
+    }
+  ]
+}

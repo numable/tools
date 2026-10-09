@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<!--
+  记账首页(路由 /)。
+  ⚠️ 本文件由 tools/ledger/build.py 生成:源在 tools/ledger/pages/home.html,共享件(model.js / ui.js / kit.css /
+     加组件按钮)在生成时注入。别直接改 bundles/ledger/page/html 下的产物。
+
+  信息优先级与组件一致(page-design-system §0):本月支出 + 预算进度在最上面,其次分类占比、近 30 天、明细。
+  记一笔 / 改一笔都走 /add(贴底面板);回到本页靠 U.watch() 轮询小键 rev,变了才重读。
+  CSP:离线 html 被注入 `default-src 'self'; connect-src 'none'` —— 本页全自包含,零网络。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ledger</title>
+<style>
+/* ── ledger kit.css(单一真源 = tools/ledger/src/kit.css,build.py 注入每个页面)──
+   色值承 design-tokens.md;源色 = 本包身份(账本橄榄绿)。页面规范见 doc/page-design-system.md:
+   左右内边距 14 · 组件圆角 14 · 行 / tile 12 · chip 8 · 段标题 13 粗 sub · 元信息 11。骨架照 tools/todo/src/kit.css。 */
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--faint:#9AA0A6;--line:#E4E7EC;
+  --tile:#EEF0F3;--tile2:#E7E9EE;--rail:#D6DAE1;
+  --src:#5C8A0A;--srcInk:#4E7A08;--srcOn:#FFFFFF;--srcSoft:rgba(92,138,10,.10);--srcSoft2:rgba(92,138,10,.16);--srcBar:#B9D48C;
+  --red:#E5484D;--redSoft:rgba(229,72,77,.10);--amber:#B37A00;--green:#2E9E6B;
+  --shadow:0 1px 2px rgba(15,20,30,.05),0 6px 18px rgba(15,20,30,.05);
+  --sheet:#FFFFFF;--scrim:rgba(0,0,0,.38)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--faint:#5E636B;--line:#262A31;
+  --tile:#1D2025;--tile2:#23272E;--rail:#2C313A;
+  --src:#A6D65A;--srcInk:#A6D65A;--srcOn:#12180A;--srcSoft:rgba(166,214,90,.12);--srcSoft2:rgba(166,214,90,.2);--srcBar:#4F6A2A;
+  --red:#FF6369;--redSoft:rgba(255,99,105,.13);--amber:#F5C23B;--green:#45C793;
+  --shadow:none;--sheet:#1A1C20;--scrim:rgba(0,0,0,.55)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:15px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC","Noto Sans SC",sans-serif;
+  padding:calc(var(--xb-content-top) + 14px) 14px calc(var(--xb-content-bottom) + 34px);
+  -webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit}
+input,select,textarea{font-size:16px;font-family:inherit;color:var(--fg)}
+.g{width:18px;height:18px;display:block;flex:0 0 auto}
+.hide{display:none!important}
+.num{font-variant-numeric:tabular-nums}
+
+/* §1 页头 */
+.hd{display:flex;align-items:flex-start;gap:8px}
+.hd h1{flex:1 1 auto;min-width:0;font-size:24px;margin:0 0 3px;letter-spacing:-.3px;line-height:1.25}
+.sub{color:var(--sub);font-size:13px;margin:0 0 12px}
+
+/* 月份切换 */
+.mnav{display:flex;align-items:center;gap:4px;margin:0 0 12px}
+.mnav b{font-size:15px;font-weight:700;min-width:0;text-align:center;padding:0 6px}
+.mnav button{width:32px;height:32px;border-radius:16px;border:0;background:var(--card);box-shadow:var(--shadow);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--sub)}
+.mnav button:disabled{opacity:.35;cursor:default}
+.mnav button .g{width:15px;height:15px}
+.mnav .now{margin-left:auto;width:auto;padding:0 12px;font-size:13px;font-weight:600;color:var(--srcInk)}
+
+/* §2 段 */
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:20px 4px 8px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.sec .r{font-weight:400;font-variant-numeric:tabular-nums}
+.sec .lk{border:0;background:none;padding:0;color:var(--srcInk);font-weight:600;font-size:13px;cursor:pointer}
+.card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.card+.card{margin-top:10px}
+.meta{color:var(--sub);font-size:11px;line-height:1.5;margin:18px 4px 0}
+
+/* 概览 */
+.ov{padding:16px 16px 14px}
+.ov .l{font-size:13px;color:var(--sub);font-weight:600}
+.ov .big{font-size:34px;font-weight:800;letter-spacing:-.5px;line-height:1.15;margin:2px 0 0;font-variant-numeric:tabular-nums;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov .big small{font-size:18px;font-weight:700;margin-right:2px}
+.bar{height:8px;border-radius:4px;background:var(--tile2);overflow:hidden;margin:12px 0 6px}
+.bar i{display:block;height:100%;border-radius:4px;background:var(--src)}
+.bar.warn i{background:var(--amber)}
+.bar.over i{background:var(--red)}
+.ov .bt{font-size:13px;color:var(--sub);display:flex;justify-content:space-between;gap:8px}
+.ov .bt span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ov .bt b{color:var(--fg);font-weight:600}
+.ov .bt .over{color:var(--red);font-weight:700}
+.ov .bt .warn{color:var(--amber);font-weight:700}
+.ov .set{border:0;background:none;padding:0;color:var(--srcInk);font-weight:600;font-size:13px;cursor:pointer;margin-top:10px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.tl{background:var(--tile);border-radius:12px;padding:9px 10px;min-width:0}
+.tl span{display:block;font-size:11.5px;color:var(--sub)}
+.tl b small{font-size:11px;font-weight:700;margin-right:1px}
+.tl b{display:block;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl b.inc{color:var(--green)}
+.tl b.neg{color:var(--red)}
+
+/* 分类占比 */
+.cb{display:flex;gap:2px;height:12px;margin:14px 14px 4px;border-radius:6px;overflow:hidden}
+.cb i{display:block;height:100%}
+.cr{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border:0;background:none;width:100%;text-align:left;position:relative}
+.cr+.cr::before{content:"";position:absolute;left:54px;right:0;top:0;height:1px;background:var(--line)}
+.cr:active{background:var(--tile)}
+.cr.on{background:var(--srcSoft)}
+.ci{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.ci .g{width:16px;height:16px}
+.cr .cn{flex:1 1 auto;min-width:0}
+.cr .cn b{display:block;font-size:15px;font-weight:500}
+.cr .cn .pb{display:block}
+.cr .cn .pb{height:4px;border-radius:2px;background:var(--tile2);margin-top:5px;overflow:hidden}
+.cr .cn .pb i{display:block;height:100%;border-radius:2px}
+.cr .ca{flex:0 0 auto;text-align:right;font-variant-numeric:tabular-nums}
+.cr .ca b{display:block;font-size:15px;font-weight:600}
+.cr .ca small{display:block;font-size:12px;color:var(--sub)}
+
+/* 每日柱 */
+.dch{padding:14px 14px 10px}
+.dch .hl{display:flex;justify-content:space-between;font-size:12.5px;color:var(--sub);gap:8px}
+.dch .hl b{color:var(--fg);font-weight:600}
+.dbars{display:flex;align-items:flex-end;gap:2px;height:84px;margin-top:12px}
+.dbars i{flex:1 1 0;border-radius:2px 2px 1px 1px;background:var(--srcBar);min-height:2px}
+.dbars i.z{background:var(--rail)}
+.dbars i.t{background:var(--src)}
+.dax{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:6px}
+
+/* 明细 */
+.dh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;color:var(--sub);font-weight:700;margin:16px 4px 6px}
+.dh .r{font-weight:400;font-variant-numeric:tabular-nums}
+.rr{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;position:relative;border:0;background:none;width:100%;text-align:left}
+.rr+.rr::before{content:"";position:absolute;left:54px;right:0;top:0;height:1px;background:var(--line)}
+.rr:active{background:var(--tile)}
+.rr .rb{flex:1 1 auto;min-width:0}
+.rr .rt{font-size:15.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rr .rm{font-size:12px;color:var(--sub);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rr .ra{flex:0 0 auto;font-size:15.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.rr .ra.inc{color:var(--green)}
+
+/* 空态 */
+.empty{text-align:center;padding:30px 20px 24px}
+.empty .ei{width:56px;height:56px;border-radius:28px;background:var(--srcSoft);color:var(--src);margin:0 auto 12px;
+  display:flex;align-items:center;justify-content:center}
+.empty .ei .g{width:26px;height:26px}
+.empty b{display:block;font-size:16px;margin-bottom:4px}
+.empty p{margin:0 auto;color:var(--sub);font-size:13px;max-width:300px}
+.empty .btn{margin-top:18px}
+
+/* 设置行 */
+.sr{display:flex;align-items:center;gap:12px;padding:13px 14px;cursor:pointer;position:relative;border:0;background:none;
+  width:100%;text-align:left}
+.sr+.sr::before{content:"";position:absolute;left:54px;right:0;top:0;height:1px;background:var(--line)}
+.sr:active{background:var(--tile)}
+.sr .si{flex:0 0 auto;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  background:var(--srcSoft);color:var(--src)}
+.sr .si .g{width:16px;height:16px}
+.sr .sb{flex:1 1 auto;min-width:0}
+.sr .sb b{display:block;font-size:15px;font-weight:500}
+.sr .sb small{display:block;font-size:12px;color:var(--sub);margin-top:1px}
+.sr .sv{flex:0 0 auto;color:var(--sub);font-size:14px;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  text-align:right;font-variant-numeric:tabular-nums}
+.sr .sv.on{color:var(--srcInk);font-weight:600}
+.sr .cv{flex:0 0 auto;color:var(--faint)}
+.sr .cv .g{width:14px;height:14px}
+
+/* 撤销条 */
+.snack{position:fixed;left:14px;right:14px;bottom:calc(var(--xb-content-bottom) + 16px);z-index:50;
+  display:flex;align-items:center;gap:10px;padding:10px 10px 10px 16px;border-radius:14px;
+  background:#1C1E22;color:#F3F4F6;box-shadow:0 8px 28px rgba(0,0,0,.25);
+  transform:translateY(20px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:520px;margin:0 auto}
+html[data-theme="dark"] .snack{background:#2A2D33}
+.snack.on{opacity:1;transform:none;pointer-events:auto}
+.snack .sm{flex:1 1 auto;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.snack .sa{flex:0 0 auto;border:0;background:rgba(255,255,255,.12);color:#C4E58C;font-weight:700;font-size:14px;
+  padding:7px 12px;border-radius:10px;cursor:pointer}
+
+/* 页内底部面板(挂页面 body,天然在容器边界内) */
+.shbg{position:fixed;inset:0;z-index:60;background:var(--scrim);opacity:0;transition:opacity .2s;display:flex;
+  align-items:flex-end;justify-content:center}
+.shbg.on{opacity:1}
+.sh{width:100%;max-width:560px;max-height:82vh;overflow:auto;background:var(--sheet);border-radius:18px 18px 0 0;
+  padding:8px 16px calc(var(--xb-safe-bottom, 0px) + 22px);transform:translateY(40px);transition:transform .22s}
+.shbg.on .sh{transform:none}
+.shh{width:36px;height:5px;border-radius:3px;background:var(--rail);margin:0 auto 12px}
+.sh h3{font-size:17px;margin:2px 2px 6px}
+.sh .hint{font-size:12.5px;color:var(--sub);margin:0 2px 12px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:12px 6px;border:0;background:none;text-align:left;cursor:pointer;
+  border-radius:12px;font-size:15.5px}
+.opt:active{background:var(--tile)}
+.opt .cd{width:44px;color:var(--sub);font-size:13px;font-variant-numeric:tabular-nums}
+.opt .ck{margin-left:auto;color:var(--src);opacity:0}
+.opt.on .ck{opacity:1}
+.opt .ck .g{width:18px;height:18px}
+.row2{display:flex;gap:10px;margin-top:14px}
+.row2 .btn{flex:1 1 0}
+
+/* 表单件 */
+.field{display:block;width:100%;border:0;outline:0;background:var(--tile);border-radius:12px;padding:12px 14px}
+.field::placeholder{color:var(--faint)}
+.seg{display:flex;background:var(--tile);border-radius:10px;padding:3px;gap:2px}
+.seg button{flex:1 1 0;border:0;background:none;padding:7px 4px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;
+  color:var(--sub)}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:5px;height:34px;padding:0 13px;border-radius:17px;border:0;cursor:pointer;
+  background:var(--tile);font-size:14px;font-weight:500;color:var(--fg)}
+.chip.on{background:var(--srcSoft2);color:var(--srcInk);font-weight:600}
+.chip .g{width:15px;height:15px}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;height:48px;border:0;border-radius:14px;
+  background:var(--src);color:var(--srcOn);font-size:16px;font-weight:700;cursor:pointer}
+.btn .g{width:18px;height:18px}
+.btn:disabled{opacity:.4}
+.btn.ghost{background:var(--card);color:var(--fg);box-shadow:var(--shadow)}
+.btn.danger{background:var(--card);color:var(--red);box-shadow:var(--shadow);font-weight:600}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+#addb{margin-top:12px}
+.fchip{display:flex;align-items:center;gap:8px;margin:14px 2px 0;font-size:13px;color:var(--sub)}
+.fchip b{color:var(--fg)}
+.fchip button{border:0;background:none;padding:0;color:var(--srcInk);font-weight:600;font-size:13px;cursor:pointer}
+.amtIn{display:flex;align-items:center;gap:8px;background:var(--tile);border-radius:12px;padding:0 14px}
+.amtIn span{color:var(--sub);font-weight:700}
+.amtIn input{flex:1 1 auto;min-width:0;border:0;outline:0;background:none;padding:12px 0;font-weight:700}
+</style>
+</head>
+<body>
+<div class="hd"><h1 id="h1">记账</h1></div>
+<p class="sub" id="sub">&nbsp;</p>
+<div class="mnav hide" id="mnav"><button type="button" id="mPrev"></button><b id="mLbl"></b><button type="button" id="mNext"></button><button type="button" class="now hide" id="mNow"></button></div>
+<div id="ovw"></div>
+<button class="btn hide" id="addb" type="button"></button>
+<div id="cats"></div>
+<div id="daily"></div>
+<div id="fchip"></div>
+<div id="list"></div>
+<div id="pickWrap"></div>
+<div class="sec" id="setSec"></div>
+<div class="card" id="set"></div>
+<p class="meta" id="priv"></p>
+<script>
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* ── ledger model(纯逻辑,不碰 DOM / 桥)──────────────────────────────────────────
+ * 单一真源 = tools/ledger/src/model.js,由 tools/ledger/build.py 逐字注入每个页面;
+ * 同一份也被 fixture.js 用 node 跑,产出 render 夹具 —— 页面写盘的形状与组件读到的形状是**同一份代码**。
+ *
+ * 为什么组件读一份「页面算好的视图」`w`(同 todo):flow 没有 filter / sort / groupBy,
+ * 而「本月合计」「按分类汇总」「近 30 天每天多少」全是这类运算。派生量在 JS 里算完整份写回,
+ * 组件的 .df 只剩「今天是保存那天之后第几天 → index:: 取格」这一步。
+ *
+ * ⚠️ 随日子变的量按天摊开 H 天(下标 k = 距保存那天的天数):跨过零点「今天花了多少」归零、跨过月初「本月」
+ *    换成新的一个月、近 30 天窗口挪一格 —— 不开页面,组件在第二天也拿得到对的数。超出 H 天 = 组件显示「数据未更新」。
+ * ⚠️ 文案不烤进 `w`(切语言时组件重取数、页面不会重写 `w`):分类名、日期、货币符号都存中英两份(z / e),
+ *    RCN 按 App 语言挑;金额串只有数字与千分位,与语言无关。
+ * ⚠️ 金额一律存整数「分」(最小货币单位 × 100),不存浮点:0.1 + 0.2 这类误差在合计里会露出来。
+ */
+var LedgerModel = (function () {
+  var DAY = 86400000;
+  var H = 31;          // 按天摊开的视野:一个月不开页面,组件仍是对的
+  var WIN = 30;        // 近 N 天柱
+  var REC_MAX = 8;     // 「最近几笔」带几条(组件最多画 6 行)
+  var CAT_TOP = 4;     // 分类占比最多几格(第 4 格起合成「其他」)
+  var MAX_CENTS = 9999999999;   // 单笔上限 99,999,999.99
+
+  // ── 色板(浅|深)。wash = 该色压在卡底上的淡底,预先算死(RCN 没有颜色运算)──
+  var CARD_L = "#FFFFFF", CARD_D = "#15171A";
+  var PAL_BASE = {
+    orange: ["#F2701F", "#FF8B3E"], blue: ["#2F7CF6", "#6EA8FE"], pink: ["#D6336C", "#F06595"],
+    teal: ["#0D9488", "#2DD4BF"], indigo: ["#5B5BD6", "#A5A3FF"], amber: ["#C98A00", "#F5C23B"],
+    purple: ["#9C36B5", "#DA77F2"], red: ["#E5484D", "#FF6369"], cyan: ["#0B7285", "#3BC9DB"],
+    green: ["#2E9E6B", "#45C793"], brown: ["#8D5A3B", "#D19A72"], grey: ["#6B7280", "#9CA3AF"]
+  };
+  function mix(a, b, t) {
+    function h(c, i) { return parseInt(c.substr(i, 2), 16); }
+    var o = "#";
+    for (var i = 1; i < 7; i += 2) {
+      var v = Math.round(h(a, i) + (h(b, i) - h(a, i)) * t);
+      o += (v < 16 ? "0" : "") + v.toString(16).toUpperCase();
+    }
+    return o;
+  }
+  var PAL = {};
+  Object.keys(PAL_BASE).forEach(function (k) {
+    var c = PAL_BASE[k];
+    PAL[k] = { l: c[0], d: c[1], c: c[0] + "|" + c[1], w: mix(CARD_L, c[0], 0.14) + "|" + mix(CARD_D, c[1], 0.20) };
+  });
+
+  // ── 分类(预置,不可自建:名字由我们出中英两份,组件才能按语言显示)。键 = 用户数据里存的值,只增不改名 ──
+  var CAT = {
+    food: { t: 0, c: "orange", z: "餐饮", e: "Food" },
+    transport: { t: 0, c: "blue", z: "交通", e: "Transport" },
+    shopping: { t: 0, c: "pink", z: "购物", e: "Shopping" },
+    daily: { t: 0, c: "teal", z: "日用", e: "Groceries" },
+    housing: { t: 0, c: "indigo", z: "住房", e: "Housing" },
+    bills: { t: 0, c: "amber", z: "缴费", e: "Bills" },
+    fun: { t: 0, c: "purple", z: "娱乐", e: "Fun" },
+    health: { t: 0, c: "red", z: "医疗", e: "Health" },
+    learn: { t: 0, c: "cyan", z: "学习", e: "Learning" },
+    travel: { t: 0, c: "green", z: "旅行", e: "Travel" },
+    gifts: { t: 0, c: "brown", z: "人情", e: "Gifts" },
+    other: { t: 0, c: "grey", z: "其他", e: "Other" },
+    salary: { t: 1, c: "green", z: "工资", e: "Salary" },
+    bonus: { t: 1, c: "amber", z: "奖金", e: "Bonus" },
+    side: { t: 1, c: "teal", z: "副业", e: "Side income" },
+    invest: { t: 1, c: "blue", z: "理财", e: "Investments" },
+    gotgift: { t: 1, c: "red", z: "红包", e: "Gifts" },
+    otherin: { t: 1, c: "grey", z: "其他", e: "Other" }
+  };
+  var CAT_E = ["food", "transport", "shopping", "daily", "housing", "bills", "fun", "health", "learn", "travel", "gifts", "other"];
+  var CAT_I = ["salary", "bonus", "side", "invest", "gotgift", "otherin"];
+  function catOf(k, t) { return CAT[k] || CAT[t ? "otherin" : "other"]; }
+  function catKey(k, t) { return CAT[k] ? k : (t ? "otherin" : "other"); }
+
+  // ── 货币:只是显示设置(不换算)。z = 中文界面的符号,e = 英文界面(overseas-first §5:人民币英文写 CN¥,与日元的 ¥ 区分)──
+  var CUR = {
+    CNY: { z: "¥", e: "CN¥", dp: 2 }, USD: { z: "US$", e: "$", dp: 2 }, EUR: { z: "€", e: "€", dp: 2 },
+    GBP: { z: "£", e: "£", dp: 2 }, JPY: { z: "JP¥", e: "¥", dp: 0 }, HKD: { z: "HK$", e: "HK$", dp: 2 },
+    TWD: { z: "NT$", e: "NT$", dp: 0 }, KRW: { z: "₩", e: "₩", dp: 0 }, SGD: { z: "S$", e: "S$", dp: 2 },
+    AUD: { z: "A$", e: "A$", dp: 2 }, CAD: { z: "C$", e: "C$", dp: 2 }, NZD: { z: "NZ$", e: "NZ$", dp: 2 },
+    CHF: { z: "CHF ", e: "CHF ", dp: 2 }, INR: { z: "₹", e: "₹", dp: 2 }, THB: { z: "฿", e: "฿", dp: 2 },
+    MYR: { z: "RM", e: "RM", dp: 2 }, BRL: { z: "R$", e: "R$", dp: 2 }, MXN: { z: "MX$", e: "MX$", dp: 2 }
+  };
+  var CUR_KEYS = ["CNY", "USD", "EUR", "GBP", "JPY", "HKD", "TWD", "KRW", "SGD", "AUD", "CAD", "NZD", "CHF", "INR", "THB", "MYR", "BRL", "MXN"];
+  var EURO = "DE FR IT ES NL BE AT IE PT FI GR SK SI LU LV LT EE MT CY HR".split(" ");
+  var BY_COUNTRY = { CN: "CNY", US: "USD", GB: "GBP", JP: "JPY", HK: "HKD", TW: "TWD", KR: "KRW", SG: "SGD", AU: "AUD",
+                     CA: "CAD", NZ: "NZD", CH: "CHF", IN: "INR", TH: "THB", MY: "MYR", BR: "BRL", MX: "MXN" };
+  /** 缺省货币:按系统地区(@app.country);拿不到地区 → 国内默认判据(cn → CNY,否则 USD)。 */
+  function defaultCur(country, cn) {
+    var c = String(country || "").toUpperCase();
+    if (BY_COUNTRY[c]) return BY_COUNTRY[c];
+    if (EURO.indexOf(c) >= 0) return "EUR";
+    return cn ? "CNY" : "USD";
+  }
+  function curOf(S) { return CUR[S.cfg.cur] ? S.cfg.cur : "USD"; }
+
+  // ── 金额 ──
+  function grp(intStr) { return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  /** 整数分 → 「1,234.50」(dp=0 的货币四舍五入成整数)。只有数字、千分位与小数点,与语言无关。 */
+  function fmt(cents, dp) {
+    var neg = cents < 0; cents = Math.abs(Math.round(cents || 0));
+    var s;
+    if (dp === 0) s = grp(String(Math.round(cents / 100)));
+    else s = grp(String(Math.floor(cents / 100))) + "." + String(cents % 100 + 100).slice(1);
+    return (neg ? "-" : "") + s;
+  }
+  /** 大数字位:不足 1000 带小数(456.78),1000 起取整(3,457)—— 30pt 的数字位放不下「3,456.78」。 */
+  function fmtBig(cents, dp) { return Math.abs(cents) < 100000 ? fmt(cents, dp) : fmt(Math.round(cents / 100) * 100, 0); }
+  /** 微档(68 宽)主值:≤ 4 字符。不足 1 万写整数(无千分位),1 万起中文「1.2万」、英文「12K / 1.2M」。 */
+  function compact(cents, zh) {
+    var v = Math.round(Math.abs(cents) / 100);
+    if (v < 10000) return String(v);
+    function one(x) { var r = Math.round(x * 10) / 10; return r >= 100 ? String(Math.round(x)) : (r % 1 ? r.toFixed(1) : String(r)); }
+    if (zh) {
+      // 「万」是全角字,算两个字符宽:≥ 10 万取整(「48万」),≥ 1000 万改用「亿」(「0.1亿」)
+      if (v < 1e5) return one(v / 1e4) + "万";
+      if (v < 1e7) return String(Math.round(v / 1e4)) + "万";
+      return one(v / 1e8) + "亿";
+    }
+    if (v < 1e6) return (v < 1e5 ? one(v / 1e3) : String(Math.round(v / 1e3))) + "K";
+    if (v < 1e9) return one(v / 1e6) + "M";
+    return one(v / 1e9) + "B";
+  }
+  /** 微档主值的「字宽」:数字 1、小数点 0.5、K/M/B 1.3、万/亿 1.8(iOS 20pt 实测:「4037」「48万」放得下,「484K」放不下)。 */
+  function cw(s) { var n = 0; for (var i = 0; i < s.length; i++) { var c = s[i]; n += c === "." ? 0.5 : /[KMB]/.test(c) ? 1.3 : /[万亿]/.test(c) ? 1.8 : 1; } return n; }
+  /** 字号档:符号(取中英较长那个)+ 数字的字符数。0 = ≤ 7 字符,1 = ≤ 9,2 = 更长。组件按档挑写死的字号。 */
+  function sizeClass(sym, s) {
+    var n = sym.length + s.length;
+    return n <= 7 ? 0 : n <= 9 ? 1 : 2;
+  }
+  /** 输入框里的字 → 整数分。全角数字 / 全角点 / 中文句号先归一成半角(G50),千分位与空格剔掉;不合法返回 -1。 */
+  function parseAmount(raw) {
+    var s = String(raw == null ? "" : raw).replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+      .replace(/[．。]/g, ".").replace(/[,，\s]/g, "");
+    if (!/^\d{0,9}(\.\d{0,2})?$/.test(s) || s === "" || s === ".") return -1;
+    var p = s.split("."), cents = parseInt(p[0] || "0", 10) * 100 + (p[1] ? parseInt((p[1] + "0").slice(0, 2), 10) : 0);
+    return cents > MAX_CENTS ? -1 : cents;
+  }
+
+  // ── 日期(一律本地时区;页面与组件的 parseDate 都按设备时区) ──
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function ymd(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function parseYmd(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+  function mid(ms) { var d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  function addDays(ms, n) { var d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime(); }
+  function dayDiff(a, b) { return Math.round((mid(b) - mid(a)) / DAY); }
+  function ym(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1); }
+  var WD_ZH = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  var WD_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var MO_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function dateTexts(d) {
+    return { mdz: (d.getMonth() + 1) + "月" + d.getDate() + "日", mde: MO_EN[d.getMonth()] + " " + d.getDate(),
+             wdz: WD_ZH[d.getDay()], wde: WD_EN[d.getDay()] };
+  }
+
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  /** 排序:日期新的在前,同一天后记的在前。 */
+  function cmpRec(a, b) { if (a.d !== b.d) return a.d < b.d ? 1 : -1; return (b.ca || 0) - (a.ca || 0); }
+
+  /** 某个月(yyyy-MM)的汇总:支出 / 收入 / 笔数 / 按分类(降序)/ 每天支出。uptoYmd 给了就只算到那一天(含)。 */
+  function monthSum(S, ymStr, uptoYmd) {
+    var o = { exp: 0, inc: 0, n: 0, cats: {}, catsI: {}, days: {} };
+    S.recs.forEach(function (r) {
+      if (r.d.slice(0, 7) !== ymStr) return;
+      if (uptoYmd && r.d > uptoYmd) return;
+      o.n++;
+      if (r.t) { o.inc += r.a; var ki = catKey(r.c, 1); o.catsI[ki] = (o.catsI[ki] || 0) + r.a; return; }
+      o.exp += r.a;
+      var k = catKey(r.c, 0);
+      o.cats[k] = (o.cats[k] || 0) + r.a;
+      o.days[r.d] = (o.days[r.d] || 0) + r.a;
+    });
+    return o;
+  }
+  function catList(map) {
+    return Object.keys(map).map(function (k) { return { k: k, a: map[k] }; })
+      .sort(function (a, b) { return b.a - a.a || (a.k < b.k ? -1 : 1); });
+  }
+  /** 每天支出表(yyyy-MM-dd → 分),给近 30 天柱用。 */
+  function dayTotals(S) {
+    var m = {};
+    S.recs.forEach(function (r) { if (!r.t) m[r.d] = (m[r.d] || 0) + r.a; });
+    return m;
+  }
+  /** 预算状态:0 没设 / 1 正常 / 2 用了 85% 以上 / 3 超了。 */
+  function budState(exp, bud) { return !bud ? 0 : exp > bud ? 3 : exp * 100 >= bud * 85 ? 2 : 1; }
+
+  /** 分类占比的格子:前 CAT_TOP-1 个分类 + 其余合成「其他」(只有 CAT_TOP 个以内时原样)。
+   *  f = 占比(画分段条),x = 起点(前面各段之和);每段至少 0.04 宽(再按比例归一),否则 1% 的那段画不出来。 */
+  function catCells(map, total, dp, icons) {
+    var L = catList(map);
+    if (L.length > CAT_TOP) {
+      var rest = L.slice(CAT_TOP - 1).reduce(function (s, x) { return s + x.a; }, 0);
+      L = L.slice(0, CAT_TOP - 1).concat([{ k: "_rest", a: rest }]);
+    }
+    var raw = L.map(function (x) { return total ? x.a / total : 0; });
+    var fl = raw.map(function (f) { return Math.max(0.04, f); });
+    var sum = fl.reduce(function (s, f) { return s + f; }, 0) || 1;
+    var x0 = 0, pAcc = 0;
+    return L.map(function (x, i) {
+      var c = x.k === "_rest" ? null : catOf(x.k, 0);
+      var pal = PAL[c ? c.c : "grey"];
+      var f = Math.round(fl[i] / sum * 1000) / 1000;
+      // 百分比四舍五入后让总和恰好 100(最后一格补差),否则「33 + 33 + 33」读起来像丢了 1%
+      var p = i === L.length - 1 ? Math.max(0, 100 - pAcc) : Math.round(raw[i] * 100);
+      pAcc += p;
+      var ic = c ? x.k : "other";
+      icons[ic] = 1;
+      var cell = { i: i, k: x.k, ic: ic, c: pal.c, cw: pal.w, nz: c ? c.z : "其他", ne: c ? c.e : "Other",
+                   a: fmt(x.a, dp), ab: fmtBig(x.a, dp), p: p, f: f, x: Math.round(x0 * 1000) / 1000,
+                   // 组件分段条:段间留 2pt 缝 —— 宽度在这里先减掉(42 档内容宽 310pt),RCN 里不写「${}-2pt」(内插后接减号不求值)
+                   g: Math.round((f - 2 / 310) * 1000) / 1000,
+                   // 图例 2×2 的列 / 行(RCN 布局里不做取余)
+                   cx: i % 2, ry: Math.floor(i / 2) };
+      x0 += f;
+      return cell;
+    });
+  }
+
+  /** 进 `w` 的一条记录:只放组件真画的东西,全是标量(RCN 在 forEach 里用 `${_it.x}` 读)。 */
+  function rec(r, i, dp, icons) {
+    var k = catKey(r.c, r.t), c = catOf(r.c, r.t), pal = PAL[c.c], d = parseYmd(r.d) || new Date(r.ca || 0);
+    var dt = dateTexts(d), nt = String(r.n || "");
+    icons[k] = 1;
+    return { i: i, id: r.id, ic: k, c: pal.c, cw: pal.w, nz: c.z, ne: c.e,
+             nt: nt.length > 40 ? nt.slice(0, 40) + "…" : nt, hn: nt ? 1 : 0,
+             a: fmt(r.a, dp), inc: r.t ? 1 : 0, dm: d.getTime(), mdz: dt.mdz, mde: dt.mde, wdz: dt.wdz, wde: dt.wde };
+  }
+
+  /** 组件视图 `w`(整份)。nowMs 可注入(夹具 / 测试)。 */
+  function buildW(S, nowMs) {
+    var base = mid(nowMs), cur = curOf(S), C = CUR[cur], dp = C.dp, bud = S.cfg.bud > 0 ? S.cfg.bud : 0;
+    var symL = C.z.length >= C.e.length ? C.z : C.e, icons = {};
+    var w = { v: 1, base: base, H: H, any: S.recs.length ? 1 : 0, cur: cur, cz: C.z, ce: C.e, bud: bud ? 1 : 0,
+              budS: bud ? fmtBig(bud, dp) : "" };
+    var DT = dayTotals(S);
+    var D = { mt: [], mtB: [], mtF: [], mtF2: [], mcz: [], mce: [], mcF: [], mi: [], hasI: [], ex: [], n: [], avg: [], bp: [], bpc: [], bst: [],
+              brm: [], td: [], tdn: [], moz: [], moe: [], cat: [], catN: [], bars: [], b30: [], b30a: [], b30z: [], b30e: [] };
+    var cache = {};
+    for (var k = 0; k < H; k++) {
+      var day = new Date(addDays(base, k)), key = ymd(day), ymS = ym(day);
+      // 本月(到第 k 天为止):同一个月里各天只有「日均」不同,汇总按月缓存
+      var ms = cache[ymS] || (cache[ymS] = monthSum(S, ymS, null));
+      var exp = ms.exp, dom = day.getDate();
+      var big = fmtBig(exp, dp);
+      D.mt.push(fmt(exp, dp)); D.mtB.push(big); D.mtF.push(sizeClass(symL, big));
+      // 21 档(金额位 78pt):≤ 7 字符 16.5pt,≤ 9 字符 13pt,再长改用压缩写法(截断会吞掉数字,不许)
+      D.mtF2.push(symL.length + big.length <= 7 ? 0 : symL.length + big.length <= 9 ? 1 : 2);
+      var cz2 = compact(exp, true), ce2 = compact(exp, false);
+      D.mcz.push(cz2); D.mce.push(ce2);
+      // 微档字号档:≤ 4 字符 20pt,5 字符 17pt(card-design-system §8.2);取中英两种写法里较长的那个
+      D.mcF.push(Math.max(cw(cz2), cw(ce2)) > 4 ? 1 : 0);
+      D.mi.push(fmtBig(ms.inc, dp)); D.hasI.push(ms.inc > 0 ? 1 : 0); D.n.push(ms.n);
+      D.avg.push(fmtBig(Math.round(exp / dom), dp));
+      var st = budState(exp, bud);
+      D.bst.push(st);
+      // 进度条填充比例:下限 0.07(21 档轨长 58pt × 0.07 ≈ 4pt = 圆角直径,再短圆角矩形就画坏);没花钱时 ex=0,组件不画填充
+      D.bp.push(bud ? Math.max(0.07, Math.min(1, Math.round(exp * 1000 / bud) / 1000)) : 0);
+      D.ex.push(exp > 0 ? 1 : 0);
+      D.bpc.push(bud ? Math.round(exp * 100 / bud) : 0);
+      D.brm.push(bud ? fmtBig(Math.abs(bud - exp), dp) : "");
+      // 今天
+      var tdc = 0, tdv = 0;
+      S.recs.forEach(function (r) { if (r.d === key && !r.t) { tdc++; tdv += r.a; } });
+      D.td.push(fmtBig(tdv, dp)); D.tdn.push(tdc);
+      D.moz.push((day.getMonth() + 1) + "月"); D.moe.push(MO_EN[day.getMonth()]);
+      // 分类占比(本月)
+      var cc = catCells(ms.cats, exp, dp, icons);
+      D.cat.push(cc); D.catN.push(cc.length);
+      // 近 30 天(含第 k 天):柱高按窗口内最大值归一;0 画一截桩(形状在,读得出「这天没花」)
+      var vals = [], mx = 0, sum = 0;
+      for (var q = 0; q < WIN; q++) {
+        var v = DT[ymd(new Date(addDays(base, k - WIN + 1 + q)))] || 0;
+        vals.push(v); mx = Math.max(mx, v); sum += v;
+      }
+      D.bars.push(vals.map(function (v2, q2) {
+        return { i: q2, f: mx ? Math.max(0.05, Math.round(v2 * 100 / mx) / 100) : 0.05, z: v2 ? 0 : 1, t: q2 === WIN - 1 ? 1 : 0 };
+      }));
+      D.b30.push(fmtBig(sum, dp)); D.b30a.push(fmtBig(Math.round(sum / WIN), dp));
+      var d0 = dateTexts(new Date(addDays(base, k - WIN + 1)));
+      D.b30z.push(d0.mdz); D.b30e.push(d0.mde);
+    }
+    w.d = D;
+    // 最近几笔(不随日子变;相对日期标签由 RCN 用 dm 对 tdm 现算)
+    var sorted = S.recs.slice().sort(cmpRec);
+    w.rec = sorted.slice(0, REC_MAX).map(function (r, i) { return rec(r, i, dp, icons); });
+    w.nRec = S.recs.length;
+    // 图标路径表:只带用到的(RCN 用 get::(${ic},${_it.ic}) 取)
+    w.ic = {};
+    Object.keys(icons).forEach(function (k2) { if (ICON_D[k2]) w.ic[k2] = ICON_D[k2]; });
+    return w;
+  }
+
+  // 图标路径表由 build.py / fixture.js 在注入前填(页面里同一张表也给 SVG 用)
+  var ICON_D = {};
+  var UI_D = {};
+
+  function empty() { return { recs: [], cfg: {} }; }
+  function normalize(S) {
+    S = S || {};
+    var o = empty();
+    o.recs = Array.isArray(S.recs) ? S.recs : [];
+    o.cfg = (S.cfg && typeof S.cfg === "object" && !Array.isArray(S.cfg)) ? S.cfg : {};
+    o.recs = o.recs.filter(function (r) { return r && typeof r === "object" && parseYmd(r.d) && r.a > 0; });
+    o.recs.forEach(function (r) {
+      if (!r.id) r.id = uid();
+      r.t = r.t ? 1 : 0;
+      r.a = Math.round(r.a);
+      r.c = catKey(r.c, r.t);
+    });
+    return o;
+  }
+
+  return {
+    DAY: DAY, H: H, WIN: WIN, PAL: PAL, CAT: CAT, CAT_E: CAT_E, CAT_I: CAT_I, CUR: CUR, CUR_KEYS: CUR_KEYS,
+    ICON_D: ICON_D, UI_D: UI_D, MAX_CENTS: MAX_CENTS,
+    defaultCur: defaultCur, curOf: curOf, fmt: fmt, fmtBig: fmtBig, compact: compact, parseAmount: parseAmount,
+    ymd: ymd, ym: ym, parseYmd: parseYmd, mid: mid, addDays: addDays, dayDiff: dayDiff, uid: uid, cmpRec: cmpRec,
+    catOf: catOf, catKey: catKey, monthSum: monthSum, catList: catList, dayTotals: dayTotals, budState: budState,
+    buildW: buildW, empty: empty, normalize: normalize
+  };
+})();
+if (typeof module !== "undefined") module.exports = LedgerModel;
+
+(function(){var I={"cats":{"food":"M216 40V224a8 8 0 0 1-16 0V176H152a8 8 0 0 1-8-8 268.75 268.75 0 0 1 7.22-56.88c9.78-40.49 28.32-67.63 53.63-78.47A8 8 0 0 1 216 40Zm-96.11-1.31a8 8 0 1 0-15.78 2.63L111.89 88H88V40a8 8 0 0 0-16 0V88H48.11l7.78-46.68a8 8 0 1 0-15.78-2.63l-8 48A8.17 8.17 0 0 0 32 88a48.07 48.07 0 0 0 40 47.32V224a8 8 0 0 0 16 0V135.32A48.07 48.07 0 0 0 128 88a8.17 8.17 0 0 0-.11-1.31Z","transport":"M248 80v24a8 8 0 0 1-16 0V80a8 8 0 0 1 16 0ZM16 72a8 8 0 0 0-8 8v24a8 8 0 0 0 16 0V80A8 8 0 0 0 16 72Zm200-8V208a16 16 0 0 1-16 16H184a16 16 0 0 1-16-16v-8H88v8a16 16 0 0 1-16 16H56a16 16 0 0 1-16-16V64A32 32 0 0 1 72 32H184A32 32 0 0 1 216 64ZM104 148a12 12 0 1 0-12 12A12 12 0 0 0 104 148Zm72 0a12 12 0 1 0-12 12A12 12 0 0 0 176 148Zm24-76H56v40H200Z","shopping":"M216 40H40A16 16 0 0 0 24 56V200a16 16 0 0 0 16 16H216a16 16 0 0 0 16-16V56A16 16 0 0 0 216 40Zm-88 96A48.05 48.05 0 0 1 80 88a8 8 0 0 1 16 0 32 32 0 0 0 64 0 8 8 0 0 1 16 0A48.05 48.05 0 0 1 128 136Z","daily":"M238 82.73A8 8 0 0 0 232 80H187.63L134 18.73a8 8 0 0 0-12 0L68.37 80H24a8 8 0 0 0-7.93 9.06L31.14 202.12A16.06 16.06 0 0 0 47 216H209a16.06 16.06 0 0 0 15.86-13.88L239.93 89.06A8 8 0 0 0 238 82.73ZM81.6 184a7.32 7.32 0 0 1-.81 0 8 8 0 0 1-8-7.2l-5.6-56a8 8 0 0 1 15.92-1.6l5.6 56A8 8 0 0 1 81.6 184Zm54.4-8a8 8 0 0 1-16 0V120a8 8 0 0 1 16 0ZM89.63 80 128 36.15 166.37 80Zm99.13 40.8-5.6 56a8 8 0 0 1-7.95 7.2 7.32 7.32 0 0 1-.81 0 8 8 0 0 1-7.16-8.76l5.6-56a8 8 0 0 1 15.92 1.6Z","housing":"M224 120v96a8 8 0 0 1-8 8H160a8 8 0 0 1-8-8V164a4 4 0 0 0-4-4H108a4 4 0 0 0-4 4v52a8 8 0 0 1-8 8H40a8 8 0 0 1-8-8V120a16 16 0 0 1 4.69-11.31l80-80a16 16 0 0 1 22.62 0l80 80A16 16 0 0 1 224 120Z","bills":"M216 40H40A16 16 0 0 0 24 56V208a8 8 0 0 0 11.58 7.15L64 200.94l28.42 14.21a8 8 0 0 0 7.16 0L128 200.94l28.42 14.21a8 8 0 0 0 7.16 0L192 200.94l28.42 14.21A8 8 0 0 0 232 208V56A16 16 0 0 0 216 40ZM176 144H80a8 8 0 0 1 0-16h96a8 8 0 0 1 0 16Zm0-32H80a8 8 0 0 1 0-16h96a8 8 0 0 1 0 16Z","fun":"M247.44 173.75a.68.68 0 0 0 0-.14L231.05 89.44c0-.06 0-.12 0-.18A60.08 60.08 0 0 0 172 40H83.89a59.88 59.88 0 0 0-59 49.52L8.58 173.61a.68.68 0 0 0 0 .14 36 36 0 0 0 60.9 31.71l.35-.37L109.52 160h37l39.71 45.09c.11.13.23.25.35.37A36.08 36.08 0 0 0 212 216a36 36 0 0 0 35.43-42.25ZM104 112H96v8a8 8 0 0 1-16 0v-8H72a8 8 0 0 1 0-16h8V88a8 8 0 0 1 16 0v8h8a8 8 0 0 1 0 16Zm40-8a8 8 0 0 1 8-8h24a8 8 0 0 1 0 16H152A8 8 0 0 1 144 104Zm84.37 87.47a19.84 19.84 0 0 1-12.9 8.23A20.09 20.09 0 0 1 198 194.31L167.8 160H172a60 60 0 0 0 51-28.38l8.74 45A19.82 19.82 0 0 1 228.37 191.47Z","health":"M216 56H176V48a24 24 0 0 0-24-24H104A24 24 0 0 0 80 48v8H40A16 16 0 0 0 24 72V200a16 16 0 0 0 16 16H216a16 16 0 0 0 16-16V72A16 16 0 0 0 216 56Zm-64 88H136v16a8 8 0 0 1-16 0V144H104a8 8 0 0 1 0-16h16V112a8 8 0 0 1 16 0v16h16a8 8 0 0 1 0 16Zm8-88H96V48a8 8 0 0 1 8-8h48a8 8 0 0 1 8 8Z","learn":"M240 56V200a8 8 0 0 1-8 8H160a24 24 0 0 0-24 23.94 7.9 7.9 0 0 1-5.12 7.55A8 8 0 0 1 120 232a24 24 0 0 0-24-24H24a8 8 0 0 1-8-8V56a8 8 0 0 1 8-8H88a32 32 0 0 1 32 32v87.73a8.17 8.17 0 0 0 7.47 8.25 8 8 0 0 0 8.53-8V80a32 32 0 0 1 32-32h64A8 8 0 0 1 240 56Z","travel":"M240 136v32a8 8 0 0 1-8 8 7.61 7.61 0 0 1-1.57-.16L156 161v23.73l17.66 17.65A8 8 0 0 1 176 208v24a8 8 0 0 1-11 7.43l-37-14.81L91 239.43A8 8 0 0 1 80 232V208a8 8 0 0 1 2.34-5.66L100 184.69V161L25.57 175.84A7.61 7.61 0 0 1 24 176a8 8 0 0 1-8-8V136a8 8 0 0 1 4.42-7.16L100 89.06V44a28 28 0 0 1 56 0V89.06l79.58 39.78A8 8 0 0 1 240 136Z","gifts":"M216 72H180.92c.39-.33.79-.65 1.17-1A29.53 29.53 0 0 0 192 49.57 32.62 32.62 0 0 0 158.44 16 29.53 29.53 0 0 0 137 25.91a54.94 54.94 0 0 0-9 14.48 54.94 54.94 0 0 0-9-14.48A29.53 29.53 0 0 0 97.56 16 32.62 32.62 0 0 0 64 49.57 29.53 29.53 0 0 0 73.91 71c.38.33.78.65 1.17 1H40A16 16 0 0 0 24 88v32a16 16 0 0 0 16 16v64a16 16 0 0 0 16 16h60a4 4 0 0 0 4-4V120H40V88h80v32h16V88h80v32H136v92a4 4 0 0 0 4 4h60a16 16 0 0 0 16-16V136a16 16 0 0 0 16-16V88A16 16 0 0 0 216 72ZM84.51 59a13.69 13.69 0 0 1-4.5-10A16.62 16.62 0 0 1 96.59 32h.49a13.69 13.69 0 0 1 10 4.5c8.39 9.48 11.35 25.2 12.39 34.92C109.71 70.39 94 67.43 84.51 59Zm87 0c-9.49 8.4-25.24 11.36-35 12.4C137.7 60.89 141 45.5 149 36.51a13.69 13.69 0 0 1 10-4.5h.49A16.62 16.62 0 0 1 176 49.08 13.69 13.69 0 0 1 171.49 59Z","other":"M128 24A104 104 0 1 0 232 128 104.13 104.13 0 0 0 128 24ZM84 140a12 12 0 1 1 12-12A12 12 0 0 1 84 140Zm44 0a12 12 0 1 1 12-12A12 12 0 0 1 128 140Zm44 0a12 12 0 1 1 12-12A12 12 0 0 1 172 140Z","salary":"M152 112a8 8 0 0 1-8 8H112a8 8 0 0 1 0-16h32A8 8 0 0 1 152 112Zm80-40V200a16 16 0 0 1-16 16H40a16 16 0 0 1-16-16V72A16 16 0 0 1 40 56H80V48a24 24 0 0 1 24-24h48a24 24 0 0 1 24 24v8h40A16 16 0 0 1 232 72ZM96 56h64V48a8 8 0 0 0-8-8H104a8 8 0 0 0-8 8Zm120 57.61V72H40v41.61A184 184 0 0 0 128 136 184 184 0 0 0 216 113.61Z","bonus":"M184 89.57V84c0-25.08-37.83-44-88-44S8 58.92 8 84v40c0 20.89 26.25 37.49 64 42.46V172c0 25.08 37.83 44 88 44s88-18.92 88-44V132C248 111.3 222.58 94.68 184 89.57ZM56 146.87C36.41 141.4 24 132.39 24 124V109.93c8.16 5.78 19.09 10.44 32 13.57Zm80-23.37c12.91-3.13 23.84-7.79 32-13.57V124c0 8.39-12.41 17.4-32 22.87Zm-16 71.37C100.41 189.4 88 180.39 88 172v-4.17c2.63.1 5.29.17 8 .17 3.88 0 7.67-.13 11.39-.35A121.92 121.92 0 0 0 120 171.41Zm0-44.62A163 163 0 0 1 96 152a163 163 0 0 1-24-1.75V126.46A183.74 183.74 0 0 0 96 128a183.74 183.74 0 0 0 24-1.54Zm64 48a165.45 165.45 0 0 1-48 0V174.4a179.48 179.48 0 0 0 24 1.6 183.74 183.74 0 0 0 24-1.54ZM232 172c0 8.39-12.41 17.4-32 22.87V171.5c12.91-3.13 23.84-7.79 32-13.57Z","side":"M232 168h-8V72a24 24 0 0 0-24-24H56A24 24 0 0 0 32 72v96H24a8 8 0 0 0-8 8v16a24 24 0 0 0 24 24H216a24 24 0 0 0 24-24V176A8 8 0 0 0 232 168ZM112 72h32a8 8 0 0 1 0 16H112a8 8 0 0 1 0-16ZM224 192a8 8 0 0 1-8 8H40a8 8 0 0 1-8-8v-8H224Z","invest":"M240 56v64a8 8 0 0 1-13.66 5.66L200 99.31l-58.34 58.35a8 8 0 0 1-11.32 0L96 123.31 29.66 189.66a8 8 0 0 1-11.32-11.32l72-72a8 8 0 0 1 11.32 0L136 140.69 188.69 88 162.34 61.66A8 8 0 0 1 168 48h64A8 8 0 0 1 240 56Z","gotgift":"M128.09 57.38a36 36 0 0 1 55.17-27.82 4 4 0 0 1-.56 7A52.06 52.06 0 0 0 152 84c0 1.17 0 2.34.12 3.49a4 4 0 0 1-6 3.76A36 36 0 0 1 128.09 57.38ZM240 160.61a24.47 24.47 0 0 1-13.6 22l-.44.2-38.83 16.54a6.94 6.94 0 0 1-1.19.4l-64 16A7.93 7.93 0 0 1 120 216H16A16 16 0 0 1 0 200V160a16 16 0 0 1 16-16H44.69l22.62-22.63A31.82 31.82 0 0 1 89.94 112H140a28 28 0 0 1 27.25 34.45l41.84-9.62A24.61 24.61 0 0 1 240 160.61Zm-16 0a8.61 8.61 0 0 0-10.87-8.3l-.31.08-67 15.41a8.32 8.32 0 0 1-1.79.2H112a8 8 0 0 1 0-16h28a12 12 0 0 0 0-24H89.94a15.86 15.86 0 0 0-11.31 4.69L56 155.31V200h63l62.43-15.61 38-16.18A8.56 8.56 0 0 0 224 160.61ZM168 84a36 36 0 1 0 36-36A36 36 0 0 0 168 84Z","otherin":"M128 24A104 104 0 1 0 232 128 104.13 104.13 0 0 0 128 24ZM84 140a12 12 0 1 1 12-12A12 12 0 0 1 84 140Zm44 0a12 12 0 1 1 12-12A12 12 0 0 1 128 140Zm44 0a12 12 0 1 1 12-12A12 12 0 0 1 172 140Z"},"ui":{"plus":"M224 128a8 8 0 0 1-8 8H136v80a8 8 0 0 1-16 0V136H40a8 8 0 0 1 0-16h80V40a8 8 0 0 1 16 0v80h80A8 8 0 0 1 224 128Z","x":"M205.66 194.34a8 8 0 0 1-11.32 11.32L128 139.31 61.66 205.66a8 8 0 0 1-11.32-11.32L116.69 128 50.34 61.66A8 8 0 0 1 61.66 50.34L128 116.69l66.34-66.35a8 8 0 0 1 11.32 11.32L139.31 128Z","check":"M229.66 77.66l-128 128a8 8 0 0 1-11.32 0l-56-56a8 8 0 0 1 11.32-11.32L96 188.69 218.34 66.34a8 8 0 0 1 11.32 11.32Z","trash":"M216 48H176V40a24 24 0 0 0-24-24H104A24 24 0 0 0 80 40v8H40a8 8 0 0 0 0 16h8V208a16 16 0 0 0 16 16H192a16 16 0 0 0 16-16V64h8a8 8 0 0 0 0-16ZM96 40a8 8 0 0 1 8-8h48a8 8 0 0 1 8 8v8H96Zm96 168H64V64H192ZM112 104v64a8 8 0 0 1-16 0V104a8 8 0 0 1 16 0Zm48 0v64a8 8 0 0 1-16 0V104a8 8 0 0 1 16 0Z","chev":"M181.66 133.66l-80 80a8 8 0 0 1-11.32-11.32L164.69 128 90.34 53.66a8 8 0 0 1 11.32-11.32l80 80A8 8 0 0 1 181.66 133.66Z","chevl":"M165.66 202.34a8 8 0 0 1-11.32 11.32l-80-80a8 8 0 0 1 0-11.32l80-80a8 8 0 0 1 11.32 11.32L91.31 128Z","wallet":"M216 64H56a8 8 0 0 1 0-16H192a8 8 0 0 0 0-16H56A24 24 0 0 0 32 56V184a24 24 0 0 0 24 24H216a16 16 0 0 0 16-16V80A16 16 0 0 0 216 64Zm0 128H56a8 8 0 0 1-8-8V78.63A23.84 23.84 0 0 0 56 80H216Zm-48-60a12 12 0 1 1 12 12A12 12 0 0 1 168 132Z","cal":"M208 32H184V24a8 8 0 0 0-16 0v8H88V24a8 8 0 0 0-16 0v8H48A16 16 0 0 0 32 48V208a16 16 0 0 0 16 16H208a16 16 0 0 0 16-16V48A16 16 0 0 0 208 32ZM72 48v8a8 8 0 0 0 16 0V48h80v8a8 8 0 0 0 16 0V48h24V80H48V48ZM208 208H48V96H208V208Z","note":"M229.66 58.34l-32-32a8 8 0 0 0-11.32 0l-96 96A8 8 0 0 0 88 128v32a8 8 0 0 0 8 8h32a8 8 0 0 0 5.66-2.34l96-96A8 8 0 0 0 229.66 58.34ZM124.69 152H104V131.31l64-64L188.69 88ZM200 76.69 179.31 56 192 43.31 212.69 64ZM224 128v80a16 16 0 0 1-16 16H48a16 16 0 0 1-16-16V48A16 16 0 0 1 48 32h80a8 8 0 0 1 0 16H48V208H208V128a8 8 0 0 1 16 0Z","gear":"M128 80a48 48 0 1 0 48 48A48.05 48.05 0 0 0 128 80Zm0 80a32 32 0 1 1 32-32A32 32 0 0 1 128 160Zm109.94-52.79a8 8 0 0 0-3.89-5.4l-29.83-17-.12-33.62a8 8 0 0 0-2.83-6.08 111.91 111.91 0 0 0-36.72-20.67 8 8 0 0 0-6.46.59L128 41.85 97.88 25a8 8 0 0 0-6.47-.6A112.1 112.1 0 0 0 54.73 45.15a8 8 0 0 0-2.83 6.07l-.15 33.65-29.83 17a8 8 0 0 0-3.89 5.4 106.47 106.47 0 0 0 0 41.56 8 8 0 0 0 3.89 5.4l29.83 17 .12 33.62a8 8 0 0 0 2.83 6.08 111.91 111.91 0 0 0 36.72 20.67 8 8 0 0 0 6.46-.59L128 214.15 158.12 231a7.91 7.91 0 0 0 3.9 1 8.09 8.09 0 0 0 2.57-.42 112.1 112.1 0 0 0 36.68-20.73 8 8 0 0 0 2.83-6.07l.15-33.65 29.83-17a8 8 0 0 0 3.89-5.4A106.47 106.47 0 0 0 237.94 107.21Zm-15 34.91-28.57 16.25a8 8 0 0 0-3 3c-.58 1-1.19 2.06-1.81 3.06a7.94 7.94 0 0 0-1.22 4.21l-.15 32.25a95.89 95.89 0 0 1-25.37 14.3L134 199.13a8 8 0 0 0-3.91-1h-.19c-1.21 0-2.43 0-3.64 0a8.08 8.08 0 0 0-4.1 1l-28.84 16.1A96 96 0 0 1 67.88 201l-.11-32.2a8 8 0 0 0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09 8.09 0 0 0-3-3.06l-28.6-16.29a90.49 90.49 0 0 1 0-28.26L61.67 97.63a8 8 0 0 0 3-3c.58-1 1.19-2.06 1.81-3.06a7.94 7.94 0 0 0 1.22-4.21l.15-32.25a95.89 95.89 0 0 1 25.37-14.3L122 56.87a8 8 0 0 0 4.1 1c1.21 0 2.43 0 3.64 0a8.08 8.08 0 0 0 4.1-1l28.84-16.1A96 96 0 0 1 188.12 55l.11 32.2a8 8 0 0 0 1.22 4.22c.62 1 1.23 2 1.8 3.06a8.09 8.09 0 0 0 3 3.06l28.6 16.29A90.49 90.49 0 0 1 222.9 142.12Z","warn":"M128 24A104 104 0 1 0 232 128 104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88A88.1 88.1 0 0 1 128 216Zm-8-80V80a8 8 0 0 1 16 0v56a8 8 0 0 1-16 0Zm20 36a12 12 0 1 1-12-12A12 12 0 0 1 140 172Z","pencil":"M227.31 73.37 182.63 28.68a16 16 0 0 0-22.63 0L36.69 152A15.86 15.86 0 0 0 32 163.31V208a16 16 0 0 0 16 16H92.69A15.86 15.86 0 0 0 104 219.31L227.31 96a16 16 0 0 0 0-22.63ZM92.69 208H48V163.31l88-88L180.69 120ZM192 108.68 147.31 64l24-24L216 84.68Z","bars":"M224 200h-8V40a8 8 0 0 0-8-8H152a8 8 0 0 0-8 8V80H96a8 8 0 0 0-8 8v40H48a8 8 0 0 0-8 8v64H32a8 8 0 0 0 0 16H224a8 8 0 0 0 0-16ZM160 48h40V200H160ZM104 96h40V200H104ZM56 144H88v56H56Z","pie":"M100 116.43a8 8 0 0 0 4-6.93v-72A8 8 0 0 0 93.34 30 104.06 104.06 0 0 0 25.73 147a8 8 0 0 0 4.52 5.81 7.86 7.86 0 0 0 3.35.74 8 8 0 0 0 4-1.07ZM88 49.62v55.26L40.12 132.51C40 131 40 129.48 40 128A88.12 88.12 0 0 1 88 49.62ZM128 24a8 8 0 0 0-8 8v91.82L41.19 169.73a8 8 0 0 0-2.87 11A104 104 0 1 0 128 24Zm0 192a88.47 88.47 0 0 1-71.49-36.68l75.52-44a8 8 0 0 0 4-6.92V40.36A88 88 0 0 1 128 216Z","coins":"M184 89.57V84c0-25.08-37.83-44-88-44S8 58.92 8 84v40c0 20.89 26.25 37.49 64 42.46V172c0 25.08 37.83 44 88 44s88-18.92 88-44V132C248 111.3 222.58 94.68 184 89.57ZM232 132c0 13.22-30.79 28-72 28-3.73 0-7.43-.13-11.08-.37C170.49 151.77 184 139 184 124V105.74C213.87 110.19 232 122.27 232 132ZM72 150.25V126.46A183.74 183.74 0 0 0 96 128a183.74 183.74 0 0 0 24-1.54v23.79A163 163 0 0 1 96 152 163 163 0 0 1 72 150.25Zm96-40.32V124c0 8.39-12.41 17.4-32 22.87V123.5C148.91 120.37 159.84 115.71 168 109.93ZM96 56c41.21 0 72 14.78 72 28s-30.79 28-72 28S24 97.22 24 84 54.79 56 96 56ZM24 124V109.93c8.16 5.78 19.09 10.44 32 13.57v23.37C36.41 141.4 24 132.39 24 124Zm64 48v-4.17c2.63.1 5.29.17 8 .17 3.88 0 7.67-.13 11.39-.35A121.92 121.92 0 0 0 120 171.41v23.46C100.41 189.4 88 180.39 88 172Zm48 26.25V174.4a179.48 179.48 0 0 0 24 1.6 183.74 183.74 0 0 0 24-1.54v23.79a165.45 165.45 0 0 1-48 0Zm64-3.38V171.5c12.91-3.13 23.84-7.79 32-13.57V172C232 180.39 219.59 189.4 200 194.87Z","undo":"M224 128a96 96 0 0 1-94.71 96H128A95.38 95.38 0 0 1 62.1 197.8a8 8 0 0 1 11-11.63A80 80 0 1 0 71.43 71.39a3.07 3.07 0 0 1-.26.25L44.59 96H72a8 8 0 0 1 0 16H24a8 8 0 0 1-8-8V56a8 8 0 0 1 16 0V85.8L60.25 60A96 96 0 0 1 224 128Z"}};for(var k in I.cats)LedgerModel.ICON_D[k]=I.cats[k];for(var j in I.ui)LedgerModel.UI_D[j]=I.ui[j];})();
+/* ── ledger ui kit(桥 / 文案 / 存盘 / 小部件)─────────────────────────────────────────
+ * 单一真源 = tools/ledger/src/ui.js,由 build.py 逐字注入每个页面(包是离线分发的,没有运行时共享件)。
+ * 依赖 LedgerModel(model.js)与 nbLang / nbCnDefault(kit/nbenv.py),都注入在前。骨架照 tools/todo/src/ui.js。
+ */
+var U = (function () {
+  var M = LedgerModel;
+  var inApp = !!(window.xbridge && typeof xbridge.isXBundleEnv === "function" && xbridge.isXBundleEnv());
+
+  /** call 型桥方法回信封 {code,msg,data},不会 reject(G49):统一拆一层。 */
+  async function call(p) {
+    var r = await p;
+    if (!r || r.code !== 0) throw new Error((r && r.msg) || "bridge");
+    return r.data;
+  }
+
+  // ── 语言(doc/overseas-first.md §1–§2):<html data-lang> → nbLang;都没有一律英文 ──
+  function lang() { return nbLang(document.documentElement.getAttribute("data-lang") || ""); }
+  var STR = {
+    zh: {
+      appName: "记账", segE: "支出", segI: "收入", add: "记一笔", edit: "改一笔", exp: "支出", inc: "收入", bal: "结余", avg: "日均",
+      monthExp: "本月支出", monthOf: "{0}支出", cats: "分类占比", last30: "近 30 天", daily: "每日支出", records: "明细",
+      today: "今天", yesterday: "昨天", dayBefore: "前天", pickDate: "其他日期", date: "日期", cat: "分类", note: "备注",
+      notePh: "备注（可不填）", amtPh: "0.00", save: "记下", saveEdit: "保存", del: "删除", cancel: "取消", clear: "清除",
+      nRec: "{0} 笔", subToday: "{0} · 本月已记 {1} 笔", subEmpty: "{0} · 还没有记账", subNone: "{0} · 本月还没有记账",
+      budget: "月预算", budgetD: "设一个每月的支出上限，组件上会显示用了多少", budgetNone: "未设置",
+      budgetLeft: "预算还剩 {0}", budgetOver: "已超出预算 {0}", budgetOf: "预算 {0} · 已用 {1}%",
+      budgetPh: "每月预算", budgetHint: "只算支出，不算收入。", budgetSet: "已设预算", budgetCleared: "已清除预算",
+      currency: "货币", currencyD: "金额前显示的货币符号", currencyHint: "只改显示的符号，已记的金额不会换算。",
+      emptyT: "还没有记账", emptyD: "点「记一笔」记下第一笔。花了多少、花在哪，这里和组件上都会一目了然。",
+      monthEmptyT: "这个月没有记录", monthEmptyD: "换个月份看看，或者记一笔。",
+      catEmpty: "这个月还没有支出", all: "全部", filterOn: "只看「{0}」", showAll: "看全部",
+      saved: "已记下 {0}", savedEdit: "已保存", deleted: "已删除这一笔", undo: "撤销",
+      delQ: "删除这一笔？", delM: "删除后不能恢复。", badAmt: "请输入金额", badDate: "日期不能晚于今天",
+      added: "刚记下的", pickTitle: "把记账加到仪表盘", pickDesc: "本月支出、预算、分类占比、最近几笔",
+      settings: "设置", privacy: "账目只保存在这台设备上，不会上传到我们的服务器。卸载 App 或删除这个工具会一并删除，换机前请在「我的 › 备份与还原」导出备份。",
+      top: "花得最多：{0} {1}%", most: "最多的一天 {0}", vsNone: "",
+      wd: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+      md: function (d) { return (d.getMonth() + 1) + "月" + d.getDate() + "日"; },
+      ymL: function (y, m) { return y + "年" + (m + 1) + "月"; },
+      moL: function (m) { return (m + 1) + "月"; }
+    },
+    en: {
+      appName: "Ledger", segE: "Expense", segI: "Income", add: "Add entry", edit: "Edit entry", exp: "Spent", inc: "Income", bal: "Net", avg: "Daily avg",
+      monthExp: "Spent this month", monthOf: "Spent in {0}", cats: "By category", last30: "Last 30 days", daily: "Daily spending", records: "Entries",
+      today: "Today", yesterday: "Yesterday", dayBefore: "2 days ago", pickDate: "Other date", date: "Date", cat: "Category", note: "Note",
+      notePh: "Note (optional)", amtPh: "0.00", save: "Save", saveEdit: "Save", del: "Delete", cancel: "Cancel", clear: "Clear",
+      nRec: "{0} entries", nRec1: "1 entry", subToday: "{0} · {1} entries this month", subToday1: "{0} · 1 entry this month",
+      subEmpty: "{0} · nothing recorded yet", subNone: "{0} · nothing recorded this month",
+      budget: "Monthly budget", budgetD: "Set a monthly spending limit. Widgets show how much is used", budgetNone: "Not set",
+      budgetLeft: "{0} left", budgetOver: "{0} over budget", budgetOf: "{1}% of {0}",
+      budgetPh: "Monthly budget", budgetHint: "Counts spending only, not income.", budgetSet: "Budget set", budgetCleared: "Budget cleared",
+      currency: "Currency", currencyD: "Symbol shown before amounts", currencyHint: "This only changes the symbol. Amounts aren't converted.",
+      emptyT: "Nothing recorded yet", emptyD: "Tap “Add entry” to log your first one. You'll see where your money goes, here and on your widgets.",
+      monthEmptyT: "No entries this month", monthEmptyD: "Try another month, or add an entry.",
+      catEmpty: "No spending this month", all: "All", filterOn: "Only “{0}”", showAll: "Show all",
+      saved: "Saved {0}", savedEdit: "Saved", deleted: "Entry deleted", undo: "Undo",
+      delQ: "Delete this entry?", delM: "You can't undo this.", badAmt: "Enter an amount", badDate: "The date can't be later than today",
+      added: "Just added", pickTitle: "Add Ledger to your dashboard", pickDesc: "Monthly spending, budget, categories, recent entries",
+      settings: "Settings", privacy: "Your entries stay on this device and are never uploaded to our servers. They're deleted if you uninstall the app or remove this tool, so export a backup in Me › Backup & Restore before switching phones.",
+      top: "Most on {0}: {1}%", most: "Biggest day: {0}", vsNone: "",
+      wd: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      md: function (d) { return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()] + " " + d.getDate(); },
+      ymL: function (y, m) { return ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m] + " " + y; },
+      moL: function (m) { return ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m]; }
+    }
+  };
+  function t(k) {
+    var v = STR[lang()][k];
+    if (v == null) v = STR.en[k];   // 缺键回落英文;空串是合法译文,只认 null
+    if (typeof v !== "string") return v;
+    var a = arguments;
+    return v.replace(/\{(\d)\}/g, function (_, i) { return a[+i + 1] != null ? a[+i + 1] : ""; });
+  }
+  /** 带数量的句子:英文单数另给 <key>1(copy-style-guide §5)。 */
+  function tn(k, n) {
+    var a = Array.prototype.slice.call(arguments, 2);
+    var key = (lang() === "en" && n === 1 && STR.en[k + "1"] != null) ? k + "1" : k;
+    return t.apply(null, [key].concat(a.length ? a : [n]));
+  }
+
+  // ── 小工具 ──
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function dark() { return document.documentElement.getAttribute("data-theme") === "dark"; }
+  function catColor(k, tt) { var p = M.PAL[M.catOf(k, tt).c]; return dark() ? p.d : p.l; }
+  function catWash(k, tt) { var p = M.PAL[M.catOf(k, tt).c]; return p.w.split("|")[dark() ? 1 : 0]; }
+  function catName(k, tt) { var c = M.catOf(k, tt); return lang() === "zh" ? c.z : c.e; }
+  function svg(d, cls) { return '<svg class="' + (cls || "g") + '" viewBox="0 0 256 256" aria-hidden="true"><path d="' + d + '" fill="currentColor"/></svg>'; }
+  function ic(name, cls) { return M.ICON_D[name] ? svg(M.ICON_D[name], cls) : ""; }
+  function ui(name, cls) { return M.UI_D[name] ? svg(M.UI_D[name], cls) : ""; }
+
+  // ── 金额文案 ──
+  function sym() { var c = M.CUR[M.curOf(S)]; return lang() === "zh" ? c.z : c.e; }
+  function dp() { return M.CUR[M.curOf(S)].dp; }
+  function money(cents) { return sym() + M.fmt(cents, dp()); }
+  function moneyBig(cents) { return sym() + M.fmtBig(cents, dp()); }
+  /** 符号缩小的金额 HTML(概览 tile 里放得下「CN¥12,000」)。 */
+  function moneyH(cents, neg) { return "<small>" + esc((neg ? "-" : "") + sym().trim()) + "</small>" + esc(M.fmtBig(cents, dp())); }
+
+  // ── 日期文案 ──
+  function relDay(ymdStr, nowMs) {
+    var d = M.parseYmd(ymdStr); if (!d) return "";
+    var n = M.dayDiff(d.getTime(), nowMs);
+    if (n === 0) return t("today");
+    if (n === 1) return t("yesterday");
+    var y = new Date(nowMs).getFullYear() === d.getFullYear();
+    return t("md")(d) + " " + t("wd")[d.getDay()] + (y ? "" : " · " + d.getFullYear());
+  }
+
+  // ── 反馈 ──
+  function haptic(k) { if (inApp) { try { xbridge.haptic(k || "tap"); } catch (e) {} } }
+  function toast(msg, type) { if (inApp) { try { xbridge.toast(msg, type); } catch (e) {} } else console.log("[toast]", msg); }
+  async function confirm(title, msg, okText) {
+    if (!inApp) return window.confirm(title + "\n" + (msg || ""));
+    try { return !!(await call(xbridge.confirm(title, msg || "", okText ? { okText: okText, destructive: true } : undefined))); }
+    catch (e) { return false; }
+  }
+  /** 撤销条:toast 一闪就没,撤销得有一个能按到的按钮。页内自绘,4 秒。 */
+  var snackT = null;
+  function snack(msg, actionText, onAction) {
+    var el = $("snack");
+    if (!el) { el = document.createElement("div"); el.id = "snack"; el.className = "snack"; document.body.appendChild(el); }
+    el.innerHTML = '<span class="sm">' + esc(msg) + "</span>" + (actionText ? '<button type="button" class="sa">' + esc(actionText) + "</button>" : "");
+    el.classList.add("on");
+    if (actionText) el.querySelector(".sa").onclick = function () { el.classList.remove("on"); clearTimeout(snackT); onAction && onAction(); };
+    clearTimeout(snackT);
+    snackT = setTimeout(function () { el.classList.remove("on"); }, 4200);
+  }
+
+  // ── 宿主信息(语言 / 主题 / 地区);缺省货币按 country 定 ──
+  var info = {};
+  async function bootEnv() {
+    if (!inApp) return;
+    try {
+      var a = await call(xbridge.appInfo());
+      info = a || {};
+      var h = document.documentElement;
+      if (!h.getAttribute("data-theme") && a && a.theme) h.setAttribute("data-theme", a.theme === "dark" ? "dark" : "light");
+      if (a && (a.language || a.locale)) h.setAttribute("data-lang", a.language || a.locale);
+    } catch (e) {}
+  }
+  /** 还没选过货币 → 按系统地区给缺省(只在内存里用;第一次存盘时写进 cfg,之后不再随地区变)。 */
+  function ensureCur() {
+    if (S.cfg.cur && M.CUR[S.cfg.cur]) return;
+    var cn = nbCnDefault({ region: info.region, language: info.language || info.locale || document.documentElement.getAttribute("data-lang") || "" });
+    S.cfg.cur = M.defaultCur(info.country, cn);
+  }
+
+  // ── 状态:读 / 写 ──
+  var S = M.empty();
+  var rev = "";
+  async function load() {
+    if (!inApp) { S = M.normalize(window.__DEMO__ || {}); ensureCur(); return S; }
+    var d = await call(xbridge.runDataFlow("read", {}));
+    S = M.normalize(d || {});
+    ensureCur();
+    try { rev = String((await call(xbridge.getData("rev"))) || ""); } catch (e) { rev = ""; }
+    return S;
+  }
+  /** 存盘串行化:两次写盘并发会让后发的先落、先发的覆盖回去。 */
+  var saving = Promise.resolve();
+  function save() {
+    var now = Date.now();
+    var job = saving.then(async function () {
+      if (!inApp) return;
+      var w = M.buildW(S, now);
+      await call(xbridge.runFlow("save", { recs: S.recs, cfg: S.cfg, w: w }));
+      rev = String(now);
+      try { await call(xbridge.setData("rev", rev)); } catch (e) {}
+      scheduleRefresh();
+    });
+    saving = job.catch(function () { toast(lang() === "zh" ? "保存失败，请重试" : "Couldn't save. Try again", "error"); });
+    return saving;
+  }
+
+  // 组件刷新:原语同一包 5 秒只兑现第一次 —— 先立即刷,窗口里的后续改动合成一次补刷(同 todo)
+  var lastRefresh = 0, refreshT = null;
+  function scheduleRefresh() {
+    if (!inApp) return;
+    var wait = lastRefresh + 5300 - Date.now();
+    if (wait <= 0) { doRefresh(); return; }
+    if (!refreshT) refreshT = setTimeout(function () { refreshT = null; doRefresh(); }, wait);
+  }
+  function doRefresh() { lastRefresh = Date.now(); try { xbridge.refreshWidget(); } catch (e) {} }
+
+  /** 别的页改过数据(记一笔面板)回到这一页时重读:rev 变了才重读,轮询只读一个小键。 */
+  function watch(onChange) {
+    if (!inApp) return;
+    async function check() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        var r = String((await call(xbridge.getData("rev"))) || "");
+        if (r !== rev) { rev = r; await load(); onChange(); }
+      } catch (e) {}
+    }
+    setInterval(check, 1500);
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+  }
+
+  function route(path) { if (inApp) { try { xbridge.route("numable://self/page" + path); } catch (e) {} } else location.href = "#" + path; }
+  function q(name) { var m = new RegExp("[?&]" + name + "=([^&]*)").exec(location.search || ""); return m ? decodeURIComponent(m[1]) : ""; }
+
+  /** 主题 / 语言:容器改属性 + 派发事件,不重载页面 —— 渲染函数要能重跑。 */
+  function onEnv(fn) {
+    addEventListener("themechange", fn);
+    addEventListener("languagechange", function () { document.documentElement.lang = lang() === "zh" ? "zh" : "en"; fn(); });
+  }
+
+  /** 页内底部面板(选货币 / 设预算)。挂在页面自己的 body 里,天然在容器边界内。 */
+  function sheet(html, onMount) {
+    var bg = document.createElement("div");
+    bg.className = "shbg";
+    bg.innerHTML = '<div class="sh" role="dialog"><div class="shh"></div>' + html + "</div>";
+    document.body.appendChild(bg);
+    requestAnimationFrame(function () { bg.classList.add("on"); });
+    function close() { bg.classList.remove("on"); setTimeout(function () { bg.remove(); }, 220); }
+    bg.addEventListener("click", function (e) { if (e.target === bg) close(); });
+    onMount && onMount(bg.querySelector(".sh"), close);
+    return close;
+  }
+
+  return {
+    inApp: inApp, call: call, lang: lang, t: t, tn: tn, $: $, esc: esc, dark: dark,
+    catColor: catColor, catWash: catWash, catName: catName, svg: svg, ic: ic, ui: ui,
+    sym: sym, dp: dp, money: money, moneyBig: moneyBig, moneyH: moneyH, relDay: relDay,
+    haptic: haptic, toast: toast, confirm: confirm, snack: snack,
+    get S() { return S; }, set S(v) { S = v; }, load: load, save: save, ensureCur: ensureCur,
+    scheduleRefresh: scheduleRefresh, watch: watch, route: route, q: q, onEnv: onEnv, bootEnv: bootEnv, sheet: sheet
+  };
+})();
+
+(function () {
+  var M = LedgerModel, t = U.t, $ = U.$, esc = U.esc;
+  var VY, VM, filt = "";
+  function S() { return U.S; }
+  function now() { return Date.now(); }
+  function curYM() { var d = new Date(); return [d.getFullYear(), d.getMonth()]; }
+  function isCur() { var c = curYM(); return VY === c[0] && VM === c[1]; }
+  function vym() { return VY + "-" + (VM < 9 ? "0" : "") + (VM + 1); }
+  function earliest() {
+    var e = null;
+    S().recs.forEach(function (r) { var k = r.d.slice(0, 7); if (!e || k < e) e = k; });
+    return e;
+  }
+
+  // ── 页头 ──
+  function renderHead() {
+    document.documentElement.lang = U.lang() === "zh" ? "zh" : "en";
+    document.title = t("appName");
+    $("h1").textContent = t("appName");
+    var d = new Date(), dstr = t("md")(d) + " " + t("wd")[d.getDay()];
+    var n = M.monthSum(S(), M.ym(d)).n;
+    $("sub").textContent = !S().recs.length ? t("subEmpty", dstr) : n ? U.tn("subToday", n, dstr, n) : t("subNone", dstr);
+  }
+
+  function renderNav() {
+    var has = S().recs.length > 0;
+    $("mnav").classList.toggle("hide", !has);
+    if (!has) return;
+    $("mPrev").innerHTML = U.ui("chevl"); $("mNext").innerHTML = U.ui("chev");
+    $("mLbl").textContent = t("ymL")(VY, VM);
+    $("mNext").disabled = isCur();
+    var e = earliest();
+    $("mPrev").disabled = !e || vym() <= e;
+    $("mNow").textContent = t("today");
+    $("mNow").classList.toggle("hide", isCur());
+  }
+
+  // ── 概览 ──
+  function renderOverview() {
+    var box = $("ovw");
+    $("addb").innerHTML = U.ui("plus") + esc(t("add"));
+    if (!S().recs.length) {
+      $("addb").classList.add("hide");
+      box.innerHTML = '<div class="card empty"><div class="ei">' + U.ui("wallet") + "</div><b>" + esc(t("emptyT")) + "</b><p>" +
+        esc(t("emptyD")) + '</p><button class="btn" type="button" id="addE">' + U.ui("plus") + esc(t("add")) + "</button></div>";
+      $("addE").onclick = openAdd;
+      return;
+    }
+    $("addb").classList.remove("hide");
+    var ms = M.monthSum(S(), vym()), bud = S().cfg.bud > 0 ? S().cfg.bud : 0;
+    var days = isCur() ? new Date().getDate() : new Date(VY, VM + 1, 0).getDate();
+    var lbl = isCur() ? t("monthExp") : t("monthOf", t("moL")(VM));
+    var h = '<div class="card ov"><div class="l">' + esc(lbl) + '</div><div class="big"><small>' + esc(U.sym()) + "</small>" +
+      esc(M.fmt(ms.exp, U.dp())) + "</div>";
+    if (bud) {
+      var st = M.budState(ms.exp, bud), pct = Math.round(ms.exp * 100 / bud);
+      var cls = st === 3 ? "over" : st === 2 ? "warn" : "";
+      h += '<div class="bar ' + cls + '"><i style="width:' + Math.max(2, Math.min(100, pct)) + '%"></i></div><div class="bt"><span class="' + cls + '">' +
+        esc(st === 3 ? t("budgetOver", U.money(ms.exp - bud)) : t("budgetLeft", U.money(bud - ms.exp))) + "</span><span>" +
+        esc(t("budgetOf", U.moneyBig(bud), pct)) + "</span></div>";
+    } else {
+      h += '<button class="set" type="button" id="setBud">' + esc(t("budget")) + " ›</button>";
+    }
+    var net = ms.inc - ms.exp;
+    h += '<div class="tiles"><div class="tl"><span>' + esc(t("inc")) + '</span><b class="' + (ms.inc ? "inc" : "") + '">' + U.moneyH(ms.inc) +
+      '</b></div><div class="tl"><span>' + esc(t("bal")) + '</span><b class="' + (net < 0 ? "neg" : "") + '">' + U.moneyH(Math.abs(net), net < 0) +
+      '</b></div><div class="tl"><span>' + esc(t("avg")) + "</span><b>" + U.moneyH(Math.round(ms.exp / days)) + "</b></div></div></div>";
+    box.innerHTML = h;
+    $("setBud") && ($("setBud").onclick = budgetSheet);
+  }
+
+  // ── 分类占比 ──
+  function renderCats() {
+    var box = $("cats");
+    if (!S().recs.length) { box.innerHTML = ""; return; }
+    var ms = M.monthSum(S(), vym()), L = M.catList(ms.cats);
+    var h = '<div class="sec"><span>' + esc(t("cats")) + '</span><span class="r">' + esc(U.money(ms.exp)) + "</span></div>";
+    if (!L.length) { box.innerHTML = h + '<div class="card"><p class="meta" style="margin:14px">' + esc(t("catEmpty")) + "</p></div>"; return; }
+    var top = L[0].a, pAcc = 0;
+    var seg = L.map(function (x) {
+      return '<i style="flex:' + Math.max(0.02, x.a / ms.exp).toFixed(4) + " 1 0;background:" + U.catColor(x.k, 0) + '"></i>';
+    }).join("");
+    var rows = L.map(function (x, i) {
+      var p = i === L.length - 1 ? Math.max(0, 100 - pAcc) : Math.round(x.a * 100 / ms.exp);
+      pAcc += p;
+      return '<button class="cr' + (filt === x.k ? " on" : "") + '" type="button" data-cat="' + esc(x.k) + '"><span class="ci" style="background:' + U.catWash(x.k, 0) +
+        ";color:" + U.catColor(x.k, 0) + '">' + U.ic(x.k) + '</span><span class="cn"><b>' + esc(U.catName(x.k, 0)) +
+        '</b><span class="pb"><i style="width:' + Math.max(2, Math.round(x.a * 100 / top)) + "%;background:" + U.catColor(x.k, 0) + '"></i></span></span>' +
+        '<span class="ca"><b>' + esc(U.money(x.a)) + "</b><small>" + p + "%</small></span></button>";
+    }).join("");
+    box.innerHTML = h + '<div class="card"><div class="cb">' + seg + "</div>" + rows + "</div>";
+  }
+
+  // ── 每日柱:本月看「近 30 天」(与组件同一个窗口),往月看那个月的每一天 ──
+  function renderDaily() {
+    var box = $("daily");
+    if (!S().recs.length) { box.innerHTML = ""; return; }
+    var DT = M.dayTotals(S()), vals = [], first, last;
+    if (isCur()) {
+      for (var q = 0; q < M.WIN; q++) { var d = new Date(M.addDays(now(), q - M.WIN + 1)); vals.push(DT[M.ymd(d)] || 0); if (!q) first = d; }
+      last = t("today");
+    } else {
+      var n = new Date(VY, VM + 1, 0).getDate();
+      for (var k = 1; k <= n; k++) vals.push(DT[M.ymd(new Date(VY, VM, k))] || 0);
+      first = new Date(VY, VM, 1); last = t("md")(new Date(VY, VM, n));
+    }
+    var mx = Math.max.apply(null, vals), sum = vals.reduce(function (s, v) { return s + v; }, 0);
+    var bars = vals.map(function (v, i) {
+      var cls = v ? (isCur() && i === vals.length - 1 ? "t" : "") : "z";
+      return '<i class="' + cls + '" style="height:' + (v ? Math.max(4, Math.round(v * 100 / mx)) : 3) + '%"></i>';
+    }).join("");
+    box.innerHTML = '<div class="sec"><span>' + esc(isCur() ? t("last30") : t("daily")) + '</span><span class="r">' + esc(U.money(sum)) + "</span></div>" +
+      '<div class="card dch"><div class="hl"><span>' + esc(t("avg")) + " <b>" + esc(U.moneyBig(Math.round(sum / vals.length))) + "</b></span><span>" +
+      (mx ? esc(t("most", U.moneyBig(mx))) : "") + '</span></div><div class="dbars">' + bars + '</div><div class="dax"><span>' +
+      esc(t("md")(first)) + "</span><span>" + esc(last) + "</span></div></div>";
+  }
+
+  // ── 明细 ──
+  function rowHTML(r) {
+    var nm = U.catName(r.c, r.t), note = String(r.n || "");
+    return '<button class="rr" type="button" data-id="' + esc(r.id) + '"><span class="ci" style="background:' + U.catWash(r.c, r.t) + ";color:" +
+      U.catColor(r.c, r.t) + '">' + U.ic(M.catKey(r.c, r.t)) + '</span><span class="rb"><div class="rt">' + esc(note || nm) + "</div>" +
+      (note ? '<div class="rm">' + esc(nm) + "</div>" : "") + '</span><span class="ra' + (r.t ? " inc" : "") + '">' + (r.t ? "+" : "") +
+      esc(U.money(r.a)) + "</span></button>";
+  }
+  function renderList() {
+    var box = $("list");
+    $("fchip").innerHTML = filt ? '<div class="fchip"><span>' + esc(t("filterOn", U.catName(filt, 0))) + '</span><button type="button" id="fAll">' +
+      esc(t("showAll")) + "</button></div>" : "";
+    $("fAll") && ($("fAll").onclick = function () { filt = ""; render(); });
+    if (!S().recs.length) { box.innerHTML = ""; return; }
+    var rs = S().recs.filter(function (r) { return r.d.slice(0, 7) === vym() && (!filt || (!r.t && r.c === filt)); }).sort(M.cmpRec);
+    if (!rs.length) {
+      box.innerHTML = '<div class="sec"><span>' + esc(t("records")) + '</span></div><div class="card empty"><div class="ei">' + U.ui("note") + "</div><b>" +
+        esc(t("monthEmptyT")) + "</b><p>" + esc(t("monthEmptyD")) + "</p></div>";
+      return;
+    }
+    var groups = [], gm = {};
+    rs.forEach(function (r) {
+      if (!gm[r.d]) { gm[r.d] = { d: r.d, items: [], e: 0, i: 0 }; groups.push(gm[r.d]); }
+      gm[r.d].items.push(r);
+      if (r.t) gm[r.d].i += r.a; else gm[r.d].e += r.a;
+    });
+    box.innerHTML = '<div class="sec"><span>' + esc(t("records")) + '</span><span class="r">' + esc(U.tn("nRec", rs.length, rs.length)) + "</span></div>" +
+      groups.map(function (g) {
+        var right = [];
+        if (g.e) right.push(t("exp") + " " + U.money(g.e));
+        if (g.i) right.push(t("inc") + " " + U.money(g.i));
+        return '<div class="dh"><span>' + esc(U.relDay(g.d, now())) + '</span><span class="r">' + esc(right.join(" · ")) + "</span></div>" +
+          '<div class="card">' + g.items.map(rowHTML).join("") + "</div>";
+      }).join("");
+  }
+
+  // ── 设置 ──
+  function renderSettings() {
+    $("pickWrap").innerHTML = '<button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg"><b>' + esc(t("pickTitle")) +
+      '</b><span class="d">' + esc(t("pickDesc")) + "</span></span></button>";
+    $("pickw").onclick = function () {
+      if (!U.inApp) return;
+      U.haptic();
+      xbridge.pickWidgets(["month", "cats", "daily", "recent", "month21", "month11", "add"].map(function (id) { return { id: id }; }));
+    };
+    $("setSec").innerHTML = "<span>" + esc(t("settings")) + "</span>";
+    function srow(id, icon, title, desc, val, cls) {
+      return '<button class="sr" type="button" id="' + id + '"><span class="si">' + U.ui(icon) + '</span><span class="sb"><b>' + esc(title) +
+        "</b><small>" + esc(desc) + '</small></span><span class="sv ' + (cls || "") + '">' + esc(val || "") + '</span><span class="cv">' + U.ui("chev") + "</span></button>";
+    }
+    var bud = S().cfg.bud > 0 ? S().cfg.bud : 0;
+    $("set").innerHTML = srow("sBud", "wallet", t("budget"), t("budgetD"), bud ? U.moneyBig(bud) : t("budgetNone"), bud ? "on" : "") +
+      srow("sCur", "coins", t("currency"), t("currencyD"), M.curOf(S()), "");
+    $("sBud").onclick = budgetSheet;
+    $("sCur").onclick = currencySheet;
+    $("priv").textContent = t("privacy");
+  }
+
+  function render() { renderHead(); renderNav(); renderOverview(); renderCats(); renderDaily(); renderList(); renderSettings(); }
+
+  // ── 面板 ──
+  function openAdd() { U.haptic(); U.route("/add"); }
+
+  function budgetSheet() {
+    U.haptic();
+    var bud = S().cfg.bud > 0 ? S().cfg.bud : 0;
+    U.sheet('<h3>' + esc(t("budget")) + '</h3><p class="hint">' + esc(t("budgetHint")) + '</p><div class="amtIn"><span>' + esc(U.sym()) +
+      '</span><input id="budIn" inputmode="decimal" autocomplete="off" enterkeyhint="done" maxlength="14" placeholder="' + esc(t("budgetPh")) + '" value="' +
+      (bud ? esc(M.fmt(bud, U.dp()).replace(/,/g, "")) : "") + '"></div><div class="row2">' +
+      (bud ? '<button class="btn ghost" type="button" id="budClr">' + esc(t("clear")) + "</button>" : "") +
+      '<button class="btn" type="button" id="budOk">' + esc(t("saveEdit")) + "</button></div>", function (el, close) {
+      var inp = el.querySelector("#budIn");
+      function ok() {
+        var c = M.parseAmount(inp.value);
+        if (c <= 0) { U.toast(t("badAmt")); return; }
+        S().cfg.bud = c; U.save(); U.haptic("success"); close(); render(); U.toast(t("budgetSet"));
+      }
+      el.querySelector("#budOk").onclick = ok;
+      inp.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); ok(); } });
+      var clr = el.querySelector("#budClr");
+      if (clr) clr.onclick = function () { delete S().cfg.bud; U.save(); U.haptic(); close(); render(); U.toast(t("budgetCleared")); };
+      setTimeout(function () { inp.focus(); }, 250);
+    });
+  }
+
+  function currencySheet() {
+    U.haptic();
+    var cur = M.curOf(S()), zh = U.lang() === "zh";
+    U.sheet('<h3>' + esc(t("currency")) + '</h3><p class="hint">' + esc(t("currencyHint")) + "</p>" + M.CUR_KEYS.map(function (k) {
+      var c = M.CUR[k];
+      return '<button class="opt' + (k === cur ? " on" : "") + '" type="button" data-cur="' + k + '"><span class="cd">' + k + "</span><span>" +
+        esc((zh ? c.z : c.e).trim()) + '</span><span class="ck">' + U.ui("check") + "</span></button>";
+    }).join(""), function (el, close) {
+      el.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-cur]"); if (!b) return;
+        S().cfg.cur = b.getAttribute("data-cur"); U.save(); U.haptic("selection"); close(); render();
+      });
+    });
+  }
+
+  // ── 事件 ──
+  document.addEventListener("click", function (e) {
+    var c = e.target.closest("[data-cat]");
+    if (c) { var k = c.getAttribute("data-cat"); filt = filt === k ? "" : k; U.haptic("selection"); render();
+      var l = $("list"); if (filt && l.scrollIntoView) l.scrollIntoView({ block: "start", behavior: "smooth" }); return; }
+    var r = e.target.closest(".rr[data-id]");
+    if (r) { U.haptic(); U.route("/add?id=" + encodeURIComponent(r.getAttribute("data-id"))); }
+  });
+  $("addb").addEventListener("click", openAdd);
+  $("mPrev").addEventListener("click", function () { VM--; if (VM < 0) { VM = 11; VY--; } filt = ""; U.haptic("selection"); render(); });
+  $("mNext").addEventListener("click", function () { if (isCur()) return; VM++; if (VM > 11) { VM = 0; VY++; } filt = ""; U.haptic("selection"); render(); });
+  $("mNow").addEventListener("click", function () { var c = curYM(); VY = c[0]; VM = c[1]; filt = ""; U.haptic("selection"); render(); });
+  U.onEnv(render);
+
+  (async function () {
+    var c = curYM(); VY = c[0]; VM = c[1];
+    await U.bootEnv();
+    try { await U.load(); } catch (e) {}
+    render();
+    U.watch(render);
+  })();
+})();
+</script>
+</body>
+</html>

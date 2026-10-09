@@ -1,0 +1,1574 @@
+{
+  "_note": "中国国债收益率(财政部-中国国债收益率曲线,中央国债登记结算公司编制,收盘口径,两位小数)。一次取最近 50 个日历日;mode=ten 出 10 年 + 日变化 + 近 1 个月迷你线,mode=curve 出最新与约 1 个月前两条曲线 + 10−2 年利差。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出。切语言 = 整盘重取,数据缓存含 locale。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      },
+      "_note": "今年(按设备时区;跨年那几个小时差一天无妨:两年的文件都会取)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[parseNumber::(calc::(${y0}-1),0)]"
+      },
+      "_note": "去年。⚠️ 进 URL 的数字过 parseNumber(Android calc 返回 2025.0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "modeIn",
+        "value": "$[findNotEmpty::(${mode},ten)]"
+      },
+      "_note": "入参落地(勿删)。mode = ten(10 年)/ curve(曲线)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cs",
+        "value": "$[formatDate::(calc::(${nowMs}-4320000000),yyyy-MM-dd)]"
+      },
+      "_note": "起点 = 50 个日历日前:够 22 个交易日(春节 / 国庆长假也够),行数少服务端才快。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ce",
+        "value": "$[formatDate::(calc::(${nowMs}+86400000),yyyy-MM-dd)]"
+      },
+      "_note": "终点 = 明天:设备在西半球时「今天」比北京晚一天,不多给一天会漏掉最新一行(区间超出今天不报错,实测)。"
+    },
+    {
+      "id": "cr",
+      "action": "request",
+      "params": {
+        "url": "https://yield.chinabond.com.cn/cbweb-czb-web/czb/historyQuery?startDate=${cs}&endDate=${ce}&gjqx=0&locale=cn_ZH&qxmc=1",
+        "method": "GET",
+        "formatType": "json",
+        "timeout": "10000"
+      },
+      "_note": "财政部-中国国债收益率曲线(中债编制),JSON(Content-Type 写的是 text/plain)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cd0",
+        "value": "$[findNotEmpty::(${cr.heList[0].workTime},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cok",
+        "value": "$[if::(matches::(findNotEmpty::(${cd0},x),^20[0-9][0-9]-[0-9]+-[0-9]+$),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${cok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "chinabond unavailable"
+          }
+        }
+      ],
+      "_note": "拿不到最新一行(接口挂了 / 返回 heList:null)= 取数失败(G26),宿主贴上次成功的那帧。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(matches::(findNotEmpty::(${cd0},x),^[0-9]+-[0-9]+-[0-9]+$),subString::(${cd0},5,10),--)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${modeIn},ten),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "tv1",
+            "value": "$[findNotEmpty::(${cr.heList[0].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv2",
+            "value": "$[findNotEmpty::(${cr.heList[1].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv3",
+            "value": "$[findNotEmpty::(${cr.heList[2].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv4",
+            "value": "$[findNotEmpty::(${cr.heList[3].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv5",
+            "value": "$[findNotEmpty::(${cr.heList[4].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv6",
+            "value": "$[findNotEmpty::(${cr.heList[5].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv7",
+            "value": "$[findNotEmpty::(${cr.heList[6].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv8",
+            "value": "$[findNotEmpty::(${cr.heList[7].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv9",
+            "value": "$[findNotEmpty::(${cr.heList[8].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv10",
+            "value": "$[findNotEmpty::(${cr.heList[9].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv11",
+            "value": "$[findNotEmpty::(${cr.heList[10].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv12",
+            "value": "$[findNotEmpty::(${cr.heList[11].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv13",
+            "value": "$[findNotEmpty::(${cr.heList[12].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv14",
+            "value": "$[findNotEmpty::(${cr.heList[13].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv15",
+            "value": "$[findNotEmpty::(${cr.heList[14].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv16",
+            "value": "$[findNotEmpty::(${cr.heList[15].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv17",
+            "value": "$[findNotEmpty::(${cr.heList[16].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv18",
+            "value": "$[findNotEmpty::(${cr.heList[17].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv19",
+            "value": "$[findNotEmpty::(${cr.heList[18].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv20",
+            "value": "$[findNotEmpty::(${cr.heList[19].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv21",
+            "value": "$[findNotEmpty::(${cr.heList[20].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tv22",
+            "value": "$[findNotEmpty::(${cr.heList[21].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v2R",
+            "value": "$[findNotEmpty::(${cr.heList[0].twoYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v30R",
+            "value": "$[findNotEmpty::(${cr.heList[0].thirtyYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v10",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${tv1},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${tv1},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v2",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${v2R},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${v2R},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v30",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${v30R},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${v30R},0.00),)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${v10},__none__),__none__),0,1),1),0,1)]"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "chinabond 10y missing"
+              }
+            }
+          ],
+          "_note": "主数 10 年取不到 = 失败(G26)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bpv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${tv1},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${tv2},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${tv1}-${tv2})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bpn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${bpv},0),${bpv},calc::(0-${bpv})),0),)]"
+          },
+          "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bpt",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),0),--,if::(eq::(${bpn},0),if::(eq::(${zh},1),持平,flat),if::(gt::(${bpv},0),if::(eq::(${zh},1),+${bpn} 基点,+${bpn} bp),if::(eq::(${zh},1),−${bpn} 基点,−${bpn} bp))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bpu",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),0),n,if::(gt::(${bpv},0),1,0))]"
+          },
+          "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bpf",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),0),0,if::(eq::(${bpn},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bps",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${bpv},__none__),__none__),0,1),0),--,if::(eq::(${bpn},0),0,if::(gt::(${bpv},0),+${bpn},−${bpn})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lLo",
+            "value": "$[min::(findNotEmpty::(${tv22},${tv1}),findNotEmpty::(${tv21},${tv1}),findNotEmpty::(${tv20},${tv1}),findNotEmpty::(${tv19},${tv1}),findNotEmpty::(${tv18},${tv1}),findNotEmpty::(${tv17},${tv1}),findNotEmpty::(${tv16},${tv1}),findNotEmpty::(${tv15},${tv1}),findNotEmpty::(${tv14},${tv1}),findNotEmpty::(${tv13},${tv1}),findNotEmpty::(${tv12},${tv1}),findNotEmpty::(${tv11},${tv1}),findNotEmpty::(${tv10},${tv1}),findNotEmpty::(${tv9},${tv1}),findNotEmpty::(${tv8},${tv1}),findNotEmpty::(${tv7},${tv1}),findNotEmpty::(${tv6},${tv1}),findNotEmpty::(${tv5},${tv1}),findNotEmpty::(${tv4},${tv1}),findNotEmpty::(${tv3},${tv1}),findNotEmpty::(${tv2},${tv1}),findNotEmpty::(${tv1},${tv1}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lHi",
+            "value": "$[max::(findNotEmpty::(${tv22},${tv1}),findNotEmpty::(${tv21},${tv1}),findNotEmpty::(${tv20},${tv1}),findNotEmpty::(${tv19},${tv1}),findNotEmpty::(${tv18},${tv1}),findNotEmpty::(${tv17},${tv1}),findNotEmpty::(${tv16},${tv1}),findNotEmpty::(${tv15},${tv1}),findNotEmpty::(${tv14},${tv1}),findNotEmpty::(${tv13},${tv1}),findNotEmpty::(${tv12},${tv1}),findNotEmpty::(${tv11},${tv1}),findNotEmpty::(${tv10},${tv1}),findNotEmpty::(${tv9},${tv1}),findNotEmpty::(${tv8},${tv1}),findNotEmpty::(${tv7},${tv1}),findNotEmpty::(${tv6},${tv1}),findNotEmpty::(${tv5},${tv1}),findNotEmpty::(${tv4},${tv1}),findNotEmpty::(${tv3},${tv1}),findNotEmpty::(${tv2},${tv1}),findNotEmpty::(${tv1},${tv1}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lOk",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${tv22},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${tv1},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),1,0)]"
+          },
+          "_note": "线画不画:凑得满 22 个收盘(平线也画:一个月没动本身就是信息)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lRg",
+            "value": "$[max::(0.1,calc::(${lHi}-${lLo}))]"
+          },
+          "_note": "纵向量程至少 10 个基点:中国国债只有两位小数、一个月常常只动 1–3 个基点,按极差铺满会把 1 个基点画成满幅跳动。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lTop",
+            "value": "$[calc::((${lHi}+${lLo})/2+${lRg}/2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y0",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv22},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y1",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv21},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y2",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv20},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y3",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv19},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y4",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv18},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y5",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv17},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y6",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv16},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y7",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv15},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y8",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv14},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y9",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv13},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y10",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv12},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y11",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv11},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y12",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv10},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y13",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv9},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y14",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv8},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y15",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv7},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y16",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv6},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y17",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv5},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y18",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv4},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y19",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv3},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y20",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv2},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21y21",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv1},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21P",
+            "value": "2.0,${l21y0},4.5,${l21y1},7.0,${l21y2},9.4,${l21y3},11.9,${l21y4},14.4,${l21y5},16.9,${l21y6},19.3,${l21y7},21.8,${l21y8},24.3,${l21y9},26.8,${l21y10},29.2,${l21y11},31.7,${l21y12},34.2,${l21y13},36.7,${l21y14},39.1,${l21y15},41.6,${l21y16},44.1,${l21y17},46.6,${l21y18},49.0,${l21y19},51.5,${l21y20},54.0,${l21y21}"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y0"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y1"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y2"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y3"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y4"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y5"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y6"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y7"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y8"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y9"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y10"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y11"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y12"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y13"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y14"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y15"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y16"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y17"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y18"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y19"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y20"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l21y21"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y0",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv22},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y1",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv21},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y2",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv20},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y3",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv19},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y4",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv18},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y5",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv17},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y6",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv16},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y7",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv15},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y8",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv14},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y9",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv13},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y10",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv12},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y11",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv11},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y12",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv10},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y13",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv9},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y14",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv8},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y15",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv7},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y16",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv6},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y17",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv5},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y18",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv4},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y19",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv3},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y20",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv2},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22y21",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-findNotEmpty::(${tv1},${tv1}))/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22P",
+            "value": "2.0,${l22y0},4.4,${l22y1},6.8,${l22y2},9.1,${l22y3},11.5,${l22y4},13.9,${l22y5},16.3,${l22y6},18.7,${l22y7},21.0,${l22y8},23.4,${l22y9},25.8,${l22y10},28.2,${l22y11},30.6,${l22y12},33.0,${l22y13},35.3,${l22y14},37.7,${l22y15},40.1,${l22y16},42.5,${l22y17},44.9,${l22y18},47.2,${l22y19},49.6,${l22y20},52.0,${l22y21}"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y0"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y1"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y2"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y3"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y4"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y5"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y6"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y7"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y8"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y9"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y10"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y11"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y12"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y13"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y14"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y15"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y16"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y17"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y18"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y19"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y20"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "l22y21"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l21Y",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-${tv1})/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "l22Y",
+            "value": "$[if::(eq::(${lOk},1),parseNumber::(calc::(2+(${lTop}-${tv1})/${lRg}*22),0.0),13)]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv1"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv2"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv3"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv4"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv5"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv6"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv7"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv8"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv9"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv10"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv11"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv12"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv13"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv14"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv15"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv16"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv17"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv18"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv19"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv20"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv21"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "tv22"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "v2R"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "v30R"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "lLo"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "lHi"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "lRg"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "lTop"
+          }
+        }
+      ],
+      "_note": "10 年三档(22 / 21)用这一段。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${modeIn},curve),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "dM",
+            "value": "$[findNotEmpty::(${cr.heList[21].workTime},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "L3m",
+            "value": "$[findNotEmpty::(${cr.heList[0].threeMonth},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "M3m",
+            "value": "$[findNotEmpty::(${cr.heList[21].threeMonth},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "L6m",
+            "value": "$[findNotEmpty::(${cr.heList[0].sixMonth},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "M6m",
+            "value": "$[findNotEmpty::(${cr.heList[21].sixMonth},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "L1y",
+            "value": "$[findNotEmpty::(${cr.heList[0].oneYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "M1y",
+            "value": "$[findNotEmpty::(${cr.heList[21].oneYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "L2y",
+            "value": "$[findNotEmpty::(${cr.heList[0].twoYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "M2y",
+            "value": "$[findNotEmpty::(${cr.heList[21].twoYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "L5y",
+            "value": "$[findNotEmpty::(${cr.heList[0].fiveYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "M5y",
+            "value": "$[findNotEmpty::(${cr.heList[21].fiveYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "L10y",
+            "value": "$[findNotEmpty::(${cr.heList[0].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "M10y",
+            "value": "$[findNotEmpty::(${cr.heList[21].tenYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "L30y",
+            "value": "$[findNotEmpty::(${cr.heList[0].thirtyYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "M30y",
+            "value": "$[findNotEmpty::(${cr.heList[21].thirtyYear},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "t10",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${L10y},0.00),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "spv",
+            "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${L2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${L10y}-${L2y})*100)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "spn",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${spv},__none__),__none__),0,1),1),parseNumber::(${spv},0),--)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "spT",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${spv},__none__),__none__),0,1),0),--,if::(gt::(${spv},0),+${spn},if::(lt::(${spv},0),−parseNumber::(calc::(0-${spv}),0),0)))]"
+          },
+          "_note": "10 年 − 2 年利差带符号写(单位「基点」在 RCN 里另一个 span)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "inv",
+            "value": "$[if::(and::(eq::(if::(eq::(findNotEmpty::(${spv},__none__),__none__),0,1),1),lt::(${spv},0)),1,0)]"
+          },
+          "_note": "倒挂 = 2 年 > 10 年(事实,不解读)。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${t10},__none__),__none__),0,1),1),0,1)]"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "chinabond 10y missing"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dMtm",
+            "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dM},-),1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dMtd",
+            "value": "$[parseNumber::(findNotEmpty::(index::(split::(${dM},-),2),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dMt",
+            "value": "$[if::(eq::(${dMtm},0),--,if::(eq::(${zh},1),${dMtm} 月 ${dMtd} 日,index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(${dMtm}-1)) ${dMtd}))]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "dMtm"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "dMtd"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cLo",
+            "value": "$[min::(findNotEmpty::(${L3m},99),findNotEmpty::(${L6m},99),findNotEmpty::(${L1y},99),findNotEmpty::(${L2y},99),findNotEmpty::(${L5y},99),findNotEmpty::(${L10y},99),findNotEmpty::(${L30y},99),findNotEmpty::(${M3m},99),findNotEmpty::(${M6m},99),findNotEmpty::(${M1y},99),findNotEmpty::(${M2y},99),findNotEmpty::(${M5y},99),findNotEmpty::(${M10y},99),findNotEmpty::(${M30y},99))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cHi",
+            "value": "$[max::(findNotEmpty::(${L3m},-99),findNotEmpty::(${L6m},-99),findNotEmpty::(${L1y},-99),findNotEmpty::(${L2y},-99),findNotEmpty::(${L5y},-99),findNotEmpty::(${L10y},-99),findNotEmpty::(${L30y},-99),findNotEmpty::(${M3m},-99),findNotEmpty::(${M6m},-99),findNotEmpty::(${M1y},-99),findNotEmpty::(${M2y},-99),findNotEmpty::(${M5y},-99),findNotEmpty::(${M10y},-99),findNotEmpty::(${M30y},-99))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cPad",
+            "value": "$[max::(0.05,calc::((${cHi}-${cLo})*0.12))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cLo2",
+            "value": "$[calc::(${cLo}-${cPad})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cRng",
+            "value": "$[calc::(${cHi}-${cLo}+2*${cPad})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yL3m",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L3m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L3m}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yL6m",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L6m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L6m}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yL1y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L1y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L1y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yL2y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L2y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yL5y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L5y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L5y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yL10y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L10y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yL30y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${L30y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${L30y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yM3m",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M3m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M3m}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yM6m",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M6m},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M6m}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yM1y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M1y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M1y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yM2y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M2y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M2y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yM5y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M5y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M5y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yM10y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M10y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M10y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "yM30y",
+            "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${M30y},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),calc::(round::(calc::((74-(${M30y}-${cLo2})/${cRng}*74)*100))/100),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cLPts",
+            "value": "[0.0,${yL3m},28.1,${yL6m},56.2,${yL1y},84.3,${yL2y},121.4,${yL5y},149.5,${yL10y},194.0,${yL30y}]"
+          },
+          "_note": "折线点串给 line.points(普通内插,不进方法参数,逗号不用转义)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cMPts",
+            "value": "[0.0,${yM3m},28.1,${yM6m},56.2,${yM1y},84.3,${yM2y},121.4,${yM5y},149.5,${yM10y},194.0,${yM30y}]"
+          },
+          "_note": "折线点串给 line.points(普通内插,不进方法参数,逗号不用转义)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cOk",
+            "value": "$[if::(and::(eq::(if::(eq::(findNotEmpty::(${yL3m},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yL30y},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yM3m},__none__),__none__),0,1),1),eq::(if::(eq::(findNotEmpty::(${yM30y},__none__),__none__),0,1),1)),1,0)]"
+          },
+          "_note": "两条线的首尾点都在才画(中间某个期限缺数时点串里会有空值,宁可不画)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dotY",
+            "value": "$[calc::(40+findNotEmpty::(${yL30y},0)-3)]"
+          }
+        }
+      ],
+      "_note": "曲线组件用这一段(键名与美债曲线 ust.df 一致,版式共用 curve_rcn)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cr"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "v10",
+          "v2",
+          "v30",
+          "bpt",
+          "bps",
+          "bpu",
+          "bpf",
+          "lOk",
+          "l21P",
+          "l22P",
+          "l21Y",
+          "l22Y",
+          "t10",
+          "spT",
+          "inv",
+          "dMt",
+          "cLPts",
+          "cMPts",
+          "cOk",
+          "dotY"
+        ]
+      }
+    }
+  ]
+}

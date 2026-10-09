@@ -1,0 +1,351 @@
+{
+ "_note": "记账组件共用的取数:零网络,只读 data.*(页面写的视图 w)。随日子变的量按 off 从 `w.d.*` 取当天那一格。\n没有 request,故不需要 error 出口(G26 只管有请求的流);「没记过账」是成功的空集,组件走空态。",
+ "version": 1,
+ "actions": [
+  {
+   "_note": "页面算好的整份视图(tools/ledger/src/model.js buildW)。没记过账 = {} → any/ok 都落 0,组件走空态。",
+   "id": "w",
+   "action": "data.get",
+   "params": {
+    "key": "w",
+    "default": {}
+   }
+  },
+  {
+   "_note": "屏障:data.get 之后紧邻的一步读不到结果(晚一拍,老宿主仍在)。",
+   "op": "set",
+   "props": {
+    "key": "_b",
+    "value": "1"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "d",
+    "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+   }
+  },
+  {
+   "_note": "今天零点(设备时区)。与页面 JS 的 new Date(y,m,d) 同一个值 —— 「最近几笔」的日期标签全靠它和 dm 比。",
+   "op": "set",
+   "props": {
+    "key": "tdm",
+    "value": "$[parseDate::(${d},yyyy-MM-dd)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "base",
+    "value": "$[findNotEmpty::(${w.base},0)]"
+   }
+  },
+  {
+   "_note": "今天是页面保存那天之后第几天。先 round 再 parseNumber 0(截成整数串):index:: 要整数下标。",
+   "op": "set",
+   "props": {
+    "key": "off",
+    "value": "$[parseNumber::(round::(calc::((${tdm}-${base})/86400000)),0)]"
+   }
+  },
+  {
+   "_note": "按天摊开的格只有 31 天;超出 = 页面太久没打开,本月 / 今天 / 近 30 天不可信,组件显示「数据未更新」。",
+   "op": "set",
+   "props": {
+    "key": "ok",
+    "value": "$[if::(and::(gt::(${base},0),ge::(${off},0),lt::(${off},31)),1,0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "any",
+    "value": "$[findNotEmpty::(${w.any},0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "cz",
+    "value": "$[findNotEmpty::(${w.cz},)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "ce",
+    "value": "$[findNotEmpty::(${w.ce},)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "bud",
+    "value": "$[findNotEmpty::(${w.bud},0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "budS",
+    "value": "$[findNotEmpty::(${w.budS},)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "mt",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.mt},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "mtB",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.mtB},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "mcz",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.mcz},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "mce",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.mce},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "mi",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.mi},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "avg",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.avg},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "brm",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.brm},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "td",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.td},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "moz",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.moz},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "moe",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.moe},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "b30",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.b30},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "b30a",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.b30a},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "b30z",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.b30z},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "b30e",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.b30e},${off}),),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "mtF",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.mtF},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "mtF2",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.mtF2},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "mcF",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.mcF},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "hasI",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.hasI},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "ex",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.ex},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "n",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.n},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "bp",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.bp},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "bpc",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.bpc},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "bst",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.bst},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "tdn",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.tdn},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "catN",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.catN},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "cat",
+    "value": "$[if::(eq::(${ok},1),index::(${w.d.cat},${off}),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "bars",
+    "value": "$[if::(eq::(${ok},1),index::(${w.d.bars},${off}),)]"
+   }
+  },
+  {
+   "_note": "最近几笔不随日子变,不按 ok 闸:数据过期时照样列得出来,日期标签按今天现算。",
+   "op": "set",
+   "props": {
+    "key": "rec",
+    "value": "$[findNotEmpty::(${w.rec},)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "nRec",
+    "value": "$[findNotEmpty::(${w.nRec},0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "ic",
+    "value": "${w.ic}"
+   }
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "tdm",
+     "ok",
+     "any",
+     "cz",
+     "ce",
+     "bud",
+     "budS",
+     "mt",
+     "mtB",
+     "mtF",
+     "mtF2",
+     "mcz",
+     "mce",
+     "mcF",
+     "mi",
+     "hasI",
+     "ex",
+     "n",
+     "avg",
+     "bp",
+     "bpc",
+     "bst",
+     "brm",
+     "td",
+     "tdn",
+     "moz",
+     "moe",
+     "cat",
+     "catN",
+     "bars",
+     "b30",
+     "b30a",
+     "b30z",
+     "b30e",
+     "rec",
+     "nRec",
+     "ic"
+    ]
+   }
+  }
+ ]
+}

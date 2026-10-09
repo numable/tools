@@ -1,0 +1,3298 @@
+{
+  "_note": "世界时钟(clock / clock11 / clock21 / clock42 共用)。零网络:设备本地偏移由 formatDate 拆出的墙上钟反算,目标城市偏移 = 包内城市表的标准偏移 + 按规则算出的当年夏令时。入参 c1..c4 = 城市 id(空 = 按地区缺省),n = 42 卡显示几行。生成器 tools/infosource/gen_moment_clock.py,设计 doc/moment-worldclock.md。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "now",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u",
+        "value": "$[floor::(calc::(${now}/60000))]"
+      },
+      "_note": "UTC 分钟(1970 起)。时区换算全在整数分钟上做。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ly",
+        "value": "$[formatDate::(${now},yyyy)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lm",
+        "value": "$[formatDate::(${now},M)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ld",
+        "value": "$[formatDate::(${now},d)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lH",
+        "value": "$[formatDate::(${now},H)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lN",
+        "value": "$[formatDate::(${now},m)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ly2",
+        "value": "$[if::(le::(${lm},2),calc::(${ly}-1),${ly})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lmp",
+        "value": "$[if::(gt::(${lm},2),calc::(${lm}-3),calc::(${lm}+9))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l4",
+        "value": "$[floor::(calc::(${ly2}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l100",
+        "value": "$[floor::(calc::(${ly2}/100))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l400",
+        "value": "$[floor::(calc::(${ly2}/400))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lq",
+        "value": "$[floor::(calc::((153*${lmp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lDay",
+        "value": "$[calc::(365*${ly2}+${l4}-${l100}+${l400}+${lq}+${ld}-1-719468)]"
+      },
+      "_note": "本地日期距 1970-01-01 的天数(days_from_civil)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lob",
+        "value": "$[calc::(${lDay}*1440+${lH}*60+${lN}+720-${u})]"
+      },
+      "_note": "设备本地偏移 + 720(偏置,恒正)。⚠️ 不用 parseDate 反推:同一个时间戳进出一趟拿不到偏移。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lh",
+        "value": "$[if::(lt::(${lH},10),0${lH},${lH})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ln",
+        "value": "$[if::(lt::(${lN},10),0${lN},${lN})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lt",
+        "value": "${_lh}:${_ln}"
+      },
+      "_note": "本地时间(42 卡右上角):桌面小组件不是每分钟重画,这一格让人对得出这张卡是几点算的。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnd",
+        "value": "$[if::(eq::(${@app.region},cn),1,if::(eq::(${@app.region},overseas),0,if::(startsWith::(${@app.language},zh),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cc",
+        "value": "k${@app.country}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CG",
+        "value": {
+          "kAE": 5,
+          "kAT": 2,
+          "kAU": 4,
+          "kBD": 5,
+          "kBE": 2,
+          "kCA": 1,
+          "kCH": 2,
+          "kCZ": 2,
+          "kDE": 2,
+          "kDK": 2,
+          "kES": 2,
+          "kFI": 2,
+          "kFR": 2,
+          "kGB": 2,
+          "kGR": 2,
+          "kID": 5,
+          "kIE": 2,
+          "kIL": 5,
+          "kIN": 5,
+          "kIS": 2,
+          "kIT": 2,
+          "kJP": 3,
+          "kKR": 3,
+          "kLU": 2,
+          "kMX": 1,
+          "kMY": 5,
+          "kNL": 2,
+          "kNO": 2,
+          "kNZ": 4,
+          "kPH": 5,
+          "kPK": 5,
+          "kPL": 2,
+          "kPT": 2,
+          "kSA": 5,
+          "kSE": 2,
+          "kSG": 5,
+          "kTH": 5,
+          "kTR": 5,
+          "kUS": 1,
+          "kVN": 5
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grp",
+        "value": "$[if::(eq::(${cnd},1),0,findNotEmpty::(get::(${CG},${_cc}),0))]"
+      },
+      "_note": "国内默认 → 组 0;否则按系统地区分组(没登记的国家也是组 0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "DEF",
+        "value": [
+          48,
+          40,
+          8,
+          61,
+          40,
+          32,
+          8,
+          61,
+          48,
+          55,
+          8,
+          4,
+          48,
+          40,
+          4,
+          61,
+          40,
+          48,
+          8,
+          4,
+          48,
+          40,
+          8,
+          1
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CI",
+        "value": {
+          "kutc": 0,
+          "kbeijing": 1,
+          "khongkong": 2,
+          "ktaipei": 3,
+          "ksingapore": 4,
+          "kkualalumpur": 5,
+          "kmanila": 6,
+          "kperth": 7,
+          "ktokyo": 8,
+          "kseoul": 9,
+          "kbangkok": 10,
+          "khochiminh": 11,
+          "kjakarta": 12,
+          "kyangon": 13,
+          "kdhaka": 14,
+          "kkathmandu": 15,
+          "kdelhi": 16,
+          "kmumbai": 17,
+          "kkarachi": 18,
+          "ktashkent": 19,
+          "kdubai": 20,
+          "ktehran": 21,
+          "kriyadh": 22,
+          "kistanbul": 23,
+          "kmoscow": 24,
+          "knairobi": 25,
+          "kcairo": 26,
+          "kjohannesburg": 27,
+          "kathens": 28,
+          "khelsinki": 29,
+          "kkyiv": 30,
+          "klagos": 31,
+          "kparis": 32,
+          "kberlin": 33,
+          "kmadrid": 34,
+          "krome": 35,
+          "kamsterdam": 36,
+          "kzurich": 37,
+          "kstockholm": 38,
+          "kwarsaw": 39,
+          "klondon": 40,
+          "kdublin": 41,
+          "klisbon": 42,
+          "kreykjavik": 43,
+          "ksaopaulo": 44,
+          "kbuenosaires": 45,
+          "kstjohns": 46,
+          "khalifax": 47,
+          "knewyork": 48,
+          "ktoronto": 49,
+          "kchicago": 50,
+          "kmexicocity": 51,
+          "kdenver": 52,
+          "kphoenix": 53,
+          "klosangeles": 54,
+          "ksanfrancisco": 55,
+          "kseattle": 56,
+          "kvancouver": 57,
+          "kanchorage": 58,
+          "khonolulu": 59,
+          "kbrisbane": 60,
+          "ksydney": 61,
+          "kmelbourne": 62,
+          "kadelaide": 63,
+          "kdarwin": 64,
+          "kauckland": 65
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "IDS",
+        "value": [
+          "utc",
+          "beijing",
+          "hongkong",
+          "taipei",
+          "singapore",
+          "kualalumpur",
+          "manila",
+          "perth",
+          "tokyo",
+          "seoul",
+          "bangkok",
+          "hochiminh",
+          "jakarta",
+          "yangon",
+          "dhaka",
+          "kathmandu",
+          "delhi",
+          "mumbai",
+          "karachi",
+          "tashkent",
+          "dubai",
+          "tehran",
+          "riyadh",
+          "istanbul",
+          "moscow",
+          "nairobi",
+          "cairo",
+          "johannesburg",
+          "athens",
+          "helsinki",
+          "kyiv",
+          "lagos",
+          "paris",
+          "berlin",
+          "madrid",
+          "rome",
+          "amsterdam",
+          "zurich",
+          "stockholm",
+          "warsaw",
+          "london",
+          "dublin",
+          "lisbon",
+          "reykjavik",
+          "saopaulo",
+          "buenosaires",
+          "stjohns",
+          "halifax",
+          "newyork",
+          "toronto",
+          "chicago",
+          "mexicocity",
+          "denver",
+          "phoenix",
+          "losangeles",
+          "sanfrancisco",
+          "seattle",
+          "vancouver",
+          "anchorage",
+          "honolulu",
+          "brisbane",
+          "sydney",
+          "melbourne",
+          "adelaide",
+          "darwin",
+          "auckland"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "STDB",
+        "value": [
+          720,
+          1200,
+          1200,
+          1200,
+          1200,
+          1200,
+          1200,
+          1200,
+          1260,
+          1260,
+          1140,
+          1140,
+          1140,
+          1110,
+          1080,
+          1065,
+          1050,
+          1050,
+          1020,
+          1020,
+          960,
+          930,
+          900,
+          900,
+          900,
+          900,
+          840,
+          840,
+          840,
+          840,
+          840,
+          780,
+          780,
+          780,
+          780,
+          780,
+          780,
+          780,
+          780,
+          780,
+          720,
+          720,
+          720,
+          720,
+          540,
+          540,
+          510,
+          480,
+          420,
+          420,
+          360,
+          360,
+          300,
+          300,
+          240,
+          240,
+          240,
+          240,
+          180,
+          120,
+          1320,
+          1320,
+          1320,
+          1290,
+          1290,
+          1440
+        ]
+      },
+      "_note": "标准偏移 + 720(偏置,恒正)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "RULE",
+        "value": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          5,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          0,
+          0,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          1,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          3,
+          3,
+          3,
+          0,
+          4
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "LOC",
+        "value": [
+          0,
+          1,
+          0,
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "SOUTH",
+        "value": [
+          0,
+          0,
+          0,
+          1,
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CUT",
+        "value": [
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          29892060,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999,
+          99999999
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CUTB",
+        "value": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          300,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NMZ",
+        "value": [
+          "UTC",
+          "北京",
+          "香港",
+          "台北",
+          "新加坡",
+          "吉隆坡",
+          "马尼拉",
+          "珀斯",
+          "东京",
+          "首尔",
+          "曼谷",
+          "胡志明市",
+          "雅加达",
+          "仰光",
+          "达卡",
+          "加德满都",
+          "新德里",
+          "孟买",
+          "卡拉奇",
+          "塔什干",
+          "迪拜",
+          "德黑兰",
+          "利雅得",
+          "伊斯坦布尔",
+          "莫斯科",
+          "内罗毕",
+          "开罗",
+          "约翰内斯堡",
+          "雅典",
+          "赫尔辛基",
+          "基辅",
+          "拉各斯",
+          "巴黎",
+          "柏林",
+          "马德里",
+          "罗马",
+          "阿姆斯特丹",
+          "苏黎世",
+          "斯德哥尔摩",
+          "华沙",
+          "伦敦",
+          "都柏林",
+          "里斯本",
+          "雷克雅未克",
+          "圣保罗",
+          "布宜诺斯艾利斯",
+          "圣约翰斯",
+          "哈利法克斯",
+          "纽约",
+          "多伦多",
+          "芝加哥",
+          "墨西哥城",
+          "丹佛",
+          "凤凰城",
+          "洛杉矶",
+          "旧金山",
+          "西雅图",
+          "温哥华",
+          "安克雷奇",
+          "檀香山",
+          "布里斯班",
+          "悉尼",
+          "墨尔本",
+          "阿德莱德",
+          "达尔文",
+          "奥克兰"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NME",
+        "value": [
+          "UTC",
+          "Beijing",
+          "Hong Kong",
+          "Taipei",
+          "Singapore",
+          "Kuala Lumpur",
+          "Manila",
+          "Perth",
+          "Tokyo",
+          "Seoul",
+          "Bangkok",
+          "Ho Chi Minh City",
+          "Jakarta",
+          "Yangon",
+          "Dhaka",
+          "Kathmandu",
+          "New Delhi",
+          "Mumbai",
+          "Karachi",
+          "Tashkent",
+          "Dubai",
+          "Tehran",
+          "Riyadh",
+          "Istanbul",
+          "Moscow",
+          "Nairobi",
+          "Cairo",
+          "Johannesburg",
+          "Athens",
+          "Helsinki",
+          "Kyiv",
+          "Lagos",
+          "Paris",
+          "Berlin",
+          "Madrid",
+          "Rome",
+          "Amsterdam",
+          "Zurich",
+          "Stockholm",
+          "Warsaw",
+          "London",
+          "Dublin",
+          "Lisbon",
+          "Reykjavik",
+          "São Paulo",
+          "Buenos Aires",
+          "St. John's",
+          "Halifax",
+          "New York",
+          "Toronto",
+          "Chicago",
+          "Mexico City",
+          "Denver",
+          "Phoenix",
+          "Los Angeles",
+          "San Francisco",
+          "Seattle",
+          "Vancouver",
+          "Anchorage",
+          "Honolulu",
+          "Brisbane",
+          "Sydney",
+          "Melbourne",
+          "Adelaide",
+          "Darwin",
+          "Auckland"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "SNZ",
+        "value": [
+          "UTC",
+          "北京",
+          "香港",
+          "台北",
+          "新加坡",
+          "吉隆坡",
+          "马尼拉",
+          "珀斯",
+          "东京",
+          "首尔",
+          "曼谷",
+          "胡志明市",
+          "雅加达",
+          "仰光",
+          "达卡",
+          "加德满都",
+          "新德里",
+          "孟买",
+          "卡拉奇",
+          "塔什干",
+          "迪拜",
+          "德黑兰",
+          "利雅得",
+          "伊斯坦堡",
+          "莫斯科",
+          "内罗毕",
+          "开罗",
+          "约堡",
+          "雅典",
+          "赫尔辛基",
+          "基辅",
+          "拉各斯",
+          "巴黎",
+          "柏林",
+          "马德里",
+          "罗马",
+          "阿姆",
+          "苏黎世",
+          "斯德哥",
+          "华沙",
+          "伦敦",
+          "都柏林",
+          "里斯本",
+          "雷克雅",
+          "圣保罗",
+          "布宜诺斯",
+          "圣约翰斯",
+          "哈利法",
+          "纽约",
+          "多伦多",
+          "芝加哥",
+          "墨西哥城",
+          "丹佛",
+          "凤凰城",
+          "洛杉矶",
+          "旧金山",
+          "西雅图",
+          "温哥华",
+          "安克雷",
+          "檀香山",
+          "布里斯班",
+          "悉尼",
+          "墨尔本",
+          "阿德莱德",
+          "达尔文",
+          "奥克兰"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "SNE",
+        "value": [
+          "UTC",
+          "Beijing",
+          "HK",
+          "Taipei",
+          "Singapore",
+          "KL",
+          "Manila",
+          "Perth",
+          "Tokyo",
+          "Seoul",
+          "Bangkok",
+          "HCMC",
+          "Jakarta",
+          "Yangon",
+          "Dhaka",
+          "Kathmandu",
+          "Delhi",
+          "Mumbai",
+          "Karachi",
+          "Tashkent",
+          "Dubai",
+          "Tehran",
+          "Riyadh",
+          "Istanbul",
+          "Moscow",
+          "Nairobi",
+          "Cairo",
+          "Joburg",
+          "Athens",
+          "Helsinki",
+          "Kyiv",
+          "Lagos",
+          "Paris",
+          "Berlin",
+          "Madrid",
+          "Rome",
+          "A'dam",
+          "Zurich",
+          "Stockholm",
+          "Warsaw",
+          "London",
+          "Dublin",
+          "Lisbon",
+          "Reykjavik",
+          "São Paulo",
+          "B. Aires",
+          "St. John's",
+          "Halifax",
+          "NYC",
+          "Toronto",
+          "Chicago",
+          "CDMX",
+          "Denver",
+          "Phoenix",
+          "LA",
+          "SF",
+          "Seattle",
+          "Vancouver",
+          "Anchorage",
+          "Honolulu",
+          "Brisbane",
+          "Sydney",
+          "Melbourne",
+          "Adelaide",
+          "Darwin",
+          "Auckland"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y4",
+        "value": "$[floor::(calc::(${ly}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y100",
+        "value": "$[floor::(calc::(${ly}/100))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y400",
+        "value": "$[floor::(calc::(${ly}/400))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yA",
+        "value": "$[calc::(365*${ly}+${y4}-${y100}+${y400}-719468)]"
+      },
+      "_note": "当年 3 月 1 日距 1970-01-01 的天数(公历日 → 天数,Howard Hinnant days_from_civil,m ≥ 3 支)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "USsF",
+        "value": "$[calc::(${yA}+0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "USsw",
+        "value": "$[calc::((${USsF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "USsx",
+        "value": "$[calc::((0+7-${USsw})%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "USsT",
+        "value": "$[calc::((${USsF}+${USsx}+7)*1440+120)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "USeF",
+        "value": "$[calc::(${yA}+245)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "USew",
+        "value": "$[calc::((${USeF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "USex",
+        "value": "$[calc::((0+7-${USew})%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "USeT",
+        "value": "$[calc::((${USeF}+${USex}+0)*1440+60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EUsF",
+        "value": "$[calc::(${yA}+30)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EUsw",
+        "value": "$[calc::((${EUsF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EUsx",
+        "value": "$[calc::((${EUsw}+7-0)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EUsT",
+        "value": "$[calc::((${EUsF}-${EUsx})*1440+60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EUeF",
+        "value": "$[calc::(${yA}+244)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EUew",
+        "value": "$[calc::((${EUeF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EUex",
+        "value": "$[calc::((${EUew}+7-0)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EUeT",
+        "value": "$[calc::((${EUeF}-${EUex})*1440+60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AUsF",
+        "value": "$[calc::(${yA}+214)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AUsw",
+        "value": "$[calc::((${AUsF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AUsx",
+        "value": "$[calc::((0+7-${AUsw})%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AUsT",
+        "value": "$[calc::((${AUsF}+${AUsx}+0)*1440+120)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AUeF",
+        "value": "$[calc::(${yA}+31)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AUew",
+        "value": "$[calc::((${AUeF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AUex",
+        "value": "$[calc::((0+7-${AUew})%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AUeT",
+        "value": "$[calc::((${AUeF}+${AUex}+0)*1440+120)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NZsF",
+        "value": "$[calc::(${yA}+213)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NZsw",
+        "value": "$[calc::((${NZsF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NZsx",
+        "value": "$[calc::((${NZsw}+7-0)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NZsT",
+        "value": "$[calc::((${NZsF}-${NZsx})*1440+120)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NZeF",
+        "value": "$[calc::(${yA}+31)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NZew",
+        "value": "$[calc::((${NZeF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NZex",
+        "value": "$[calc::((0+7-${NZew})%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NZeT",
+        "value": "$[calc::((${NZeF}+${NZex}+0)*1440+120)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EGsF",
+        "value": "$[calc::(${yA}+60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EGsw",
+        "value": "$[calc::((${EGsF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EGsx",
+        "value": "$[calc::((${EGsw}+7-5)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EGsT",
+        "value": "$[calc::((${EGsF}-${EGsx})*1440+0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EGeF",
+        "value": "$[calc::(${yA}+244)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EGew",
+        "value": "$[calc::((${EGeF}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EGex",
+        "value": "$[calc::((${EGew}+7-4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "EGeT",
+        "value": "$[calc::((${EGeF}-${EGex})*1440+1380)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ST",
+        "value": [
+          "0",
+          "${USsT}",
+          "${EUsT}",
+          "${AUsT}",
+          "${NZsT}",
+          "${EGsT}"
+        ]
+      },
+      "_note": "下标 = 规则号(0 = 不实行夏令时,占位)。字面量数组里的 ${} 逐元素求值。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ET",
+        "value": [
+          "0",
+          "${USeT}",
+          "${EUeT}",
+          "${AUeT}",
+          "${NZeT}",
+          "${EGeT}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0ck",
+        "value": "k${c1}"
+      },
+      "_note": "查表键加前缀 k:空 id 时 get::(表,'') 会把整张表当结果返回,加前缀后落空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0dk",
+        "value": "$[calc::(${grp}*4+0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0i",
+        "value": "$[findNotEmpty::(get::(${CI},${_0ck}),index::(${DEF},${_0dk}))]"
+      },
+      "_note": "不认识的 id / 空 → 按地区缺省(DEF 第 grp 组的第 k 个)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0sb",
+        "value": "$[index::(${STDB},${_0i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0r",
+        "value": "$[index::(${RULE},${_0i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0lc",
+        "value": "$[index::(${LOC},${_0r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0so",
+        "value": "$[index::(${SOUTH},${_0r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0sT",
+        "value": "$[index::(${ST},${_0r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0eT",
+        "value": "$[index::(${ET},${_0r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0s",
+        "value": "$[calc::(${_0sT}+720*${_0lc}-${_0sb}*${_0lc})]"
+      },
+      "_note": "切换时刻(UTC 分钟)= 当天 0 点 + 规定钟点 − 标准偏移(只对按当地钟点切换的规则;欧盟是 UTC 钟点,lc = 0)。标准偏移用 +720 的偏置值,算式里不出现负数。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0e",
+        "value": "$[calc::(${_0eT}+720*${_0lc}-${_0sb}*${_0lc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0on",
+        "value": "$[if::(eq::(${_0r},0),0,if::(eq::(${_0so},1),if::(or::(ge::(${u},${_0s}),lt::(${u},${_0e})),1,0),if::(and::(ge::(${u},${_0s}),lt::(${u},${_0e})),1,0)))]"
+      },
+      "_note": "南半球(起月 > 止月)夏令时跨年:u ≥ 起 或 u < 止;北半球:起 ≤ u < 止。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0cu",
+        "value": "$[index::(${CUT},${_0i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0ca",
+        "value": "$[index::(${CUTB},${_0i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0ob0",
+        "value": "$[calc::(${_0sb}+60*${_0on})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0ob",
+        "value": "$[if::(ge::(${u},${_0cu}),${_0ca},${_0ob0})]"
+      },
+      "_note": "改制:到了 CUT 那一刻起固定为 CUTB(温哥华 2026-11-01 起常年 UTC−7)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0ds",
+        "value": "$[if::(ge::(${u},${_0cu}),0,${_0on})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0tw",
+        "value": "$[calc::(${u}+${_0ob}-720)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0td",
+        "value": "$[floor::(calc::(${_0tw}/1440))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0tm",
+        "value": "$[calc::(${_0tw}-${_0td}*1440)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0th",
+        "value": "$[floor::(calc::(${_0tm}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0tn",
+        "value": "$[calc::(${_0tm}-${_0th}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0H",
+        "value": "$[round::(${_0th})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0M",
+        "value": "$[round::(${_0tn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0hh",
+        "value": "$[if::(lt::(${_0H},10),0${_0H},${_0H})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0mm",
+        "value": "$[if::(lt::(${_0M},10),0${_0M},${_0M})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "${_0hh}:${_0mm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ng0",
+        "value": "$[if::(or::(lt::(${_0th},6),ge::(${_0th},18)),1,0)]"
+      },
+      "_note": "夜 = 当地 18:00–次日 06:00。按钟点判,**不是日出日落**(那要经纬度与三角函数,引擎没有)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dd0",
+        "value": "$[calc::(${_0td}-${lDay})]"
+      },
+      "_note": "当地日期比本地日期多几天(−1 / 0 / 1)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0gp",
+        "value": "$[if::(ge::(${_0ob},${lob}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0ad",
+        "value": "$[if::(eq::(${_0gp},1),calc::(${_0ob}-${lob}),calc::(${lob}-${_0ob}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0dh0",
+        "value": "$[floor::(calc::(${_0ad}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0dm0",
+        "value": "$[calc::(${_0ad}-${_0dh0}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0dh",
+        "value": "$[round::(${_0dh0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0dm",
+        "value": "$[round::(${_0dm0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0sg",
+        "value": "$[if::(eq::(${_0gp},1),+,−)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "df0",
+        "value": "$[if::(eq::(${_0ad},0),同一时间,if::(eq::(${_0dm},0),${_0sg}${_0dh} 小时,${_0sg}${_0dh} 小时 ${_0dm} 分))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "df0",
+            "value": "$[if::(eq::(${_0ad},0),Same time,if::(eq::(${_0dm},0),${_0sg}${_0dh}h,${_0sg}${_0dh}h ${_0dm}m))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0og",
+        "value": "$[if::(ge::(${_0ob},720),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0oa",
+        "value": "$[if::(eq::(${_0og},1),calc::(${_0ob}-720),calc::(720-${_0ob}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0oh0",
+        "value": "$[floor::(calc::(${_0oa}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0om0",
+        "value": "$[calc::(${_0oa}-${_0oh0}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0oh",
+        "value": "$[round::(${_0oh0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0om",
+        "value": "$[round::(${_0om0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_0os",
+        "value": "$[if::(eq::(${_0og},1),+,−)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ut0",
+        "value": "$[if::(eq::(${_0om},0),UTC${_0os}${_0oh},UTC${_0os}${_0oh}:${_0om})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds0",
+        "value": "${_0ds}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n0",
+        "value": "$[index::(${NMZ},${_0i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "$[index::(${SNZ},${_0i})]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "n0",
+            "value": "$[index::(${NME},${_0i})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s0",
+            "value": "$[index::(${SNE},${_0i})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "id0",
+        "value": "$[index::(${IDS},${_0i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rl0",
+        "value": "$[if::(eq::(${dd0},1),明天,if::(eq::(${dd0},-1),昨天,今天))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "rl0",
+            "value": "$[if::(eq::(${dd0},1),Tomorrow,if::(eq::(${dd0},-1),Yesterday,Today))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_z",
+        "value": "$[calc::(${_0td}+719468)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_era",
+        "value": "$[floor::(calc::(${_z}/146097))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_doe",
+        "value": "$[calc::(${_z}-${_era}*146097)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_a1",
+        "value": "$[floor::(calc::(${_doe}/1460))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_a2",
+        "value": "$[floor::(calc::(${_doe}/36524))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_a3",
+        "value": "$[floor::(calc::(${_doe}/146096))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_yoe",
+        "value": "$[floor::(calc::((${_doe}-${_a1}+${_a2}-${_a3})/365))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1",
+        "value": "$[floor::(calc::(${_yoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2",
+        "value": "$[floor::(calc::(${_yoe}/100))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_doy",
+        "value": "$[calc::(${_doe}-365*${_yoe}-${_b1}+${_b2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mp",
+        "value": "$[floor::(calc::((5*${_doy}+2)/153))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_c1",
+        "value": "$[floor::(calc::((153*${_mp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d0",
+        "value": "$[calc::(${_doy}-${_c1}+1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_m0",
+        "value": "$[if::(lt::(${_mp},10),calc::(${_mp}+3),calc::(${_mp}-9))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d",
+        "value": "$[round::(${_d0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_m",
+        "value": "$[round::(${_m0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wd",
+        "value": "$[calc::((${_0td}+4)%7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_WK",
+        "value": [
+          "周日",
+          "周一",
+          "周二",
+          "周三",
+          "周四",
+          "周五",
+          "周六"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_MON",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wn",
+        "value": "$[index::(${_WK},${_wd})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dt0",
+        "value": "${_m} 月 ${_d} 日 ${_wn}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_WK",
+            "value": [
+              "Sun",
+              "Mon",
+              "Tue",
+              "Wed",
+              "Thu",
+              "Fri",
+              "Sat"
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_wn",
+            "value": "$[index::(${_WK},${_wd})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mn",
+            "value": "$[index::(${_MON},calc::(${_m}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dt0",
+            "value": "${_wn}, ${_mn} ${_d}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1ck",
+        "value": "k${c2}"
+      },
+      "_note": "查表键加前缀 k:空 id 时 get::(表,'') 会把整张表当结果返回,加前缀后落空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1dk",
+        "value": "$[calc::(${grp}*4+1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1i",
+        "value": "$[findNotEmpty::(get::(${CI},${_1ck}),index::(${DEF},${_1dk}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1sb",
+        "value": "$[index::(${STDB},${_1i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1r",
+        "value": "$[index::(${RULE},${_1i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1lc",
+        "value": "$[index::(${LOC},${_1r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1so",
+        "value": "$[index::(${SOUTH},${_1r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1sT",
+        "value": "$[index::(${ST},${_1r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1eT",
+        "value": "$[index::(${ET},${_1r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1s",
+        "value": "$[calc::(${_1sT}+720*${_1lc}-${_1sb}*${_1lc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1e",
+        "value": "$[calc::(${_1eT}+720*${_1lc}-${_1sb}*${_1lc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1on",
+        "value": "$[if::(eq::(${_1r},0),0,if::(eq::(${_1so},1),if::(or::(ge::(${u},${_1s}),lt::(${u},${_1e})),1,0),if::(and::(ge::(${u},${_1s}),lt::(${u},${_1e})),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1cu",
+        "value": "$[index::(${CUT},${_1i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1ca",
+        "value": "$[index::(${CUTB},${_1i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1ob0",
+        "value": "$[calc::(${_1sb}+60*${_1on})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1ob",
+        "value": "$[if::(ge::(${u},${_1cu}),${_1ca},${_1ob0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1ds",
+        "value": "$[if::(ge::(${u},${_1cu}),0,${_1on})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1tw",
+        "value": "$[calc::(${u}+${_1ob}-720)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1td",
+        "value": "$[floor::(calc::(${_1tw}/1440))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1tm",
+        "value": "$[calc::(${_1tw}-${_1td}*1440)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1th",
+        "value": "$[floor::(calc::(${_1tm}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1tn",
+        "value": "$[calc::(${_1tm}-${_1th}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1H",
+        "value": "$[round::(${_1th})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1M",
+        "value": "$[round::(${_1tn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1hh",
+        "value": "$[if::(lt::(${_1H},10),0${_1H},${_1H})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1mm",
+        "value": "$[if::(lt::(${_1M},10),0${_1M},${_1M})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1",
+        "value": "${_1hh}:${_1mm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ng1",
+        "value": "$[if::(or::(lt::(${_1th},6),ge::(${_1th},18)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dd1",
+        "value": "$[calc::(${_1td}-${lDay})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1gp",
+        "value": "$[if::(ge::(${_1ob},${lob}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1ad",
+        "value": "$[if::(eq::(${_1gp},1),calc::(${_1ob}-${lob}),calc::(${lob}-${_1ob}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1dh0",
+        "value": "$[floor::(calc::(${_1ad}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1dm0",
+        "value": "$[calc::(${_1ad}-${_1dh0}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1dh",
+        "value": "$[round::(${_1dh0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1dm",
+        "value": "$[round::(${_1dm0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1sg",
+        "value": "$[if::(eq::(${_1gp},1),+,−)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "df1",
+        "value": "$[if::(eq::(${_1ad},0),同一时间,if::(eq::(${_1dm},0),${_1sg}${_1dh} 小时,${_1sg}${_1dh} 小时 ${_1dm} 分))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "df1",
+            "value": "$[if::(eq::(${_1ad},0),Same time,if::(eq::(${_1dm},0),${_1sg}${_1dh}h,${_1sg}${_1dh}h ${_1dm}m))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1og",
+        "value": "$[if::(ge::(${_1ob},720),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1oa",
+        "value": "$[if::(eq::(${_1og},1),calc::(${_1ob}-720),calc::(720-${_1ob}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1oh0",
+        "value": "$[floor::(calc::(${_1oa}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1om0",
+        "value": "$[calc::(${_1oa}-${_1oh0}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1oh",
+        "value": "$[round::(${_1oh0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1om",
+        "value": "$[round::(${_1om0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_1os",
+        "value": "$[if::(eq::(${_1og},1),+,−)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ut1",
+        "value": "$[if::(eq::(${_1om},0),UTC${_1os}${_1oh},UTC${_1os}${_1oh}:${_1om})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds1",
+        "value": "${_1ds}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n1",
+        "value": "$[index::(${NMZ},${_1i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s1",
+        "value": "$[index::(${SNZ},${_1i})]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "n1",
+            "value": "$[index::(${NME},${_1i})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s1",
+            "value": "$[index::(${SNE},${_1i})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "id1",
+        "value": "$[index::(${IDS},${_1i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rl1",
+        "value": "$[if::(eq::(${dd1},1),明天,if::(eq::(${dd1},-1),昨天,今天))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "rl1",
+            "value": "$[if::(eq::(${dd1},1),Tomorrow,if::(eq::(${dd1},-1),Yesterday,Today))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2ck",
+        "value": "k${c3}"
+      },
+      "_note": "查表键加前缀 k:空 id 时 get::(表,'') 会把整张表当结果返回,加前缀后落空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2dk",
+        "value": "$[calc::(${grp}*4+2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2i",
+        "value": "$[findNotEmpty::(get::(${CI},${_2ck}),index::(${DEF},${_2dk}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2sb",
+        "value": "$[index::(${STDB},${_2i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2r",
+        "value": "$[index::(${RULE},${_2i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2lc",
+        "value": "$[index::(${LOC},${_2r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2so",
+        "value": "$[index::(${SOUTH},${_2r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2sT",
+        "value": "$[index::(${ST},${_2r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2eT",
+        "value": "$[index::(${ET},${_2r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2s",
+        "value": "$[calc::(${_2sT}+720*${_2lc}-${_2sb}*${_2lc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2e",
+        "value": "$[calc::(${_2eT}+720*${_2lc}-${_2sb}*${_2lc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2on",
+        "value": "$[if::(eq::(${_2r},0),0,if::(eq::(${_2so},1),if::(or::(ge::(${u},${_2s}),lt::(${u},${_2e})),1,0),if::(and::(ge::(${u},${_2s}),lt::(${u},${_2e})),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2cu",
+        "value": "$[index::(${CUT},${_2i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2ca",
+        "value": "$[index::(${CUTB},${_2i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2ob0",
+        "value": "$[calc::(${_2sb}+60*${_2on})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2ob",
+        "value": "$[if::(ge::(${u},${_2cu}),${_2ca},${_2ob0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2ds",
+        "value": "$[if::(ge::(${u},${_2cu}),0,${_2on})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2tw",
+        "value": "$[calc::(${u}+${_2ob}-720)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2td",
+        "value": "$[floor::(calc::(${_2tw}/1440))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2tm",
+        "value": "$[calc::(${_2tw}-${_2td}*1440)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2th",
+        "value": "$[floor::(calc::(${_2tm}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2tn",
+        "value": "$[calc::(${_2tm}-${_2th}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2H",
+        "value": "$[round::(${_2th})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2M",
+        "value": "$[round::(${_2tn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2hh",
+        "value": "$[if::(lt::(${_2H},10),0${_2H},${_2H})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2mm",
+        "value": "$[if::(lt::(${_2M},10),0${_2M},${_2M})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2",
+        "value": "${_2hh}:${_2mm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ng2",
+        "value": "$[if::(or::(lt::(${_2th},6),ge::(${_2th},18)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dd2",
+        "value": "$[calc::(${_2td}-${lDay})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2gp",
+        "value": "$[if::(ge::(${_2ob},${lob}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2ad",
+        "value": "$[if::(eq::(${_2gp},1),calc::(${_2ob}-${lob}),calc::(${lob}-${_2ob}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2dh0",
+        "value": "$[floor::(calc::(${_2ad}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2dm0",
+        "value": "$[calc::(${_2ad}-${_2dh0}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2dh",
+        "value": "$[round::(${_2dh0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2dm",
+        "value": "$[round::(${_2dm0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2sg",
+        "value": "$[if::(eq::(${_2gp},1),+,−)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "df2",
+        "value": "$[if::(eq::(${_2ad},0),同一时间,if::(eq::(${_2dm},0),${_2sg}${_2dh} 小时,${_2sg}${_2dh} 小时 ${_2dm} 分))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "df2",
+            "value": "$[if::(eq::(${_2ad},0),Same time,if::(eq::(${_2dm},0),${_2sg}${_2dh}h,${_2sg}${_2dh}h ${_2dm}m))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2og",
+        "value": "$[if::(ge::(${_2ob},720),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2oa",
+        "value": "$[if::(eq::(${_2og},1),calc::(${_2ob}-720),calc::(720-${_2ob}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2oh0",
+        "value": "$[floor::(calc::(${_2oa}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2om0",
+        "value": "$[calc::(${_2oa}-${_2oh0}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2oh",
+        "value": "$[round::(${_2oh0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2om",
+        "value": "$[round::(${_2om0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_2os",
+        "value": "$[if::(eq::(${_2og},1),+,−)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ut2",
+        "value": "$[if::(eq::(${_2om},0),UTC${_2os}${_2oh},UTC${_2os}${_2oh}:${_2om})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds2",
+        "value": "${_2ds}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n2",
+        "value": "$[index::(${NMZ},${_2i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2",
+        "value": "$[index::(${SNZ},${_2i})]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "n2",
+            "value": "$[index::(${NME},${_2i})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s2",
+            "value": "$[index::(${SNE},${_2i})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "id2",
+        "value": "$[index::(${IDS},${_2i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rl2",
+        "value": "$[if::(eq::(${dd2},1),明天,if::(eq::(${dd2},-1),昨天,今天))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "rl2",
+            "value": "$[if::(eq::(${dd2},1),Tomorrow,if::(eq::(${dd2},-1),Yesterday,Today))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3ck",
+        "value": "k${c4}"
+      },
+      "_note": "查表键加前缀 k:空 id 时 get::(表,'') 会把整张表当结果返回,加前缀后落空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3dk",
+        "value": "$[calc::(${grp}*4+3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3i",
+        "value": "$[findNotEmpty::(get::(${CI},${_3ck}),index::(${DEF},${_3dk}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3sb",
+        "value": "$[index::(${STDB},${_3i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3r",
+        "value": "$[index::(${RULE},${_3i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3lc",
+        "value": "$[index::(${LOC},${_3r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3so",
+        "value": "$[index::(${SOUTH},${_3r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3sT",
+        "value": "$[index::(${ST},${_3r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3eT",
+        "value": "$[index::(${ET},${_3r})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3s",
+        "value": "$[calc::(${_3sT}+720*${_3lc}-${_3sb}*${_3lc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3e",
+        "value": "$[calc::(${_3eT}+720*${_3lc}-${_3sb}*${_3lc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3on",
+        "value": "$[if::(eq::(${_3r},0),0,if::(eq::(${_3so},1),if::(or::(ge::(${u},${_3s}),lt::(${u},${_3e})),1,0),if::(and::(ge::(${u},${_3s}),lt::(${u},${_3e})),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3cu",
+        "value": "$[index::(${CUT},${_3i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3ca",
+        "value": "$[index::(${CUTB},${_3i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3ob0",
+        "value": "$[calc::(${_3sb}+60*${_3on})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3ob",
+        "value": "$[if::(ge::(${u},${_3cu}),${_3ca},${_3ob0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3ds",
+        "value": "$[if::(ge::(${u},${_3cu}),0,${_3on})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3tw",
+        "value": "$[calc::(${u}+${_3ob}-720)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3td",
+        "value": "$[floor::(calc::(${_3tw}/1440))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3tm",
+        "value": "$[calc::(${_3tw}-${_3td}*1440)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3th",
+        "value": "$[floor::(calc::(${_3tm}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3tn",
+        "value": "$[calc::(${_3tm}-${_3th}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3H",
+        "value": "$[round::(${_3th})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3M",
+        "value": "$[round::(${_3tn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3hh",
+        "value": "$[if::(lt::(${_3H},10),0${_3H},${_3H})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3mm",
+        "value": "$[if::(lt::(${_3M},10),0${_3M},${_3M})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3",
+        "value": "${_3hh}:${_3mm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ng3",
+        "value": "$[if::(or::(lt::(${_3th},6),ge::(${_3th},18)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dd3",
+        "value": "$[calc::(${_3td}-${lDay})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3gp",
+        "value": "$[if::(ge::(${_3ob},${lob}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3ad",
+        "value": "$[if::(eq::(${_3gp},1),calc::(${_3ob}-${lob}),calc::(${lob}-${_3ob}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3dh0",
+        "value": "$[floor::(calc::(${_3ad}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3dm0",
+        "value": "$[calc::(${_3ad}-${_3dh0}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3dh",
+        "value": "$[round::(${_3dh0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3dm",
+        "value": "$[round::(${_3dm0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3sg",
+        "value": "$[if::(eq::(${_3gp},1),+,−)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "df3",
+        "value": "$[if::(eq::(${_3ad},0),同一时间,if::(eq::(${_3dm},0),${_3sg}${_3dh} 小时,${_3sg}${_3dh} 小时 ${_3dm} 分))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "df3",
+            "value": "$[if::(eq::(${_3ad},0),Same time,if::(eq::(${_3dm},0),${_3sg}${_3dh}h,${_3sg}${_3dh}h ${_3dm}m))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3og",
+        "value": "$[if::(ge::(${_3ob},720),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3oa",
+        "value": "$[if::(eq::(${_3og},1),calc::(${_3ob}-720),calc::(720-${_3ob}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3oh0",
+        "value": "$[floor::(calc::(${_3oa}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3om0",
+        "value": "$[calc::(${_3oa}-${_3oh0}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3oh",
+        "value": "$[round::(${_3oh0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3om",
+        "value": "$[round::(${_3om0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_3os",
+        "value": "$[if::(eq::(${_3og},1),+,−)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ut3",
+        "value": "$[if::(eq::(${_3om},0),UTC${_3os}${_3oh},UTC${_3os}${_3oh}:${_3om})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds3",
+        "value": "${_3ds}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n3",
+        "value": "$[index::(${NMZ},${_3i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s3",
+        "value": "$[index::(${SNZ},${_3i})]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "n3",
+            "value": "$[index::(${NME},${_3i})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s3",
+            "value": "$[index::(${SNE},${_3i})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "id3",
+        "value": "$[index::(${IDS},${_3i})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rl3",
+        "value": "$[if::(eq::(${dd3},1),明天,if::(eq::(${dd3},-1),昨天,今天))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "rl3",
+            "value": "$[if::(eq::(${dd3},1),Tomorrow,if::(eq::(${dd3},-1),Yesterday,Today))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nn",
+        "value": "$[if::(and::(ge::(${n},2),le::(${n},4)),round::(${n}),4)]"
+      },
+      "_note": "42 卡显示几行:入参 n ∈ 2..4,空 / 非法 = 4。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rh",
+        "value": "$[if::(eq::(${nn},2),53.00,if::(eq::(${nn},3),33.33,23.50))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fN",
+        "value": "$[if::(eq::(${nn},2),14,if::(eq::(${nn},3),13,12.5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fT",
+        "value": "$[if::(eq::(${nn},2),24,if::(eq::(${nn},3),21,17))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fS",
+        "value": "$[if::(eq::(${nn},2),11,if::(eq::(${nn},3),10.5,10))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ry0",
+        "value": "$[if::(eq::(${nn},2),34.00,if::(eq::(${nn},3),34.00,34.00))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ry1",
+        "value": "$[if::(eq::(${nn},2),93.00,if::(eq::(${nn},3),73.33,63.50))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ry2",
+        "value": "$[if::(eq::(${nn},2),0,if::(eq::(${nn},3),112.67,93.00))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ry3",
+        "value": "$[if::(eq::(${nn},2),0,if::(eq::(${nn},3),0,122.50))]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "lt",
+          "cnd",
+          "n0",
+          "s0",
+          "id0",
+          "t0",
+          "ng0",
+          "dd0",
+          "df0",
+          "ut0",
+          "ds0",
+          "rl0",
+          "n1",
+          "s1",
+          "id1",
+          "t1",
+          "ng1",
+          "dd1",
+          "df1",
+          "ut1",
+          "ds1",
+          "rl1",
+          "n2",
+          "s2",
+          "id2",
+          "t2",
+          "ng2",
+          "dd2",
+          "df2",
+          "ut2",
+          "ds2",
+          "rl2",
+          "n3",
+          "s3",
+          "id3",
+          "t3",
+          "ng3",
+          "dd3",
+          "df3",
+          "ut3",
+          "ds3",
+          "rl3",
+          "dt0",
+          "nn",
+          "rh",
+          "fN",
+          "fT",
+          "fS",
+          "ry0",
+          "ry1",
+          "ry2",
+          "ry3"
+        ]
+      }
+    }
+  ]
+}

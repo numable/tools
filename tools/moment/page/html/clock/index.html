@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>World clock</title>
+<style>
+/* 世界时钟:选城市 + 加组件 / 改组件。与组件同源 —— 同一张城市表、同一套时区算法(xb:clock 块由
+   tools/infosource/gen_moment_clock.py 注入)。**零网络、零 flow**:时间全在 JS 里现算。 */
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --tile:#E7E9EE;--rail:#D6DAE1;--accent:#128F66;
+  --src:#5B5BD6;--srcSoft:rgba(91,91,214,.12);--sun:#F59E0B;
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--tile:#20232A;--rail:#2C313A;--accent:#6FE8BE;
+  --src:#A5A3FF;--srcSoft:rgba(165,163,255,.18);--sun:#F2B655;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  font-variant-numeric:tabular-nums;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:16px}
+.sec{font-size:13px;color:var(--sub);font-weight:500;margin:20px 0 8px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.sec em{font-style:normal;font-weight:500;font-size:13px;color:var(--sub);white-space:nowrap}
+/* 已选城市:一城一行,与 42 组件同构 —— 昼夜标 · 名字 · 「明天 · +13 小时」· 当地时间 */
+.prow{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;
+  padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow)}
+.prow .g{flex:1 1 auto;min-width:0}
+.prow .nm{display:block;font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow .d{display:block;font-size:11.5px;color:var(--sub);margin-top:1px}
+.prow .d.x{color:var(--src)}
+.prow .tm{flex:0 0 auto;font-size:24px;font-weight:700;letter-spacing:-.5px}
+.prow .rm{flex:0 0 auto;border:0;background:var(--tile);color:var(--sub);width:28px;height:28px;
+  border-radius:14px;font:600 15px/28px inherit;padding:0;cursor:pointer}
+.ic{flex:0 0 auto;width:12px;height:12px;border-radius:50%;display:inline-block}
+.ic.sun{background:var(--sun)}
+.ic.moon{background:transparent;box-shadow:inset 4px -2px 0 0 var(--src)}
+.hint{color:var(--sub);font-size:11.5px;margin:2px 0 0;line-height:1.55}
+/* 城市清单 */
+input{width:100%;border:0;background:var(--card);border-radius:12px;box-shadow:var(--shadow);
+  padding:12px 14px;font-family:inherit;font-size:16px;font-weight:500;color:var(--fg);
+  outline:2px solid transparent}
+input:focus{outline-color:var(--src)}
+/* ⚠️ 输入框字号必须 ≥16px:iOS WebView 上小于 16px 聚焦会把整页放大且退不回去(lint 查这一条) */
+.list{background:var(--card);border-radius:14px;box-shadow:var(--shadow);margin-top:10px;overflow:hidden}
+.crow{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer}
+.crow+.crow{border-top:1px solid var(--line)}
+.crow .g{flex:1 1 auto;min-width:0}
+.crow .nm{display:block;font-size:14px;font-weight:600}
+.crow .z{display:block;font-size:11px;color:var(--sub);margin-top:1px}
+.crow .tm{flex:0 0 auto;font-size:15px;font-weight:600;color:var(--sub)}
+.crow .ck{flex:0 0 auto;width:22px;height:22px;border-radius:11px;border:1.5px solid var(--rail);
+  font:700 12px/19px inherit;text-align:center;color:transparent}
+.crow.on .ck{background:var(--src);border-color:var(--src);color:#FFFFFF}
+html[data-theme="dark"] .crow.on .ck{color:#0B0C0E}
+.crow.dis{opacity:.45}
+.empty{padding:14px;color:var(--sub);font-size:12.5px}
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.7}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.crow,.xb-tap{position:relative}
+.crow::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.crow:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.pickb,.chip,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.pickb:active,.chip:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#picked";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+</head>
+<body>
+  <h1 data-i="title"></h1>
+  <div class="sub" id="lead"></div>
+
+  <div class="sec"><span data-i="secPicked"></span><em id="pickSum"></em></div>
+  <div id="picked"></div>
+  <div class="hint" id="pickHint"></div>
+
+  <button class="pickb" id="save"><span class="pk" id="saveK">＋</span><span class="pg">
+    <b id="saveT"></b><span class="d" id="saveS"></span></span></button>
+
+  <div class="sec"><span data-i="secAll"></span><em id="allSum"></em></div>
+  <input id="q" type="search" autocomplete="off" spellcheck="false">
+  <div class="list" id="all"></div>
+
+  <div class="foot" data-i="foot"></div>
+<script>
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* xb:clock — 由 tools/infosource/gen_moment_clock.py 注入,别手改(与世界时钟组件同一张城市表、同一套算法) */
+var CLK={"ids":["utc","beijing","hongkong","taipei","singapore","kualalumpur","manila","perth","tokyo","seoul","bangkok","hochiminh","jakarta","yangon","dhaka","kathmandu","delhi","mumbai","karachi","tashkent","dubai","tehran","riyadh","istanbul","moscow","nairobi","cairo","johannesburg","athens","helsinki","kyiv","lagos","paris","berlin","madrid","rome","amsterdam","zurich","stockholm","warsaw","london","dublin","lisbon","reykjavik","saopaulo","buenosaires","stjohns","halifax","newyork","toronto","chicago","mexicocity","denver","phoenix","losangeles","sanfrancisco","seattle","vancouver","anchorage","honolulu","brisbane","sydney","melbourne","adelaide","darwin","auckland"],"zh":["UTC","北京","香港","台北","新加坡","吉隆坡","马尼拉","珀斯","东京","首尔","曼谷","胡志明市","雅加达","仰光","达卡","加德满都","新德里","孟买","卡拉奇","塔什干","迪拜","德黑兰","利雅得","伊斯坦布尔","莫斯科","内罗毕","开罗","约翰内斯堡","雅典","赫尔辛基","基辅","拉各斯","巴黎","柏林","马德里","罗马","阿姆斯特丹","苏黎世","斯德哥尔摩","华沙","伦敦","都柏林","里斯本","雷克雅未克","圣保罗","布宜诺斯艾利斯","圣约翰斯","哈利法克斯","纽约","多伦多","芝加哥","墨西哥城","丹佛","凤凰城","洛杉矶","旧金山","西雅图","温哥华","安克雷奇","檀香山","布里斯班","悉尼","墨尔本","阿德莱德","达尔文","奥克兰"],"en":["UTC","Beijing","Hong Kong","Taipei","Singapore","Kuala Lumpur","Manila","Perth","Tokyo","Seoul","Bangkok","Ho Chi Minh City","Jakarta","Yangon","Dhaka","Kathmandu","New Delhi","Mumbai","Karachi","Tashkent","Dubai","Tehran","Riyadh","Istanbul","Moscow","Nairobi","Cairo","Johannesburg","Athens","Helsinki","Kyiv","Lagos","Paris","Berlin","Madrid","Rome","Amsterdam","Zurich","Stockholm","Warsaw","London","Dublin","Lisbon","Reykjavik","São Paulo","Buenos Aires","St. John's","Halifax","New York","Toronto","Chicago","Mexico City","Denver","Phoenix","Los Angeles","San Francisco","Seattle","Vancouver","Anchorage","Honolulu","Brisbane","Sydney","Melbourne","Adelaide","Darwin","Auckland"],"std":[0,480,480,480,480,480,480,480,540,540,420,420,420,390,360,345,330,330,300,300,240,210,180,180,180,180,120,120,120,120,120,60,60,60,60,60,60,60,60,60,0,0,0,0,-180,-180,-210,-240,-300,-300,-360,-360,-420,-420,-480,-480,-480,-480,-540,-600,600,600,600,570,570,720],"rule":["","","","","","","","","","","","","","","","","","","","","","","","","","","EG","","EU","EU","EU","","EU","EU","EU","EU","EU","EU","EU","EU","EU","EU","EU","","","","US","US","US","US","US","","US","","US","US","US","US","US","","","AU","AU","AU","","NZ"],"cut":[99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,29892060,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999],"cutOff":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-420,0,0,0,0,0,0,0,0],"rules":{"US":[3,2,0,120,11,1,0,60,1],"EU":[3,-1,0,60,10,-1,0,60,0],"AU":[10,1,0,120,4,1,0,120,1],"NZ":[9,-1,0,120,4,1,0,120,1],"EG":[4,-1,5,0,10,-1,4,1380,1]},"def":[["newyork","london","tokyo","sydney"],["london","paris","tokyo","sydney"],["newyork","sanfrancisco","tokyo","singapore"],["newyork","london","singapore","sydney"],["london","newyork","tokyo","singapore"],["newyork","london","tokyo","beijing"]],"cg":{"US":1,"CA":1,"MX":1,"GB":2,"IE":2,"PT":2,"ES":2,"FR":2,"DE":2,"IT":2,"NL":2,"BE":2,"LU":2,"CH":2,"AT":2,"SE":2,"NO":2,"DK":2,"FI":2,"IS":2,"PL":2,"CZ":2,"GR":2,"JP":3,"KR":3,"AU":4,"NZ":4,"SG":5,"MY":5,"TH":5,"VN":5,"ID":5,"PH":5,"IN":5,"PK":5,"BD":5,"AE":5,"SA":5,"IL":5,"TR":5}};
+
+/* 与 clock.df 同一算法(gen_moment_clock.py 的 ref_offset 是第三份,三方对拍见 verify_moment_clock.py)。
+   不用 Intl 的 timeZone:页面与组件必须说同一个时间,哪怕某地改了制 —— 改表时两边一起改。 */
+function clkFl(a,b){ return Math.floor(a/b); }
+function clkA(Y){ return 365*Y+clkFl(Y,4)-clkFl(Y,100)+clkFl(Y,400)-719468; }
+function clkCm(M){ return clkFl(153*(M-3)+2,5); }
+function clkDay(Y,M,N,W){
+  var A=clkA(Y);
+  if (N>0){ var F=A+clkCm(M); return F+((W+7-(F+4)%7)%7)+7*(N-1); }
+  var L=A+clkCm(M+1)-1; return L-(((L+4)%7+7-W)%7);
+}
+function clkOffset(i,u,Y){
+  if (u>=CLK.cut[i]) return CLK.cutOff[i];
+  var std=CLK.std[i], r=CLK.rule[i]; if (!r) return std;
+  var R=CLK.rules[r], s=clkDay(Y,R[0],R[1],R[2])*1440+R[3]-std*R[8], e=clkDay(Y,R[4],R[5],R[6])*1440+R[7]-std*R[8];
+  var on = R[0]>R[4] ? (u>=s||u<e) : (u>=s&&u<e);
+  return std+(on?60:0);
+}
+function clkIdx(id){ var i=CLK.ids.indexOf(String(id||"")); return i; }
+/* 缺省城市:与流同判(国内默认 → 组 0;否则按系统地区)。 */
+function clkDefaults(env){
+  var g = nbCnDefault(env) ? 0 : (CLK.cg[String(env&&env.country||"").toUpperCase()]||0);
+  return CLK.def[g].slice();
+}
+/* 一个城市此刻:{name,time,dd,night,diff,utc,dst} */
+function clkNow(i,lang,nowMs){
+  var now=nowMs||Date.now(), d=new Date(now), u=Math.floor(now/60000);
+  var lOff=-d.getTimezoneOffset(), Y=d.getFullYear();
+  var off=clkOffset(i,u,Y), tw=u+off, td=Math.floor(tw/1440), tm=tw-td*1440, h=Math.floor(tm/60), m=tm-h*60;
+  var lDay=Math.floor((u+lOff)/1440);
+  var dif=off-lOff, ad=Math.abs(dif), dh=Math.floor(ad/60), dm=ad%60, sg=dif>=0?"+":"−";
+  var zh=lang==="zh";
+  var diff = ad===0 ? (zh?"同一时间":"Same time")
+           : zh ? (sg+dh+" 小时"+(dm?" "+dm+" 分":"")) : (sg+dh+"h"+(dm?" "+dm+"m":""));
+  var oa=Math.abs(off), oh=Math.floor(oa/60), om=oa%60;
+  var dst = CLK.rule[i] && u<CLK.cut[i] && off!==CLK.std[i];
+  return { id:CLK.ids[i], name:(zh?CLK.zh[i]:CLK.en[i]), time:(h<10?"0":"")+h+":"+(m<10?"0":"")+m,
+           dd:td-lDay, night:(h<6||h>=18), diff:diff, dst:!!dst, offMin:off,
+           utc:"UTC"+(off>=0?"+":"−")+oh+(om?":"+(om<10?"0":"")+om:"") };
+}
+/* xb:clock end */
+var I18N = {
+ zh:{title:"世界时钟",
+   leadAdd:"选 1–4 个城市，看当地现在几点、和这里差几个小时。",
+   leadEdit1:"给这个组件换一个城市。",leadEdit2:"给这个组件选两个城市。",leadEdit42:"给这个组件选 2–4 个城市。",
+   secPicked:"已选",secAll:"全部城市",
+   pickN:"{n} / {m}",allN:"{n} 个",
+   q:"搜索城市",none:"没有找到这个城市",
+   hint0:"在下面点一个城市。",hintMin:"至少选 {m} 个。",hintFull:"已经选满，先去掉一个再换。",
+   addT:"添加「世界时钟」组件",addS1:"单城市大字一格，或一个小方块",addSn:"按你选的城市，有单城市、两城市和多城市几种",
+   saveT:"保存到这个组件",saveS:"只修改你点进来的这一个，不会新增",saved:"已保存",
+   rm:"去掉",dst:"夏令时",
+   tmr:"明天",yst:"昨天",tdy:"今天",
+   foot:"这个工具不联网，时间根据设备时钟和包里的时区表计算。夏令时按各地现行规则自动切换，比如美国在 3 月第二个周日、欧洲在 3 月最后一个周日；印度、尼泊尔这类差半小时或 45 分钟的地方也算在内。白天和夜晚按当地钟点划分（6 点到 18 点算白天），不是日出日落时间。桌面上的组件不是每分钟都重画，显示的时间可能比实际晚几分钟。"},
+ en:{title:"World clock",
+   leadAdd:"Pick 1–4 cities to see their local time and how far ahead or behind they are.",
+   leadEdit1:"Pick a different city for this widget.",leadEdit2:"Pick two cities for this widget.",leadEdit42:"Pick 2–4 cities for this widget.",
+   secPicked:"Selected",secAll:"All cities",
+   pickN:"{n} / {m}",allN:"{n}",
+   q:"Search cities",none:"No city matches",
+   hint0:"Tap a city below.",hintMin:"Pick at least {m}.",hintFull:"That's the maximum. Remove one to swap it.",
+   addT:"Add a World clock widget",addS1:"One big clock, or a tiny one",addSn:"Single-city, two-city and multi-city sizes from your picks",
+   saveT:"Save to this widget",saveS:"Updates the widget you came from — no new one",saved:"Saved",
+   rm:"Remove",dst:"DST",
+   tmr:"Tomorrow",yst:"Yesterday",tdy:"Today",
+   foot:"This tool uses no network: times come from the device clock and a time-zone table inside the tool. Daylight saving switches by each place's current rules — the second Sunday of March in the US, the last Sunday of March in Europe — and half-hour or 45-minute offsets such as India and Nepal are covered. Day and night follow the local clock (6:00–18:00 is day), not sunrise and sunset. Widgets on your home screen are not redrawn every minute, so the time shown can run a few minutes behind."}
+};
+var LANG="en";
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function applyTheme(th){
+  var dark = th ? th==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark?"dark":"light");
+}
+function toast(m){ try{ window.xbridge&&xbridge.toast&&xbridge.toast(m); }catch(e){} }
+
+var ENV={}, BRICK="", MODE="add", MIN=1, MAX=4, PICK=[], Q="";
+/* 从组件 onEdit 进来:n=1(22 / 11)、n=2(21)、w=42(42,2–4 个);从首页进来 = 新加,1–4 个。 */
+(function(){
+  var q=new URLSearchParams(location.search);
+  BRICK=String(q.get("brickId")||"");
+  var n=parseInt(q.get("n")||"",10), w=String(q.get("w")||"");
+  if (BRICK){
+    if (w==="42"){ MODE="e42"; MIN=2; MAX=4; }
+    else if (n===2){ MODE="e2"; MIN=2; MAX=2; }
+    else { MODE="e1"; MIN=1; MAX=1; }
+  }
+  ["c1","c2","c3","c4"].forEach(function(k){ var v=q.get(k); if (v) PICK.push(v); });
+  if (MODE==="e42" && n>=2 && n<=4) PICK=PICK.slice(0,n);
+})();
+
+function rel(dd){ return dd===1?t("tmr"):dd===-1?t("yst"):t("tdy"); }
+function dline(c){ return (c.dd?rel(c.dd)+" · ":"")+c.diff; }
+function icon(c){ return '<i class="ic '+(c.night?"moon":"sun")+'"></i>'; }
+function valid(){ return PICK.filter(function(id){ return clkIdx(id)>=0; }); }
+
+function paintPicked(){
+  var box=document.getElementById("picked"), ids=valid();
+  document.getElementById("pickSum").textContent=t("pickN").replace("{n}",ids.length).replace("{m}",MAX);
+  box.innerHTML=ids.map(function(id){
+    var c=clkNow(clkIdx(id),LANG);
+    return '<div class="prow">'+icon(c)+'<div class="g"><span class="nm">'+esc(c.name)+'</span>'+
+      '<span class="d'+(c.dd?" x":"")+'">'+esc(dline(c))+'</span></div>'+
+      '<span class="tm">'+c.time+'</span>'+
+      '<button class="rm xb-press" data-rm="'+esc(id)+'" aria-label="'+esc(t("rm"))+'">×</button></div>';
+  }).join("");
+  var h = !ids.length ? t("hint0") : ids.length<MIN ? t("hintMin").replace("{m}",MIN) : ids.length>=MAX ? t("hintFull") : "";
+  var he=document.getElementById("pickHint"); he.textContent=h; he.hidden=!h;
+  var ok=ids.length>=MIN;
+  var sv=document.getElementById("save"); sv.style.opacity=ok?"":".45";
+}
+function paintAll(){
+  var box=document.getElementById("all"), q=Q.trim().toLowerCase(), ids=valid(), rows=[];
+  for (var i=0;i<CLK.ids.length;i++){
+    var hay=(CLK.zh[i]+" "+CLK.en[i]+" "+CLK.ids[i]).toLowerCase();
+    if (q && hay.indexOf(q)<0) continue;
+    rows.push(i);
+  }
+  /* 按此刻的偏移从东到西排:同一时区的城市挨在一起,找「东京附近」不用记名字 */
+  var now=Date.now();
+  rows.sort(function(a,b){ var ca=clkNow(a,LANG,now), cb=clkNow(b,LANG,now);
+    var oa=ca.offMin, ob=cb.offMin; return ob-oa || (CLK.en[a]<CLK.en[b]?-1:1); });
+  document.getElementById("allSum").textContent=t("allN").replace("{n}",rows.length);
+  box.innerHTML = rows.length ? rows.map(function(i){
+    var c=clkNow(i,LANG,now), on=ids.indexOf(CLK.ids[i])>=0, dis=!on && ids.length>=MAX && MAX>1;
+    return '<div class="crow'+(on?" on":"")+(dis?" dis":"")+'" data-id="'+esc(CLK.ids[i])+'">'+icon(c)+
+      '<div class="g"><span class="nm">'+esc(c.name)+'</span><span class="z">'+esc(c.utc+(c.dst?" · "+t("dst"):"")+" · "+dline(c))+'</span></div>'+
+      '<span class="tm">'+c.time+'</span><span class="ck">✓</span></div>';
+  }).join("") : '<div class="empty">'+esc(t("none"))+'</div>';
+}
+function paintBtn(){
+  var k=document.getElementById("saveK"), T=document.getElementById("saveT"), Sd=document.getElementById("saveS");
+  if (BRICK){ k.textContent="✓"; T.textContent=t("saveT"); Sd.textContent=t("saveS"); }
+  else { k.textContent="＋"; T.textContent=t("addT"); Sd.textContent=t(valid().length>=2?"addSn":"addS1"); }
+}
+function paint(){
+  document.title=t("title");
+  document.querySelectorAll("[data-i]").forEach(function(el){ el.textContent=t(el.dataset.i); });
+  document.getElementById("lead").textContent=t(MODE==="e1"?"leadEdit1":MODE==="e2"?"leadEdit2":MODE==="e42"?"leadEdit42":"leadAdd");
+  document.getElementById("q").placeholder=t("q");
+  paintPicked(); paintAll(); paintBtn();
+}
+
+document.addEventListener("input", function(e){ if (e.target.id==="q"){ Q=e.target.value; paintAll(); } });
+document.addEventListener("click", function(e){
+  var rm=e.target.closest && e.target.closest("[data-rm]");
+  if (rm){ var id=rm.dataset.rm; PICK=valid().filter(function(x){ return x!==id; }); paint(); return; }
+  var row=e.target.closest && e.target.closest(".crow[data-id]");
+  if (row){
+    var id=row.dataset.id, ids=valid(), at=ids.indexOf(id);
+    if (at>=0) ids.splice(at,1);
+    else if (MAX===1) ids=[id];                      /* 单城市:点谁换谁 */
+    else if (ids.length<MAX) ids.push(id);
+    else { toast(t("hintFull")); return; }
+    PICK=ids; paintPicked(); paintAll(); paintBtn(); return;
+  }
+  /* ⚠️ 判据用 closest:按钮里有 span,点在 span 上 e.target.id 为空(G12) */
+  if (e.target.closest && e.target.closest("#save")){
+    var ids2=valid();
+    if (ids2.length<MIN){ toast(t("hintMin").replace("{m}",MIN)); return; }
+    if (BRICK){
+      var p={c1:ids2[0]||""};
+      if (MODE!=="e1"){ p.c2=ids2[1]||""; }
+      if (MODE==="e42"){ p.c3=ids2[2]||""; p.c4=ids2[3]||""; p.n=String(ids2.length); }
+      try{ if (window.xbridge && xbridge.updateParams){ xbridge.updateParams(BRICK,p); toast(t("saved")); } }catch(e2){}
+      return;
+    }
+    /* 加组件:候选按选了几个城市给(§8.1a 一个按钮;参数各归各的)。1 个 → 22 与 11;≥ 2 → 再加 21(前两个)与 42(全部)。 */
+    var items=[{id:"clock",params:{c1:ids2[0]}},{id:"clock11",params:{c1:ids2[0]}}];
+    if (ids2.length>=2){
+      items.push({id:"clock21",params:{c1:ids2[0],c2:ids2[1]}});
+      items.push({id:"clock42",params:{c1:ids2[0],c2:ids2[1],c3:ids2[2]||"",c4:ids2[3]||"",n:String(ids2.length)}});
+    }
+    if (window.xbridge && xbridge.pickWidgets) xbridge.pickWidgets(items);
+  }
+});
+
+(async function boot(){
+  var de=document.documentElement;
+  if (de.getAttribute("data-lang")) LANG=nbLang(de.getAttribute("data-lang"));
+  ENV=await nbInfo();
+  applyTheme(ENV.theme || de.getAttribute("data-theme") || undefined);
+  LANG=nbLang(ENV.language||ENV.locale);
+  /* 没带城市(新加 / 组件还是缺省参数)= 组件上实际显示的那几个:按地区给的缺省(与 clock.df 同判)。 */
+  if (!valid().length){
+    var d=clkDefaults(ENV);
+    PICK = MODE==="e1" ? d.slice(0,1) : MODE==="e2" ? d.slice(0,2) : MODE==="e42" ? d.slice(0,4) : d.slice(0,1);
+  }
+  paint();
+  /* 时间每 20 秒重算一次(只重画数字,不打断正在输入的搜索) */
+  setInterval(function(){ paintPicked(); if (document.activeElement && document.activeElement.id==="q") return; paintAll(); }, 20000);
+})();
+</script>
+</body></html>

@@ -1,0 +1,2301 @@
+{
+  "_note": "各国央行政策利率(国际清算银行 BIS 官方数据接口,WS_CBPOL):当前值 + 上次调整多少基点、在什么时候 + 数据日期。美国还原成目标区间;中国是 BIS 采用的 1 年期 LPR。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出。切语言 = 整盘重取,数据缓存含 locale。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      },
+      "_note": "今年(按设备时区;跨年那几个小时差一天无妨:两年的文件都会取)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[parseNumber::(calc::(${y0}-1),0)]"
+      },
+      "_note": "去年。⚠️ 进 URL 的数字过 parseNumber(Android calc 返回 2025.0)。"
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "pd",
+          "action": "request",
+          "params": {
+            "url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/D.US+XM+JP+GB+CN+CA+CH+AU?lastNObservations=60&format=csv&detail=dataonly",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000"
+          }
+        },
+        {
+          "id": "pm",
+          "action": "request",
+          "params": {
+            "url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/M.US+XM+JP+GB+CN+CA+CH+AU?lastNObservations=13&format=csv&detail=dataonly",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "日频 60 个观测(~10KB)+ 月频 13 个月(~2KB),并发一次往返。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pok",
+        "value": "$[if::(startsWith::(findNotEmpty::(${pd},),FREQ),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${pok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "bis unavailable"
+          }
+        }
+      ],
+      "_note": "日频 CSV 取不到 = 失败(G26)。月频缺了只是「上次调整」写 --。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usD",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pd},),[\\s\\S]*?((?:\\nD\\,US\\,[^\\n]*)+)[\\s\\S]*,$1),\\nD\\,US\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      },
+      "_note": "取出这一国的行并压成「<日期=值>…」(按 REF_AREA 取,不按下标),再剔掉非数值的观测(加拿大等周末写 NaN,2026-10-09 实测):没有这一国时第一次替换不命中、原文原样留着,下面用「整串都是 <日期=数> 记号」判掉。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usM",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pm},),[\\s\\S]*?((?:\\nM\\,US\\,[^\\n]*)+)[\\s\\S]*,$1),\\nM\\,US\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmD",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pd},),[\\s\\S]*?((?:\\nD\\,XM\\,[^\\n]*)+)[\\s\\S]*,$1),\\nD\\,XM\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmM",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pm},),[\\s\\S]*?((?:\\nM\\,XM\\,[^\\n]*)+)[\\s\\S]*,$1),\\nM\\,XM\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpD",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pd},),[\\s\\S]*?((?:\\nD\\,JP\\,[^\\n]*)+)[\\s\\S]*,$1),\\nD\\,JP\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpM",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pm},),[\\s\\S]*?((?:\\nM\\,JP\\,[^\\n]*)+)[\\s\\S]*,$1),\\nM\\,JP\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbD",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pd},),[\\s\\S]*?((?:\\nD\\,GB\\,[^\\n]*)+)[\\s\\S]*,$1),\\nD\\,GB\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbM",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pm},),[\\s\\S]*?((?:\\nM\\,GB\\,[^\\n]*)+)[\\s\\S]*,$1),\\nM\\,GB\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnD",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pd},),[\\s\\S]*?((?:\\nD\\,CN\\,[^\\n]*)+)[\\s\\S]*,$1),\\nD\\,CN\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnM",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pm},),[\\s\\S]*?((?:\\nM\\,CN\\,[^\\n]*)+)[\\s\\S]*,$1),\\nM\\,CN\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caD",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pd},),[\\s\\S]*?((?:\\nD\\,CA\\,[^\\n]*)+)[\\s\\S]*,$1),\\nD\\,CA\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caM",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pm},),[\\s\\S]*?((?:\\nM\\,CA\\,[^\\n]*)+)[\\s\\S]*,$1),\\nM\\,CA\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chD",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pd},),[\\s\\S]*?((?:\\nD\\,CH\\,[^\\n]*)+)[\\s\\S]*,$1),\\nD\\,CH\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chM",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pm},),[\\s\\S]*?((?:\\nM\\,CH\\,[^\\n]*)+)[\\s\\S]*,$1),\\nM\\,CH\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auD",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pd},),[\\s\\S]*?((?:\\nD\\,AU\\,[^\\n]*)+)[\\s\\S]*,$1),\\nD\\,AU\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auM",
+        "value": "$[replaceAll::(replaceAll::(replaceAll::(findNotEmpty::(${pm},),[\\s\\S]*?((?:\\nM\\,AU\\,[^\\n]*)+)[\\s\\S]*,$1),\\nM\\,AU\\,([0-9-]+)\\,([^\\n]*),<$1=$2>),<[0-9-]+=[^0-9>][^>]*>,)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "pd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "pm"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usok",
+        "value": "$[if::(matches::(findNotEmpty::(${usD},x),^(?:<[0-9-]+=[0-9.]+>)+$),1,0)]"
+      },
+      "_note": "这一国日频是否可用(停发的序列是 NaN,也判掉)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usL",
+        "value": "$[if::(eq::(${usok},1),replaceAll::(${usD},^[\\s\\S]*=([^>]*)>$,$1),)]"
+      },
+      "_note": "最新值。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usLd",
+        "value": "$[if::(eq::(${usok},1),replaceAll::(${usD},^[\\s\\S]*<([0-9-]+)=[^>]*>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uspD",
+        "value": "$[if::(eq::(${usok},1),replaceAll::(${usD},^([\\s\\S]*?)(?:<[0-9-]+=${usL}>)+$,$1),)]"
+      },
+      "_note": "最新值之前的部分:把末尾那段「都等于最新值」的记号整段剥掉(最新值写进正则;值里的小数点在正则里匹配任意字符,对纯数字无害)。非空 = 60 个日观测里调整过。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usrD",
+        "value": "$[if::(eq::(${usok},1),replaceAll::(${usD},^[\\s\\S]*?((?:<[0-9-]+=${usL}>)+)$,$1),)]"
+      },
+      "_note": "末尾那段:它的第一个记号的日期 = 这次调整生效的那天。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ushD",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${uspD},__none__),__none__),0,1),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usmOk",
+        "value": "$[if::(and::(eq::(${usok},1),eq::(${ushD},0),matches::(findNotEmpty::(${usM},x),^(?:<[0-9-]+=[0-9.]+>)+$)),1,0)]"
+      },
+      "_note": "日观测里没调整过,才去月末值里找。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uspM",
+        "value": "$[if::(eq::(${usmOk},1),replaceAll::(${usM},^([\\s\\S]*?)(?:<[0-9-]+=${usL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usrM",
+        "value": "$[if::(eq::(${usmOk},1),replaceAll::(${usM},^[\\s\\S]*?((?:<[0-9-]+=${usL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ussM",
+        "value": "$[if::(eq::(${usmOk},1),if::(eq::(${uspM},${usM}),x,if::(eq::(if::(eq::(findNotEmpty::(${uspM},__none__),__none__),0,1),1),m,n)),)]"
+      },
+      "_note": "月末值:x = 最新月末值与当前值不同(月频还没跟上,判断不了)· m = 找到调整的那个月 · n = 13 个月都没变。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usP",
+        "value": "$[if::(eq::(${ushD},1),replaceAll::(${uspD},^[\\s\\S]*=([^>]*)>$,$1),if::(eq::(findNotEmpty::(${ussM},),m),replaceAll::(${uspM},^[\\s\\S]*=([^>]*)>$,$1),))]"
+      },
+      "_note": "调整前的值。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usCd",
+        "value": "$[if::(eq::(${ushD},1),replaceAll::(${usrD},^<([0-9-]+)=[\\s\\S]*$,$1),if::(eq::(findNotEmpty::(${ussM},),m),replaceAll::(${usrM},^<([0-9-]+)=[\\s\\S]*$,$1),))]"
+      },
+      "_note": "调整日期:日频是 YYYY-MM-DD(确切那天),月频是 YYYY-MM(那个月末之前)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "uspD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usrD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "uspM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usrM"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmok",
+        "value": "$[if::(matches::(findNotEmpty::(${xmD},x),^(?:<[0-9-]+=[0-9.]+>)+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmL",
+        "value": "$[if::(eq::(${xmok},1),replaceAll::(${xmD},^[\\s\\S]*=([^>]*)>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmLd",
+        "value": "$[if::(eq::(${xmok},1),replaceAll::(${xmD},^[\\s\\S]*<([0-9-]+)=[^>]*>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmpD",
+        "value": "$[if::(eq::(${xmok},1),replaceAll::(${xmD},^([\\s\\S]*?)(?:<[0-9-]+=${xmL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmrD",
+        "value": "$[if::(eq::(${xmok},1),replaceAll::(${xmD},^[\\s\\S]*?((?:<[0-9-]+=${xmL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmhD",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xmpD},__none__),__none__),0,1),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmmOk",
+        "value": "$[if::(and::(eq::(${xmok},1),eq::(${xmhD},0),matches::(findNotEmpty::(${xmM},x),^(?:<[0-9-]+=[0-9.]+>)+$)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmpM",
+        "value": "$[if::(eq::(${xmmOk},1),replaceAll::(${xmM},^([\\s\\S]*?)(?:<[0-9-]+=${xmL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmrM",
+        "value": "$[if::(eq::(${xmmOk},1),replaceAll::(${xmM},^[\\s\\S]*?((?:<[0-9-]+=${xmL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmsM",
+        "value": "$[if::(eq::(${xmmOk},1),if::(eq::(${xmpM},${xmM}),x,if::(eq::(if::(eq::(findNotEmpty::(${xmpM},__none__),__none__),0,1),1),m,n)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmP",
+        "value": "$[if::(eq::(${xmhD},1),replaceAll::(${xmpD},^[\\s\\S]*=([^>]*)>$,$1),if::(eq::(findNotEmpty::(${xmsM},),m),replaceAll::(${xmpM},^[\\s\\S]*=([^>]*)>$,$1),))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmCd",
+        "value": "$[if::(eq::(${xmhD},1),replaceAll::(${xmrD},^<([0-9-]+)=[\\s\\S]*$,$1),if::(eq::(findNotEmpty::(${xmsM},),m),replaceAll::(${xmrM},^<([0-9-]+)=[\\s\\S]*$,$1),))]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmpD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmrD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmpM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmrM"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpok",
+        "value": "$[if::(matches::(findNotEmpty::(${jpD},x),^(?:<[0-9-]+=[0-9.]+>)+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpL",
+        "value": "$[if::(eq::(${jpok},1),replaceAll::(${jpD},^[\\s\\S]*=([^>]*)>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpLd",
+        "value": "$[if::(eq::(${jpok},1),replaceAll::(${jpD},^[\\s\\S]*<([0-9-]+)=[^>]*>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jppD",
+        "value": "$[if::(eq::(${jpok},1),replaceAll::(${jpD},^([\\s\\S]*?)(?:<[0-9-]+=${jpL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jprD",
+        "value": "$[if::(eq::(${jpok},1),replaceAll::(${jpD},^[\\s\\S]*?((?:<[0-9-]+=${jpL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jphD",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${jppD},__none__),__none__),0,1),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpmOk",
+        "value": "$[if::(and::(eq::(${jpok},1),eq::(${jphD},0),matches::(findNotEmpty::(${jpM},x),^(?:<[0-9-]+=[0-9.]+>)+$)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jppM",
+        "value": "$[if::(eq::(${jpmOk},1),replaceAll::(${jpM},^([\\s\\S]*?)(?:<[0-9-]+=${jpL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jprM",
+        "value": "$[if::(eq::(${jpmOk},1),replaceAll::(${jpM},^[\\s\\S]*?((?:<[0-9-]+=${jpL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpsM",
+        "value": "$[if::(eq::(${jpmOk},1),if::(eq::(${jppM},${jpM}),x,if::(eq::(if::(eq::(findNotEmpty::(${jppM},__none__),__none__),0,1),1),m,n)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpP",
+        "value": "$[if::(eq::(${jphD},1),replaceAll::(${jppD},^[\\s\\S]*=([^>]*)>$,$1),if::(eq::(findNotEmpty::(${jpsM},),m),replaceAll::(${jppM},^[\\s\\S]*=([^>]*)>$,$1),))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpCd",
+        "value": "$[if::(eq::(${jphD},1),replaceAll::(${jprD},^<([0-9-]+)=[\\s\\S]*$,$1),if::(eq::(findNotEmpty::(${jpsM},),m),replaceAll::(${jprM},^<([0-9-]+)=[\\s\\S]*$,$1),))]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jpD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jpM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jppD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jprD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jppM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jprM"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbok",
+        "value": "$[if::(matches::(findNotEmpty::(${gbD},x),^(?:<[0-9-]+=[0-9.]+>)+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbL",
+        "value": "$[if::(eq::(${gbok},1),replaceAll::(${gbD},^[\\s\\S]*=([^>]*)>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbLd",
+        "value": "$[if::(eq::(${gbok},1),replaceAll::(${gbD},^[\\s\\S]*<([0-9-]+)=[^>]*>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbpD",
+        "value": "$[if::(eq::(${gbok},1),replaceAll::(${gbD},^([\\s\\S]*?)(?:<[0-9-]+=${gbL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbrD",
+        "value": "$[if::(eq::(${gbok},1),replaceAll::(${gbD},^[\\s\\S]*?((?:<[0-9-]+=${gbL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbhD",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${gbpD},__none__),__none__),0,1),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbmOk",
+        "value": "$[if::(and::(eq::(${gbok},1),eq::(${gbhD},0),matches::(findNotEmpty::(${gbM},x),^(?:<[0-9-]+=[0-9.]+>)+$)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbpM",
+        "value": "$[if::(eq::(${gbmOk},1),replaceAll::(${gbM},^([\\s\\S]*?)(?:<[0-9-]+=${gbL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbrM",
+        "value": "$[if::(eq::(${gbmOk},1),replaceAll::(${gbM},^[\\s\\S]*?((?:<[0-9-]+=${gbL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbsM",
+        "value": "$[if::(eq::(${gbmOk},1),if::(eq::(${gbpM},${gbM}),x,if::(eq::(if::(eq::(findNotEmpty::(${gbpM},__none__),__none__),0,1),1),m,n)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbP",
+        "value": "$[if::(eq::(${gbhD},1),replaceAll::(${gbpD},^[\\s\\S]*=([^>]*)>$,$1),if::(eq::(findNotEmpty::(${gbsM},),m),replaceAll::(${gbpM},^[\\s\\S]*=([^>]*)>$,$1),))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbCd",
+        "value": "$[if::(eq::(${gbhD},1),replaceAll::(${gbrD},^<([0-9-]+)=[\\s\\S]*$,$1),if::(eq::(findNotEmpty::(${gbsM},),m),replaceAll::(${gbrM},^<([0-9-]+)=[\\s\\S]*$,$1),))]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbpD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbrD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbpM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbrM"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnok",
+        "value": "$[if::(matches::(findNotEmpty::(${cnD},x),^(?:<[0-9-]+=[0-9.]+>)+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnL",
+        "value": "$[if::(eq::(${cnok},1),replaceAll::(${cnD},^[\\s\\S]*=([^>]*)>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnLd",
+        "value": "$[if::(eq::(${cnok},1),replaceAll::(${cnD},^[\\s\\S]*<([0-9-]+)=[^>]*>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnpD",
+        "value": "$[if::(eq::(${cnok},1),replaceAll::(${cnD},^([\\s\\S]*?)(?:<[0-9-]+=${cnL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnrD",
+        "value": "$[if::(eq::(${cnok},1),replaceAll::(${cnD},^[\\s\\S]*?((?:<[0-9-]+=${cnL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnhD",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cnpD},__none__),__none__),0,1),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnmOk",
+        "value": "$[if::(and::(eq::(${cnok},1),eq::(${cnhD},0),matches::(findNotEmpty::(${cnM},x),^(?:<[0-9-]+=[0-9.]+>)+$)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnpM",
+        "value": "$[if::(eq::(${cnmOk},1),replaceAll::(${cnM},^([\\s\\S]*?)(?:<[0-9-]+=${cnL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnrM",
+        "value": "$[if::(eq::(${cnmOk},1),replaceAll::(${cnM},^[\\s\\S]*?((?:<[0-9-]+=${cnL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnsM",
+        "value": "$[if::(eq::(${cnmOk},1),if::(eq::(${cnpM},${cnM}),x,if::(eq::(if::(eq::(findNotEmpty::(${cnpM},__none__),__none__),0,1),1),m,n)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnP",
+        "value": "$[if::(eq::(${cnhD},1),replaceAll::(${cnpD},^[\\s\\S]*=([^>]*)>$,$1),if::(eq::(findNotEmpty::(${cnsM},),m),replaceAll::(${cnpM},^[\\s\\S]*=([^>]*)>$,$1),))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnCd",
+        "value": "$[if::(eq::(${cnhD},1),replaceAll::(${cnrD},^<([0-9-]+)=[\\s\\S]*$,$1),if::(eq::(findNotEmpty::(${cnsM},),m),replaceAll::(${cnrM},^<([0-9-]+)=[\\s\\S]*$,$1),))]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnpD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnrD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnpM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnrM"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caok",
+        "value": "$[if::(matches::(findNotEmpty::(${caD},x),^(?:<[0-9-]+=[0-9.]+>)+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caL",
+        "value": "$[if::(eq::(${caok},1),replaceAll::(${caD},^[\\s\\S]*=([^>]*)>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caLd",
+        "value": "$[if::(eq::(${caok},1),replaceAll::(${caD},^[\\s\\S]*<([0-9-]+)=[^>]*>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "capD",
+        "value": "$[if::(eq::(${caok},1),replaceAll::(${caD},^([\\s\\S]*?)(?:<[0-9-]+=${caL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "carD",
+        "value": "$[if::(eq::(${caok},1),replaceAll::(${caD},^[\\s\\S]*?((?:<[0-9-]+=${caL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cahD",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${capD},__none__),__none__),0,1),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "camOk",
+        "value": "$[if::(and::(eq::(${caok},1),eq::(${cahD},0),matches::(findNotEmpty::(${caM},x),^(?:<[0-9-]+=[0-9.]+>)+$)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "capM",
+        "value": "$[if::(eq::(${camOk},1),replaceAll::(${caM},^([\\s\\S]*?)(?:<[0-9-]+=${caL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "carM",
+        "value": "$[if::(eq::(${camOk},1),replaceAll::(${caM},^[\\s\\S]*?((?:<[0-9-]+=${caL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "casM",
+        "value": "$[if::(eq::(${camOk},1),if::(eq::(${capM},${caM}),x,if::(eq::(if::(eq::(findNotEmpty::(${capM},__none__),__none__),0,1),1),m,n)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caP",
+        "value": "$[if::(eq::(${cahD},1),replaceAll::(${capD},^[\\s\\S]*=([^>]*)>$,$1),if::(eq::(findNotEmpty::(${casM},),m),replaceAll::(${capM},^[\\s\\S]*=([^>]*)>$,$1),))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caCd",
+        "value": "$[if::(eq::(${cahD},1),replaceAll::(${carD},^<([0-9-]+)=[\\s\\S]*$,$1),if::(eq::(findNotEmpty::(${casM},),m),replaceAll::(${carM},^<([0-9-]+)=[\\s\\S]*$,$1),))]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "caD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "caM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "capD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "carD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "capM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "carM"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chok",
+        "value": "$[if::(matches::(findNotEmpty::(${chD},x),^(?:<[0-9-]+=[0-9.]+>)+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chL",
+        "value": "$[if::(eq::(${chok},1),replaceAll::(${chD},^[\\s\\S]*=([^>]*)>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chLd",
+        "value": "$[if::(eq::(${chok},1),replaceAll::(${chD},^[\\s\\S]*<([0-9-]+)=[^>]*>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chpD",
+        "value": "$[if::(eq::(${chok},1),replaceAll::(${chD},^([\\s\\S]*?)(?:<[0-9-]+=${chL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chrD",
+        "value": "$[if::(eq::(${chok},1),replaceAll::(${chD},^[\\s\\S]*?((?:<[0-9-]+=${chL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chhD",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${chpD},__none__),__none__),0,1),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chmOk",
+        "value": "$[if::(and::(eq::(${chok},1),eq::(${chhD},0),matches::(findNotEmpty::(${chM},x),^(?:<[0-9-]+=[0-9.]+>)+$)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chpM",
+        "value": "$[if::(eq::(${chmOk},1),replaceAll::(${chM},^([\\s\\S]*?)(?:<[0-9-]+=${chL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chrM",
+        "value": "$[if::(eq::(${chmOk},1),replaceAll::(${chM},^[\\s\\S]*?((?:<[0-9-]+=${chL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chsM",
+        "value": "$[if::(eq::(${chmOk},1),if::(eq::(${chpM},${chM}),x,if::(eq::(if::(eq::(findNotEmpty::(${chpM},__none__),__none__),0,1),1),m,n)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chP",
+        "value": "$[if::(eq::(${chhD},1),replaceAll::(${chpD},^[\\s\\S]*=([^>]*)>$,$1),if::(eq::(findNotEmpty::(${chsM},),m),replaceAll::(${chpM},^[\\s\\S]*=([^>]*)>$,$1),))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chCd",
+        "value": "$[if::(eq::(${chhD},1),replaceAll::(${chrD},^<([0-9-]+)=[\\s\\S]*$,$1),if::(eq::(findNotEmpty::(${chsM},),m),replaceAll::(${chrM},^<([0-9-]+)=[\\s\\S]*$,$1),))]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chpD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chrD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chpM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chrM"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auok",
+        "value": "$[if::(matches::(findNotEmpty::(${auD},x),^(?:<[0-9-]+=[0-9.]+>)+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auL",
+        "value": "$[if::(eq::(${auok},1),replaceAll::(${auD},^[\\s\\S]*=([^>]*)>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auLd",
+        "value": "$[if::(eq::(${auok},1),replaceAll::(${auD},^[\\s\\S]*<([0-9-]+)=[^>]*>$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aupD",
+        "value": "$[if::(eq::(${auok},1),replaceAll::(${auD},^([\\s\\S]*?)(?:<[0-9-]+=${auL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aurD",
+        "value": "$[if::(eq::(${auok},1),replaceAll::(${auD},^[\\s\\S]*?((?:<[0-9-]+=${auL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auhD",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${aupD},__none__),__none__),0,1),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aumOk",
+        "value": "$[if::(and::(eq::(${auok},1),eq::(${auhD},0),matches::(findNotEmpty::(${auM},x),^(?:<[0-9-]+=[0-9.]+>)+$)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aupM",
+        "value": "$[if::(eq::(${aumOk},1),replaceAll::(${auM},^([\\s\\S]*?)(?:<[0-9-]+=${auL}>)+$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aurM",
+        "value": "$[if::(eq::(${aumOk},1),replaceAll::(${auM},^[\\s\\S]*?((?:<[0-9-]+=${auL}>)+)$,$1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ausM",
+        "value": "$[if::(eq::(${aumOk},1),if::(eq::(${aupM},${auM}),x,if::(eq::(if::(eq::(findNotEmpty::(${aupM},__none__),__none__),0,1),1),m,n)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auP",
+        "value": "$[if::(eq::(${auhD},1),replaceAll::(${aupD},^[\\s\\S]*=([^>]*)>$,$1),if::(eq::(findNotEmpty::(${ausM},),m),replaceAll::(${aupM},^[\\s\\S]*=([^>]*)>$,$1),))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auCd",
+        "value": "$[if::(eq::(${auhD},1),replaceAll::(${aurD},^<([0-9-]+)=[\\s\\S]*$,$1),if::(eq::(findNotEmpty::(${ausM},),m),replaceAll::(${aurM},^<([0-9-]+)=[\\s\\S]*$,$1),))]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "auD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "auM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "aupD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "aurD"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "aupM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "aurM"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usR",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${usL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),connect::(parseNumber::(calc::(${usL}-0.125),0.00),–,parseNumber::(calc::(${usL}+0.125),0.00)),)]"
+      },
+      "_note": "美国:BIS 给的是目标区间中点,还原成区间(25 基点宽),与 macro 包(纽约联储)同一说法。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usxv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${usL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${usP},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${usL}-${usP})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usxn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${usxv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${usxv},0),${usxv},calc::(0-${usxv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usxt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${usxv},__none__),__none__),0,1),0),--,if::(eq::(${usxn},0),0,if::(gt::(${usxv},0),+${usxn},−${usxn})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usxu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${usxv},__none__),__none__),0,1),0),n,if::(gt::(${usxv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usxf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${usxv},__none__),__none__),0,1),0),0,if::(eq::(${usxn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usCm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${usCd},-),1),0),0)]"
+      },
+      "_note": "调整日期拆成数字再拼文案:方法参数里「字 + 方法调用」不会被求值,只能「字 + 插值」(memory vparser)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usCdd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${usCd},-),2),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usCy",
+        "value": "$[subString::(findNotEmpty::(${usCd},0000),0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usCy2",
+        "value": "$[subString::(findNotEmpty::(${usCd},0000),2,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usCmn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(max::(${usCm},1)-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usW",
+        "value": "$[if::(eq::(${ushD},1),if::(eq::(${zh},1),${usCm} 月 ${usCdd} 日,${usCmn} ${usCdd}),if::(eq::(findNotEmpty::(${ussM},),m),if::(eq::(${zh},1),${usCy2} 年 ${usCm} 月,${usCmn} ${usCy}),if::(eq::(findNotEmpty::(${ussM},),n),if::(eq::(${zh},1),一年多未调,None in 1y),--)))]"
+      },
+      "_note": "调整时间:日频「9 月 17 日」/ 月频「26 年 3 月」(只知道是哪个月)/ 13 个月没变「一年多未调」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usDt",
+        "value": "$[if::(eq::(${usok},1),subString::(${usLd},5,10),--)]"
+      },
+      "_note": "数据日期 MM-DD(各国更新进度不一,每行都写)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "usN",
+        "value": "$[if::(eq::(${usok},1),parseNumber::(replaceAll::(${usLd},-,),0),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usCm"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usCdd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usCy"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usCy2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "usCmn"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmR",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${xmL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${xmL},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmxv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${xmL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${xmP},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${xmL}-${xmP})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmxn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xmxv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${xmxv},0),${xmxv},calc::(0-${xmxv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmxt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xmxv},__none__),__none__),0,1),0),--,if::(eq::(${xmxn},0),0,if::(gt::(${xmxv},0),+${xmxn},−${xmxn})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmxu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xmxv},__none__),__none__),0,1),0),n,if::(gt::(${xmxv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmxf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${xmxv},__none__),__none__),0,1),0),0,if::(eq::(${xmxn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmCm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${xmCd},-),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmCdd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${xmCd},-),2),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmCy",
+        "value": "$[subString::(findNotEmpty::(${xmCd},0000),0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmCy2",
+        "value": "$[subString::(findNotEmpty::(${xmCd},0000),2,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmCmn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(max::(${xmCm},1)-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmW",
+        "value": "$[if::(eq::(${xmhD},1),if::(eq::(${zh},1),${xmCm} 月 ${xmCdd} 日,${xmCmn} ${xmCdd}),if::(eq::(findNotEmpty::(${xmsM},),m),if::(eq::(${zh},1),${xmCy2} 年 ${xmCm} 月,${xmCmn} ${xmCy}),if::(eq::(findNotEmpty::(${xmsM},),n),if::(eq::(${zh},1),一年多未调,None in 1y),--)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmDt",
+        "value": "$[if::(eq::(${xmok},1),subString::(${xmLd},5,10),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xmN",
+        "value": "$[if::(eq::(${xmok},1),parseNumber::(replaceAll::(${xmLd},-,),0),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmCm"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmCdd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmCy"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmCy2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "xmCmn"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpR",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${jpL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${jpL},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpxv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${jpL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${jpP},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${jpL}-${jpP})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpxn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${jpxv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${jpxv},0),${jpxv},calc::(0-${jpxv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpxt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${jpxv},__none__),__none__),0,1),0),--,if::(eq::(${jpxn},0),0,if::(gt::(${jpxv},0),+${jpxn},−${jpxn})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpxu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${jpxv},__none__),__none__),0,1),0),n,if::(gt::(${jpxv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpxf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${jpxv},__none__),__none__),0,1),0),0,if::(eq::(${jpxn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpCm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${jpCd},-),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpCdd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${jpCd},-),2),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpCy",
+        "value": "$[subString::(findNotEmpty::(${jpCd},0000),0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpCy2",
+        "value": "$[subString::(findNotEmpty::(${jpCd},0000),2,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpCmn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(max::(${jpCm},1)-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpW",
+        "value": "$[if::(eq::(${jphD},1),if::(eq::(${zh},1),${jpCm} 月 ${jpCdd} 日,${jpCmn} ${jpCdd}),if::(eq::(findNotEmpty::(${jpsM},),m),if::(eq::(${zh},1),${jpCy2} 年 ${jpCm} 月,${jpCmn} ${jpCy}),if::(eq::(findNotEmpty::(${jpsM},),n),if::(eq::(${zh},1),一年多未调,None in 1y),--)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpDt",
+        "value": "$[if::(eq::(${jpok},1),subString::(${jpLd},5,10),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jpN",
+        "value": "$[if::(eq::(${jpok},1),parseNumber::(replaceAll::(${jpLd},-,),0),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jpCm"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jpCdd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jpCy"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jpCy2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "jpCmn"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbR",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${gbL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${gbL},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbxv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${gbL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${gbP},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${gbL}-${gbP})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbxn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${gbxv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${gbxv},0),${gbxv},calc::(0-${gbxv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbxt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${gbxv},__none__),__none__),0,1),0),--,if::(eq::(${gbxn},0),0,if::(gt::(${gbxv},0),+${gbxn},−${gbxn})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbxu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${gbxv},__none__),__none__),0,1),0),n,if::(gt::(${gbxv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbxf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${gbxv},__none__),__none__),0,1),0),0,if::(eq::(${gbxn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbCm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${gbCd},-),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbCdd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${gbCd},-),2),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbCy",
+        "value": "$[subString::(findNotEmpty::(${gbCd},0000),0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbCy2",
+        "value": "$[subString::(findNotEmpty::(${gbCd},0000),2,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbCmn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(max::(${gbCm},1)-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbW",
+        "value": "$[if::(eq::(${gbhD},1),if::(eq::(${zh},1),${gbCm} 月 ${gbCdd} 日,${gbCmn} ${gbCdd}),if::(eq::(findNotEmpty::(${gbsM},),m),if::(eq::(${zh},1),${gbCy2} 年 ${gbCm} 月,${gbCmn} ${gbCy}),if::(eq::(findNotEmpty::(${gbsM},),n),if::(eq::(${zh},1),一年多未调,None in 1y),--)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbDt",
+        "value": "$[if::(eq::(${gbok},1),subString::(${gbLd},5,10),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbN",
+        "value": "$[if::(eq::(${gbok},1),parseNumber::(replaceAll::(${gbLd},-,),0),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbCm"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbCdd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbCy"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbCy2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "gbCmn"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnR",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${cnL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${cnL},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnxv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${cnL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${cnP},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${cnL}-${cnP})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnxn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cnxv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${cnxv},0),${cnxv},calc::(0-${cnxv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnxt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cnxv},__none__),__none__),0,1),0),--,if::(eq::(${cnxn},0),0,if::(gt::(${cnxv},0),+${cnxn},−${cnxn})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnxu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cnxv},__none__),__none__),0,1),0),n,if::(gt::(${cnxv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnxf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${cnxv},__none__),__none__),0,1),0),0,if::(eq::(${cnxn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnCm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${cnCd},-),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnCdd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${cnCd},-),2),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnCy",
+        "value": "$[subString::(findNotEmpty::(${cnCd},0000),0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnCy2",
+        "value": "$[subString::(findNotEmpty::(${cnCd},0000),2,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnCmn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(max::(${cnCm},1)-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnW",
+        "value": "$[if::(eq::(${cnhD},1),if::(eq::(${zh},1),${cnCm} 月 ${cnCdd} 日,${cnCmn} ${cnCdd}),if::(eq::(findNotEmpty::(${cnsM},),m),if::(eq::(${zh},1),${cnCy2} 年 ${cnCm} 月,${cnCmn} ${cnCy}),if::(eq::(findNotEmpty::(${cnsM},),n),if::(eq::(${zh},1),一年多未调,None in 1y),--)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnDt",
+        "value": "$[if::(eq::(${cnok},1),subString::(${cnLd},5,10),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnN",
+        "value": "$[if::(eq::(${cnok},1),parseNumber::(replaceAll::(${cnLd},-,),0),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnCm"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnCdd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnCy"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnCy2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "cnCmn"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caR",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${caL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${caL},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caxv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${caL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${caP},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${caL}-${caP})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caxn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${caxv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${caxv},0),${caxv},calc::(0-${caxv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caxt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${caxv},__none__),__none__),0,1),0),--,if::(eq::(${caxn},0),0,if::(gt::(${caxv},0),+${caxn},−${caxn})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caxu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${caxv},__none__),__none__),0,1),0),n,if::(gt::(${caxv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caxf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${caxv},__none__),__none__),0,1),0),0,if::(eq::(${caxn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caCm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${caCd},-),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caCdd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${caCd},-),2),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caCy",
+        "value": "$[subString::(findNotEmpty::(${caCd},0000),0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caCy2",
+        "value": "$[subString::(findNotEmpty::(${caCd},0000),2,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caCmn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(max::(${caCm},1)-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caW",
+        "value": "$[if::(eq::(${cahD},1),if::(eq::(${zh},1),${caCm} 月 ${caCdd} 日,${caCmn} ${caCdd}),if::(eq::(findNotEmpty::(${casM},),m),if::(eq::(${zh},1),${caCy2} 年 ${caCm} 月,${caCmn} ${caCy}),if::(eq::(findNotEmpty::(${casM},),n),if::(eq::(${zh},1),一年多未调,None in 1y),--)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caDt",
+        "value": "$[if::(eq::(${caok},1),subString::(${caLd},5,10),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "caN",
+        "value": "$[if::(eq::(${caok},1),parseNumber::(replaceAll::(${caLd},-,),0),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "caCm"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "caCdd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "caCy"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "caCy2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "caCmn"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chR",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${chL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${chL},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chxv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${chL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${chP},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${chL}-${chP})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chxn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${chxv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${chxv},0),${chxv},calc::(0-${chxv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chxt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${chxv},__none__),__none__),0,1),0),--,if::(eq::(${chxn},0),0,if::(gt::(${chxv},0),+${chxn},−${chxn})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chxu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${chxv},__none__),__none__),0,1),0),n,if::(gt::(${chxv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chxf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${chxv},__none__),__none__),0,1),0),0,if::(eq::(${chxn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chCm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${chCd},-),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chCdd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${chCd},-),2),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chCy",
+        "value": "$[subString::(findNotEmpty::(${chCd},0000),0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chCy2",
+        "value": "$[subString::(findNotEmpty::(${chCd},0000),2,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chCmn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(max::(${chCm},1)-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chW",
+        "value": "$[if::(eq::(${chhD},1),if::(eq::(${zh},1),${chCm} 月 ${chCdd} 日,${chCmn} ${chCdd}),if::(eq::(findNotEmpty::(${chsM},),m),if::(eq::(${zh},1),${chCy2} 年 ${chCm} 月,${chCmn} ${chCy}),if::(eq::(findNotEmpty::(${chsM},),n),if::(eq::(${zh},1),一年多未调,None in 1y),--)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chDt",
+        "value": "$[if::(eq::(${chok},1),subString::(${chLd},5,10),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chN",
+        "value": "$[if::(eq::(${chok},1),parseNumber::(replaceAll::(${chLd},-,),0),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chCm"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chCdd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chCy"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chCy2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "chCmn"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auR",
+        "value": "$[if::(eq::(if::(matches::(findNotEmpty::(${auL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),parseNumber::(${auL},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auxv",
+        "value": "$[if::(and::(eq::(if::(matches::(findNotEmpty::(${auL},x),^-?[0-9]+[.]?[0-9]*$),1,0),1),eq::(if::(matches::(findNotEmpty::(${auP},x),^-?[0-9]+[.]?[0-9]*$),1,0),1)),round::(calc::((${auL}-${auP})*100)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auxn",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${auxv},__none__),__none__),0,1),1),parseNumber::(if::(ge::(${auxv},0),${auxv},calc::(0-${auxv})),0),)]"
+      },
+      "_note": "⚠️ 进文本的数字过 parseNumber(x,0):Android 上 round 返回 double,直接拼会渲成「4.0 基点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auxt",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${auxv},__none__),__none__),0,1),0),--,if::(eq::(${auxn},0),0,if::(gt::(${auxv},0),+${auxn},−${auxn})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auxu",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${auxv},__none__),__none__),0,1),0),n,if::(gt::(${auxv},0),1,0))]"
+      },
+      "_note": "方向:1 涨 / 0 跌 / n 无数(不留空:空键在 CLI 里报「字段为空」,且 rckit.col 对 n 同样走灰)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auxf",
+        "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${auxv},__none__),__none__),0,1),0),0,if::(eq::(${auxn},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auCm",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${auCd},-),1),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auCdd",
+        "value": "$[parseNumber::(findNotEmpty::(index::(split::(${auCd},-),2),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auCy",
+        "value": "$[subString::(findNotEmpty::(${auCd},0000),0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auCy2",
+        "value": "$[subString::(findNotEmpty::(${auCd},0000),2,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auCmn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(max::(${auCm},1)-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auW",
+        "value": "$[if::(eq::(${auhD},1),if::(eq::(${zh},1),${auCm} 月 ${auCdd} 日,${auCmn} ${auCdd}),if::(eq::(findNotEmpty::(${ausM},),m),if::(eq::(${zh},1),${auCy2} 年 ${auCm} 月,${auCmn} ${auCy}),if::(eq::(findNotEmpty::(${ausM},),n),if::(eq::(${zh},1),一年多未调,None in 1y),--)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auDt",
+        "value": "$[if::(eq::(${auok},1),subString::(${auLd},5,10),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "auN",
+        "value": "$[if::(eq::(${auok},1),parseNumber::(replaceAll::(${auLd},-,),0),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "auCm"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "auCdd"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "auCy"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "auCy2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "auCmn"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aN",
+        "value": "$[max::(${usN},${xmN},${jpN},${gbN},${cnN},${caN},${chN},${auN})]"
+      },
+      "_note": "时效锚 = 各国里最新的那个数据日期。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(gt::(${aN},0),connect::(subString::(${aN},4,6),-,subString::(${aN},6,8)),--)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "usR",
+          "usxt",
+          "usxu",
+          "usxf",
+          "usW",
+          "usDt",
+          "xmR",
+          "xmxt",
+          "xmxu",
+          "xmxf",
+          "xmW",
+          "xmDt",
+          "jpR",
+          "jpxt",
+          "jpxu",
+          "jpxf",
+          "jpW",
+          "jpDt",
+          "gbR",
+          "gbxt",
+          "gbxu",
+          "gbxf",
+          "gbW",
+          "gbDt",
+          "cnR",
+          "cnxt",
+          "cnxu",
+          "cnxf",
+          "cnW",
+          "cnDt",
+          "caR",
+          "caxt",
+          "caxu",
+          "caxf",
+          "caW",
+          "caDt",
+          "chR",
+          "chxt",
+          "chxu",
+          "chxf",
+          "chW",
+          "chDt",
+          "auR",
+          "auxt",
+          "auxu",
+          "auxf",
+          "auW",
+          "auDt"
+        ]
+      }
+    }
+  ]
+}

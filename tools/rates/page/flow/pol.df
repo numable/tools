@@ -1,0 +1,63 @@
+{
+  "_note": "各国央行政策利率(BIS WS_CBPOL):12 家,日频最近 60 个观测 + 月频最近 13 个月末值的 CSV 原文(合计约 20KB)。原样取回,解析与首屏缓存在页面 JS 的 flowCached 里做(与 macro 同法)。",
+  "_lintCache": "exempt",
+  "version": 1,
+  "actions": [
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "d",
+          "action": "request",
+          "params": {
+            "url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/D.US+XM+JP+GB+CN+CA+CH+AU+KR+IN+BR+MX?lastNObservations=60&format=csv&detail=dataonly",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000"
+          }
+        },
+        {
+          "id": "m",
+          "action": "request",
+          "params": {
+            "url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_CBPOL/1.0/M.US+XM+JP+GB+CN+CA+CH+AU+KR+IN+BR+MX?lastNObservations=13&format=csv&detail=dataonly",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(findNotEmpty::(${d},),FREQ),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "bis unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "d",
+          "m"
+        ]
+      }
+    }
+  ]
+}

@@ -125,6 +125,7 @@ body.std{padding-top:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px))
 .ptitle{font-size:24px;font-weight:700;margin:0 2px 6px;letter-spacing:-.3px}
 .slots{margin-top:12px}
 .pick .row{cursor:pointer}
+#seg button{padding:0 3px;font-size:12.5px}
 .cur{flex:0 0 auto;font-size:12px;font-weight:600;color:var(--sub);background:var(--tile);border-radius:16px;padding:0 12px;height:28px;display:flex;align-items:center}
 </style>
 <h1 class="ptitle" id="ptitle" data-i="pTitle" hidden></h1>
@@ -133,7 +134,7 @@ body.std{padding-top:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px))
 <div class="sec"><span data-i="mineT"></span></div>
 <div id="mine"></div>
 <div class="sec"><span data-i="findT"></span></div>
-<div class="seg" id="seg"><button data-e="npm" type="button">npm</button><button data-e="pypi" type="button">PyPI</button><button data-e="crates" type="button">crates.io</button></div>
+<div class="seg" id="seg"><button data-e="npm" type="button">npm</button><button data-e="pypi" type="button">PyPI</button><button data-e="crates" type="button">crates.io</button><button data-e="docker" type="button">Docker</button><button data-e="brew" type="button">Homebrew</button></div>
 <form class="sbox" id="sf"><input id="kw" type="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" data-ph="ph"><button type="submit" data-i="go"></button></form>
 <p class="hint" id="hint"></p>
 <div id="res" class="pick"></div>
@@ -211,13 +212,20 @@ async function bootEnv(onChange) {
   addEventListener("themechange", function () { onChange && onChange("theme"); });
 }
 
-/* ── 生态 ── */
-var ECO = { npm: "npm", pypi: "PyPI", crates: "crates.io" };
+/* ── 生态 ──
+   docker / brew / cask(2026-10-09)没有逐日数据:Docker Hub 只有累计拉取,Homebrew 只有近 30 / 90 / 365 天安装。
+   它们不走 series(),走 nsModel();页面按 m.k("d" / "b")换一套表现,不画走势、不报较上周。 */
+var ECO = { npm: "npm", pypi: "PyPI", crates: "crates.io", docker: "Docker Hub", brew: "Homebrew", cask: "Homebrew Cask" };
 function normE(e) { e = String(e || "").toLowerCase(); return ECO[e] ? e : "npm"; }
 function normN(e, n) { n = String(n || "").trim(); return e === "npm" ? n : n.toLowerCase(); }
+function isSer(e) { return e === "npm" || e === "pypi" || e === "crates"; }
 function pyName(n) { return String(n).toLowerCase().replace(/[._]+/g, "-"); }
+function dRepo(n) { return n.indexOf("/") > 0 ? n : "library/" + n; }
 function regUrl(e, n) { return e === "npm" ? "https://www.npmjs.com/package/" + n
-  : e === "pypi" ? "https://pypi.org/project/" + n + "/" : "https://crates.io/crates/" + n; }
+  : e === "pypi" ? "https://pypi.org/project/" + n + "/"
+  : e === "docker" ? (n.indexOf("/") > 0 ? "https://hub.docker.com/r/" + n : "https://hub.docker.com/_/" + n)
+  : e === "brew" ? "https://formulae.brew.sh/formula/" + n : e === "cask" ? "https://formulae.brew.sh/cask/" + n
+  : "https://crates.io/crates/" + n; }
 
 /* ── 关注列表:data.ps_list(组件 board.df 读同一个键;顺序 = 首页与「关注列表」组件的显示顺序)── */
 var DEF = [{ e: "npm", n: "react" }, { e: "pypi", n: "requests" }, { e: "crates", n: "serde" }];
@@ -268,6 +276,22 @@ async function series(e, n, long) {
   var c = ks.map(function (k) { return { d: k, v: acc[k] }; }).slice(long ? -90 : -30);
   return { days: c, end: c[c.length - 1].d };
 }
+/* Docker Hub / Homebrew:一次取回就是全部数字(没有序列)。404:Docker 回 {message},Homebrew 回网页(解析失败)→ notfound。 */
+async function nsModel(e, n) {
+  if (e === "docker") {
+    var j = await retry(function () { return rawJ("docker", "repositories/" + dRepo(n) + "/"); });
+    if (!j || !j.name) throw new Error("notfound");
+    return { k: "d", main: +j.pull_count || 0, stars: +j.star_count || 0, upd: String(j.last_updated || "").slice(0, 10),
+      reg: String(j.date_registered || "").slice(0, 10), end: isoDay(new Date()) };
+  }
+  var s = await retry(function () { return raw("brew", (e === "cask" ? "cask/" : "formula/") + n + ".json"); }), h;
+  try { h = JSON.parse(s); } catch (x) { throw new Error("notfound"); }
+  var a = (h && h.analytics) || {}, ins = a.install || {}, req = a.install_on_request || {};
+  function g(o, w) { var t = o[w]; return t && t[n] != null ? +t[n] : 0; }
+  if (!h || !h.generated_date) throw new Error("notfound");
+  return { k: "b", main: g(ins, "30d"), d90: g(ins, "90d"), d365: g(ins, "365d"),
+    req30: e === "brew" && req["30d"] ? g(req, "30d") : null, end: String(h.generated_date).slice(0, 10) };
+}
 /* 缺天判据(与组件 pkg.df / board.df / cmp.df 同一条):某天为 0,且最近 30 天里非零日的中位数 ≥ 100
    → 视为「数据源当天没有统计」,不是「没人下载」。小包真的一天 0 下载不受影响。
    npm 的逐日统计会整天缺失(2026-09 实测 react 两周缺 3 天),不处理的话环比会报出假下跌。 */
@@ -298,10 +322,31 @@ function fillGaps(v) { var miss = gapMask(v), out = [], last = null;
   var first = null; for (var j = 0; j < out.length; j++) if (out[j] != null) { first = out[j]; break; }
   return out.map(function (x) { return x == null ? (first || 0) : x; }); }
 
+/* Docker:最近推送的 tag 里以版本号开头的(1.30.5-trixie-perl → 1.30.5),按推送先后去重 → 最近推送的版本。
+   ⚠️ 不是「最高版本」:nginx 同时维护 stable 与 mainline 两条线,哪条后推哪条在前。 */
+function dkVer(tags) { var out = [], seen = {};
+  (tags || []).forEach(function (x) { var m = /^v?(\d+(\.\d+)+)/.exec(String(x.name || ""));
+    /* 1.30 是 1.30.5 的别名 tag(同一次推送),已有更细的版本号就不再列 */
+    if (m && !seen[m[1]] && !Object.keys(seen).some(function (k) { return k.indexOf(m[1] + ".") === 0; })) {
+      seen[m[1]] = 1; out.push({ v: m[1], date: String(x.last_updated || "").slice(0, 10) }); } });
+  return out; }
 /* 元数据:最新版本 / 发布日 / 简介 / 主页 / 仓库;hist = 最近 5 个正式版(PyPI / crates.io)。
    npm 不做发布记录:带时间的版本表只在完整文档里,react 一份 2.9MB,为一个列表每天拉它不值当。 */
 function isRel(v) { return /^\d+(\.\d+)*$/.test(String(v || "")); }
 async function meta(e, n, withHist) {
+  if (e === "docker") {
+    var dj = await retry(function () { return rawJ("docker", "repositories/" + dRepo(n) + "/"); }), dh = [];
+    try { var tg = await rawJ("docker", "repositories/" + dRepo(n) + "/tags?page_size=" + (withHist ? 25 : 10) + "&ordering=last_updated");
+      dh = dkVer(tg.results); } catch (x) { dh = []; }
+    return { v: dh[0] ? dh[0].v : "", date: dh[0] ? dh[0].date : "", desc: dj.description || "", home: "", repo: "",
+      hist: withHist && dh.length ? dh.slice(0, 5) : null, pushed: 1 };
+  }
+  if (e === "brew" || e === "cask") {
+    var hs = await retry(function () { return raw("brew", (e === "cask" ? "cask/" : "formula/") + n + ".json"); }), hj;
+    try { hj = JSON.parse(hs); } catch (x) { throw new Error("notfound"); }
+    var hv = e === "cask" ? String(hj.version || "").split(",")[0] : ((hj.versions && hj.versions.stable) || "");
+    return { v: hv, date: "", desc: hj.desc || "", home: hj.homepage || "", repo: "", hist: null, nodate: 1 };
+  }
   if (e === "npm") {
     var l = await retry(function () { return rawJ("reg", n + "/latest"); });
     var date = "";
@@ -386,8 +431,10 @@ function sparkSvg(vals, w, h) {
 }
 
 var XSVG = '<svg viewBox="0 0 16 16" width="16" height="16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>';
+var HINT = { npm: "hintNpm", pypi: "hintPy", crates: "hintCr", docker: "hintDk", brew: "hintBr", cask: "hintBr" };
 var USVG = '<svg viewBox="0 0 16 16" width="16" height="16"><path d="M8 13V3.5M3.8 7.6L8 3.4l4.2 4.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>';
 async function doSearch(e, kw) {
+  if (e === "cask") e = "brew";   /* Homebrew 一个入口:formula 与 cask 都核实 */
   if (e === "npm") {
     var j = await rawJ("reg", "-/v1/search?text=" + encodeURIComponent(kw) + "&size=12");
     var a = (j.objects || []).map(function (o) { var p = o.package || {};
@@ -399,6 +446,23 @@ async function doSearch(e, kw) {
     var b = (c.crates || []).map(function (x) { return { e: "crates", n: x.name, v: x.default_version || x.max_stable_version || x.newest_version,
       d: x.description || "", dl: x.recent_downloads != null ? t("r90", cmp(x.recent_downloads)) : "" }; });
     return b.length ? b : t("noResE", kw).replace("%e", "crates.io");
+  }
+  if (e === "docker") {
+    /* Docker Hub 搜索:官方镜像的 repo_name 不带 library/(redis),用户仓库带命名空间(bitnami/redis) */
+    var dj = await rawJ("docker", "search/repositories/?query=" + encodeURIComponent(kw) + "&page_size=12");
+    var da = (dj.results || []).map(function (x) { return { e: "docker", n: String(x.repo_name || "").replace(/^library\//, ""), v: x.is_official ? t("official") : "",
+      d: x.short_description || "", dl: x.pull_count != null ? t("pulls", cmp(x.pull_count)) : "" }; });
+    return da.length ? da : t("noResE", kw).replace("%e", "Docker Hub");
+  }
+  if (e === "brew") {
+    /* Homebrew 没有搜索接口:按完整名字核实 formula 与 cask(同名可能两个都有,比如 docker)。 */
+    var nm0 = kw.trim().toLowerCase(), outB = [];
+    for (var bi = 0; bi < 2; bi++) { var kind = bi ? "cask" : "formula";
+      try { var bj = JSON.parse(await raw("brew", kind + "/" + nm0 + ".json"));
+        if (bj && bj.generated_date) { var bv = bi ? String(bj.version || "").split(",")[0] : ((bj.versions && bj.versions.stable) || "");
+          var b30 = bj.analytics && bj.analytics.install && bj.analytics.install["30d"];
+          outB.push({ e: bi ? "cask" : "brew", n: nm0, v: bv, d: bj.desc || "", dl: b30 && b30[nm0] != null ? t("i30", cmp(b30[nm0])) : "" }); } } catch (x) {} }
+    return outB.length ? outB : t("brNo", kw);
   }
   /* PyPI 没有公开的搜索接口:按完整包名取它的发布 RSS 来核实。
      ⚠️ 包不存在时 pypi.org 回 404 网页 —— 有的宿主把网页原文当响应交回来,v1 只判「非空」就把它当成了包,
@@ -421,6 +485,8 @@ i18n({
     slotA: "包 A · %s", slotB: "包 B · %s", mineT: "从关注里选", findT: "搜索其它包",
     ph: "包名或关键词", go: "搜索", hintNpm: "按关键词搜索 npm，结果带每周下载量。", hintPy: "PyPI 没有公开的搜索接口，请输入完整包名（如 requests）。",
     hintCr: "按关键词搜索 crates.io，结果带近 90 天下载量。", wkDl: "每周 %s", r90: "近 90 天 %s",
+    hintDk: "按关键词搜索 Docker Hub 镜像，结果带累计拉取量。", hintBr: "Homebrew 没有公开的搜索接口，请输入完整名字（如 wget、visual-studio-code）。",
+    pulls: "累计拉取 %s", i30: "近 30 天安装 %s", official: "官方镜像", brNo: "Homebrew 上没有找到「%s」，请检查名字",
     choose: "选这个", cur: "当前", emptyMine: "还没有关注任何开源包，可以在下面搜索。",
     noResE: "%e 上没有找到「%s」", pyNo: "PyPI 上没有找到「%s」，请检查包名",
     searching: "正在搜索…", searchFail: "搜索失败，请检查网络后重试", done: "已更新组件", saveFail: "没能更新组件，请重试",
@@ -429,6 +495,8 @@ i18n({
     slotA: "A · %s", slotB: "B · %s", mineT: "From your watchlist", findT: "Find another package",
     ph: "Package name or keyword", go: "Search", hintNpm: "Search npm by keyword. Results show weekly downloads.", hintPy: "PyPI has no public search. Enter the exact package name (e.g. requests).",
     hintCr: "Search crates.io by keyword. Results show 90-day downloads.", wkDl: "%s / week", r90: "%s in 90 days",
+    hintDk: "Search Docker Hub images by keyword. Results show total pulls.", hintBr: "Homebrew has no public search. Enter the exact name (e.g. wget, visual-studio-code).",
+    pulls: "%s pulls", i30: "%s installs in 30 days", official: "Official", brNo: "Nothing named \"%s\" on Homebrew. Check the name",
     choose: "Choose", cur: "Current", emptyMine: "No watched packages yet. Search below.",
     noResE: "Nothing called \"%s\" on %e", pyNo: "No package named \"%s\" on PyPI. Check the name",
     searching: "Searching…", searchFail: "Search failed. Check your connection and try again", done: "Widget updated", saveFail: "Couldn't update the widget. Try again",
@@ -448,12 +516,16 @@ function paintTop() {
   $("slots").hidden = !TWO;
   if (TWO) $("slots").innerHTML = [0, 1].map(function (i) { return '<button type="button" data-s="' + i + '" class="' + (S.slot === i ? "on" : "") + '">' +
     esc(t(i ? "slotB" : "slotA", CUR[i].n || "--")) + "</button>"; }).join("");
-  [].forEach.call($("seg").children, function (b) { b.className = b.getAttribute("data-e") === S.e ? "on" : ""; });
-  $("hint").textContent = t(S.e === "npm" ? "hintNpm" : S.e === "pypi" ? "hintPy" : "hintCr");
+  [].forEach.call($("seg").children, function (b) { var de = b.getAttribute("data-e");
+    b.className = (de === S.e || (de === "brew" && S.e === "cask")) ? "on" : "";
+    /* 两包对比只比逐日序列:双槽模式下不给 Docker / Homebrew */
+    b.hidden = TWO && !isSer(de); });
+  $("hint").textContent = t(HINT[S.e] || "hintNpm");
 }
+function mineList() { return TWO ? S.wl.filter(function (x) { return isSer(x.e); }) : S.wl; }
 function paintMine() {
-  if (!S.wl.length) { $("mine").innerHTML = '<div class="state">' + esc(t("emptyMine")) + "</div>"; return; }
-  $("mine").innerHTML = '<div class="list pick">' + S.wl.map(function (x) {
+  if (!mineList().length) { $("mine").innerHTML = '<div class="state">' + esc(t("emptyMine")) + "</div>"; return; }
+  $("mine").innerHTML = '<div class="list pick">' + mineList().map(function (x) {
     return '<div class="row it" data-e="' + esc(x.e) + '" data-n="' + esc(x.n) + '"><div class="l"><b>' + esc(x.n) +
       '</b><div class="m"><span class="eco">' + esc(ECO[x.e]) + "</span></div></div>" + btn(x.e, x.n) + "</div>"; }).join("") + "</div>";
 }
@@ -490,7 +562,7 @@ async function choose(e, n) {
   if (!BRICK) { $("lead").textContent = t("noBrick"); document.body.classList.add("std");
     $("ptitle").hidden = false; $("ptitle").textContent = t("pTitle"); }
   $("slots").onclick = function (ev) { var b = ev.target.closest("button"); if (!b) return; haptic();
-    S.slot = +b.getAttribute("data-s"); S.e = CUR[S.slot].e; S.res = null; S.seq++; paintAll(); };
+    S.slot = +b.getAttribute("data-s"); S.e = isSer(CUR[S.slot].e) ? CUR[S.slot].e : "npm"; S.res = null; S.seq++; paintAll(); };
   $("seg").onclick = function (ev) { var b = ev.target.closest("button"); if (!b) return; haptic();
     S.e = b.getAttribute("data-e"); S.res = null; S.seq++; paintAll(); var kw = $("kw").value.trim(); if (kw) search(kw); };
   $("sf").onsubmit = function (ev) { ev.preventDefault(); var kw = $("kw").value.trim(); if (!kw) return; $("kw").blur(); search(kw); };

@@ -106,6 +106,16 @@ input:focus{outline-color:var(--src)}
 .hrow .n small{font-size:11px;color:var(--sub);font-weight:600;margin-left:2px}
 .hrow.first .n{color:var(--src)}
 .drow .u{font-size:10.5px;color:var(--sub);margin-left:3px;font-weight:600}
+/* 世界时钟一段:与 42 组件同构(昼夜标 · 城市 · 「明天 · +13 小时」· 当地时间)。表与算法由 gen_moment_clock.py 注入(xb:clock) */
+.crow{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:11px 14px;margin-bottom:8px}
+.crow .g{flex:1 1 auto;min-width:0}
+.crow .nm{display:block;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crow .d{display:block;font-size:11px;color:var(--sub);margin-top:2px}
+.crow .d.x{color:var(--src)}
+.crow .n{flex:0 0 auto;font-size:20px;font-weight:700;color:var(--fg)}
+.crow .ic{flex:0 0 auto;width:11px;height:11px;border-radius:50%;display:inline-block;background:#F59E0B}
+html[data-theme="dark"] .crow .ic{background:#F2B655}
+.crow .ic.moon,html[data-theme="dark"] .crow .ic.moon{background:transparent;box-shadow:inset 4px -2px 0 0 var(--src)}
 /* 已经过去的日子不再是「还剩」,数字也不该继续用源色抢注意力 */
 .drow.gone .n{color:var(--sub)}
 /* 「就是今天」那一格放的是文字不是数字,收一档字号 —— 22px 会把它挤成两行 */
@@ -336,6 +346,11 @@ html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
   <div class="sec"><span id="secHoli"></span><em id="holiSum"></em></div>
   <div id="holi"></div>
 
+  <div class="sec"><span data-i="secClock"></span><em id="clockSum"></em></div>
+  <div id="clock"></div>
+  <button class="entry" id="toClock"><span class="g">
+    <b data-i="clockT"></b><span class="d" data-i="clockS"></span></span><span class="ar">›</span></button>
+
   <button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg">
     <b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button>
 
@@ -365,6 +380,8 @@ async function nbInfo(){
 }
 var I18N = {
  zh:{reload:"重新读取",pickT:"添加组件",pickS:"在面板里挑，确认后加到仪表盘",title:"时间进度",secCount:"倒数日",
+   secClock:"世界时钟",clockT:"选城市",clockS:"选 1–4 个城市，加成组件",clockSum:"此刻",
+   tmr:"明天",yst:"昨天",
    secProg:"时间进度",secHoliCn:"节假日",secHoliUs:"美国节日",holiSum:"接下来 4 个",holiToday:"就是今天",
    wk:["周日","周一","周二","周三","周四","周五","周六"],
    stHas:"距{n} 还有 {d} 天",stToday:"{n} 就是今天",stGone:"{n} 已过 {d} 天",
@@ -379,6 +396,8 @@ var I18N = {
    gridNote:"一格一天——最多显示 56 天",
    foot:"这个工具不联网，所有数字都根据设备时间计算，开启飞行模式也同样准确。格子有四种状态：实色表示已过去，半透明表示正在进行，灰色表示尚未到来，最浅的是这个月没有的日期（例如 2 月只有 28 格为实色）。倒数日按日历天数算，同一天里早晚看到的天数一样。"},
  en:{reload:"Reload",pickT:"Add widgets",pickS:"Pick in the panel, then confirm",title:"Time Progress",secCount:"Countdown",
+   secClock:"World clock",clockT:"Choose cities",clockS:"Pick 1–4 cities and add them as a widget",clockSum:"right now",
+   tmr:"Tomorrow",yst:"Yesterday",
    secProg:"Time progress",secHoliCn:"China holidays",secHoliUs:"US holidays",holiSum:"next 4",holiToday:"today",
    wk:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
    stHas:"{d} days until {n}","stHas.one":"{d} day until {n}",stToday:"{n} is today",stGone:"{n} was {d} days ago","stGone.one":"{n} was {d} day ago",
@@ -525,6 +544,60 @@ async function loadList(){
 /* xb:holi — 由 tools/infosource/gen_moment_holiday.py 注入,别手改(与 holiday 卡同一张表) */
 var HOLI={"cn": [["2026-09-25", "中秋节", "Mid-Autumn Festival"], ["2026-10-01", "国庆节", "National Day"], ["2027-01-01", "元旦", "New Year's Day"], ["2027-02-06", "春节", "Spring Festival"], ["2027-04-05", "清明节", "Qingming Festival"], ["2027-05-01", "劳动节", "Labour Day"], ["2027-06-09", "端午节", "Dragon Boat Festival"], ["2027-09-15", "中秋节", "Mid-Autumn Festival"], ["2027-10-01", "国庆节", "National Day"], ["2028-01-01", "元旦", "New Year's Day"], ["2028-01-26", "春节", "Spring Festival"], ["2028-04-04", "清明节", "Qingming Festival"], ["2028-05-01", "劳动节", "Labour Day"], ["2028-05-28", "端午节", "Dragon Boat Festival"], ["2028-10-01", "国庆节", "National Day"], ["2028-10-03", "中秋节", "Mid-Autumn Festival"], ["2029-01-01", "元旦", "New Year's Day"]], "us": [["2026-10-12", "哥伦布日", "Columbus Day"], ["2026-11-11", "退伍军人节", "Veterans Day"], ["2026-11-26", "感恩节", "Thanksgiving"], ["2026-12-25", "圣诞节", "Christmas"], ["2027-01-01", "元旦", "New Year's Day"], ["2027-01-18", "马丁·路德·金纪念日", "MLK Day"], ["2027-02-15", "总统日", "Presidents' Day"], ["2027-05-31", "阵亡将士纪念日", "Memorial Day"], ["2027-06-19", "六月节", "Juneteenth"], ["2027-07-04", "美国独立日", "Independence Day"], ["2027-09-06", "劳工节", "Labor Day"], ["2027-10-11", "哥伦布日", "Columbus Day"], ["2027-11-11", "退伍军人节", "Veterans Day"], ["2027-11-25", "感恩节", "Thanksgiving"], ["2027-12-25", "圣诞节", "Christmas"], ["2028-01-01", "元旦", "New Year's Day"], ["2028-01-17", "马丁·路德·金纪念日", "MLK Day"], ["2028-02-21", "总统日", "Presidents' Day"], ["2028-05-29", "阵亡将士纪念日", "Memorial Day"], ["2028-06-19", "六月节", "Juneteenth"], ["2028-07-04", "美国独立日", "Independence Day"], ["2028-09-04", "劳工节", "Labor Day"], ["2028-10-09", "哥伦布日", "Columbus Day"], ["2028-11-11", "退伍军人节", "Veterans Day"], ["2028-11-23", "感恩节", "Thanksgiving"], ["2028-12-25", "圣诞节", "Christmas"], ["2029-01-01", "元旦", "New Year's Day"]]};
 /* xb:holi end */
+/* xb:clock — 由 tools/infosource/gen_moment_clock.py 注入,别手改(与世界时钟组件同一张城市表、同一套算法) */
+var CLK={"ids":["utc","beijing","hongkong","taipei","singapore","kualalumpur","manila","perth","tokyo","seoul","bangkok","hochiminh","jakarta","yangon","dhaka","kathmandu","delhi","mumbai","karachi","tashkent","dubai","tehran","riyadh","istanbul","moscow","nairobi","cairo","johannesburg","athens","helsinki","kyiv","lagos","paris","berlin","madrid","rome","amsterdam","zurich","stockholm","warsaw","london","dublin","lisbon","reykjavik","saopaulo","buenosaires","stjohns","halifax","newyork","toronto","chicago","mexicocity","denver","phoenix","losangeles","sanfrancisco","seattle","vancouver","anchorage","honolulu","brisbane","sydney","melbourne","adelaide","darwin","auckland"],"zh":["UTC","北京","香港","台北","新加坡","吉隆坡","马尼拉","珀斯","东京","首尔","曼谷","胡志明市","雅加达","仰光","达卡","加德满都","新德里","孟买","卡拉奇","塔什干","迪拜","德黑兰","利雅得","伊斯坦布尔","莫斯科","内罗毕","开罗","约翰内斯堡","雅典","赫尔辛基","基辅","拉各斯","巴黎","柏林","马德里","罗马","阿姆斯特丹","苏黎世","斯德哥尔摩","华沙","伦敦","都柏林","里斯本","雷克雅未克","圣保罗","布宜诺斯艾利斯","圣约翰斯","哈利法克斯","纽约","多伦多","芝加哥","墨西哥城","丹佛","凤凰城","洛杉矶","旧金山","西雅图","温哥华","安克雷奇","檀香山","布里斯班","悉尼","墨尔本","阿德莱德","达尔文","奥克兰"],"en":["UTC","Beijing","Hong Kong","Taipei","Singapore","Kuala Lumpur","Manila","Perth","Tokyo","Seoul","Bangkok","Ho Chi Minh City","Jakarta","Yangon","Dhaka","Kathmandu","New Delhi","Mumbai","Karachi","Tashkent","Dubai","Tehran","Riyadh","Istanbul","Moscow","Nairobi","Cairo","Johannesburg","Athens","Helsinki","Kyiv","Lagos","Paris","Berlin","Madrid","Rome","Amsterdam","Zurich","Stockholm","Warsaw","London","Dublin","Lisbon","Reykjavik","São Paulo","Buenos Aires","St. John's","Halifax","New York","Toronto","Chicago","Mexico City","Denver","Phoenix","Los Angeles","San Francisco","Seattle","Vancouver","Anchorage","Honolulu","Brisbane","Sydney","Melbourne","Adelaide","Darwin","Auckland"],"std":[0,480,480,480,480,480,480,480,540,540,420,420,420,390,360,345,330,330,300,300,240,210,180,180,180,180,120,120,120,120,120,60,60,60,60,60,60,60,60,60,0,0,0,0,-180,-180,-210,-240,-300,-300,-360,-360,-420,-420,-480,-480,-480,-480,-540,-600,600,600,600,570,570,720],"rule":["","","","","","","","","","","","","","","","","","","","","","","","","","","EG","","EU","EU","EU","","EU","EU","EU","EU","EU","EU","EU","EU","EU","EU","EU","","","","US","US","US","US","US","","US","","US","US","US","US","US","","","AU","AU","AU","","NZ"],"cut":[99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999,29892060,99999999,99999999,99999999,99999999,99999999,99999999,99999999,99999999],"cutOff":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-420,0,0,0,0,0,0,0,0],"rules":{"US":[3,2,0,120,11,1,0,60,1],"EU":[3,-1,0,60,10,-1,0,60,0],"AU":[10,1,0,120,4,1,0,120,1],"NZ":[9,-1,0,120,4,1,0,120,1],"EG":[4,-1,5,0,10,-1,4,1380,1]},"def":[["newyork","london","tokyo","sydney"],["london","paris","tokyo","sydney"],["newyork","sanfrancisco","tokyo","singapore"],["newyork","london","singapore","sydney"],["london","newyork","tokyo","singapore"],["newyork","london","tokyo","beijing"]],"cg":{"US":1,"CA":1,"MX":1,"GB":2,"IE":2,"PT":2,"ES":2,"FR":2,"DE":2,"IT":2,"NL":2,"BE":2,"LU":2,"CH":2,"AT":2,"SE":2,"NO":2,"DK":2,"FI":2,"IS":2,"PL":2,"CZ":2,"GR":2,"JP":3,"KR":3,"AU":4,"NZ":4,"SG":5,"MY":5,"TH":5,"VN":5,"ID":5,"PH":5,"IN":5,"PK":5,"BD":5,"AE":5,"SA":5,"IL":5,"TR":5}};
+
+/* 与 clock.df 同一算法(gen_moment_clock.py 的 ref_offset 是第三份,三方对拍见 verify_moment_clock.py)。
+   不用 Intl 的 timeZone:页面与组件必须说同一个时间,哪怕某地改了制 —— 改表时两边一起改。 */
+function clkFl(a,b){ return Math.floor(a/b); }
+function clkA(Y){ return 365*Y+clkFl(Y,4)-clkFl(Y,100)+clkFl(Y,400)-719468; }
+function clkCm(M){ return clkFl(153*(M-3)+2,5); }
+function clkDay(Y,M,N,W){
+  var A=clkA(Y);
+  if (N>0){ var F=A+clkCm(M); return F+((W+7-(F+4)%7)%7)+7*(N-1); }
+  var L=A+clkCm(M+1)-1; return L-(((L+4)%7+7-W)%7);
+}
+function clkOffset(i,u,Y){
+  if (u>=CLK.cut[i]) return CLK.cutOff[i];
+  var std=CLK.std[i], r=CLK.rule[i]; if (!r) return std;
+  var R=CLK.rules[r], s=clkDay(Y,R[0],R[1],R[2])*1440+R[3]-std*R[8], e=clkDay(Y,R[4],R[5],R[6])*1440+R[7]-std*R[8];
+  var on = R[0]>R[4] ? (u>=s||u<e) : (u>=s&&u<e);
+  return std+(on?60:0);
+}
+function clkIdx(id){ var i=CLK.ids.indexOf(String(id||"")); return i; }
+/* 缺省城市:与流同判(国内默认 → 组 0;否则按系统地区)。 */
+function clkDefaults(env){
+  var g = nbCnDefault(env) ? 0 : (CLK.cg[String(env&&env.country||"").toUpperCase()]||0);
+  return CLK.def[g].slice();
+}
+/* 一个城市此刻:{name,time,dd,night,diff,utc,dst} */
+function clkNow(i,lang,nowMs){
+  var now=nowMs||Date.now(), d=new Date(now), u=Math.floor(now/60000);
+  var lOff=-d.getTimezoneOffset(), Y=d.getFullYear();
+  var off=clkOffset(i,u,Y), tw=u+off, td=Math.floor(tw/1440), tm=tw-td*1440, h=Math.floor(tm/60), m=tm-h*60;
+  var lDay=Math.floor((u+lOff)/1440);
+  var dif=off-lOff, ad=Math.abs(dif), dh=Math.floor(ad/60), dm=ad%60, sg=dif>=0?"+":"−";
+  var zh=lang==="zh";
+  var diff = ad===0 ? (zh?"同一时间":"Same time")
+           : zh ? (sg+dh+" 小时"+(dm?" "+dm+" 分":"")) : (sg+dh+"h"+(dm?" "+dm+"m":""));
+  var oa=Math.abs(off), oh=Math.floor(oa/60), om=oa%60;
+  var dst = CLK.rule[i] && u<CLK.cut[i] && off!==CLK.std[i];
+  return { id:CLK.ids[i], name:(zh?CLK.zh[i]:CLK.en[i]), time:(h<10?"0":"")+h+":"+(m<10?"0":"")+m,
+           dd:td-lDay, night:(h<6||h>=18), diff:diff, dst:!!dst, offMin:off,
+           utc:"UTC"+(off>=0?"+":"−")+oh+(om?":"+(om<10?"0":"")+om:"") };
+}
+/* xb:clock end */
+function paintClock(){
+  /* 这一段显示组件缺省会显示的那几个城市(按地区,与 clock.df 同判);选城市、加组件在 /clock。 */
+  var box=document.getElementById("clock"); if(!box || typeof clkNow!=="function") return;
+  var now=Date.now();
+  box.innerHTML=clkDefaults(ENV).map(function(id){
+    var c=clkNow(clkIdx(id),LANG,now), r=c.dd===1?t("tmr"):c.dd===-1?t("yst"):"";
+    return '<div class="crow"><i class="ic'+(c.night?" moon":"")+'"></i><div class="g"><span class="nm">'+esc(c.name)+'</span>'+
+      '<span class="d'+(c.dd?" x":"")+'">'+esc((r?r+" · ":"")+c.diff)+'</span></div><div class="n">'+c.time+'</div></div>';
+  }).join("");
+  document.getElementById("clockSum").textContent=t("clockSum");
+}
 function paintHoli(){
   /* 国内默认看中国节假日,其余看美国节日,段标题写明是哪国的(doc/overseas-first.md §8)。
      HOLI 每行 [日期, 中文名, 英文名],名字按界面语言取。 */
@@ -552,7 +625,7 @@ function paint(){
   /* 右上角「重新读取」圆钮:只画图标(本包无时间可锚),无障碍名随语言。 */
   var fr=document.getElementById("fresh");
   xbAt.set(fr,null); fr.setAttribute("aria-label",t("reload"));
-  paintSegs(); paintList(); paintHead(); paintHoli();
+  paintSegs(); paintList(); paintHead(); paintHoli(); paintClock();
 }
 /* 容器内导航走 xbridge.route(裸 path 会被补成 numable://<self>/page<path>);拿不到桥时回落相对路径 ——
    ⚠️ 这里原本写的是 `xbridge.navigate`:**桥上没有这个方法**(全表只有 route),`if(xbridge.x)` 守卫不报错,
@@ -569,12 +642,13 @@ document.addEventListener("click", function(e){
      (loadList 末尾自带 paintList + paintHead;没有桥时它直接返回,故先画一遍兜底)。
      ⚠️ 判据用 closest 不用 e.target.id —— 按钮里是 xbAt 画的 svg,点在它身上 e.target 不是按钮(G12)。 */
   if (e.target.closest && e.target.closest("#fresh")){
-    paintSegs(); paintHoli(); paintList(); paintHead(); void loadList(); return; }
+    paintSegs(); paintHoli(); paintClock(); paintList(); paintHead(); void loadList(); return; }
   var seg = e.target.closest && e.target.closest("[data-k]");
   if (seg){ go("/span","?k="+encodeURIComponent(seg.dataset.k)); return; }
   var row = e.target.closest && e.target.closest("[data-id]");
   if (row){ go("/count","?id="+encodeURIComponent(row.dataset.id)); return; }
   if (e.target.closest && e.target.closest("#toCount")){ go("/count",""); return; }
+  if (e.target.closest && e.target.closest("#toClock")){ go("/clock",""); return; }
   /* 加卡入口 = **一个按钮**(§8.1a)。⚠️ 这里**不带 params**:首页没有「当前这一个倒数日」
      (配置器已经搬走),硬塞一个默认日期进去就是替用户回答他还没做的选择。
      带日期的加卡入口在 `/count` —— 那一页讲的就是他刚填的那个日子。
@@ -595,6 +669,7 @@ var ENV={};
   applyTheme(ENV.theme || de.getAttribute("data-theme") || undefined);
   LANG=nbLang(ENV.language||ENV.locale);
   paint();
+  setInterval(paintClock, 20000);   /* 世界时钟一段每 20 秒重算(只重画这一段) */
   await loadList();
 })();
 </script>
