@@ -1,0 +1,706 @@
+{
+  "_note": "生成器 tools/infosource/gen_headlines.py(v2ex 聚合)。只取标签 / 节点与数字,不进标题与正文。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "tzNow",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "action": "request",
+      "id": "resp",
+      "params": {
+        "url": "https://www.v2ex.com/api/topics/hot.json",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp[0].title}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "v2ex_unreachable"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${tzNow},HH:mm)]"
+      },
+      "_note": "榜单没有「数据时间」字段,用取数时刻兜底(标准 §4.4)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dRx",
+        "value": "[^a-z0-9~@]"
+      },
+      "_note": "键里的正则特殊字符(`.` `+` …)统一换成 `_`,blob 与候选两边同换。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSg",
+        "value": [
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[0].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[1].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[2].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[3].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[4].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[5].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[6].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[7].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[8].node.name},~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,${resp[9].node.name},~)),${dRx},_)]"
+        ]
+      },
+      "_note": "每条的节点段「~programmer~」;按节点英文 id 计数,显示名中文界面用中文、其余用英文名(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dBl",
+        "value": "$[connect::(@,join::(${dSg},),@)]"
+      },
+      "_note": "全部段拼成一串;两端 `@` 哨兵不能省(split 丢首尾空段)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCk",
+        "value": [
+          "$[replaceAll::(toLowerCase::(${resp[0].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[1].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[2].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[3].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[4].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[5].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[6].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[7].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[8].node.name}),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(${resp[9].node.name}),${dRx},_)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dLb",
+        "value": [
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[0].node.title},findNotEmpty::(${resp[0].node.title_alternative},${resp[0].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[1].node.title},findNotEmpty::(${resp[1].node.title_alternative},${resp[1].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[2].node.title},findNotEmpty::(${resp[2].node.title_alternative},${resp[2].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[3].node.title},findNotEmpty::(${resp[3].node.title_alternative},${resp[3].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[4].node.title},findNotEmpty::(${resp[4].node.title_alternative},${resp[4].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[5].node.title},findNotEmpty::(${resp[5].node.title_alternative},${resp[5].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[6].node.title},findNotEmpty::(${resp[6].node.title_alternative},${resp[6].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[7].node.title},findNotEmpty::(${resp[7].node.title_alternative},${resp[7].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[8].node.title},findNotEmpty::(${resp[8].node.title_alternative},${resp[8].node.title})),)]",
+          "$[findNotEmpty::(if::(startsWith::(${@app.language},zh),${resp[9].node.title},findNotEmpty::(${resp[9].node.title_alternative},${resp[9].node.title})),)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCt",
+        "value": [
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},0),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},0),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},1),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},1),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},2),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},2),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},3),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},3),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},4),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},4),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},5),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},5),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},6),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},6),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},7),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},7),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},8),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},8),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},9),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},9),~)))-1))]"
+        ]
+      },
+      "_note": "每个候选出现了几次;空候选记 -1。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "@"
+      },
+      "_note": "已选中的键「~a~~b~」:后一轮把它们排除掉(contains 一次判完,不必逐个比)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM0",
+        "value": "$[max::(${dCt})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI0s",
+        "value": [
+          "$[if::(eq::(index::(${dCt},0),${dM0}),0,999)]",
+          "$[if::(eq::(index::(${dCt},1),${dM0}),1,999)]",
+          "$[if::(eq::(index::(${dCt},2),${dM0}),2,999)]",
+          "$[if::(eq::(index::(${dCt},3),${dM0}),3,999)]",
+          "$[if::(eq::(index::(${dCt},4),${dM0}),4,999)]",
+          "$[if::(eq::(index::(${dCt},5),${dM0}),5,999)]",
+          "$[if::(eq::(index::(${dCt},6),${dM0}),6,999)]",
+          "$[if::(eq::(index::(${dCt},7),${dM0}),7,999)]",
+          "$[if::(eq::(index::(${dCt},8),${dM0}),8,999)]",
+          "$[if::(eq::(index::(${dCt},9),${dM0}),9,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI0",
+        "value": "$[min::(${dI0s})]"
+      },
+      "_note": "并列时取靠前的(原列表按热度排,靠前 = 更热)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI0}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn0",
+        "value": "$[if::(ge::(${dM0},1),index::(${dLb},${dI0}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc0",
+        "value": "$[if::(ge::(${dM0},1),round::(${dM0}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW0",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[0].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[1].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[2].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[3].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[4].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[5].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[6].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[7].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[8].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp[9].replies},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds0",
+        "value": "$[if::(ge::(${dM0},1),round::(sum::(${dW0})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSc1",
+        "value": [
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},0),~)),-1,index::(${dCt},0))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},1),~)),-1,index::(${dCt},1))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},2),~)),-1,index::(${dCt},2))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},3),~)),-1,index::(${dCt},3))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},4),~)),-1,index::(${dCt},4))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},5),~)),-1,index::(${dCt},5))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},6),~)),-1,index::(${dCt},6))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},7),~)),-1,index::(${dCt},7))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},8),~)),-1,index::(${dCt},8))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},9),~)),-1,index::(${dCt},9))]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM1",
+        "value": "$[max::(${dSc1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI1s",
+        "value": [
+          "$[if::(eq::(index::(${dSc1},0),${dM1}),0,999)]",
+          "$[if::(eq::(index::(${dSc1},1),${dM1}),1,999)]",
+          "$[if::(eq::(index::(${dSc1},2),${dM1}),2,999)]",
+          "$[if::(eq::(index::(${dSc1},3),${dM1}),3,999)]",
+          "$[if::(eq::(index::(${dSc1},4),${dM1}),4,999)]",
+          "$[if::(eq::(index::(${dSc1},5),${dM1}),5,999)]",
+          "$[if::(eq::(index::(${dSc1},6),${dM1}),6,999)]",
+          "$[if::(eq::(index::(${dSc1},7),${dM1}),7,999)]",
+          "$[if::(eq::(index::(${dSc1},8),${dM1}),8,999)]",
+          "$[if::(eq::(index::(${dSc1},9),${dM1}),9,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI1",
+        "value": "$[min::(${dI1s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI1}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn1",
+        "value": "$[if::(ge::(${dM1},1),index::(${dLb},${dI1}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc1",
+        "value": "$[if::(ge::(${dM1},1),round::(${dM1}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW1",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[0].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[1].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[2].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[3].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[4].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[5].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[6].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[7].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[8].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp[9].replies},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds1",
+        "value": "$[if::(ge::(${dM1},1),round::(sum::(${dW1})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSc2",
+        "value": [
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},0),~)),-1,index::(${dCt},0))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},1),~)),-1,index::(${dCt},1))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},2),~)),-1,index::(${dCt},2))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},3),~)),-1,index::(${dCt},3))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},4),~)),-1,index::(${dCt},4))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},5),~)),-1,index::(${dCt},5))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},6),~)),-1,index::(${dCt},6))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},7),~)),-1,index::(${dCt},7))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},8),~)),-1,index::(${dCt},8))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},9),~)),-1,index::(${dCt},9))]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM2",
+        "value": "$[max::(${dSc2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI2s",
+        "value": [
+          "$[if::(eq::(index::(${dSc2},0),${dM2}),0,999)]",
+          "$[if::(eq::(index::(${dSc2},1),${dM2}),1,999)]",
+          "$[if::(eq::(index::(${dSc2},2),${dM2}),2,999)]",
+          "$[if::(eq::(index::(${dSc2},3),${dM2}),3,999)]",
+          "$[if::(eq::(index::(${dSc2},4),${dM2}),4,999)]",
+          "$[if::(eq::(index::(${dSc2},5),${dM2}),5,999)]",
+          "$[if::(eq::(index::(${dSc2},6),${dM2}),6,999)]",
+          "$[if::(eq::(index::(${dSc2},7),${dM2}),7,999)]",
+          "$[if::(eq::(index::(${dSc2},8),${dM2}),8,999)]",
+          "$[if::(eq::(index::(${dSc2},9),${dM2}),9,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI2",
+        "value": "$[min::(${dI2s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI2}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn2",
+        "value": "$[if::(ge::(${dM2},1),index::(${dLb},${dI2}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc2",
+        "value": "$[if::(ge::(${dM2},1),round::(${dM2}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW2",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[0].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[1].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[2].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[3].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[4].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[5].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[6].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[7].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[8].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp[9].replies},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds2",
+        "value": "$[if::(ge::(${dM2},1),round::(sum::(${dW2})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSc3",
+        "value": [
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},0),~)),-1,index::(${dCt},0))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},1),~)),-1,index::(${dCt},1))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},2),~)),-1,index::(${dCt},2))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},3),~)),-1,index::(${dCt},3))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},4),~)),-1,index::(${dCt},4))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},5),~)),-1,index::(${dCt},5))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},6),~)),-1,index::(${dCt},6))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},7),~)),-1,index::(${dCt},7))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},8),~)),-1,index::(${dCt},8))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},9),~)),-1,index::(${dCt},9))]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM3",
+        "value": "$[max::(${dSc3})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI3s",
+        "value": [
+          "$[if::(eq::(index::(${dSc3},0),${dM3}),0,999)]",
+          "$[if::(eq::(index::(${dSc3},1),${dM3}),1,999)]",
+          "$[if::(eq::(index::(${dSc3},2),${dM3}),2,999)]",
+          "$[if::(eq::(index::(${dSc3},3),${dM3}),3,999)]",
+          "$[if::(eq::(index::(${dSc3},4),${dM3}),4,999)]",
+          "$[if::(eq::(index::(${dSc3},5),${dM3}),5,999)]",
+          "$[if::(eq::(index::(${dSc3},6),${dM3}),6,999)]",
+          "$[if::(eq::(index::(${dSc3},7),${dM3}),7,999)]",
+          "$[if::(eq::(index::(${dSc3},8),${dM3}),8,999)]",
+          "$[if::(eq::(index::(${dSc3},9),${dM3}),9,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI3",
+        "value": "$[min::(${dI3s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI3}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn3",
+        "value": "$[if::(ge::(${dM3},1),index::(${dLb},${dI3}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc3",
+        "value": "$[if::(ge::(${dM3},1),round::(${dM3}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW3",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[0].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[1].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[2].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[3].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[4].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[5].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[6].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[7].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[8].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp[9].replies},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds3",
+        "value": "$[if::(ge::(${dM3},1),round::(sum::(${dW3})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSc4",
+        "value": [
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},0),~)),-1,index::(${dCt},0))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},1),~)),-1,index::(${dCt},1))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},2),~)),-1,index::(${dCt},2))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},3),~)),-1,index::(${dCt},3))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},4),~)),-1,index::(${dCt},4))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},5),~)),-1,index::(${dCt},5))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},6),~)),-1,index::(${dCt},6))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},7),~)),-1,index::(${dCt},7))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},8),~)),-1,index::(${dCt},8))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},9),~)),-1,index::(${dCt},9))]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM4",
+        "value": "$[max::(${dSc4})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI4s",
+        "value": [
+          "$[if::(eq::(index::(${dSc4},0),${dM4}),0,999)]",
+          "$[if::(eq::(index::(${dSc4},1),${dM4}),1,999)]",
+          "$[if::(eq::(index::(${dSc4},2),${dM4}),2,999)]",
+          "$[if::(eq::(index::(${dSc4},3),${dM4}),3,999)]",
+          "$[if::(eq::(index::(${dSc4},4),${dM4}),4,999)]",
+          "$[if::(eq::(index::(${dSc4},5),${dM4}),5,999)]",
+          "$[if::(eq::(index::(${dSc4},6),${dM4}),6,999)]",
+          "$[if::(eq::(index::(${dSc4},7),${dM4}),7,999)]",
+          "$[if::(eq::(index::(${dSc4},8),${dM4}),8,999)]",
+          "$[if::(eq::(index::(${dSc4},9),${dM4}),9,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI4",
+        "value": "$[min::(${dI4s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI4}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn4",
+        "value": "$[if::(ge::(${dM4},1),index::(${dLb},${dI4}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc4",
+        "value": "$[if::(ge::(${dM4},1),round::(${dM4}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW4",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[0].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[1].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[2].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[3].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[4].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[5].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[6].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[7].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[8].replies},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp[9].replies},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds4",
+        "value": "$[if::(ge::(${dM4},1),round::(sum::(${dW4})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dK",
+        "value": "$[calc::(if::(ge::(${dM0},1),1,0)+if::(ge::(${dM1},1),1,0)+if::(ge::(${dM2},1),1,0)+if::(ge::(${dM3},1),1,0)+if::(ge::(${dM4},1),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSs",
+        "value": [
+          "$[findNotEmpty::(${ds0},0)]",
+          "$[findNotEmpty::(${ds1},0)]",
+          "$[findNotEmpty::(${ds2},0)]",
+          "$[findNotEmpty::(${ds3},0)]",
+          "$[findNotEmpty::(${ds4},0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSx",
+        "value": "$[max::(calc::(max::(${dSs})),1)]"
+      },
+      "_note": "条按权重合计归一(第 1 名按条数排,不一定权重最大)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db0",
+        "value": "$[if::(ge::(${dM0},1),parseNumber::(max::(calc::(findNotEmpty::(${ds0},0)/${dSx}*134.0),6),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db1",
+        "value": "$[if::(ge::(${dM1},1),parseNumber::(max::(calc::(findNotEmpty::(${ds1},0)/${dSx}*134.0),6),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db2",
+        "value": "$[if::(ge::(${dM2},1),parseNumber::(max::(calc::(findNotEmpty::(${ds2},0)/${dSx}*134.0),6),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db3",
+        "value": "$[if::(ge::(${dM3},1),parseNumber::(max::(calc::(findNotEmpty::(${ds3},0)/${dSx}*134.0),6),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db4",
+        "value": "$[if::(ge::(${dM4},1),parseNumber::(max::(calc::(findNotEmpty::(${ds4},0)/${dSx}*134.0),6),0.0),)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "dK",
+          "dn0",
+          "dc0",
+          "ds0",
+          "db0",
+          "dn1",
+          "dc1",
+          "ds1",
+          "db1",
+          "dn2",
+          "dc2",
+          "ds2",
+          "db2",
+          "dn3",
+          "dc3",
+          "ds3",
+          "db3",
+          "dn4",
+          "dc4",
+          "ds4",
+          "db4"
+        ]
+      }
+    }
+  ]
+}
