@@ -115,6 +115,7 @@ html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
 
 .mine .row{padding-right:0;cursor:pointer}
 #seg button{padding:0 3px;font-size:12.5px}   /* 五个生态挤一排(2026-10-09 加了 Docker / Homebrew) */
+.mine .off{color:var(--sub);font-size:11.5px;white-space:nowrap}
 .ib{flex:0 0 44px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--sub);border-radius:10px}
 .ib:disabled{opacity:.25}
 .mine .row .ib+.ib{margin-left:-8px}
@@ -160,11 +161,13 @@ i18n({
   zh: { notX: "请在 Numable 里打开这个页面",
     wan: "万", yi: "亿", vsWk: "较上周", flat: "与上周持平", flatS: "持平", noCmp: "上周没有下载",
     fail: "获取数据失败，显示的是上次的数据", failCold: "暂时取不到数据，请稍后点右上角的日期重试",
-    notFound: "找不到这个开源包，请检查名称", ago: "%s 天前", today: "今天" },
+    notFound: "找不到这个开源包，请检查名称", ago: "%s 天前", today: "今天",
+    offT: "当前地区不提供", offD: "当前地区不提供 Docker Hub 的数据。" },
   en: { notX: "Open this page in Numable",
     vsWk: "vs prev week", flat: "Flat vs prev week", flatS: "Flat", noCmp: "No downloads last week",
     fail: "Couldn't update. Showing the last data", failCold: "Couldn't get data right now. Tap the date to retry",
-    notFound: "Package not found. Check the name", ago: "%sd ago", today: "today" }
+    notFound: "Package not found. Check the name", ago: "%sd ago", today: "today",
+    offT: "Not available in your region", offD: "Docker Hub data isn't available in your region." }
 });
 function t(k, a) { var s = I18N[LANG] && I18N[LANG][k]; if (s == null) s = I18N.en[k]; if (s == null) s = k;
   if (a != null) s = String(s).replace("%s", a); return s; }
@@ -190,8 +193,19 @@ function haptic(k) { try { xbridge.haptic(k || "selection"); } catch (e) {} }
 function go(path) { haptic(); try { xbridge.route("numable://self/page" + path); } catch (e) {} }
 function openUrl(u) { haptic(); try { xbridge.route(u); } catch (e) {} }
 
+/* ── 大陆不提供 Docker(2026-10-10,doc/pkgstats-infosource.md §7)──
+   hub.docker.com 在大陆打不开。判据只认分发地区 region === "cn"(取不到 = 按海外照常取,与 stock 快讯、组件流同一口径);
+   appInfo 不带 region 的宿主跑一次 env 流(零网络)补上。大陆:不给 Docker 分段、不发 Docker 请求,
+   已关注的 Docker 镜像照常列出、标「当前地区不提供」—— 关注一个不删。 */
+var REGION = "";
+function dkOff(e) { return REGION === "cn" && e === "docker"; }
+async function bootRegion(d) { var r = d && d.region;
+  if (r == null || r === "") { try { var ev = await call(xbridge.runDataFlow("env", {}, 5000)); r = ev && ev.rg; } catch (x) { r = ""; } }
+  REGION = String(r || ""); }
+
 async function bootEnv(onChange) {
   var de = document.documentElement, d = await nbInfo();
+  await bootRegion(d);
   if (!de.getAttribute("data-theme") && d.theme) de.setAttribute("data-theme", d.theme === "dark" ? "dark" : "light");
   LANG = nbLang(d.language || d.locale);
   de.lang = LANG === "zh" ? "zh-CN" : "en"; paintI18n();
@@ -267,6 +281,7 @@ async function series(e, n, long) {
 }
 /* Docker Hub / Homebrew:一次取回就是全部数字(没有序列)。404:Docker 回 {message},Homebrew 回网页(解析失败)→ notfound。 */
 async function nsModel(e, n) {
+  if (dkOff(e)) throw new Error("regionoff");
   if (e === "docker") {
     var j = await retry(function () { return rawJ("docker", "repositories/" + dRepo(n) + "/"); });
     if (!j || !j.name) throw new Error("notfound");
@@ -323,6 +338,7 @@ function dkVer(tags) { var out = [], seen = {};
    npm 不做发布记录:带时间的版本表只在完整文档里,react 一份 2.9MB,为一个列表每天拉它不值当。 */
 function isRel(v) { return /^\d+(\.\d+)*$/.test(String(v || "")); }
 async function meta(e, n, withHist) {
+  if (dkOff(e)) throw new Error("regionoff");
   if (e === "docker") {
     var dj = await retry(function () { return rawJ("docker", "repositories/" + dRepo(n) + "/"); }), dh = [];
     try { var tg = await rawJ("docker", "repositories/" + dRepo(n) + "/tags?page_size=" + (withHist ? 25 : 10) + "&ordering=last_updated");
@@ -436,6 +452,7 @@ async function doSearch(e, kw) {
       d: x.description || "", dl: x.recent_downloads != null ? t("r90", cmp(x.recent_downloads)) : "" }; });
     return b.length ? b : t("noResE", kw).replace("%e", "crates.io");
   }
+  if (dkOff(e)) return t("offT");   /* 大陆不给 Docker 分段;这里只是兜底,不发请求 */
   if (e === "docker") {
     /* Docker Hub 搜索:官方镜像的 repo_name 不带 library/(redis),用户仓库带命名空间(bitnami/redis) */
     var dj = await rawJ("docker", "search/repositories/?query=" + encodeURIComponent(kw) + "&page_size=12");
@@ -495,7 +512,8 @@ i18n({
 });
 var S = { e: "npm", wl: [], res: null, seq: 0 };
 function paintTop() {
-  [].forEach.call($("seg").children, function (b) { b.className = b.getAttribute("data-e") === S.e ? "on" : ""; });
+  [].forEach.call($("seg").children, function (b) { var de = b.getAttribute("data-e");
+    b.className = de === S.e ? "on" : ""; b.hidden = dkOff(de); });   /* 大陆不给 Docker 分段 */
   $("hint").textContent = t(HINT[S.e] || "hintNpm");
   $("mineN").textContent = t("nMine", S.wl.length).replace("%s", WL_MAX);
 }
@@ -512,7 +530,7 @@ function paintMine() {
   if (!S.wl.length) { $("mine").innerHTML = '<div class="state">' + esc(t("emptyMine")) + "</div>"; return; }
   $("mine").innerHTML = '<div class="list mine">' + S.wl.map(function (x, i) {
     return '<div class="row it" data-e="' + esc(x.e) + '" data-n="' + esc(x.n) + '" data-x="' + i + '"><div class="l"><b>' + esc(x.n) +
-      '</b><div class="m"><span class="eco">' + esc(ECO[x.e]) + "</span></div></div>" +
+      '</b><div class="m"><span class="eco">' + esc(ECO[x.e]) + "</span>" + (dkOff(x.e) ? '<span class="off">' + esc(t("offT")) + "</span>" : "") + "</div></div>" +
       '<button class="ib" type="button" data-a="up" aria-label="' + esc(t("up")) + '"' + (i === 0 ? " disabled" : "") + ">" + USVG + "</button>" +
       '<button class="ib" type="button" data-a="rm" aria-label="' + esc(t("rm")) + '">' + XSVG + "</button></div>";
   }).join("") + "</div>";

@@ -51,9 +51,9 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Hugging Face Papers](tools/hfpapers) · HF 每日论文 | `hfpapers` | 10 | public API · 公开接口 | `huggingface.co` |
 | [Ledger](tools/ledger) · 记账 | `ledger` | 1 | offline · 不联网 | — |
 | [Lobsters](tools/lobsters) · Lobsters | `lobsters` | 10 | public API · 公开接口 | `lobste.rs` |
-| [Time Progress](tools/moment) · 时间进度 | `moment` | 53 | offline · 不联网 | — |
+| [Time Progress](tools/moment) · 时间进度 | `moment` | 54 | offline · 不联网 | — |
 | [Dose Log](tools/pill) · 服药记录 | `pill` | 46 | offline · 不联网 | — |
-| [Package Stats](tools/pkgstats) · 开源包下载量 | `pkgstats` | 17 | public API · 公开接口 | `api.npmjs.org` `registry.npmjs.org` `pypistats.org` `pypi.org` `crates.io` `hub.docker.com` `formulae.brew.sh` |
+| [Package Stats](tools/pkgstats) · 开源包下载量 | `pkgstats` | 18 | public API · 公开接口 | `api.npmjs.org` `registry.npmjs.org` `pypistats.org` `pypi.org` `crates.io` `hub.docker.com` `formulae.brew.sh` |
 | [Rates](tools/rates) · 利率 | `rates` | 5 | public API · 公开接口 | `home.treasury.gov` `www.mof.go.jp` `api.statistiken.bundesbank.de` `yield.chinabond.com.cn` `stats.bis.org` |
 | [Release Watch](tools/releases) · 开源项目发布 | `releases` | 13 | public API · 公开接口 | `github.com` |
 | [SEC Filings](tools/secfilings) · 美股公告 | `secfilings` | 14 | public API · 公开接口 | `www.sec.gov` |

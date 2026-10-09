@@ -92,6 +92,28 @@
     {
       "op": "set",
       "props": {
+        "key": "rgCn",
+        "value": "$[if::(eq::(${@app.region},cn),1,0)]"
+      },
+      "_note": "大陆(@app.region = cn)不提供 Docker Hub:hub.docker.com 在大陆打不开,发了也只会挂到超时。地区取不到(老宿主 / Win)为空 → 按海外照常取(与 stock 快讯、weather 的 nominatim 同一口径)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dOff",
+        "value": "$[if::(eq::(${isD},1),${rgCn},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dGo",
+        "value": "$[if::(eq::(${isD},1),if::(eq::(${rgCn},1),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
         "key": "isN",
         "value": "$[if::(eq::(${isC},1),0,if::(eq::(${isP},1),0,if::(eq::(${isS},1),1,0)))]"
       },
@@ -291,7 +313,7 @@
     {
       "op": "if",
       "props": {
-        "val": "${isD}"
+        "val": "${dGo}"
       },
       "items": [
         {
@@ -335,7 +357,7 @@
     {
       "op": "if",
       "props": {
-        "val": "$[if::(eq::(${isD},1),if::(eq::(${vIn},1),1,0),0)]"
+        "val": "$[if::(eq::(${dGo},1),if::(eq::(${vIn},1),1,0),0)]"
       },
       "items": [
         {
@@ -370,8 +392,9 @@
       "op": "set",
       "props": {
         "key": "miss",
-        "value": "$[if::(eq::(${isS},0),if::(eq::(${isD},1),if::(gt::(length::(${rD.name}),0),0,1),if::(gt::(length::(${rH.generated_date}),0),0,1)),if::(eq::(${isN},1),if::(gt::(length::(${rN.downloads}),0),0,1),if::(eq::(${isP},1),if::(gt::(length::(${rP.data}),0),0,1),if::(gt::(length::(${rC.meta.extra_downloads}),0),0,1))))]"
-      }
+        "value": "$[if::(eq::(${dOff},1),0,if::(eq::(${isS},0),if::(eq::(${isD},1),if::(gt::(length::(${rD.name}),0),0,1),if::(gt::(length::(${rH.generated_date}),0),0,1)),if::(eq::(${isN},1),if::(gt::(length::(${rN.downloads}),0),0,1),if::(eq::(${isP},1),if::(gt::(length::(${rP.data}),0),0,1),if::(gt::(length::(${rC.meta.extra_downloads}),0),0,1)))))]"
+      },
+      "_note": "大陆的 Docker(dOff)本来就不取,不算没拿到、不等 1.5 秒。"
     },
     {
       "op": "if",
@@ -450,7 +473,7 @@
         {
           "op": "if",
           "props": {
-            "val": "${isD}"
+            "val": "${dGo}"
           },
           "items": [
             {
@@ -714,7 +737,7 @@
     {
       "op": "if",
       "props": {
-        "val": "$[if::(eq::(${ok},1),0,1)]"
+        "val": "$[if::(if::(eq::(${ok},1),1,${dOff}),0,1)]"
       },
       "items": [
         {
@@ -724,7 +747,7 @@
           }
         }
       ],
-      "_note": "主干 = 数据截至日。包不存在(npm 回 error 体 / PyPI 404 / crates 404)、被限流、网络失败,都会让它为空 → 抛错,平台回落上次成功的数据,不渲一份空的上去。"
+      "_note": "主干 = 数据截至日。包不存在(npm 回 error 体 / PyPI 404 / crates 404)、被限流、网络失败,都会让它为空 → 抛错,平台回落上次成功的数据,不渲一份空的上去。大陆的 Docker(dOff=1)例外:不取数是确定的状态,流成功、kind=o,组件画「当前地区不提供」(抛错的话平台只会回落旧数据或一直空着)。"
     },
     {
       "op": "set",
@@ -3332,9 +3355,9 @@
       "op": "set",
       "props": {
         "key": "kind",
-        "value": "$[if::(eq::(${isD},1),d,if::(eq::(${isH},1),b,s))]"
+        "value": "$[if::(eq::(${dOff},1),o,if::(eq::(${isD},1),d,if::(eq::(${isH},1),b,s)))]"
       },
-      "_note": "表现档:s = 逐日序列(npm / PyPI / crates.io)· d = Docker Hub(累计拉取)· b = Homebrew(30 / 90 / 365 天安装)。"
+      "_note": "表现档:s = 逐日序列(npm / PyPI / crates.io)· d = Docker Hub(累计拉取)· b = Homebrew(30 / 90 / 365 天安装)· o = 大陆的 Docker Hub(不取数,组件画「当前地区不提供」)。"
     },
     {
       "op": "set",

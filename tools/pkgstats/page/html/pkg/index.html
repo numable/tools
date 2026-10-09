@@ -250,6 +250,7 @@ html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
 .wst .ok{flex:1 1 auto;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
 .wst .ok i{font-style:normal;color:var(--src);font-weight:700}
 .wst button{flex:0 0 auto;color:var(--sub);font-size:13px;padding:0 10px;min-height:40px}
+.hero .big.off{font-size:24px;letter-spacing:0}
 </style>
 <header class="hd"><div class="tx"><h1 id="nm">--</h1><div class="sub" id="sub"></div></div>
   <button class="xb-at" id="at" type="button"></button></header>
@@ -266,8 +267,8 @@ html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
   <div class="warn" id="zw" hidden></div>
 </section>
 <section class="tiles" id="tiles"></section>
-<div class="sec"><span data-i="verT"></span><span class="v" id="verAgo"></span></div>
-<section class="card pad ver"><div class="vv" id="vv">--</div><div class="vd" id="vd"></div><div class="ds" id="ds" hidden></div></section>
+<div class="sec" id="verS"><span data-i="verT"></span><span class="v" id="verAgo"></span></div>
+<section class="card pad ver" id="verC"><div class="vv" id="vv">--</div><div class="vd" id="vd"></div><div class="ds" id="ds" hidden></div></section>
 <div id="histW" hidden><div class="sec"><span data-i="histT"></span></div>
 <section class="list hist" id="hist"></section></div>
 <div id="linksW"><div class="sec"><span data-i="linksT"></span></div>
@@ -308,11 +309,13 @@ i18n({
   zh: { notX: "请在 Numable 里打开这个页面",
     wan: "万", yi: "亿", vsWk: "较上周", flat: "与上周持平", flatS: "持平", noCmp: "上周没有下载",
     fail: "获取数据失败，显示的是上次的数据", failCold: "暂时取不到数据，请稍后点右上角的日期重试",
-    notFound: "找不到这个开源包，请检查名称", ago: "%s 天前", today: "今天" },
+    notFound: "找不到这个开源包，请检查名称", ago: "%s 天前", today: "今天",
+    offT: "当前地区不提供", offD: "当前地区不提供 Docker Hub 的数据。" },
   en: { notX: "Open this page in Numable",
     vsWk: "vs prev week", flat: "Flat vs prev week", flatS: "Flat", noCmp: "No downloads last week",
     fail: "Couldn't update. Showing the last data", failCold: "Couldn't get data right now. Tap the date to retry",
-    notFound: "Package not found. Check the name", ago: "%sd ago", today: "today" }
+    notFound: "Package not found. Check the name", ago: "%sd ago", today: "today",
+    offT: "Not available in your region", offD: "Docker Hub data isn't available in your region." }
 });
 function t(k, a) { var s = I18N[LANG] && I18N[LANG][k]; if (s == null) s = I18N.en[k]; if (s == null) s = k;
   if (a != null) s = String(s).replace("%s", a); return s; }
@@ -338,8 +341,19 @@ function haptic(k) { try { xbridge.haptic(k || "selection"); } catch (e) {} }
 function go(path) { haptic(); try { xbridge.route("numable://self/page" + path); } catch (e) {} }
 function openUrl(u) { haptic(); try { xbridge.route(u); } catch (e) {} }
 
+/* ── 大陆不提供 Docker(2026-10-10,doc/pkgstats-infosource.md §7)──
+   hub.docker.com 在大陆打不开。判据只认分发地区 region === "cn"(取不到 = 按海外照常取,与 stock 快讯、组件流同一口径);
+   appInfo 不带 region 的宿主跑一次 env 流(零网络)补上。大陆:不给 Docker 分段、不发 Docker 请求,
+   已关注的 Docker 镜像照常列出、标「当前地区不提供」—— 关注一个不删。 */
+var REGION = "";
+function dkOff(e) { return REGION === "cn" && e === "docker"; }
+async function bootRegion(d) { var r = d && d.region;
+  if (r == null || r === "") { try { var ev = await call(xbridge.runDataFlow("env", {}, 5000)); r = ev && ev.rg; } catch (x) { r = ""; } }
+  REGION = String(r || ""); }
+
 async function bootEnv(onChange) {
   var de = document.documentElement, d = await nbInfo();
+  await bootRegion(d);
   if (!de.getAttribute("data-theme") && d.theme) de.setAttribute("data-theme", d.theme === "dark" ? "dark" : "light");
   LANG = nbLang(d.language || d.locale);
   de.lang = LANG === "zh" ? "zh-CN" : "en"; paintI18n();
@@ -415,6 +429,7 @@ async function series(e, n, long) {
 }
 /* Docker Hub / Homebrew:一次取回就是全部数字(没有序列)。404:Docker 回 {message},Homebrew 回网页(解析失败)→ notfound。 */
 async function nsModel(e, n) {
+  if (dkOff(e)) throw new Error("regionoff");
   if (e === "docker") {
     var j = await retry(function () { return rawJ("docker", "repositories/" + dRepo(n) + "/"); });
     if (!j || !j.name) throw new Error("notfound");
@@ -471,6 +486,7 @@ function dkVer(tags) { var out = [], seen = {};
    npm 不做发布记录:带时间的版本表只在完整文档里,react 一份 2.9MB,为一个列表每天拉它不值当。 */
 function isRel(v) { return /^\d+(\.\d+)*$/.test(String(v || "")); }
 async function meta(e, n, withHist) {
+  if (dkOff(e)) throw new Error("regionoff");
   if (e === "docker") {
     var dj = await retry(function () { return rawJ("docker", "repositories/" + dRepo(n) + "/"); }), dh = [];
     try { var tg = await rawJ("docker", "repositories/" + dRepo(n) + "/tags?page_size=" + (withHist ? 25 : 10) + "&ordering=last_updated");
@@ -696,7 +712,16 @@ function paintWatch() { var on = wlHas(S.wl, E, N);
   $("watchW").innerHTML = on ? '<div class="card wst"><span class="ok"><i>✓</i>' + esc(t("watchOn")) + '</span><button type="button" id="unw">' + esc(t("unwatch")) + "</button></div>"
     : '<button class="watch" type="button" id="dow">' + esc(t("watchAdd")) + "</button>";
   var pt = document.querySelector('#pickw [data-i="pickT"]'); if (pt) pt.textContent = t("pickT", N); }
-function paintAll() { paintHead(); paintHero(); paintChart(); paintTiles(); paintMeta(); paintWatch(); }
+/* 大陆的 Docker(dkOff):不取数,整页只说明一句;关注 / 取消关注照常(关注一个不删)。
+   链接也不给 —— hub.docker.com 在大陆同样打不开。 */
+function paintOff() {
+  $("nm").textContent = N; $("sub").textContent = ECO[E]; xbAt.set("at", null, { day: 1 });
+  $("hk").hidden = true; $("big").textContent = t("offT"); $("big").className = "big off";
+  $("pc").hidden = true; $("pcs").textContent = t("offD");
+  ["chartW", "tiles", "verS", "verC", "histW", "linksW", "pickw", "foot"].forEach(function (id) { var el = $(id); if (el) el.hidden = true; });
+  paintWatch();
+}
+function paintAll() { if (dkOff(E)) return paintOff(); paintHead(); paintHero(); paintChart(); paintTiles(); paintMeta(); paintWatch(); }
 
 async function loadSeries(force) {
   var k = ckey("90", E, N), c = force ? null : await cacheGet(k);
@@ -735,7 +760,7 @@ async function setWatch(on) {
   if (!N) { paintAll(); $("sub").textContent = t("noPkg"); $("watchW").hidden = true; $("pickw").hidden = true;
     $("linksW").hidden = true; $("foot").hidden = true; return; }
   paintAll();
-  $("at").onclick = function () { haptic(); refresh(true); };
+  $("at").onclick = function () { haptic(); if (!dkOff(E)) refresh(true); };
   $("seg").onclick = function (e) { var b = e.target.closest("button"); if (!b) return; haptic();
     S.r = +b.getAttribute("data-r"); S.sel = -1;
     [].forEach.call($("seg").children, function (x) { x.className = x === b ? "on" : ""; }); paintChart(); };
@@ -746,7 +771,7 @@ async function setWatch(on) {
   $("watchW").onclick = function (e) { var b = e.target.closest("button"); if (!b) return; setWatch(b.id === "dow"); };
   $("pickw").onclick = function () { haptic(); var p = { eco: E, pkg: N };
     xbridge.pickWidgets([{ id: "pkg", params: p }, { id: "release", params: p }, { id: "trend", params: p }, { id: "detail", params: p }]); };
-  refresh(false);
+  if (!dkOff(E)) refresh(false);
 })();
 </script>
 
