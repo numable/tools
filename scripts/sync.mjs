@@ -72,7 +72,7 @@ for (const w of whitelist) {
   index.push(entry);
   const dir = join(TOOLS_DIR, w.domain);
   if (prev?.sha256 === b.sha256 && existsSync(dir)) continue;
-  changes.push(prev ? `${w.domain} v${prev.version} → v${b.version}` : `${w.domain} v${b.version} (new)`);
+  changes.push(!prev ? `${w.domain} v${b.version} (new)` : prev.sha256 === b.sha256 ? `${w.domain} v${b.version} restored` : `${w.domain} v${prev.version} → v${b.version}`);
   if (DRY) continue;
 
   const res = await fetch(b.bundleUrl);
