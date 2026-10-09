@@ -1,0 +1,110 @@
+{
+  "type": "page",
+  "id": "air-detail",
+  "_note": "城市详情:当前 AQI 与建议 → 48 小时逐时 → 各项污染物 → 紫外线 → 添加这个城市的组件 → 数据说明。\n⚠️ 根节点**不写** lat/lon/city 的同名 params 兜底 —— 会顶掉路由 query(点谁进来都渲兜底那一个)。",
+  "root": {
+    "type": "container",
+    "id": "root",
+    "title": "${city}",
+    "layout": "list",
+    "direction": "vertical",
+    "gap": "12pt",
+    "padding": "16pt",
+    "paddingTop": "${@contentInset.top}pt",
+    "paddingBottom": "28pt",
+    "depends": [
+      {
+        "flow": "@[file://xWidget/flow/aq.df]",
+        "params": {
+          "lat": "${lat}",
+          "lon": "${lon}",
+          "city": "${city}",
+          "_cache": 1,
+          "_reval": "${state.reval}"
+        }
+      }
+    ],
+    "items": [
+      {
+        "type": "Canvas",
+        "id": "head",
+        "h": "34pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-dhead.rcn]"
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "hero",
+        "h": "320pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-hero.rcn]"
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "hours",
+        "h": "196pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-hours.rcn]"
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "parts",
+        "h": "240pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-parts.rcn]"
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "uv",
+        "h": "146pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-uv.rcn]"
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "addbtn",
+        "h": "56pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-addbtn-city.rcn]"
+        },
+        "events": {
+          "onClick": {
+            "flow": "@[file://page/flow/pick-detail.af]",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          }
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "foot",
+        "h": "150pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-foot-detail.rcn]"
+        }
+      }
+    ],
+    "events": {
+      "onLoad": [
+        {
+          "flow": "@[file://page/flow/revalidate.af]",
+          "params": {
+            "stale": "${_stale}"
+          }
+        }
+      ],
+      "onRefresh": {
+        "flow": "@[file://page/flow/refresh-detail.af]",
+        "params": {}
+      }
+    }
+  }
+}

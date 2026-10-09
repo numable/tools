@@ -1,0 +1,53 @@
+{
+  "_note": "**动态提醒(边沿,无参数)** —— doc/alert-design.md §12「github-ci」。\n\n「关注的仓库里有 CI 挂了」。与同包的 `reviews.xjob` 刻意分成两种形状:\n · `reviews` = **电平 + cooldown**(条件持续为真,每 4h 提一次,不需要状态);\n · `ci`      = **边沿 + then**(同一批失败只报一次,状态 `ci.last` 住判定段)。\n\nv41 起 `depends` 复用组件的 `xWidget/flow/repos.df`(与 CI 状态卡同一份数):一条 GraphQL 看全部关注位(没设关注位时是你最近推送的 6 个仓库),不再只看第 0 个观察位。repos.df 按判定段的约定出 `conclusion`(failure / success / 空=还在跑)、`id`(失败集合签名:仓库名@最新提交时间)与 `repo`(第一个失败的仓库)。判定段逐条比对:只有**新出现**的失败项(不在上次基线里)才报,通知点名那个仓库;已经报过、还挂着的不重复报。\n\n⚠️ `level: urgent` —— CI 红了是「真的不能等」那一档(§5.8);同包另有一条 `quiet`,G45.all-urgent 不会命中。",
+  "version": 1,
+  "id": "ci",
+  "title": "CI 失败提醒",
+  "sub": "关注的仓库有 CI 没通过时提醒",
+  "i18n": {
+    "en-US": {
+      "title": "CI failure alert",
+      "sub": "Tells you when CI fails on a repo you watch",
+      "message": {
+        "title": "CI failed on ${newRepo}",
+        "body": "The latest commit on the default branch didn't pass its checks"
+      }
+    }
+  },
+  "events": {
+    "onClick": "/"
+  },
+  "task": {
+    "depends": [
+      {
+        "flow": "@[file://xWidget/flow/repos.df]"
+      }
+    ],
+    "_note_then": "判定段。入参**纯显式**:`conclusion` / `id` 都来自 depends 输出,不写在这里就进不去。",
+    "then": {
+      "flow": "@[file://xJob/flow/ci.df]",
+      "params": {
+        "conclusion": "${conclusion}",
+        "id": "${id}",
+        "f0": "${f0}",
+        "f1": "${f1}",
+        "f2": "${f2}",
+        "f3": "${f3}",
+        "f4": "${f4}",
+        "f5": "${f5}"
+      }
+    },
+    "refresh": {
+      "interval": [
+        "1800"
+      ]
+    }
+  },
+  "alert": {
+    "level": "urgent",
+    "message": {
+      "title": "${newRepo} 的 CI 没通过",
+      "body": "默认分支最新一次提交的检查没有通过"
+    }
+  }
+}

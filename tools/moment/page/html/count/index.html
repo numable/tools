@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Countdown</title>
+<style>
+
+/* 与卡片同源(infosource-standard §4.2b):同一套块、**同一种格子**、同一个源色(靛)。
+   v10 起页面与卡片说同一句话 —— 本月一格一天 / 本季一格一周 / 今年一格一月,
+   三态色也逐格对齐(已过实底 / 当下半透明 / 未来轨色 / 不存在的日子几乎不出声)。
+   本页**零网络、零 flow** —— 全部时间量在 JS 里现算。理由与包本身一致:
+   任何数据源都可能挂,这一页不会;也因此它在飞行模式下与联网时完全一样。 */
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --tile:#E7E9EE;--rail:#D6DAE1;--void:#EEF0F4;--accent:#128F66;
+  --src:#5B5BD6;--srcCur:rgba(91,91,214,.5);--srcSoft:rgba(91,91,214,.12);
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--tile:#20232A;--rail:#2C313A;--void:#252930;--accent:#6FE8BE;
+  --src:#A5A3FF;--srcCur:rgba(165,163,255,.5);--srcSoft:rgba(165,163,255,.18);--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  font-variant-numeric:tabular-nums;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:16px}
+/* §2 段标题 = 左名字 + 右摘要,13pt/Medium/sub;段间 20pt、到第一张卡 8pt。 */
+.sec{font-size:13px;color:var(--sub);font-weight:500;margin:20px 0 8px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.sec em{font-style:normal;font-weight:500;font-size:13px;color:var(--sub);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec em b{font-weight:600;color:var(--fg)}
+
+/* 一段 = 一块:标签 + 百分比 + 一行格子 + 图例/剩余。与 44 卡逐行同构。 */
+.seg{background:var(--tile);border-radius:12px;padding:12px;margin-bottom:8px}
+.seg .top{display:flex;align-items:baseline;gap:8px}
+.seg .lab{font-size:12px;font-weight:600}
+.seg .pct{margin-left:auto;font-size:19px;font-weight:700}
+.seg .pct em{font-size:11px;font-style:normal;color:var(--sub);font-weight:600}
+.cells{display:flex;gap:2px;margin-top:10px}
+.cells i{flex:1 1 0;height:18px;border-radius:3px;background:var(--rail);display:block}
+.cells i.on{background:var(--src)}
+.cells i.cur{background:var(--srcCur)}
+.cells i.void{background:var(--void)}
+.seg .foot2{display:flex;margin-top:6px;color:var(--sub);font-size:11px}
+.seg .foot2 span+span{margin-left:auto}
+
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.row{display:flex;align-items:center;gap:10px}
+.row+.row{margin-top:10px}
+.lbl{flex:0 0 52px;color:var(--sub);font-size:12px}
+/* ⚠️ 输入框字号必须显式 ≥16px:iOS WebView 上小于 16px 聚焦会把**整页**放大,而且退不回去
+   (memory [[ios-webview-focus-zoom-16px]])。lint 会查这一条。 */
+input{flex:1 1 0;min-width:0;border:0;background:var(--tile);border-radius:10px;
+  padding:11px 12px;font-family:inherit;font-size:16px;font-weight:600;line-height:1.15;
+  color:var(--fg);outline:2px solid transparent}
+input:focus{outline-color:var(--src)}
+.prev{display:flex;align-items:baseline;gap:8px;margin-top:12px;padding-top:12px;
+  border-top:1px solid var(--line);min-height:34px}
+.prev .big{font-size:26px;font-weight:700;letter-spacing:-.5px}
+.prev .unit{font-size:12px;color:var(--sub)}
+.prev .st{color:var(--sub);font-size:12px}
+/* 点阵:与 22 卡上那张同一个隐喻 —— 一格一天,可数 */
+.grid{display:flex;flex-wrap:wrap;gap:3px;margin-top:12px}
+.grid i{width:11px;height:11px;border-radius:3px;background:var(--tile);display:block}
+.grid i.on{background:var(--src)}
+.gridNote{color:var(--sub);font-size:11px;margin-top:7px}
+.picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{border:0;background:var(--tile);color:var(--fg);border-radius:8px;padding:8px 11px;
+  font:600 13px/1 inherit;cursor:pointer}
+
+/* 入口行:与加卡按钮同高同圆角,但**没有 ＋** —— 那个符号是「加卡」的专属信号,
+   借给别的动作用会让两种按钮读起来一样。 */
+.entry{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:0 16px;
+  margin:0;background:var(--card);border:0;border-radius:14px;text-align:left;
+  font:inherit;color:var(--fg);cursor:pointer;box-shadow:var(--shadow)}
+.entry .g{flex:1 1 auto;min-width:0}
+.entry b{display:block;font-size:13.5px;font-weight:700;line-height:1.25}
+.entry .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:var(--sub)}
+.entry .ar{flex:0 0 auto;color:var(--sub);font-size:15px;opacity:.55}
+/* 段可点:箭头是唯一信号(这一页格子已经很密,再加底色会把「数据」与「控件」搅在一起) */
+.seg[data-k]{cursor:pointer}
+.seg .lab .ar{color:var(--sub);font-size:12px;opacity:.55;margin-left:4px}
+
+.danger{display:block;width:100%;margin:14px 0 0;padding:13px;background:transparent;
+  color:#E5484D;font:600 13px/1 inherit;border-radius:12px;border:1px solid var(--line)}
+html[data-theme="dark"] .danger{color:#FF6369}
+.danger[hidden]{display:none}  /* display:block 会盖掉 hidden 属性,新建页也露出「从清单里删除」 */
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.7}
+/* ── 段详情 ─────────────────────────────────────────────── */
+.hrow{display:flex;align-items:baseline;gap:12px}
+.pctBig{font-size:44px;font-weight:700;letter-spacing:-1.4px;line-height:1;color:var(--src)}
+.pctBig em{font-size:20px;font-style:normal;opacity:.55;letter-spacing:-.4px}
+.hside{margin-left:auto;text-align:right}
+.hside .k{display:block;font-size:10.5px;color:var(--sub)}
+.hside .v{display:block;font-size:15px;font-weight:700;margin-top:1px}
+.barw{height:6px;border-radius:3px;background:var(--rail);margin-top:14px;overflow:hidden}
+.barw i{display:block;height:100%;border-radius:3px;background:var(--src)}
+/* 详情页的格子比首页大一档:这一页只讲这一段,格子是主角 */
+.cells.big i{height:26px;border-radius:3px}
+.frow{display:flex;align-items:baseline;padding:9px 0;font-size:12.5px;color:var(--sub)}
+.frow + .frow{border-top:1px solid var(--line)}
+.frow b{margin-left:auto;color:var(--fg);font-size:13.5px;font-weight:600}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.entry,.seg[data-k],.xb-tap{position:relative}
+.entry::after,.seg[data-k]::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.entry:active::after,.seg[data-k]:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.danger,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.danger:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#quick";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+</head>
+<body>
+  <h1 data-i="title"></h1>
+  <div class="sub" data-i="lead"></div>
+
+  <div class="card">
+    <div class="row"><span class="lbl" data-i="lName"></span>
+      <input id="nm" maxlength="12" value=""></div>
+    <div class="row"><span class="lbl" data-i="lDate"></span>
+      <input id="dt" type="date" value=""></div>
+    <div class="picks" id="quick"></div>
+    <div class="prev" id="prev"></div>
+    <div class="grid" id="grid"></div>
+    <div class="gridNote" data-i="gridNote"></div>
+  </div>
+
+  <button class="pickb" id="save"><span class="pk">✓</span><span class="pg">
+    <b data-i="saveT"></b><span class="d" data-i="saveS"></span></span></button>
+
+  <button class="pickb" id="addw"><span class="pk">＋</span><span class="pg">
+    <b data-i="addCountT"></b><span class="d" data-i="addCountS"></span></span></button>
+
+  <button class="danger" id="del" hidden data-i="delT"></button>
+
+  <div class="foot" data-i="foot"></div>
+<script>
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+var I18N = {
+ zh:{title:"倒数日",lead:"离某一天还有多少天。填好之后可以加成一个组件。",
+   lName:"名称",lDate:"日期",
+   addCountT:"添加「倒数日」组件",addCountS:"用上面填的名称与日期",
+   saveT:"保存到我的清单",saveS:"首页会多出一行，一直数到那天",
+   saveCardT:"保存到这个组件",saveCardS:"只修改你点进来的这一个，不会新增",saved:"已保存",
+   delT:"从清单里删除",delAsk:"删掉这个倒数日？已经加到仪表盘的组件不受影响。",deleted:"已删除",
+   full:"清单最多 12 个",need:"先选一个日期",
+   left:"还剩",past:"已过",day:" 天",
+   gridNote:"一格一天——最多显示 56 天",
+   gridOver:"一格一天——共 {n} 天，只画出前 56 天",
+   foot:"倒数日按日历天数算，同一天里早晚看到的天数一样。这个工具不联网，天数根据设备时间计算。"},
+ en:{title:"Countdown",lead:"Days until a date. Set it up, then add it as a widget.",
+   lName:"Name",lDate:"Date",
+   addCountT:"Add a Countdown widget",addCountS:"Uses the name and date above",
+   saveT:"Save to my list",saveS:"Adds a row on the home page that keeps counting",
+   saveCardT:"Save to this widget",saveCardS:"Updates the widget you came from — no new one",saved:"Saved",
+   delT:"Remove from list",delAsk:"Delete this countdown? Widgets already on your dashboard are not affected.",deleted:"Deleted",
+   full:"Up to 12 countdowns",need:"Pick a date first",
+   left:"left",past:"ago",day:" days","day.one":" day",
+   gridNote:"one cell = one day — up to 56 shown",
+   gridOver:"one cell = one day — first 56 of {n} shown",
+   foot:"Countdowns are counted in calendar days, so you see the same number all day. This tool uses no network: the number comes from the device clock."}
+};
+var LANG="en";
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键;缺键回落英文(doc/overseas-first.md §2) */
+function tp(k,n){var T=I18N[LANG]; return (Math.abs(n)===1&&T&&Object.prototype.hasOwnProperty.call(T,k+".one"))?T[k+".one"]:t(k);}  /* 单复数:英文 n = 1 取 <key>.one(doc/copy-style-guide.md);中文不设 .one */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function applyTheme(th){
+  var dark = th ? th==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark?"dark":"light");
+}
+function pad(n){ return (n<10?"0":"")+n; }
+function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+/* ⚠️ 两端都归到**当天 0 点**再相减:直接拿时间戳差会让同一天的上午与下午差出一天,
+   而「还剩几天」是个自然日概念。 */
+function midnight(s){ var p=String(s).split("-"); return new Date(+p[0],+p[1]-1,+p[2]).getTime(); }
+var ENV={};
+/* 启动顺序照 market boot()(doc/overseas-first.md §1–§2):先读宿主写好的 <html data-lang>,
+   再等 appInfo(nbInfo 处理信封);**缺省英文**。 */
+async function boot(paint){
+  var de=document.documentElement;
+  if (de.getAttribute("data-lang")) LANG=nbLang(de.getAttribute("data-lang"));
+  ENV=await nbInfo();
+  applyTheme(ENV.theme || de.getAttribute("data-theme") || undefined);
+  LANG=nbLang(ENV.language||ENV.locale);
+  paint();
+}
+
+var MAX=56;
+/* 某个月日「下一次」是哪天(今天当天算没过)。 */
+function nextOn(m,d){
+  var now=new Date(), y=now.getFullYear();
+  if (midnight(y+"-"+pad(m)+"-"+pad(d)) < midnight(ymd(now))) y++;
+  return y+"-"+pad(m)+"-"+pad(d);
+}
+/* 缺省的倒数日 = 下一个 1 月 1 日(与组件 countdown.df 的缺省同一天);名字按界面语言。 */
+function defName(){ return LANG==="zh" ? "元旦" : "New Year"; }
+function defDate(){ return (new Date().getFullYear()+1)+"-01-01"; }
+function paintQuick(){
+  /* 快捷选项两套(doc/overseas-first.md §8):国内默认 = 元旦 / 圣诞 / 劳动节 / 国庆;
+     其余 = New Year / Valentine's / Halloween / Christmas(不出现 May Day / Oct 1)。 */
+  var opts = nbCnDefault(ENV)
+    ? [[nextOn(1,1),"元旦","New Year"],[nextOn(12,25),"圣诞","Christmas"],
+       [nextOn(5,1),"劳动节","Labour Day"],[nextOn(10,1),"国庆","National Day"]]
+    : [[nextOn(1,1),"元旦","New Year"],[nextOn(2,14),"情人节","Valentine's"],
+       [nextOn(10,31),"万圣节","Halloween"],[nextOn(12,25),"圣诞节","Christmas"]];
+  /* 英文名取短写(New Year / Valentine's):这一格填进去的就是组件卡名,22 卡名字那格放不下 New Year's Day。 */
+  document.getElementById("quick").innerHTML=opts.map(function(o){
+    return '<button class="chip" data-q="'+o[0]+"|"+esc(LANG==="zh"?o[1]:o[2])+'">'+
+           esc(LANG==="zh"?o[1]:o[2])+"</button>";
+  }).join("");
+}
+function paintPrev(){
+  var v=document.getElementById("dt").value;
+  var box=document.getElementById("prev"), grid=document.getElementById("grid");
+  if (!v){ box.innerHTML='<span class="st">—</span>'; grid.innerHTML=""; return; }
+  var days=Math.round((midnight(v)-midnight(ymd(new Date())))/86400000);
+  var abs=Math.abs(days), lit=Math.min(abs,MAX);
+  /* 语序按语言:中文「还剩 92 天」、英文「92 days left」(原中文渲成倒装的「92 天 还剩」) */
+  var lead='<span class="unit">'+esc(days<0?t("past"):t("left"))+"</span>";
+  var num='<span class="big">'+abs+'</span><span class="unit">'+esc(tp("day",abs))+"</span>";
+  box.innerHTML = LANG==="zh" ? lead+" "+num : num+lead;
+  document.querySelector("[data-i=gridNote]").textContent = abs>MAX ? t("gridOver").replace("{n}",abs) : t("gridNote");
+  var out=""; for (var i=0;i<MAX;i++) out+='<i class="'+(i<lit?"on":"")+'"></i>';
+  grid.innerHTML=out;
+}
+function paint(){
+  document.title=t("title");
+  document.querySelectorAll("[data-i]").forEach(function(el){
+    var k=el.dataset.i;
+    if (k==="foot") el.innerHTML=t(k); else el.textContent=t(k);
+  });
+  paintQuick(); paintPrev();
+}
+document.addEventListener("input", function(e){
+  if (e.target.id==="dt"||e.target.id==="nm") paintPrev();
+});
+/* 清单读写。⚠️ 走 `.af`/`.df` 而**不是** `xbridge.getData/setData` ——
+   后者在 Win 上调不到(doc/bridge-action-deeplink-review.md 的 🔴 发现,已让两个包的自选静默失效),
+   而 checkin/pill 这一族零网络本地包一直走 flow,四端都成立。 */
+var DAYS=[], MAXN=12;
+async function loadDays(){
+  if (!(window.xbridge && xbridge.runDataFlow)) return;
+  try{
+    var r=await xbridge.runDataFlow("read",{});
+    var v=(r&&(r.data||r))||{}, raw=v.list;
+    DAYS = typeof raw==="string" ? (JSON.parse(raw||"[]")||[]) : (raw||[]);
+    if (!Array.isArray(DAYS)) DAYS=[];
+  }catch(e){ DAYS=[]; }
+}
+/* 整份写回 —— flow 没有 push/remove 原语(save.af 的 _note 同注)。 */
+async function saveDays(){
+  if (!(window.xbridge && xbridge.runFlow)) return false;
+  try{ await xbridge.runFlow("save",{days:DAYS}); return true; }catch(e){ return false; }
+}
+function toast(m){ try{ window.xbridge&&xbridge.toast&&xbridge.toast(m); }catch(e){} }
+function vals(){
+  return { title:(document.getElementById("nm").value||t("title")).trim(),
+           date:(document.getElementById("dt").value||"") };
+}
+async function confirmAsk(msg){
+  try{ if (window.xbridge && xbridge.confirm){
+    var r=await xbridge.confirm(msg, "", {destructive:true});   /* 参数是 (标题, 正文, 选项);传对象会被当成标题(G49) */
+    return !!(r===true || (r&&(r.data===true||r.data&&r.data.ok)));
+  } }catch(e){}
+  return true;   /* 桥没有 confirm 时不拦:删除仍可由清单再加回来,而卡住用户更糟 */
+}
+
+document.addEventListener("click", function(e){
+  var q=e.target.closest && e.target.closest("[data-q]");
+  if (q){ var p=q.dataset.q.split("|");
+    document.getElementById("dt").value=p[0];
+    document.getElementById("nm").value=p[1];
+    paintPrev(); return; }
+
+  /* 主动作:存进「我的清单」(新建 = 追加一条;编辑 = 就地改那一条)。
+     ⚠️ 从卡片 onEdit 进来时它不是这个语义 —— 那时按钮是「保存到这个组件」,见下。 */
+  if (e.target.closest && e.target.closest("#save")){
+    var v=vals();
+    if (!v.date){ toast(t("need")); return; }
+    if (BRICK){
+      if (window.xbridge && xbridge.updateParams){
+        try{ xbridge.updateParams(BRICK,{title:v.title,date:v.date}); toast(t("saved")); }catch(e2){}
+      }
+      return;
+    }
+    (async function(){
+      await loadDays();
+      var i=-1; for (var k=0;k<DAYS.length;k++) if (DAYS[k].id===ID){ i=k; break; }
+      if (i>=0) DAYS[i]={id:ID,title:v.title,date:v.date};
+      else {
+        if (DAYS.length>=MAXN){ toast(t("full")); return; }
+        /* id = 创建时刻,**稳定且不复用**;绝不用下标(§8.1a 纪律 2)。 */
+        ID = "d"+Date.now();
+        DAYS.push({id:ID,title:v.title,date:v.date});
+      }
+      if (await saveDays()){ toast(t("saved")); showDelete(true); }
+    })();
+    return;
+  }
+
+  /* 次动作:加成一张卡(候选带着上面填的名称与日期,§8.1a 纪律 1)。
+     ⚠️ 与「存进清单」是两件事:清单是这一页自己的记账,卡是仪表盘上的东西。 */
+  if (e.target.closest && e.target.closest("#addw")){
+    var v2=vals();
+    if (!v2.date){ toast(t("need")); return; }
+    if (window.xbridge && xbridge.pickWidgets)
+      xbridge.pickWidgets([{ id:"countdown", params:{ title:v2.title, date:v2.date } }]);
+    return;
+  }
+
+  if (e.target.closest && e.target.closest("#del")){
+    (async function(){
+      if (!(await confirmAsk(t("delAsk")))) return;
+      await loadDays();
+      DAYS = DAYS.filter(function(x){ return x.id!==ID; });
+      if (await saveDays()){
+        toast(t("deleted"));
+        try{ if (window.xbridge && xbridge.closePage) return xbridge.closePage(); }catch(e3){}
+        history.back();
+      }
+    })();
+  }
+});
+function showDelete(on){ document.getElementById("del").hidden = !on; }
+
+var ID="";
+var BRICK="";
+(function(){
+  var q=new URLSearchParams(location.search);
+  BRICK=String(q.get("brickId")||"");
+  ID=String(q.get("id")||"");
+  /* 从卡片 onEdit 进来时带着这张卡当前的值 —— 桥没有「读实例参数」的 API,只能靠插值。 */
+  var ti=q.get("title"), dt=q.get("date");
+  if (ti) document.getElementById("nm").value=ti;
+  if (dt) document.getElementById("dt").value=dt;
+  boot(async function(){
+    paint();
+    /* 名称与日期都空(新建,或从缺省参数的组件点进来)= 组件上显示的那个缺省:下一个 1 月 1 日。 */
+    if (!ID && !document.getElementById("nm").value && !document.getElementById("dt").value){
+      document.getElementById("nm").value=defName();
+      document.getElementById("dt").value=defDate();
+    }
+    if (BRICK){
+      /* ① 从卡片来:这一页只改那张卡,与清单无关(点「编辑」却往清单里多出一条会很怪)。 */
+      document.querySelector('#save [data-i="saveT"]').textContent=t("saveCardT");
+      document.querySelector('#save [data-i="saveS"]').textContent=t("saveCardS");
+      document.getElementById("addw").hidden=true;
+      showDelete(false);
+      return;
+    }
+    if (ID){
+      /* ② 从清单来:载入那一条,并给出删除。 */
+      await loadDays();
+      var it=null; for (var k=0;k<DAYS.length;k++) if (DAYS[k].id===ID){ it=DAYS[k]; break; }
+      if (it){
+        document.getElementById("nm").value=it.title;
+        document.getElementById("dt").value=it.date;
+        showDelete(true);
+      }
+      paintPrev();
+      return;
+    }
+    /* ③ 新建:给一个默认日期(空日期会让预览一直是「—」,而这一页第一眼就该有个数)。 */
+    if (!document.getElementById("dt").value)
+      document.getElementById("dt").value=defDate();
+    paintPrev();
+  });
+})();
+</script>
+</body></html>

@@ -1,0 +1,822 @@
+{
+  "_note": "未来 24 小时(42)。上:气温曲线(curves 平滑 —— 气温是连续量,平滑不伪造信息;金融卡不平滑是另一回事),标出最高 / 最低点;下:逐时降水概率柱(浅蓝,0% 不画)。结论行三态:无雨 / 某点起可能下雨 / 正在下雨。生成器 gen_weather_more.py。",
+  "rc": {
+    "cells": [
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_sky",
+          "value": "$[findNotEmpty::(${sky},overcast)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},clear)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#2F7FC4\\,#6FB4E0\\,#A9D2EC)@90|linear(#1F5C90\\,#487F9E\\,#6E9AB0)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},overcast)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#6B7E8E\\,#93A5B2\\,#B9C6CF)@90|linear(#4A5763\\,#6A7783\\,#8A96A0)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},rain)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#3E5A73\\,#5C7B93\\,#89A3B5)@90|linear(#2A3F52\\,#42596C\\,#647D8C)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},snow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#7C93A8\\,#A8BCCB\\,#D6E3EC)@90|linear(#586A7A\\,#7B8D9B\\,#9FB0BC)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},night)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#101A2E\\,#1C2A44\\,#33465F)@90|linear(#0A1220\\,#141F33\\,#25344A)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_decor",
+          "value": "$[if::(eq::(${_sky},clear),glow,if::(eq::(${_sky},overcast),fog,none))]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_decor},glow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "radial(#8CFFFFFF\\,#00FFFFFF)@0.8\\,0.16\\,0.6|radial(#66FFFFFF\\,#00FFFFFF)@0.8\\,0.16\\,0.6"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_decor},fog)]"
+        },
+        "react": [
+          {
+            "_note": "⚠️ 雾必须是**一层柔光**,不能是「一条 16pt 高、装着横向渐变的 layer」。\n那种写法横向是渐变(两端透明)、**纵向却是硬边**,于是渲出来是一道齐刷刷的白杠 ——\n用户 2026-08-21 真机反馈的「顶部和小组件有白色横条」就是它,而且因为阴天档最常见,\n页头与四张卡会同时出现。radial 四周都柔,没有任何一条边可以被读成线。\n落点定在偏上(cy=0.34):底部有 DIM 压暗层,雾放下面会被压没。",
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "radial(#2BFFFFFF\\,#00FFFFFF)@0.5\\,0.34\\,0.78|radial(#1EFFFFFF\\,#00FFFFFF)@0.5\\,0.34\\,0.78"
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#00000000\\,#4D000000)@90|linear(#00000000\\,#59000000)@90"
+      },
+      {
+        "id": "srcDot",
+        "type": "layer",
+        "x": "14pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#7FC4F5|#7FC4F5"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "23pt",
+        "y": "12pt",
+        "w": "{parent.w}-71pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${city},--)] · ${@i18n.w_h24T}",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#FFFFFF",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-54pt",
+        "y": "15pt",
+        "w": "40pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},--)]",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1",
+        "alignmentH": "2"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${rCase},__none__),__none__),0,if::(eq::(${rCase},0),1,0))]"
+        },
+        "react": [
+          {
+            "id": "c0",
+            "type": "txt",
+            "x": "14pt",
+            "y": "32pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.w_rainNone}",
+            "fontSize": "11.5pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${rCase},0),1)]"
+        },
+        "react": [
+          {
+            "id": "c1",
+            "type": "txt",
+            "x": "14pt",
+            "y": "32pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.w_rainA}${rH}${@i18n.w_rainB}${rP}%",
+            "fontSize": "11.5pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${rCase},0),2)]"
+        },
+        "react": [
+          {
+            "id": "c2",
+            "type": "txt",
+            "x": "14pt",
+            "y": "32pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.w_rainNow}${rP}%",
+            "fontSize": "11.5pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "id": "curve",
+        "type": "curves",
+        "x": "14.0pt",
+        "y": "57.0pt",
+        "w": "310.0pt",
+        "h": "49.0pt",
+        "points": "[$[findNotEmpty::(${pts},0\\,999\\,1\\,999)]]",
+        "lineWidth": "2pt",
+        "lineCap": "round",
+        "lineJoin": "round",
+        "strokeColor": "#FFFFFF|#FFFFFF",
+        "coverageColor": "linear(#40FFFFFF\\,#00FFFFFF)@90|linear(#33FFFFFF\\,#00FFFFFF)@90"
+      },
+      {
+        "id": "pbase",
+        "type": "layer",
+        "x": "14.0pt",
+        "y": "134.0pt",
+        "w": "310.0pt",
+        "h": "1pt",
+        "bgColor": "#59FFFFFF|#4DFFFFFF"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${tmaxS},__none__),__none__),0,1)]"
+        },
+        "react": [
+          {
+            "id": "mxDot",
+            "type": "line",
+            "x": "14.0pt",
+            "y": "57.0pt",
+            "w": "310.0pt",
+            "h": "49.0pt",
+            "points": "[$[findNotEmpty::(${mxX},-99)],$[findNotEmpty::(${mxY},-99)],$[findNotEmpty::(${mxX},-99)],$[findNotEmpty::(${mxY},-99)]]",
+            "lineWidth": "6pt",
+            "lineCap": "round",
+            "strokeColor": "#FFFFFF|#FFFFFF"
+          },
+          {
+            "id": "mxL",
+            "type": "txt",
+            "x": "${mxLX}pt",
+            "y": "${mxLY}pt",
+            "w": "28pt",
+            "h": "-1",
+            "text": "${tmaxS}°",
+            "fontSize": "10pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "1"
+          },
+          {
+            "id": "mnDot",
+            "type": "line",
+            "x": "14.0pt",
+            "y": "57.0pt",
+            "w": "310.0pt",
+            "h": "49.0pt",
+            "points": "[$[findNotEmpty::(${mnX},-99)],$[findNotEmpty::(${mnY},-99)],$[findNotEmpty::(${mnX},-99)],$[findNotEmpty::(${mnY},-99)]]",
+            "lineWidth": "6pt",
+            "lineCap": "round",
+            "strokeColor": "#FFFFFF|#FFFFFF"
+          },
+          {
+            "id": "mnL",
+            "type": "txt",
+            "x": "${mnLX}pt",
+            "y": "${mnLY}pt",
+            "w": "28pt",
+            "h": "-1",
+            "text": "${tminS}°",
+            "fontSize": "10pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "1"
+          },
+          {
+            "id": "pb0",
+            "type": "layer",
+            "x": "15.00pt",
+            "y": "${py0}pt",
+            "w": "10.92pt",
+            "h": "${ph0}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph0},0),0),0,1)]"
+          },
+          {
+            "id": "pb1",
+            "type": "layer",
+            "x": "27.92pt",
+            "y": "${py1}pt",
+            "w": "10.92pt",
+            "h": "${ph1}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph1},0),0),0,1)]"
+          },
+          {
+            "id": "pb2",
+            "type": "layer",
+            "x": "40.83pt",
+            "y": "${py2}pt",
+            "w": "10.92pt",
+            "h": "${ph2}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph2},0),0),0,1)]"
+          },
+          {
+            "id": "pb3",
+            "type": "layer",
+            "x": "53.75pt",
+            "y": "${py3}pt",
+            "w": "10.92pt",
+            "h": "${ph3}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph3},0),0),0,1)]"
+          },
+          {
+            "id": "pb4",
+            "type": "layer",
+            "x": "66.67pt",
+            "y": "${py4}pt",
+            "w": "10.92pt",
+            "h": "${ph4}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph4},0),0),0,1)]"
+          },
+          {
+            "id": "pb5",
+            "type": "layer",
+            "x": "79.58pt",
+            "y": "${py5}pt",
+            "w": "10.92pt",
+            "h": "${ph5}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph5},0),0),0,1)]"
+          },
+          {
+            "id": "pb6",
+            "type": "layer",
+            "x": "92.50pt",
+            "y": "${py6}pt",
+            "w": "10.92pt",
+            "h": "${ph6}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph6},0),0),0,1)]"
+          },
+          {
+            "id": "pb7",
+            "type": "layer",
+            "x": "105.42pt",
+            "y": "${py7}pt",
+            "w": "10.92pt",
+            "h": "${ph7}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph7},0),0),0,1)]"
+          },
+          {
+            "id": "pb8",
+            "type": "layer",
+            "x": "118.33pt",
+            "y": "${py8}pt",
+            "w": "10.92pt",
+            "h": "${ph8}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph8},0),0),0,1)]"
+          },
+          {
+            "id": "pb9",
+            "type": "layer",
+            "x": "131.25pt",
+            "y": "${py9}pt",
+            "w": "10.92pt",
+            "h": "${ph9}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph9},0),0),0,1)]"
+          },
+          {
+            "id": "pb10",
+            "type": "layer",
+            "x": "144.17pt",
+            "y": "${py10}pt",
+            "w": "10.92pt",
+            "h": "${ph10}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph10},0),0),0,1)]"
+          },
+          {
+            "id": "pb11",
+            "type": "layer",
+            "x": "157.08pt",
+            "y": "${py11}pt",
+            "w": "10.92pt",
+            "h": "${ph11}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph11},0),0),0,1)]"
+          },
+          {
+            "id": "pb12",
+            "type": "layer",
+            "x": "170.00pt",
+            "y": "${py12}pt",
+            "w": "10.92pt",
+            "h": "${ph12}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph12},0),0),0,1)]"
+          },
+          {
+            "id": "pb13",
+            "type": "layer",
+            "x": "182.92pt",
+            "y": "${py13}pt",
+            "w": "10.92pt",
+            "h": "${ph13}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph13},0),0),0,1)]"
+          },
+          {
+            "id": "pb14",
+            "type": "layer",
+            "x": "195.83pt",
+            "y": "${py14}pt",
+            "w": "10.92pt",
+            "h": "${ph14}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph14},0),0),0,1)]"
+          },
+          {
+            "id": "pb15",
+            "type": "layer",
+            "x": "208.75pt",
+            "y": "${py15}pt",
+            "w": "10.92pt",
+            "h": "${ph15}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph15},0),0),0,1)]"
+          },
+          {
+            "id": "pb16",
+            "type": "layer",
+            "x": "221.67pt",
+            "y": "${py16}pt",
+            "w": "10.92pt",
+            "h": "${ph16}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph16},0),0),0,1)]"
+          },
+          {
+            "id": "pb17",
+            "type": "layer",
+            "x": "234.58pt",
+            "y": "${py17}pt",
+            "w": "10.92pt",
+            "h": "${ph17}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph17},0),0),0,1)]"
+          },
+          {
+            "id": "pb18",
+            "type": "layer",
+            "x": "247.50pt",
+            "y": "${py18}pt",
+            "w": "10.92pt",
+            "h": "${ph18}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph18},0),0),0,1)]"
+          },
+          {
+            "id": "pb19",
+            "type": "layer",
+            "x": "260.42pt",
+            "y": "${py19}pt",
+            "w": "10.92pt",
+            "h": "${ph19}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph19},0),0),0,1)]"
+          },
+          {
+            "id": "pb20",
+            "type": "layer",
+            "x": "273.33pt",
+            "y": "${py20}pt",
+            "w": "10.92pt",
+            "h": "${ph20}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph20},0),0),0,1)]"
+          },
+          {
+            "id": "pb21",
+            "type": "layer",
+            "x": "286.25pt",
+            "y": "${py21}pt",
+            "w": "10.92pt",
+            "h": "${ph21}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph21},0),0),0,1)]"
+          },
+          {
+            "id": "pb22",
+            "type": "layer",
+            "x": "299.17pt",
+            "y": "${py22}pt",
+            "w": "10.92pt",
+            "h": "${ph22}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph22},0),0),0,1)]"
+          },
+          {
+            "id": "pb23",
+            "type": "layer",
+            "x": "312.08pt",
+            "y": "${py23}pt",
+            "w": "10.92pt",
+            "h": "${ph23}pt",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "leftB": "1.5pt",
+              "rightT": "1.5pt",
+              "rightB": "1.5pt"
+            },
+            "bgColor": "#9FD4FF|#8CC8F5",
+            "hide": "$[if::(gt::(findNotEmpty::(${ph23},0),0),0,1)]"
+          }
+        ],
+        "_note": "有数据才画极值点 / 标签 / 降水柱(几何字段空值会让整卡布局失败)。"
+      },
+      {
+        "id": "hl0",
+        "type": "txt",
+        "x": "14.00",
+        "y": "138.0pt",
+        "w": "40pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${hh0},--)]${@i18n.w_hr}",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1"
+      },
+      {
+        "id": "hl6",
+        "type": "txt",
+        "x": "91.50",
+        "y": "138.0pt",
+        "w": "40pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${hh6},--)]${@i18n.w_hr}",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1"
+      },
+      {
+        "id": "hl12",
+        "type": "txt",
+        "x": "169.00",
+        "y": "138.0pt",
+        "w": "40pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${hh12},--)]${@i18n.w_hr}",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1"
+      },
+      {
+        "id": "hl18",
+        "type": "txt",
+        "x": "246.50",
+        "y": "138.0pt",
+        "w": "40pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${hh18},--)]${@i18n.w_hr}",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1"
+      },
+      {
+        "id": "popL",
+        "type": "txt",
+        "x": "324.0pt-{popL.w}",
+        "y": "138.0pt",
+        "w": "-1",
+        "h": "-1",
+        "text": "${@i18n.w_pop}",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1"
+      },
+      {
+        "id": "popD",
+        "type": "layer",
+        "x": "{popL.x}-9pt",
+        "y": "139.5pt",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#9FD4FF|#8CC8F5"
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "w_h24T": "未来 24 小时",
+        "w_rainNone": "24 小时内降水概率都不高",
+        "w_rainA": "预计 ",
+        "w_rainB": " 点起可能下雨 · ",
+        "w_rainNow": "正在下雨 · 降水概率 ",
+        "w_pop": "降水概率",
+        "w_hr": "时"
+      },
+      "en-US": {
+        "w_h24T": "Next 24 hours",
+        "w_rainNone": "Low chance of rain for 24 h",
+        "w_rainA": "Rain likely from ",
+        "w_rainB": ":00 · ",
+        "w_rainNow": "Raining now · chance ",
+        "w_pop": "Rain %",
+        "w_hr": "h"
+      }
+    }
+  }
+}

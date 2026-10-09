@@ -1,0 +1,450 @@
+{
+  "_note": "紫外线(11 · 微档,card-design-system §8.2)。2026-10-08 新增,生成器 gen_weather_more.py。主值 = 今日紫外线峰值,底行 = WHO 档位色点 + 档位字;微档不放时效锚。数据 = sky24.df,零新增请求。",
+  "rc": {
+    "cells": [
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_sky",
+          "value": "$[findNotEmpty::(${sky},overcast)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},clear)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#2F7FC4\\,#6FB4E0\\,#A9D2EC)@90|linear(#1F5C90\\,#487F9E\\,#6E9AB0)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},overcast)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#6B7E8E\\,#93A5B2\\,#B9C6CF)@90|linear(#4A5763\\,#6A7783\\,#8A96A0)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},rain)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#3E5A73\\,#5C7B93\\,#89A3B5)@90|linear(#2A3F52\\,#42596C\\,#647D8C)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},snow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#7C93A8\\,#A8BCCB\\,#D6E3EC)@90|linear(#586A7A\\,#7B8D9B\\,#9FB0BC)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},night)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#101A2E\\,#1C2A44\\,#33465F)@90|linear(#0A1220\\,#141F33\\,#25344A)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_decor",
+          "value": "$[if::(eq::(${_sky},clear),glow,if::(eq::(${_sky},overcast),fog,none))]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_decor},glow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "radial(#8CFFFFFF\\,#00FFFFFF)@0.8\\,0.16\\,0.6|radial(#66FFFFFF\\,#00FFFFFF)@0.8\\,0.16\\,0.6"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_decor},fog)]"
+        },
+        "react": [
+          {
+            "_note": "⚠️ 雾必须是**一层柔光**,不能是「一条 16pt 高、装着横向渐变的 layer」。\n那种写法横向是渐变(两端透明)、**纵向却是硬边**,于是渲出来是一道齐刷刷的白杠 ——\n用户 2026-08-21 真机反馈的「顶部和小组件有白色横条」就是它,而且因为阴天档最常见,\n页头与四张卡会同时出现。radial 四周都柔,没有任何一条边可以被读成线。\n落点定在偏上(cy=0.34):底部有 DIM 压暗层,雾放下面会被压没。",
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "radial(#2BFFFFFF\\,#00FFFFFF)@0.5\\,0.34\\,0.78|radial(#1EFFFFFF\\,#00FFFFFF)@0.5\\,0.34\\,0.78"
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#00000000\\,#4D000000)@90|linear(#00000000\\,#59000000)@90"
+      },
+      {
+        "id": "srcDot",
+        "type": "layer",
+        "x": "8pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#7FC4F5|#7FC4F5"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "17pt",
+        "y": "7pt",
+        "w": "43pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${city},--)]",
+        "fontSize": "10pt",
+        "textColor": "#FFFFFF|#FFFFFF",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "lineBreak": "0"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${uvLv},__none__),__none__),0,1)]"
+        },
+        "react": [
+          {
+            "id": "uvV",
+            "type": "txt",
+            "x": "8pt",
+            "y": "22pt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${uvMax}",
+            "fontSize": "20pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "lineBreak": "0"
+          },
+          {
+            "id": "uvU",
+            "type": "txt",
+            "x": "{uvV.r}+3pt",
+            "y": "30pt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${@i18n.w_uvU}",
+            "fontSize": "9pt",
+            "textColor": "#B3FFFFFF|#A6FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${uvLv},1)]"
+            },
+            "react": [
+              {
+                "type": "layer",
+                "x": "8pt",
+                "y": "49pt",
+                "w": "5pt",
+                "h": "5pt",
+                "cornerRadius": {
+                  "leftT": "2.5pt",
+                  "leftB": "2.5pt",
+                  "rightT": "2.5pt",
+                  "rightB": "2.5pt"
+                },
+                "bgColor": "#34C759|#3DD68C"
+              },
+              {
+                "id": "uvL0",
+                "type": "txt",
+                "x": "16pt",
+                "y": "46pt",
+                "w": "46pt",
+                "h": "-1",
+                "text": "${@i18n.w_uvC1}",
+                "fontSize": "9pt",
+                "textColor": "#FFFFFF|#FFFFFF",
+                "maxLines": "1",
+                "lineBreak": "0"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${uvLv},2)]"
+            },
+            "react": [
+              {
+                "type": "layer",
+                "x": "8pt",
+                "y": "49pt",
+                "w": "5pt",
+                "h": "5pt",
+                "cornerRadius": {
+                  "leftT": "2.5pt",
+                  "leftB": "2.5pt",
+                  "rightT": "2.5pt",
+                  "rightB": "2.5pt"
+                },
+                "bgColor": "#F5C400|#FFD60A"
+              },
+              {
+                "id": "uvL1",
+                "type": "txt",
+                "x": "16pt",
+                "y": "46pt",
+                "w": "46pt",
+                "h": "-1",
+                "text": "${@i18n.w_uvC2}",
+                "fontSize": "9pt",
+                "textColor": "#FFFFFF|#FFFFFF",
+                "maxLines": "1",
+                "lineBreak": "0"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${uvLv},3)]"
+            },
+            "react": [
+              {
+                "type": "layer",
+                "x": "8pt",
+                "y": "49pt",
+                "w": "5pt",
+                "h": "5pt",
+                "cornerRadius": {
+                  "leftT": "2.5pt",
+                  "leftB": "2.5pt",
+                  "rightT": "2.5pt",
+                  "rightB": "2.5pt"
+                },
+                "bgColor": "#FF9500|#FF9F4A"
+              },
+              {
+                "id": "uvL2",
+                "type": "txt",
+                "x": "16pt",
+                "y": "46pt",
+                "w": "46pt",
+                "h": "-1",
+                "text": "${@i18n.w_uvC3}",
+                "fontSize": "9pt",
+                "textColor": "#FFFFFF|#FFFFFF",
+                "maxLines": "1",
+                "lineBreak": "0"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${uvLv},4)]"
+            },
+            "react": [
+              {
+                "type": "layer",
+                "x": "8pt",
+                "y": "49pt",
+                "w": "5pt",
+                "h": "5pt",
+                "cornerRadius": {
+                  "leftT": "2.5pt",
+                  "leftB": "2.5pt",
+                  "rightT": "2.5pt",
+                  "rightB": "2.5pt"
+                },
+                "bgColor": "#FF3B30|#FF6259"
+              },
+              {
+                "id": "uvL3",
+                "type": "txt",
+                "x": "16pt",
+                "y": "46pt",
+                "w": "46pt",
+                "h": "-1",
+                "text": "${@i18n.w_uvC4}",
+                "fontSize": "9pt",
+                "textColor": "#FFFFFF|#FFFFFF",
+                "maxLines": "1",
+                "lineBreak": "0"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${uvLv},5)]"
+            },
+            "react": [
+              {
+                "type": "layer",
+                "x": "8pt",
+                "y": "49pt",
+                "w": "5pt",
+                "h": "5pt",
+                "cornerRadius": {
+                  "leftT": "2.5pt",
+                  "leftB": "2.5pt",
+                  "rightT": "2.5pt",
+                  "rightB": "2.5pt"
+                },
+                "bgColor": "#AF52DE|#C77DFF"
+              },
+              {
+                "id": "uvL4",
+                "type": "txt",
+                "x": "16pt",
+                "y": "46pt",
+                "w": "46pt",
+                "h": "-1",
+                "text": "${@i18n.w_uvC5}",
+                "fontSize": "9pt",
+                "textColor": "#FFFFFF|#FFFFFF",
+                "maxLines": "1",
+                "lineBreak": "0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${uvLv},__none__),__none__),1,0)]"
+        },
+        "react": [
+          {
+            "id": "uvE",
+            "type": "txt",
+            "x": "8pt",
+            "y": "28pt",
+            "w": "54pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "lineBreak": "0"
+          },
+          {
+            "id": "uvEL",
+            "type": "txt",
+            "x": "8pt",
+            "y": "46pt",
+            "w": "54pt",
+            "h": "-1",
+            "text": "${@i18n.w_uvU} --",
+            "fontSize": "9pt",
+            "textColor": "#B3FFFFFF|#A6FFFFFF",
+            "maxLines": "1",
+            "lineBreak": "0"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "w_uvU": "UV",
+        "w_uvC1": "弱",
+        "w_uvC2": "中等",
+        "w_uvC3": "强",
+        "w_uvC4": "很强",
+        "w_uvC5": "极强"
+      },
+      "en-US": {
+        "w_uvU": "UV",
+        "w_uvC1": "Low",
+        "w_uvC2": "Moderate",
+        "w_uvC3": "High",
+        "w_uvC4": "Very high",
+        "w_uvC5": "Extreme"
+      }
+    }
+  }
+}

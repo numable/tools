@@ -1,0 +1,17 @@
+{
+  "_note": "关注列表写回:整份数组一起落盘。\n数组的增删在 H5 页的 JS 里做完再整份传进来 —— VParser 没有数组追加/删除原语,而桥的 runFlow 入参是**结构化**的(传数组进来就是数组),所以这里只需原样写盘。\n⚠️ `${list}` 必须整取,不要试图在 AF 里拼数组字面量:那样长度就被写死了。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "data.set",
+      "params": {
+        "key": "tw_chans",
+        "value": "${list}"
+      }
+    },
+    {
+      "_note": "落盘后立刻让本包的卡真取数重渲(feed / channel 两张卡都 data.get tw_chans,刷新间隔按小时计,不踢它就要等到下一个 interval 才看得到刚关注的频道)。⚠️ 必须放在 data.set **之后**;不是 reload —— 渲染图缓存的 key 不含数据维度,reload 的第一步 cacheGet 会命中旧图,刷了等于没刷(doc/widget-refresh-primitive.md §3)。scope 缺省 bundle,desktop 缺省 true。",
+      "action": "widget.refresh"
+    }
+  ]
+}

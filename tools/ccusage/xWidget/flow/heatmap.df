@@ -1,0 +1,597 @@
+{
+  "_note": "活跃热力图取数。网格的 col/row/level 已由服务端逐格算好(merged.grid)——VParser 没有 floor，让渲染层去算 i/7 算不准；这也是「派生序列优先在数据层预计算」的直接应用。网格右下角 = 看的人这台设备的「今天」(?today=,2026-09-24 起);不带参数的老版本退回「数据里的最后一天」。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "todayQ",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      },
+      "_note": "「今天」以看的人这台设备的日期为锚(2026-09-24)。不带它服务端只能拿「数据里最后一天」当今天 —— 今天还没用 Claude Code 时,「今日」会显示上一个活跃日的数。服务端只认离它自己 3 天以内的日期,算不出来就退回老行为,不会取不到数。"
+    },
+    {
+      "id": "resp",
+      "action": "request",
+      "params": {
+        "url": "https://usage.numable.app/s?today=${todayQ}&lite=1",
+        "method": "GET",
+        "header": {
+          "User-Agent": "Numable"
+        },
+        "formatType": "json",
+        "credential": "nu"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grid",
+        "value": "${resp.merged.grid}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gn",
+        "value": "$[length::(${grid})]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${resp},),1,0)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "ccusage_unreachable"
+          }
+        }
+      ],
+      "_note": "令牌被拒(服务端返错误体)是**明确答案** —— 不抛,卡上渲「未接入」引导重新填令牌。\n只有**完全没拿到响应**(网络失败)才抛。\n取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "live",
+        "value": "$[if::(ge::(findNotEmpty::(${gn},0),1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "MONE",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      },
+      "_note": "热力图起止月日:中文「7月26日」/ 英文「Jul 26」(doc/overseas-first.md §5,不出现纯数字日期)。拼接先落 Z / E 两个键再在 if 里引用。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startLblIso",
+        "value": "${resp.merged.gridStart}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startLblMo",
+        "value": "$[parseNumber::(subString::(${startLblIso},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startLblDy",
+        "value": "$[parseNumber::(subString::(${startLblIso},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startLblMe",
+        "value": "$[index::(${MONE},calc::(${startLblMo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startLblZ",
+        "value": "${startLblMo}月${startLblDy}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startLblE",
+        "value": "${startLblMe} ${startLblDy}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startLbl",
+        "value": "$[if::(eq::(length::(${startLblIso}),10),if::(startsWith::(${@app.language},zh),${startLblZ},${startLblE}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endLblIso",
+        "value": "${resp.merged.gridEnd}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endLblMo",
+        "value": "$[parseNumber::(subString::(${endLblIso},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endLblDy",
+        "value": "$[parseNumber::(subString::(${endLblIso},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endLblMe",
+        "value": "$[index::(${MONE},calc::(${endLblMo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endLblZ",
+        "value": "${endLblMo}月${endLblDy}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endLblE",
+        "value": "${endLblMe} ${endLblDy}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endLbl",
+        "value": "$[if::(eq::(length::(${endLblIso}),10),if::(startsWith::(${@app.language},zh),${endLblZ},${endLblE}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "daysRaw",
+        "value": "$[if::(eq::(${live},1),${resp.merged.totals.activeDays},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "streak",
+        "value": "$[if::(eq::(${live},1),${resp.merged.totals.streak},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "longest",
+        "value": "$[if::(eq::(${live},1),${resp.merged.totals.longestStreak},)]"
+      }
+    },
+    {
+      "_note": "时效锚(card-design-system §3)= 采集侧最后一次上传的时刻(内容时间):当天 HH:mm、跨天 MM-dd HH:mm。外层判空哨兵勿删 —— formatDate::(空,…) 在 web SDK 上渲成 epoch。",
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(eq::(findNotEmpty::(${resp.updatedAt},__none__),__none__),,if::(eq::(formatDate::(${resp.updatedAt},yyyyMMdd),formatDate::(${@time.nowMs},yyyyMMdd)),formatDate::(${resp.updatedAt},HH:mm),formatDate::(${resp.updatedAt},MM-dd HH:mm)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "actN",
+        "value": "$[if::(eq::(${live},1),length::(replaceAll::(join::(pluck::(${grid},l),~),[^1-4],)),)]"
+      },
+      "_note": "格子窗口内的活跃天数(2026-10-08):副标题原来写 totals.activeDays(全部历史),比格子还多。这里数窗口内 l≥1 的格:把每格档位拼成串、删掉 1–4 以外的字符,剩下的长度就是活跃天数(VParser 无 filter/count,见 vparser-regex-split-and-counting)。零新增请求。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd0",
+        "value": "$[findNotEmpty::(${grid[0].d},)]"
+      },
+      "_note": "月份刻度:格子按列 = 一周(c 列、r 行,首格 gridStart)。每列取首格日期,这一列里有某月 1 号(日 ≤ 7)就标月份;第 0 列恒标。缺格(数据不足 10 周)落空不标。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy0",
+        "value": "$[if::(eq::(length::(${_gd0}),10),parseNumber::(subString::(${_gd0},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo0",
+        "value": "$[if::(eq::(length::(${_gd0}),10),parseNumber::(subString::(${_gd0},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me0",
+        "value": "$[index::(${MONE},calc::(${_mo0}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk0",
+        "value": "$[if::(eq::(length::(${_gd0}),10),if::(1,if::(startsWith::(${@app.language},zh),${_mo0}月,${_me0}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd1",
+        "value": "$[findNotEmpty::(${grid[7].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy1",
+        "value": "$[if::(eq::(length::(${_gd1}),10),parseNumber::(subString::(${_gd1},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo1",
+        "value": "$[if::(eq::(length::(${_gd1}),10),parseNumber::(subString::(${_gd1},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me1",
+        "value": "$[index::(${MONE},calc::(${_mo1}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk1",
+        "value": "$[if::(eq::(length::(${_gd1}),10),if::(le::(${_dy1},7),if::(startsWith::(${@app.language},zh),${_mo1}月,${_me1}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd2",
+        "value": "$[findNotEmpty::(${grid[14].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy2",
+        "value": "$[if::(eq::(length::(${_gd2}),10),parseNumber::(subString::(${_gd2},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo2",
+        "value": "$[if::(eq::(length::(${_gd2}),10),parseNumber::(subString::(${_gd2},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me2",
+        "value": "$[index::(${MONE},calc::(${_mo2}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk2",
+        "value": "$[if::(eq::(length::(${_gd2}),10),if::(le::(${_dy2},7),if::(startsWith::(${@app.language},zh),${_mo2}月,${_me2}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd3",
+        "value": "$[findNotEmpty::(${grid[21].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy3",
+        "value": "$[if::(eq::(length::(${_gd3}),10),parseNumber::(subString::(${_gd3},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo3",
+        "value": "$[if::(eq::(length::(${_gd3}),10),parseNumber::(subString::(${_gd3},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me3",
+        "value": "$[index::(${MONE},calc::(${_mo3}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk3",
+        "value": "$[if::(eq::(length::(${_gd3}),10),if::(le::(${_dy3},7),if::(startsWith::(${@app.language},zh),${_mo3}月,${_me3}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd4",
+        "value": "$[findNotEmpty::(${grid[28].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy4",
+        "value": "$[if::(eq::(length::(${_gd4}),10),parseNumber::(subString::(${_gd4},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo4",
+        "value": "$[if::(eq::(length::(${_gd4}),10),parseNumber::(subString::(${_gd4},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me4",
+        "value": "$[index::(${MONE},calc::(${_mo4}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk4",
+        "value": "$[if::(eq::(length::(${_gd4}),10),if::(le::(${_dy4},7),if::(startsWith::(${@app.language},zh),${_mo4}月,${_me4}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd5",
+        "value": "$[findNotEmpty::(${grid[35].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy5",
+        "value": "$[if::(eq::(length::(${_gd5}),10),parseNumber::(subString::(${_gd5},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo5",
+        "value": "$[if::(eq::(length::(${_gd5}),10),parseNumber::(subString::(${_gd5},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me5",
+        "value": "$[index::(${MONE},calc::(${_mo5}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk5",
+        "value": "$[if::(eq::(length::(${_gd5}),10),if::(le::(${_dy5},7),if::(startsWith::(${@app.language},zh),${_mo5}月,${_me5}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd6",
+        "value": "$[findNotEmpty::(${grid[42].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy6",
+        "value": "$[if::(eq::(length::(${_gd6}),10),parseNumber::(subString::(${_gd6},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo6",
+        "value": "$[if::(eq::(length::(${_gd6}),10),parseNumber::(subString::(${_gd6},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me6",
+        "value": "$[index::(${MONE},calc::(${_mo6}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk6",
+        "value": "$[if::(eq::(length::(${_gd6}),10),if::(le::(${_dy6},7),if::(startsWith::(${@app.language},zh),${_mo6}月,${_me6}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd7",
+        "value": "$[findNotEmpty::(${grid[49].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy7",
+        "value": "$[if::(eq::(length::(${_gd7}),10),parseNumber::(subString::(${_gd7},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo7",
+        "value": "$[if::(eq::(length::(${_gd7}),10),parseNumber::(subString::(${_gd7},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me7",
+        "value": "$[index::(${MONE},calc::(${_mo7}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk7",
+        "value": "$[if::(eq::(length::(${_gd7}),10),if::(le::(${_dy7},7),if::(startsWith::(${@app.language},zh),${_mo7}月,${_me7}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd8",
+        "value": "$[findNotEmpty::(${grid[56].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy8",
+        "value": "$[if::(eq::(length::(${_gd8}),10),parseNumber::(subString::(${_gd8},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo8",
+        "value": "$[if::(eq::(length::(${_gd8}),10),parseNumber::(subString::(${_gd8},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me8",
+        "value": "$[index::(${MONE},calc::(${_mo8}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk8",
+        "value": "$[if::(eq::(length::(${_gd8}),10),if::(le::(${_dy8},7),if::(startsWith::(${@app.language},zh),${_mo8}月,${_me8}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_gd9",
+        "value": "$[findNotEmpty::(${grid[63].d},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dy9",
+        "value": "$[if::(eq::(length::(${_gd9}),10),parseNumber::(subString::(${_gd9},8,10),0),99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mo9",
+        "value": "$[if::(eq::(length::(${_gd9}),10),parseNumber::(subString::(${_gd9},5,7),0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_me9",
+        "value": "$[index::(${MONE},calc::(${_mo9}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk9",
+        "value": "$[if::(eq::(length::(${_gd9}),10),if::(le::(${_dy9},7),if::(startsWith::(${@app.language},zh),${_mo9}月,${_me9}),),)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "grid",
+          "gn",
+          "live",
+          "startLbl",
+          "endLbl",
+          "daysRaw",
+          "streak",
+          "longest",
+          "at",
+          "actN",
+          "mk0",
+          "mk1",
+          "mk2",
+          "mk3",
+          "mk4",
+          "mk5",
+          "mk6",
+          "mk7",
+          "mk8",
+          "mk9"
+        ]
+      }
+    }
+  ]
+}

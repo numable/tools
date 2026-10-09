@@ -1,0 +1,3546 @@
+{
+  "_note": "记录率(stats 卡)。本盒 + 前三盒服药期里「已服用」的天数占比。生成器 gen_pill_stats.py。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "start",
+      "action": "data.get",
+      "params": {
+        "key": "start",
+        "default": ""
+      }
+    },
+    {
+      "id": "active",
+      "action": "data.get",
+      "params": {
+        "key": "active",
+        "default": 21
+      }
+    },
+    {
+      "id": "rest",
+      "action": "data.get",
+      "params": {
+        "key": "rest",
+        "default": 7
+      }
+    },
+    {
+      "id": "taken",
+      "action": "data.get",
+      "params": {
+        "key": "taken",
+        "default": "_"
+      }
+    },
+    {
+      "id": "skipped",
+      "action": "data.get",
+      "params": {
+        "key": "skipped",
+        "default": "_"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "${start}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasPlan",
+        "value": "$[if::(gt::(length::(${s0}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd",
+        "value": "$[findNotEmpty::(${s0},2026-01-01)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cycle",
+        "value": "$[calc::(${active}+${rest})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startMs",
+        "value": "$[parseDate::(${sd},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(formatDate::(${@time.nowMs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offset",
+        "value": "$[round::(calc::((${todayMs}-${startMs})/86400000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curPack",
+        "value": "$[if::(lt::(${offset},0),-1,floor::(calc::(${offset}/${cycle})))]"
+      },
+      "_note": "与 w.df 同式;计划还没开始 = -1(本卡整张走「没有数据」)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayIdx",
+        "value": "$[calc::(${offset}-max::(${curPack},0)*${cycle})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tk",
+        "value": "${taken}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk",
+        "value": "${skipped}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pb0",
+        "value": "$[calc::((calc::(${curPack}-0))*${cycle})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lim0",
+        "value": "$[if::(eq::(0,0),min::(calc::(${todayIdx}+1),${active}),${active})]"
+      },
+      "_note": "本盒只数到今天(含);往期整段服药期。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_0",
+        "value": "$[if::(lt::(0,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_0",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+0)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_0",
+        "value": "$[if::(eq::(${e0_0},1),if::(contains::(${tk},${g0_0}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_0",
+        "value": "$[if::(eq::(${e0_0},1),if::(contains::(${sk},${g0_0}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_1",
+        "value": "$[if::(lt::(1,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_1",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+1)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_1",
+        "value": "$[if::(eq::(${e0_1},1),if::(contains::(${tk},${g0_1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_1",
+        "value": "$[if::(eq::(${e0_1},1),if::(contains::(${sk},${g0_1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_2",
+        "value": "$[if::(lt::(2,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_2",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+2)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_2",
+        "value": "$[if::(eq::(${e0_2},1),if::(contains::(${tk},${g0_2}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_2",
+        "value": "$[if::(eq::(${e0_2},1),if::(contains::(${sk},${g0_2}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_3",
+        "value": "$[if::(lt::(3,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_3",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+3)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_3",
+        "value": "$[if::(eq::(${e0_3},1),if::(contains::(${tk},${g0_3}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_3",
+        "value": "$[if::(eq::(${e0_3},1),if::(contains::(${sk},${g0_3}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_4",
+        "value": "$[if::(lt::(4,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_4",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+4)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_4",
+        "value": "$[if::(eq::(${e0_4},1),if::(contains::(${tk},${g0_4}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_4",
+        "value": "$[if::(eq::(${e0_4},1),if::(contains::(${sk},${g0_4}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_5",
+        "value": "$[if::(lt::(5,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_5",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+5)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_5",
+        "value": "$[if::(eq::(${e0_5},1),if::(contains::(${tk},${g0_5}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_5",
+        "value": "$[if::(eq::(${e0_5},1),if::(contains::(${sk},${g0_5}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_6",
+        "value": "$[if::(lt::(6,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_6",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+6)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_6",
+        "value": "$[if::(eq::(${e0_6},1),if::(contains::(${tk},${g0_6}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_6",
+        "value": "$[if::(eq::(${e0_6},1),if::(contains::(${sk},${g0_6}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_7",
+        "value": "$[if::(lt::(7,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_7",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+7)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_7",
+        "value": "$[if::(eq::(${e0_7},1),if::(contains::(${tk},${g0_7}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_7",
+        "value": "$[if::(eq::(${e0_7},1),if::(contains::(${sk},${g0_7}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_8",
+        "value": "$[if::(lt::(8,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_8",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+8)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_8",
+        "value": "$[if::(eq::(${e0_8},1),if::(contains::(${tk},${g0_8}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_8",
+        "value": "$[if::(eq::(${e0_8},1),if::(contains::(${sk},${g0_8}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_9",
+        "value": "$[if::(lt::(9,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_9",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+9)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_9",
+        "value": "$[if::(eq::(${e0_9},1),if::(contains::(${tk},${g0_9}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_9",
+        "value": "$[if::(eq::(${e0_9},1),if::(contains::(${sk},${g0_9}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_10",
+        "value": "$[if::(lt::(10,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_10",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+10)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_10",
+        "value": "$[if::(eq::(${e0_10},1),if::(contains::(${tk},${g0_10}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_10",
+        "value": "$[if::(eq::(${e0_10},1),if::(contains::(${sk},${g0_10}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_11",
+        "value": "$[if::(lt::(11,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_11",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+11)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_11",
+        "value": "$[if::(eq::(${e0_11},1),if::(contains::(${tk},${g0_11}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_11",
+        "value": "$[if::(eq::(${e0_11},1),if::(contains::(${sk},${g0_11}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_12",
+        "value": "$[if::(lt::(12,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_12",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+12)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_12",
+        "value": "$[if::(eq::(${e0_12},1),if::(contains::(${tk},${g0_12}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_12",
+        "value": "$[if::(eq::(${e0_12},1),if::(contains::(${sk},${g0_12}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_13",
+        "value": "$[if::(lt::(13,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_13",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+13)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_13",
+        "value": "$[if::(eq::(${e0_13},1),if::(contains::(${tk},${g0_13}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_13",
+        "value": "$[if::(eq::(${e0_13},1),if::(contains::(${sk},${g0_13}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_14",
+        "value": "$[if::(lt::(14,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_14",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+14)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_14",
+        "value": "$[if::(eq::(${e0_14},1),if::(contains::(${tk},${g0_14}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_14",
+        "value": "$[if::(eq::(${e0_14},1),if::(contains::(${sk},${g0_14}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_15",
+        "value": "$[if::(lt::(15,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_15",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+15)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_15",
+        "value": "$[if::(eq::(${e0_15},1),if::(contains::(${tk},${g0_15}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_15",
+        "value": "$[if::(eq::(${e0_15},1),if::(contains::(${sk},${g0_15}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_16",
+        "value": "$[if::(lt::(16,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_16",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+16)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_16",
+        "value": "$[if::(eq::(${e0_16},1),if::(contains::(${tk},${g0_16}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_16",
+        "value": "$[if::(eq::(${e0_16},1),if::(contains::(${sk},${g0_16}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_17",
+        "value": "$[if::(lt::(17,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_17",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+17)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_17",
+        "value": "$[if::(eq::(${e0_17},1),if::(contains::(${tk},${g0_17}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_17",
+        "value": "$[if::(eq::(${e0_17},1),if::(contains::(${sk},${g0_17}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_18",
+        "value": "$[if::(lt::(18,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_18",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+18)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_18",
+        "value": "$[if::(eq::(${e0_18},1),if::(contains::(${tk},${g0_18}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_18",
+        "value": "$[if::(eq::(${e0_18},1),if::(contains::(${sk},${g0_18}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_19",
+        "value": "$[if::(lt::(19,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_19",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+19)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_19",
+        "value": "$[if::(eq::(${e0_19},1),if::(contains::(${tk},${g0_19}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_19",
+        "value": "$[if::(eq::(${e0_19},1),if::(contains::(${sk},${g0_19}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_20",
+        "value": "$[if::(lt::(20,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_20",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+20)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_20",
+        "value": "$[if::(eq::(${e0_20},1),if::(contains::(${tk},${g0_20}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_20",
+        "value": "$[if::(eq::(${e0_20},1),if::(contains::(${sk},${g0_20}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_21",
+        "value": "$[if::(lt::(21,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_21",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+21)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_21",
+        "value": "$[if::(eq::(${e0_21},1),if::(contains::(${tk},${g0_21}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_21",
+        "value": "$[if::(eq::(${e0_21},1),if::(contains::(${sk},${g0_21}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_22",
+        "value": "$[if::(lt::(22,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_22",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+22)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_22",
+        "value": "$[if::(eq::(${e0_22},1),if::(contains::(${tk},${g0_22}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_22",
+        "value": "$[if::(eq::(${e0_22},1),if::(contains::(${sk},${g0_22}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_23",
+        "value": "$[if::(lt::(23,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_23",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+23)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_23",
+        "value": "$[if::(eq::(${e0_23},1),if::(contains::(${tk},${g0_23}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_23",
+        "value": "$[if::(eq::(${e0_23},1),if::(contains::(${sk},${g0_23}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_24",
+        "value": "$[if::(lt::(24,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_24",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+24)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_24",
+        "value": "$[if::(eq::(${e0_24},1),if::(contains::(${tk},${g0_24}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_24",
+        "value": "$[if::(eq::(${e0_24},1),if::(contains::(${sk},${g0_24}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_25",
+        "value": "$[if::(lt::(25,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_25",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+25)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_25",
+        "value": "$[if::(eq::(${e0_25},1),if::(contains::(${tk},${g0_25}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_25",
+        "value": "$[if::(eq::(${e0_25},1),if::(contains::(${sk},${g0_25}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_26",
+        "value": "$[if::(lt::(26,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_26",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+26)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_26",
+        "value": "$[if::(eq::(${e0_26},1),if::(contains::(${tk},${g0_26}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_26",
+        "value": "$[if::(eq::(${e0_26},1),if::(contains::(${sk},${g0_26}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0_27",
+        "value": "$[if::(lt::(27,${lim0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0_27",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb0}+27)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0_27",
+        "value": "$[if::(eq::(${e0_27},1),if::(contains::(${tk},${g0_27}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0_27",
+        "value": "$[if::(eq::(${e0_27},1),if::(contains::(${sk},${g0_27}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "T0",
+        "value": "$[calc::(${t0_0}+${t0_1}+${t0_2}+${t0_3}+${t0_4}+${t0_5}+${t0_6}+${t0_7}+${t0_8}+${t0_9}+${t0_10}+${t0_11}+${t0_12}+${t0_13}+${t0_14}+${t0_15}+${t0_16}+${t0_17}+${t0_18}+${t0_19}+${t0_20}+${t0_21}+${t0_22}+${t0_23}+${t0_24}+${t0_25}+${t0_26}+${t0_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "S0",
+        "value": "$[calc::(${k0_0}+${k0_1}+${k0_2}+${k0_3}+${k0_4}+${k0_5}+${k0_6}+${k0_7}+${k0_8}+${k0_9}+${k0_10}+${k0_11}+${k0_12}+${k0_13}+${k0_14}+${k0_15}+${k0_16}+${k0_17}+${k0_18}+${k0_19}+${k0_20}+${k0_21}+${k0_22}+${k0_23}+${k0_24}+${k0_25}+${k0_26}+${k0_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "E0",
+        "value": "$[calc::(${e0_0}+${e0_1}+${e0_2}+${e0_3}+${e0_4}+${e0_5}+${e0_6}+${e0_7}+${e0_8}+${e0_9}+${e0_10}+${e0_11}+${e0_12}+${e0_13}+${e0_14}+${e0_15}+${e0_16}+${e0_17}+${e0_18}+${e0_19}+${e0_20}+${e0_21}+${e0_22}+${e0_23}+${e0_24}+${e0_25}+${e0_26}+${e0_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok0",
+        "value": "$[if::(eq::(${hasPlan},1),if::(ge::(calc::(${curPack}-0),0),if::(gt::(${E0},0),1,0),0),0)]"
+      },
+      "_note": "这一盒存在(计划已开始且不早于起始日)且有应记天数才出。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r0",
+        "value": "$[if::(eq::(${ok0},1),round::(calc::(${T0}*100/${E0})),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0",
+        "value": "$[parseNumber::(max::(calc::(3+findNotEmpty::(${r0},0)/100*144.0),3),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pb1",
+        "value": "$[calc::((calc::(${curPack}-1))*${cycle})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lim1",
+        "value": "$[if::(eq::(1,0),min::(calc::(${todayIdx}+1),${active}),${active})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_0",
+        "value": "$[if::(lt::(0,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_0",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+0)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_0",
+        "value": "$[if::(eq::(${e1_0},1),if::(contains::(${tk},${g1_0}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_0",
+        "value": "$[if::(eq::(${e1_0},1),if::(contains::(${sk},${g1_0}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_1",
+        "value": "$[if::(lt::(1,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_1",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+1)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_1",
+        "value": "$[if::(eq::(${e1_1},1),if::(contains::(${tk},${g1_1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_1",
+        "value": "$[if::(eq::(${e1_1},1),if::(contains::(${sk},${g1_1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_2",
+        "value": "$[if::(lt::(2,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_2",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+2)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_2",
+        "value": "$[if::(eq::(${e1_2},1),if::(contains::(${tk},${g1_2}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_2",
+        "value": "$[if::(eq::(${e1_2},1),if::(contains::(${sk},${g1_2}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_3",
+        "value": "$[if::(lt::(3,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_3",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+3)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_3",
+        "value": "$[if::(eq::(${e1_3},1),if::(contains::(${tk},${g1_3}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_3",
+        "value": "$[if::(eq::(${e1_3},1),if::(contains::(${sk},${g1_3}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_4",
+        "value": "$[if::(lt::(4,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_4",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+4)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_4",
+        "value": "$[if::(eq::(${e1_4},1),if::(contains::(${tk},${g1_4}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_4",
+        "value": "$[if::(eq::(${e1_4},1),if::(contains::(${sk},${g1_4}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_5",
+        "value": "$[if::(lt::(5,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_5",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+5)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_5",
+        "value": "$[if::(eq::(${e1_5},1),if::(contains::(${tk},${g1_5}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_5",
+        "value": "$[if::(eq::(${e1_5},1),if::(contains::(${sk},${g1_5}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_6",
+        "value": "$[if::(lt::(6,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_6",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+6)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_6",
+        "value": "$[if::(eq::(${e1_6},1),if::(contains::(${tk},${g1_6}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_6",
+        "value": "$[if::(eq::(${e1_6},1),if::(contains::(${sk},${g1_6}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_7",
+        "value": "$[if::(lt::(7,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_7",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+7)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_7",
+        "value": "$[if::(eq::(${e1_7},1),if::(contains::(${tk},${g1_7}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_7",
+        "value": "$[if::(eq::(${e1_7},1),if::(contains::(${sk},${g1_7}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_8",
+        "value": "$[if::(lt::(8,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_8",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+8)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_8",
+        "value": "$[if::(eq::(${e1_8},1),if::(contains::(${tk},${g1_8}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_8",
+        "value": "$[if::(eq::(${e1_8},1),if::(contains::(${sk},${g1_8}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_9",
+        "value": "$[if::(lt::(9,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_9",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+9)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_9",
+        "value": "$[if::(eq::(${e1_9},1),if::(contains::(${tk},${g1_9}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_9",
+        "value": "$[if::(eq::(${e1_9},1),if::(contains::(${sk},${g1_9}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_10",
+        "value": "$[if::(lt::(10,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_10",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+10)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_10",
+        "value": "$[if::(eq::(${e1_10},1),if::(contains::(${tk},${g1_10}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_10",
+        "value": "$[if::(eq::(${e1_10},1),if::(contains::(${sk},${g1_10}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_11",
+        "value": "$[if::(lt::(11,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_11",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+11)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_11",
+        "value": "$[if::(eq::(${e1_11},1),if::(contains::(${tk},${g1_11}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_11",
+        "value": "$[if::(eq::(${e1_11},1),if::(contains::(${sk},${g1_11}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_12",
+        "value": "$[if::(lt::(12,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_12",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+12)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_12",
+        "value": "$[if::(eq::(${e1_12},1),if::(contains::(${tk},${g1_12}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_12",
+        "value": "$[if::(eq::(${e1_12},1),if::(contains::(${sk},${g1_12}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_13",
+        "value": "$[if::(lt::(13,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_13",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+13)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_13",
+        "value": "$[if::(eq::(${e1_13},1),if::(contains::(${tk},${g1_13}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_13",
+        "value": "$[if::(eq::(${e1_13},1),if::(contains::(${sk},${g1_13}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_14",
+        "value": "$[if::(lt::(14,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_14",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+14)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_14",
+        "value": "$[if::(eq::(${e1_14},1),if::(contains::(${tk},${g1_14}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_14",
+        "value": "$[if::(eq::(${e1_14},1),if::(contains::(${sk},${g1_14}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_15",
+        "value": "$[if::(lt::(15,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_15",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+15)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_15",
+        "value": "$[if::(eq::(${e1_15},1),if::(contains::(${tk},${g1_15}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_15",
+        "value": "$[if::(eq::(${e1_15},1),if::(contains::(${sk},${g1_15}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_16",
+        "value": "$[if::(lt::(16,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_16",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+16)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_16",
+        "value": "$[if::(eq::(${e1_16},1),if::(contains::(${tk},${g1_16}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_16",
+        "value": "$[if::(eq::(${e1_16},1),if::(contains::(${sk},${g1_16}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_17",
+        "value": "$[if::(lt::(17,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_17",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+17)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_17",
+        "value": "$[if::(eq::(${e1_17},1),if::(contains::(${tk},${g1_17}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_17",
+        "value": "$[if::(eq::(${e1_17},1),if::(contains::(${sk},${g1_17}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_18",
+        "value": "$[if::(lt::(18,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_18",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+18)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_18",
+        "value": "$[if::(eq::(${e1_18},1),if::(contains::(${tk},${g1_18}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_18",
+        "value": "$[if::(eq::(${e1_18},1),if::(contains::(${sk},${g1_18}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_19",
+        "value": "$[if::(lt::(19,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_19",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+19)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_19",
+        "value": "$[if::(eq::(${e1_19},1),if::(contains::(${tk},${g1_19}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_19",
+        "value": "$[if::(eq::(${e1_19},1),if::(contains::(${sk},${g1_19}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_20",
+        "value": "$[if::(lt::(20,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_20",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+20)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_20",
+        "value": "$[if::(eq::(${e1_20},1),if::(contains::(${tk},${g1_20}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_20",
+        "value": "$[if::(eq::(${e1_20},1),if::(contains::(${sk},${g1_20}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_21",
+        "value": "$[if::(lt::(21,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_21",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+21)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_21",
+        "value": "$[if::(eq::(${e1_21},1),if::(contains::(${tk},${g1_21}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_21",
+        "value": "$[if::(eq::(${e1_21},1),if::(contains::(${sk},${g1_21}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_22",
+        "value": "$[if::(lt::(22,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_22",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+22)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_22",
+        "value": "$[if::(eq::(${e1_22},1),if::(contains::(${tk},${g1_22}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_22",
+        "value": "$[if::(eq::(${e1_22},1),if::(contains::(${sk},${g1_22}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_23",
+        "value": "$[if::(lt::(23,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_23",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+23)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_23",
+        "value": "$[if::(eq::(${e1_23},1),if::(contains::(${tk},${g1_23}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_23",
+        "value": "$[if::(eq::(${e1_23},1),if::(contains::(${sk},${g1_23}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_24",
+        "value": "$[if::(lt::(24,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_24",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+24)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_24",
+        "value": "$[if::(eq::(${e1_24},1),if::(contains::(${tk},${g1_24}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_24",
+        "value": "$[if::(eq::(${e1_24},1),if::(contains::(${sk},${g1_24}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_25",
+        "value": "$[if::(lt::(25,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_25",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+25)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_25",
+        "value": "$[if::(eq::(${e1_25},1),if::(contains::(${tk},${g1_25}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_25",
+        "value": "$[if::(eq::(${e1_25},1),if::(contains::(${sk},${g1_25}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_26",
+        "value": "$[if::(lt::(26,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_26",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+26)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_26",
+        "value": "$[if::(eq::(${e1_26},1),if::(contains::(${tk},${g1_26}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_26",
+        "value": "$[if::(eq::(${e1_26},1),if::(contains::(${sk},${g1_26}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1_27",
+        "value": "$[if::(lt::(27,${lim1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1_27",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb1}+27)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1_27",
+        "value": "$[if::(eq::(${e1_27},1),if::(contains::(${tk},${g1_27}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1_27",
+        "value": "$[if::(eq::(${e1_27},1),if::(contains::(${sk},${g1_27}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "T1",
+        "value": "$[calc::(${t1_0}+${t1_1}+${t1_2}+${t1_3}+${t1_4}+${t1_5}+${t1_6}+${t1_7}+${t1_8}+${t1_9}+${t1_10}+${t1_11}+${t1_12}+${t1_13}+${t1_14}+${t1_15}+${t1_16}+${t1_17}+${t1_18}+${t1_19}+${t1_20}+${t1_21}+${t1_22}+${t1_23}+${t1_24}+${t1_25}+${t1_26}+${t1_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "S1",
+        "value": "$[calc::(${k1_0}+${k1_1}+${k1_2}+${k1_3}+${k1_4}+${k1_5}+${k1_6}+${k1_7}+${k1_8}+${k1_9}+${k1_10}+${k1_11}+${k1_12}+${k1_13}+${k1_14}+${k1_15}+${k1_16}+${k1_17}+${k1_18}+${k1_19}+${k1_20}+${k1_21}+${k1_22}+${k1_23}+${k1_24}+${k1_25}+${k1_26}+${k1_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "E1",
+        "value": "$[calc::(${e1_0}+${e1_1}+${e1_2}+${e1_3}+${e1_4}+${e1_5}+${e1_6}+${e1_7}+${e1_8}+${e1_9}+${e1_10}+${e1_11}+${e1_12}+${e1_13}+${e1_14}+${e1_15}+${e1_16}+${e1_17}+${e1_18}+${e1_19}+${e1_20}+${e1_21}+${e1_22}+${e1_23}+${e1_24}+${e1_25}+${e1_26}+${e1_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok1",
+        "value": "$[if::(eq::(${hasPlan},1),if::(ge::(calc::(${curPack}-1),0),if::(gt::(${E1},0),1,0),0),0)]"
+      },
+      "_note": "这一盒存在(计划已开始且不早于起始日)且有应记天数才出。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r1",
+        "value": "$[if::(eq::(${ok1},1),round::(calc::(${T1}*100/${E1})),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1",
+        "value": "$[parseNumber::(max::(calc::(3+findNotEmpty::(${r1},0)/100*144.0),3),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pb2",
+        "value": "$[calc::((calc::(${curPack}-2))*${cycle})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lim2",
+        "value": "$[if::(eq::(2,0),min::(calc::(${todayIdx}+1),${active}),${active})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_0",
+        "value": "$[if::(lt::(0,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_0",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+0)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_0",
+        "value": "$[if::(eq::(${e2_0},1),if::(contains::(${tk},${g2_0}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_0",
+        "value": "$[if::(eq::(${e2_0},1),if::(contains::(${sk},${g2_0}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_1",
+        "value": "$[if::(lt::(1,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_1",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+1)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_1",
+        "value": "$[if::(eq::(${e2_1},1),if::(contains::(${tk},${g2_1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_1",
+        "value": "$[if::(eq::(${e2_1},1),if::(contains::(${sk},${g2_1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_2",
+        "value": "$[if::(lt::(2,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_2",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+2)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_2",
+        "value": "$[if::(eq::(${e2_2},1),if::(contains::(${tk},${g2_2}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_2",
+        "value": "$[if::(eq::(${e2_2},1),if::(contains::(${sk},${g2_2}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_3",
+        "value": "$[if::(lt::(3,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_3",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+3)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_3",
+        "value": "$[if::(eq::(${e2_3},1),if::(contains::(${tk},${g2_3}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_3",
+        "value": "$[if::(eq::(${e2_3},1),if::(contains::(${sk},${g2_3}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_4",
+        "value": "$[if::(lt::(4,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_4",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+4)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_4",
+        "value": "$[if::(eq::(${e2_4},1),if::(contains::(${tk},${g2_4}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_4",
+        "value": "$[if::(eq::(${e2_4},1),if::(contains::(${sk},${g2_4}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_5",
+        "value": "$[if::(lt::(5,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_5",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+5)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_5",
+        "value": "$[if::(eq::(${e2_5},1),if::(contains::(${tk},${g2_5}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_5",
+        "value": "$[if::(eq::(${e2_5},1),if::(contains::(${sk},${g2_5}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_6",
+        "value": "$[if::(lt::(6,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_6",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+6)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_6",
+        "value": "$[if::(eq::(${e2_6},1),if::(contains::(${tk},${g2_6}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_6",
+        "value": "$[if::(eq::(${e2_6},1),if::(contains::(${sk},${g2_6}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_7",
+        "value": "$[if::(lt::(7,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_7",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+7)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_7",
+        "value": "$[if::(eq::(${e2_7},1),if::(contains::(${tk},${g2_7}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_7",
+        "value": "$[if::(eq::(${e2_7},1),if::(contains::(${sk},${g2_7}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_8",
+        "value": "$[if::(lt::(8,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_8",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+8)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_8",
+        "value": "$[if::(eq::(${e2_8},1),if::(contains::(${tk},${g2_8}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_8",
+        "value": "$[if::(eq::(${e2_8},1),if::(contains::(${sk},${g2_8}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_9",
+        "value": "$[if::(lt::(9,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_9",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+9)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_9",
+        "value": "$[if::(eq::(${e2_9},1),if::(contains::(${tk},${g2_9}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_9",
+        "value": "$[if::(eq::(${e2_9},1),if::(contains::(${sk},${g2_9}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_10",
+        "value": "$[if::(lt::(10,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_10",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+10)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_10",
+        "value": "$[if::(eq::(${e2_10},1),if::(contains::(${tk},${g2_10}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_10",
+        "value": "$[if::(eq::(${e2_10},1),if::(contains::(${sk},${g2_10}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_11",
+        "value": "$[if::(lt::(11,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_11",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+11)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_11",
+        "value": "$[if::(eq::(${e2_11},1),if::(contains::(${tk},${g2_11}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_11",
+        "value": "$[if::(eq::(${e2_11},1),if::(contains::(${sk},${g2_11}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_12",
+        "value": "$[if::(lt::(12,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_12",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+12)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_12",
+        "value": "$[if::(eq::(${e2_12},1),if::(contains::(${tk},${g2_12}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_12",
+        "value": "$[if::(eq::(${e2_12},1),if::(contains::(${sk},${g2_12}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_13",
+        "value": "$[if::(lt::(13,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_13",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+13)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_13",
+        "value": "$[if::(eq::(${e2_13},1),if::(contains::(${tk},${g2_13}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_13",
+        "value": "$[if::(eq::(${e2_13},1),if::(contains::(${sk},${g2_13}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_14",
+        "value": "$[if::(lt::(14,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_14",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+14)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_14",
+        "value": "$[if::(eq::(${e2_14},1),if::(contains::(${tk},${g2_14}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_14",
+        "value": "$[if::(eq::(${e2_14},1),if::(contains::(${sk},${g2_14}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_15",
+        "value": "$[if::(lt::(15,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_15",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+15)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_15",
+        "value": "$[if::(eq::(${e2_15},1),if::(contains::(${tk},${g2_15}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_15",
+        "value": "$[if::(eq::(${e2_15},1),if::(contains::(${sk},${g2_15}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_16",
+        "value": "$[if::(lt::(16,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_16",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+16)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_16",
+        "value": "$[if::(eq::(${e2_16},1),if::(contains::(${tk},${g2_16}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_16",
+        "value": "$[if::(eq::(${e2_16},1),if::(contains::(${sk},${g2_16}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_17",
+        "value": "$[if::(lt::(17,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_17",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+17)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_17",
+        "value": "$[if::(eq::(${e2_17},1),if::(contains::(${tk},${g2_17}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_17",
+        "value": "$[if::(eq::(${e2_17},1),if::(contains::(${sk},${g2_17}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_18",
+        "value": "$[if::(lt::(18,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_18",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+18)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_18",
+        "value": "$[if::(eq::(${e2_18},1),if::(contains::(${tk},${g2_18}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_18",
+        "value": "$[if::(eq::(${e2_18},1),if::(contains::(${sk},${g2_18}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_19",
+        "value": "$[if::(lt::(19,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_19",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+19)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_19",
+        "value": "$[if::(eq::(${e2_19},1),if::(contains::(${tk},${g2_19}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_19",
+        "value": "$[if::(eq::(${e2_19},1),if::(contains::(${sk},${g2_19}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_20",
+        "value": "$[if::(lt::(20,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_20",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+20)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_20",
+        "value": "$[if::(eq::(${e2_20},1),if::(contains::(${tk},${g2_20}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_20",
+        "value": "$[if::(eq::(${e2_20},1),if::(contains::(${sk},${g2_20}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_21",
+        "value": "$[if::(lt::(21,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_21",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+21)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_21",
+        "value": "$[if::(eq::(${e2_21},1),if::(contains::(${tk},${g2_21}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_21",
+        "value": "$[if::(eq::(${e2_21},1),if::(contains::(${sk},${g2_21}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_22",
+        "value": "$[if::(lt::(22,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_22",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+22)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_22",
+        "value": "$[if::(eq::(${e2_22},1),if::(contains::(${tk},${g2_22}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_22",
+        "value": "$[if::(eq::(${e2_22},1),if::(contains::(${sk},${g2_22}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_23",
+        "value": "$[if::(lt::(23,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_23",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+23)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_23",
+        "value": "$[if::(eq::(${e2_23},1),if::(contains::(${tk},${g2_23}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_23",
+        "value": "$[if::(eq::(${e2_23},1),if::(contains::(${sk},${g2_23}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_24",
+        "value": "$[if::(lt::(24,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_24",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+24)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_24",
+        "value": "$[if::(eq::(${e2_24},1),if::(contains::(${tk},${g2_24}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_24",
+        "value": "$[if::(eq::(${e2_24},1),if::(contains::(${sk},${g2_24}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_25",
+        "value": "$[if::(lt::(25,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_25",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+25)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_25",
+        "value": "$[if::(eq::(${e2_25},1),if::(contains::(${tk},${g2_25}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_25",
+        "value": "$[if::(eq::(${e2_25},1),if::(contains::(${sk},${g2_25}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_26",
+        "value": "$[if::(lt::(26,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_26",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+26)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_26",
+        "value": "$[if::(eq::(${e2_26},1),if::(contains::(${tk},${g2_26}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_26",
+        "value": "$[if::(eq::(${e2_26},1),if::(contains::(${sk},${g2_26}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e2_27",
+        "value": "$[if::(lt::(27,${lim2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2_27",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb2}+27)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2_27",
+        "value": "$[if::(eq::(${e2_27},1),if::(contains::(${tk},${g2_27}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2_27",
+        "value": "$[if::(eq::(${e2_27},1),if::(contains::(${sk},${g2_27}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "T2",
+        "value": "$[calc::(${t2_0}+${t2_1}+${t2_2}+${t2_3}+${t2_4}+${t2_5}+${t2_6}+${t2_7}+${t2_8}+${t2_9}+${t2_10}+${t2_11}+${t2_12}+${t2_13}+${t2_14}+${t2_15}+${t2_16}+${t2_17}+${t2_18}+${t2_19}+${t2_20}+${t2_21}+${t2_22}+${t2_23}+${t2_24}+${t2_25}+${t2_26}+${t2_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "S2",
+        "value": "$[calc::(${k2_0}+${k2_1}+${k2_2}+${k2_3}+${k2_4}+${k2_5}+${k2_6}+${k2_7}+${k2_8}+${k2_9}+${k2_10}+${k2_11}+${k2_12}+${k2_13}+${k2_14}+${k2_15}+${k2_16}+${k2_17}+${k2_18}+${k2_19}+${k2_20}+${k2_21}+${k2_22}+${k2_23}+${k2_24}+${k2_25}+${k2_26}+${k2_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "E2",
+        "value": "$[calc::(${e2_0}+${e2_1}+${e2_2}+${e2_3}+${e2_4}+${e2_5}+${e2_6}+${e2_7}+${e2_8}+${e2_9}+${e2_10}+${e2_11}+${e2_12}+${e2_13}+${e2_14}+${e2_15}+${e2_16}+${e2_17}+${e2_18}+${e2_19}+${e2_20}+${e2_21}+${e2_22}+${e2_23}+${e2_24}+${e2_25}+${e2_26}+${e2_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok2",
+        "value": "$[if::(eq::(${hasPlan},1),if::(ge::(calc::(${curPack}-2),0),if::(gt::(${E2},0),1,0),0),0)]"
+      },
+      "_note": "这一盒存在(计划已开始且不早于起始日)且有应记天数才出。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r2",
+        "value": "$[if::(eq::(${ok2},1),round::(calc::(${T2}*100/${E2})),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x2",
+        "value": "$[parseNumber::(max::(calc::(3+findNotEmpty::(${r2},0)/100*144.0),3),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pb3",
+        "value": "$[calc::((calc::(${curPack}-3))*${cycle})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lim3",
+        "value": "$[if::(eq::(3,0),min::(calc::(${todayIdx}+1),${active}),${active})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_0",
+        "value": "$[if::(lt::(0,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_0",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+0)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_0",
+        "value": "$[if::(eq::(${e3_0},1),if::(contains::(${tk},${g3_0}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_0",
+        "value": "$[if::(eq::(${e3_0},1),if::(contains::(${sk},${g3_0}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_1",
+        "value": "$[if::(lt::(1,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_1",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+1)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_1",
+        "value": "$[if::(eq::(${e3_1},1),if::(contains::(${tk},${g3_1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_1",
+        "value": "$[if::(eq::(${e3_1},1),if::(contains::(${sk},${g3_1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_2",
+        "value": "$[if::(lt::(2,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_2",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+2)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_2",
+        "value": "$[if::(eq::(${e3_2},1),if::(contains::(${tk},${g3_2}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_2",
+        "value": "$[if::(eq::(${e3_2},1),if::(contains::(${sk},${g3_2}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_3",
+        "value": "$[if::(lt::(3,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_3",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+3)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_3",
+        "value": "$[if::(eq::(${e3_3},1),if::(contains::(${tk},${g3_3}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_3",
+        "value": "$[if::(eq::(${e3_3},1),if::(contains::(${sk},${g3_3}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_4",
+        "value": "$[if::(lt::(4,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_4",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+4)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_4",
+        "value": "$[if::(eq::(${e3_4},1),if::(contains::(${tk},${g3_4}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_4",
+        "value": "$[if::(eq::(${e3_4},1),if::(contains::(${sk},${g3_4}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_5",
+        "value": "$[if::(lt::(5,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_5",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+5)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_5",
+        "value": "$[if::(eq::(${e3_5},1),if::(contains::(${tk},${g3_5}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_5",
+        "value": "$[if::(eq::(${e3_5},1),if::(contains::(${sk},${g3_5}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_6",
+        "value": "$[if::(lt::(6,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_6",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+6)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_6",
+        "value": "$[if::(eq::(${e3_6},1),if::(contains::(${tk},${g3_6}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_6",
+        "value": "$[if::(eq::(${e3_6},1),if::(contains::(${sk},${g3_6}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_7",
+        "value": "$[if::(lt::(7,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_7",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+7)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_7",
+        "value": "$[if::(eq::(${e3_7},1),if::(contains::(${tk},${g3_7}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_7",
+        "value": "$[if::(eq::(${e3_7},1),if::(contains::(${sk},${g3_7}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_8",
+        "value": "$[if::(lt::(8,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_8",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+8)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_8",
+        "value": "$[if::(eq::(${e3_8},1),if::(contains::(${tk},${g3_8}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_8",
+        "value": "$[if::(eq::(${e3_8},1),if::(contains::(${sk},${g3_8}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_9",
+        "value": "$[if::(lt::(9,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_9",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+9)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_9",
+        "value": "$[if::(eq::(${e3_9},1),if::(contains::(${tk},${g3_9}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_9",
+        "value": "$[if::(eq::(${e3_9},1),if::(contains::(${sk},${g3_9}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_10",
+        "value": "$[if::(lt::(10,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_10",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+10)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_10",
+        "value": "$[if::(eq::(${e3_10},1),if::(contains::(${tk},${g3_10}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_10",
+        "value": "$[if::(eq::(${e3_10},1),if::(contains::(${sk},${g3_10}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_11",
+        "value": "$[if::(lt::(11,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_11",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+11)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_11",
+        "value": "$[if::(eq::(${e3_11},1),if::(contains::(${tk},${g3_11}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_11",
+        "value": "$[if::(eq::(${e3_11},1),if::(contains::(${sk},${g3_11}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_12",
+        "value": "$[if::(lt::(12,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_12",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+12)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_12",
+        "value": "$[if::(eq::(${e3_12},1),if::(contains::(${tk},${g3_12}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_12",
+        "value": "$[if::(eq::(${e3_12},1),if::(contains::(${sk},${g3_12}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_13",
+        "value": "$[if::(lt::(13,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_13",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+13)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_13",
+        "value": "$[if::(eq::(${e3_13},1),if::(contains::(${tk},${g3_13}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_13",
+        "value": "$[if::(eq::(${e3_13},1),if::(contains::(${sk},${g3_13}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_14",
+        "value": "$[if::(lt::(14,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_14",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+14)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_14",
+        "value": "$[if::(eq::(${e3_14},1),if::(contains::(${tk},${g3_14}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_14",
+        "value": "$[if::(eq::(${e3_14},1),if::(contains::(${sk},${g3_14}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_15",
+        "value": "$[if::(lt::(15,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_15",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+15)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_15",
+        "value": "$[if::(eq::(${e3_15},1),if::(contains::(${tk},${g3_15}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_15",
+        "value": "$[if::(eq::(${e3_15},1),if::(contains::(${sk},${g3_15}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_16",
+        "value": "$[if::(lt::(16,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_16",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+16)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_16",
+        "value": "$[if::(eq::(${e3_16},1),if::(contains::(${tk},${g3_16}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_16",
+        "value": "$[if::(eq::(${e3_16},1),if::(contains::(${sk},${g3_16}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_17",
+        "value": "$[if::(lt::(17,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_17",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+17)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_17",
+        "value": "$[if::(eq::(${e3_17},1),if::(contains::(${tk},${g3_17}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_17",
+        "value": "$[if::(eq::(${e3_17},1),if::(contains::(${sk},${g3_17}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_18",
+        "value": "$[if::(lt::(18,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_18",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+18)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_18",
+        "value": "$[if::(eq::(${e3_18},1),if::(contains::(${tk},${g3_18}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_18",
+        "value": "$[if::(eq::(${e3_18},1),if::(contains::(${sk},${g3_18}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_19",
+        "value": "$[if::(lt::(19,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_19",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+19)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_19",
+        "value": "$[if::(eq::(${e3_19},1),if::(contains::(${tk},${g3_19}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_19",
+        "value": "$[if::(eq::(${e3_19},1),if::(contains::(${sk},${g3_19}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_20",
+        "value": "$[if::(lt::(20,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_20",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+20)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_20",
+        "value": "$[if::(eq::(${e3_20},1),if::(contains::(${tk},${g3_20}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_20",
+        "value": "$[if::(eq::(${e3_20},1),if::(contains::(${sk},${g3_20}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_21",
+        "value": "$[if::(lt::(21,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_21",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+21)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_21",
+        "value": "$[if::(eq::(${e3_21},1),if::(contains::(${tk},${g3_21}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_21",
+        "value": "$[if::(eq::(${e3_21},1),if::(contains::(${sk},${g3_21}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_22",
+        "value": "$[if::(lt::(22,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_22",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+22)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_22",
+        "value": "$[if::(eq::(${e3_22},1),if::(contains::(${tk},${g3_22}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_22",
+        "value": "$[if::(eq::(${e3_22},1),if::(contains::(${sk},${g3_22}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_23",
+        "value": "$[if::(lt::(23,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_23",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+23)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_23",
+        "value": "$[if::(eq::(${e3_23},1),if::(contains::(${tk},${g3_23}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_23",
+        "value": "$[if::(eq::(${e3_23},1),if::(contains::(${sk},${g3_23}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_24",
+        "value": "$[if::(lt::(24,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_24",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+24)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_24",
+        "value": "$[if::(eq::(${e3_24},1),if::(contains::(${tk},${g3_24}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_24",
+        "value": "$[if::(eq::(${e3_24},1),if::(contains::(${sk},${g3_24}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_25",
+        "value": "$[if::(lt::(25,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_25",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+25)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_25",
+        "value": "$[if::(eq::(${e3_25},1),if::(contains::(${tk},${g3_25}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_25",
+        "value": "$[if::(eq::(${e3_25},1),if::(contains::(${sk},${g3_25}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_26",
+        "value": "$[if::(lt::(26,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_26",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+26)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_26",
+        "value": "$[if::(eq::(${e3_26},1),if::(contains::(${tk},${g3_26}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_26",
+        "value": "$[if::(eq::(${e3_26},1),if::(contains::(${sk},${g3_26}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e3_27",
+        "value": "$[if::(lt::(27,${lim3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3_27",
+        "value": "$[connect::(_,formatDate::(calc::(${startMs}+(${pb3}+27)*86400000+43200000),yyyy-MM-dd),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3_27",
+        "value": "$[if::(eq::(${e3_27},1),if::(contains::(${tk},${g3_27}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3_27",
+        "value": "$[if::(eq::(${e3_27},1),if::(contains::(${sk},${g3_27}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "T3",
+        "value": "$[calc::(${t3_0}+${t3_1}+${t3_2}+${t3_3}+${t3_4}+${t3_5}+${t3_6}+${t3_7}+${t3_8}+${t3_9}+${t3_10}+${t3_11}+${t3_12}+${t3_13}+${t3_14}+${t3_15}+${t3_16}+${t3_17}+${t3_18}+${t3_19}+${t3_20}+${t3_21}+${t3_22}+${t3_23}+${t3_24}+${t3_25}+${t3_26}+${t3_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "S3",
+        "value": "$[calc::(${k3_0}+${k3_1}+${k3_2}+${k3_3}+${k3_4}+${k3_5}+${k3_6}+${k3_7}+${k3_8}+${k3_9}+${k3_10}+${k3_11}+${k3_12}+${k3_13}+${k3_14}+${k3_15}+${k3_16}+${k3_17}+${k3_18}+${k3_19}+${k3_20}+${k3_21}+${k3_22}+${k3_23}+${k3_24}+${k3_25}+${k3_26}+${k3_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "E3",
+        "value": "$[calc::(${e3_0}+${e3_1}+${e3_2}+${e3_3}+${e3_4}+${e3_5}+${e3_6}+${e3_7}+${e3_8}+${e3_9}+${e3_10}+${e3_11}+${e3_12}+${e3_13}+${e3_14}+${e3_15}+${e3_16}+${e3_17}+${e3_18}+${e3_19}+${e3_20}+${e3_21}+${e3_22}+${e3_23}+${e3_24}+${e3_25}+${e3_26}+${e3_27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok3",
+        "value": "$[if::(eq::(${hasPlan},1),if::(ge::(calc::(${curPack}-3),0),if::(gt::(${E3},0),1,0),0),0)]"
+      },
+      "_note": "这一盒存在(计划已开始且不早于起始日)且有应记天数才出。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r3",
+        "value": "$[if::(eq::(${ok3},1),round::(calc::(${T3}*100/${E3})),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x3",
+        "value": "$[parseNumber::(max::(calc::(3+findNotEmpty::(${r3},0)/100*144.0),3),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sw",
+        "value": "$[parseNumber::(calc::(findNotEmpty::(${r0},0)*3.6),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},MM-dd)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "hasPlan",
+          "curPack",
+          "T0",
+          "S0",
+          "E0",
+          "ok0",
+          "r0",
+          "x0",
+          "T1",
+          "S1",
+          "E1",
+          "ok1",
+          "r1",
+          "x1",
+          "T2",
+          "S2",
+          "E2",
+          "ok2",
+          "r2",
+          "x2",
+          "T3",
+          "S3",
+          "E3",
+          "ok3",
+          "r3",
+          "x3",
+          "sw",
+          "at"
+        ]
+      }
+    }
+  ]
+}

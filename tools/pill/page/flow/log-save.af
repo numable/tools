@@ -1,0 +1,100 @@
+{
+  "_note": "补录提交:把某一天**显式**设为三态之一(含清除标记)。\n与 toggle.af 的循环语义不同 —— 那个服务高频的今天,这个服务低频的补录。\n\n做法:先把该日期从两个串里都摘干净(`t0`/`s0`),再按选择追加到目标串。\n这样「清除标记」天然就是「只摘不加」,不需要单独一支。\n\n⚠️ 同样带**合法性闸**:算不出日期就一个字节都不写(见 toggle.af 里那条注释)。\n⚠️ 全用纯表达式,不用 `op:if` —— operation 的分支退出时会恢复外层绑定,\n   里面 `op:set` 出来的键拿不到外面。\n⚠️⚠️ **表单值必须经 `@event.value.*` 取**:字符串式绑定的 flow 初始 scope 只有 `@event`(协议 §D),\n   裸 `${date}`/`${state}` 恒空 → `ok` 判 0 → 一个字节都不写,而且不报错(2026-08-21 iOS 实测)。\n⚠️⚠️ **流必须自己调 `page.close`**:宿主「只看流有没有主动要求关闭,不看成败」,不调就一直挂着\n   = 用户看到的「点保存没反应」。上面那条注释说的「表单提交后自己关页」,少的就是这个动作。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "taken",
+      "action": "data.get",
+      "params": { "key": "taken", "default": "_" }
+    },
+    {
+      "id": "skipped",
+      "action": "data.get",
+      "params": { "key": "skipped", "default": "_" }
+    },
+    {
+      "op": "set",
+      "props": { "key": "d", "value": "${@event.value.date}" }
+    },
+    {
+      "op": "set",
+      "props": { "key": "st", "value": "${@event.value.state}" }
+    },
+    {
+      "op": "set",
+      "props": { "key": "ok", "value": "$[if::(eq::(length::(${d}),10),1,0)]" }
+    },
+    {
+      "op": "set",
+      "props": { "key": "tag", "value": "$[connect::(_,${d},_)]" }
+    },
+    {
+      "_note": "先摘干净:两个串里都不再有这一天。`replaceAll(串,_日期_,_)` 会把两侧哨兵合并回一个。",
+      "op": "set",
+      "props": { "key": "t0", "value": "$[replaceAll::(${taken},${tag},_)]" }
+    },
+    {
+      "op": "set",
+      "props": { "key": "s0", "value": "$[replaceAll::(${skipped},${tag},_)]" }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nt",
+        "value": "$[if::(eq::(${ok},0),${taken},if::(eq::(${st},taken),connect::(${t0},${d},_),${t0}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ns",
+        "value": "$[if::(eq::(${ok},0),${skipped},if::(eq::(${st},skipped),connect::(${s0},${d},_),${s0}))]"
+      }
+    },
+    {
+      "action": "data.set",
+      "params": { "key": "taken", "value": "${nt}" }
+    },
+    {
+      "action": "data.set",
+      "params": { "key": "skipped", "value": "${ns}" }
+    },
+    {
+      "_note": "补录**今天**且选的是「已服」时,撤掉当天那一发服药提醒(doc/alert-design.md §4.4,\n三条记录路之一,另两条在 xWidget/flow/mark-today.af 与 page/flow/toggle.af)。\n\n补录这条路的全部意义就是「填过去的日子」,所以日期闸在这里最要紧:补录上周三那一笔\n与今天该不该响毫无关系。⚠️ 比**毫秒**不比日期串(VParser 的 eq 先数字化,日期串是未定义行为),\n故先把两边各自 parseDate 成 ms —— 这三条 op:set 就是为这道闸新加的。",
+      "op": "set",
+      "props": { "key": "tStr", "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]" }
+    },
+    {
+      "op": "set",
+      "props": { "key": "tMs", "value": "$[parseDate::(${tStr},yyyy-MM-dd)]" }
+    },
+    {
+      "op": "set",
+      "props": { "key": "dMs", "value": "$[parseDate::(${d},yyyy-MM-dd)]" }
+    },
+    {
+      "_note": "三条一起成立才撤:合法(`ok==1`)· 是今天(`dMs==tMs`)· 选的是「已服」(`st==taken`)。\n⚠️ `params` 省略 = 本规则全部实例;幂等;只撤到今天零点,明天照常响 —— 不是关闭提醒。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${ok},1),if::(eq::(${dMs},${tMs}),if::(eq::(${st},taken),1,0),0),0)]"
+      },
+      "items": [
+        {
+          "action": "alert.skip",
+          "params": {
+            "id": "dose",
+            "until": "today"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "不在这里 reloadPage —— 表单提交后自己关页,由 open-log.af 的 openForResult 回来后整页重载。\n但仪表盘那张卡与桌面小组件不在那条链上,得自己踢一下(同 toggle.af 结尾)。",
+      "action": "widget.refresh"
+    },
+    {
+      "_note": "收口:告诉宿主可以关表单了(见顶注第二条)。回传值不消费 —— 状态已写进 data.*,\nopen-log.af 的 openForResult 收到 nil 后整页重载。",
+      "action": "page.close"
+    }
+  ]
+}

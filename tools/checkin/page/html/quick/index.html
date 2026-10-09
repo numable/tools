@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<!--
+  快速记一笔(路由 /quick?id=<事项 id>)。**没有界面** —— 打开即写、toast、自动退回。
+
+  为什么需要这一页:卡片上点一下想直接记一笔,但**AF 没有数组追加原语**(action 表里只有
+  data.get / set / remove / merge / has / keys / getAll / clear,没有任何 list push),
+  而一条打卡记录就是往 `log_<id>` 这个时间戳数组里 push 一个数。所以「卡上静默写一条」在
+  当前数据模型下**做不到**;能做的是让卡片跳到这一页,由 JS 完成写入(JS 有数组)。
+
+  这条路同时服务两个消费者,不是为桌面单独造的:
+    · 仪表盘卡上那颗圆 → 这里(RCN 无动画能力,原地写也没有过渡帧可言,差别只在多一次转场);
+    · 桌面小组件 → 也只能这样(iOS 小组件只有整卡 .widgetURL,点不了单个元素)。
+
+  ⚠️ **失败不许自动退**。写盘失败时留在页面上把话说清楚 —— 自动退回 + 一个一闪而过的 toast
+  等于「看起来记上了,其实没有」,这比报错严重得多。
+  ⚠️ 记完**不重复记**:check 型今天已经记过就只提示、不再追加(卡上连点两下不该变成两条)。
+  ⚠️ 派生统计与两页逐字同源(kindOf / goalOf / effLog / computeStat)—— 改动时三处一起改
+  (home / item / quick)。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Log one</title>
+<style>
+:root{color-scheme:light dark;--bg:#F5F6F8;--fg:#0E1116;--sub:#6B7280}
+html[data-theme="dark"]{--bg:#0B0C0E;--fg:#F3F4F6;--sub:#8E939B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.6 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+.box{text-align:center;max-width:280px}
+.box .big{font-size:44px;line-height:1;margin-bottom:14px}
+.box .big svg{width:44px;height:44px;display:block;margin:0 auto}
+.box h1{font-size:17px;margin:0 0 6px;font-weight:700}
+.box p{margin:0;color:var(--sub);font-size:13px}
+/* 失败态才需要一个「知道了」—— 成功态是自动退的,给按钮反而让人以为要点 */
+.btn{margin-top:20px;border:0;border-radius:13px;padding:13px 22px;font-size:15px;font-weight:700;
+  background:var(--fg);color:var(--bg);font-family:inherit;cursor:pointer}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.xb-tap{position:relative}
+.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.btn,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.btn:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style></head>
+<body>
+  <div class="box" id="box"><div class="big">·</div><h1 id="t"></h1><p id="d"></p></div>
+<script>
+/*ICONS:BEGIN*//* 由 tools/infosource/gen_checkin_icons.py 生成,四页逐字同源,勿手改 */
+var ICONS=["target", "sunrise", "footprints", "droplet", "book-open", "flower-2", "dumbbell", "pen-line", "salad", "pill", "cigarette-off", "bed", "coffee", "sprout", "guitar", "paintbrush"];
+var IC={"target": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><circle cx=\"12\" cy=\"12\" r=\"6\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /></svg>", "sunrise": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2v8\" /><path d=\"m4.93 10.93 1.41 1.41\" /><path d=\"M2 18h2\" /><path d=\"M20 18h2\" /><path d=\"m19.07 10.93-1.41 1.41\" /><path d=\"M22 22H2\" /><path d=\"m8 6 4-4 4 4\" /><path d=\"M16 18a4 4 0 0 0-8 0\" /></svg>", "footprints": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z\" /><path d=\"M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z\" /><path d=\"M16 17h4\" /><path d=\"M4 13h4\" /></svg>", "droplet": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" /></svg>", "book-open": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" /></svg>", "flower-2": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 5a3 3 0 1 1 3 3m-3-3a3 3 0 1 0-3 3m3-3v1M9 8a3 3 0 1 0 3 3M9 8h1m5 0a3 3 0 1 1-3 3m3-3h-1m-2 3v-1\" /><circle cx=\"12\" cy=\"8\" r=\"2\" /><path d=\"M12 10v12\" /><path d=\"M12 22c4.2 0 7-1.667 7-5-4.2 0-7 1.667-7 5Z\" /><path d=\"M12 22c-4.2 0-7-1.667-7-5 4.2 0 7 1.667 7 5Z\" /></svg>", "dumbbell": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" /></svg>", "pen-line": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\" /><path d=\"M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z\" /></svg>", "salad": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 21h10\" /><path d=\"M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z\" /><path d=\"M11.38 12a2.4 2.4 0 0 1-.4-4.77 2.4 2.4 0 0 1 3.2-2.77 2.4 2.4 0 0 1 3.47-.63 2.4 2.4 0 0 1 3.37 3.37 2.4 2.4 0 0 1-1.1 3.7 2.51 2.51 0 0 1 .03 1.1\" /><path d=\"m13 12 4-4\" /><path d=\"M10.9 7.25A3.99 3.99 0 0 0 4 10c0 .73.2 1.41.54 2\" /></svg>", "pill": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /><path d=\"m8.5 8.5 7 7\" /></svg>", "cigarette-off": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 12H3a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h13\" /><path d=\"M18 8c0-2.5-2-2.5-2-5\" /><path d=\"m2 2 20 20\" /><path d=\"M21 12a1 1 0 0 1 1 1v2a1 1 0 0 1-.5.866\" /><path d=\"M22 8c0-2.5-2-2.5-2-5\" /><path d=\"M7 12v4\" /></svg>", "bed": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 4v16\" /><path d=\"M2 8h18a2 2 0 0 1 2 2v10\" /><path d=\"M2 17h20\" /><path d=\"M6 8v9\" /></svg>", "coffee": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10 2v2\" /><path d=\"M14 2v2\" /><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\" /><path d=\"M6 2v2\" /></svg>", "sprout": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 20h10\" /><path d=\"M10 20c5.5-2.5.8-6.4 3-10\" /><path d=\"M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z\" /><path d=\"M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z\" /></svg>", "guitar": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m11.9 12.1 4.514-4.514\" /><path d=\"M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z\" /><path d=\"m6 16 2 2\" /><path d=\"M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z\" /><circle cx=\"11.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\" /></svg>", "paintbrush": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m14.622 17.897-10.68-2.913\" /><path d=\"M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z\" /><path d=\"M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15\" /></svg>"};
+var EMO={"🎯": "target", "🌅": "sunrise", "🏃": "footprints", "💧": "droplet", "📖": "book-open", "🧘": "flower-2", "💪": "dumbbell", "✍️": "pen-line", "🥗": "salad", "💊": "pill", "🚭": "cigarette-off", "🛏": "bed", "☕": "coffee", "🌱": "sprout", "🎸": "guitar", "🧹": "paintbrush"};
+function icName(v){ return IC[v]?v:(EMO[v]||"target"); }
+function icSvg(v){ return IC[icName(v)]; }
+/*ICONS:END*/
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+var I18N={
+ zh:{done:"记下了",dup:"今天已经记过了",added:"已经是第 {n} 次",
+     fail:"没能记上",failD:"记录保存失败，请返回重试。",
+     gone:"这件事已被删除",ok:"知道了",notX:"当前不在 XBundle 环境中",
+     streak:"连续 {n} 天"},
+ en:{done:"Logged",dup:"Already logged today",added:"That's #{n} today",
+     fail:"Couldn't log it",failD:"Nothing was written — this one doesn't count. Go back and try again.",
+     gone:"This habit was deleted",ok:"OK",notX:"Not running inside XBundle",
+     streak:"{n}-day streak"}};
+var LANG="en";
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键;缺键回落英文(doc/overseas-first.md §2) */
+function p2(n){return (n<10?"0":"")+n;}
+function fmtDay(ms){var d=new Date(ms);return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());}
+function dayMid(ms){var d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();}
+
+/* —— 与 home / item 逐字相同的一份 —— 改动时三处一起改。 */
+function kindOf(it){
+  if(it.kind==="count"||it.kind==="check") return it.kind;
+  return (Number(it.goal)||1)>1 ? "count" : "check";
+}
+function goalOf(it){ return kindOf(it)==="count" ? Math.max(1,Number(it.goal)||1) : 1; }
+function effLog(it){
+  if(kindOf(it)==="count") return it.log;
+  var seen={}, out=[], i;
+  for(i=it.log.length-1;i>=0;i--){        // log 是降序,倒着走 = 从早到晚,先到的留下
+    var k=fmtDay(it.log[i]);
+    if(seen[k]) continue;
+    seen[k]=1; out.push(it.log[i]);
+  }
+  out.sort(function(a,b){return b-a;});
+  return out;
+}
+function countOn(it, ms){
+  var d=fmtDay(ms), lg=effLog(it), n=0;
+  for(var i=0;i<lg.length;i++) if(fmtDay(lg[i])===d) n++;
+  return n;
+}
+function computeStat(log, goal, meta){
+  goal = goal>=1 ? goal : 1;
+  var s={total:log.length,lastTs:log.length?log[0]:null,avgGap:null,maxGap:null,
+         streakStart:null,best:0,byDay:{}};
+  var cut=dayMid(Date.now())-400*864e5, i;
+  for(i=0;i<log.length;i++){ if(log[i]<cut) continue;
+    var k=fmtDay(log[i]); s.byDay[k]=(s.byDay[k]||0)+1; }
+  var hit=[];
+  for(i=0;i<log.length;i++){
+    var mi=dayMid(log[i]);
+    if(hit.length&&hit[hit.length-1]===mi) continue;
+    if((s.byDay[fmtDay(log[i])]||0)>=goal) hit.push(mi);
+  }
+  var gaps=[];
+  for(i=0;i+1<hit.length;i++) gaps.push(Math.round((hit[i]-hit[i+1])/864e5));
+  if(gaps.length){ var sum=0,mx=0;
+    for(i=0;i<gaps.length;i++){sum+=gaps[i]; if(gaps[i]>mx) mx=gaps[i];}
+    s.avgGap=Math.round(sum/gaps.length*10)/10; s.maxGap=mx; }
+  if(hit.length){
+    var start=hit[0];
+    for(i=0;i+1<hit.length;i++){ if(Math.round((hit[i]-hit[i+1])/864e5)===1) start=hit[i+1]; else break; }
+    s.streakStart=start;
+    s.streakEnd=hit[0];
+    var run=1,best=1;
+    for(i=0;i+1<hit.length;i++){
+      if(Math.round((hit[i]-hit[i+1])/864e5)===1){ run++; if(run>best) best=run; } else run=1;
+    }
+    s.best=best;
+  }
+  if(meta){ s.goal=goal; s.pal=meta.pal||1; s.icon=meta.icon||""; s.name=meta.name||"";
+            s.kind=meta.kind||"check"; }
+  return s;
+}
+function streakOf(it){
+  var s=computeStat(effLog(it), goalOf(it));
+  if(s.streakStart==null||s.streakEnd==null) return 0;
+  var alive=dayMid(s.lastTs!=null?s.lastTs:s.streakEnd), today=dayMid(Date.now());
+  if(today-alive>864e5*1.5) return 0;
+  return Math.round((dayMid(s.streakEnd)-s.streakStart)/864e5)+1;
+}
+
+function show(icon, title, desc, fail){
+  var big=document.querySelector(".big");
+  if(IC[icName(icon)]&&icon!=="·") big.innerHTML=icSvg(icon); else big.textContent=icon;
+  document.getElementById("t").textContent=title;
+  document.getElementById("d").textContent=desc||"";
+  if(fail){
+    var b=document.createElement("button");
+    b.className="btn"; b.textContent=t("ok");
+    b.addEventListener("click",function(){ if(window.xbridge&&xbridge.closePage) xbridge.closePage(); });
+    document.getElementById("box").appendChild(b);
+  }
+}
+
+/* 启动顺序照 market boot()(doc/overseas-first.md §1–§2):先读宿主写好的 <html data-lang>,
+   再等 appInfo(nbInfo 处理信封);**缺省英文**。 */
+(async function boot(){
+  var de=document.documentElement;
+  if(de.getAttribute("data-lang")) LANG=nbLang(de.getAttribute("data-lang"));
+  var d0=await nbInfo();
+  LANG=nbLang(d0.language||d0.locale);
+  document.title=LANG==="zh"?"记一笔":"Log one";
+  var th=d0.theme||de.getAttribute("data-theme")||"";
+  var dark = th ? th==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark?"dark":"light");
+  if(!window.xbridge){ show("·", t("notX"), "", true); return; }
+
+  var m=/[?&]id=([^&]*)/.exec(location.search||"");
+  var ID=m?decodeURIComponent(m[1]):"";
+  if(ID.indexOf("${")===0) ID="";   // 卡上的 ${w0} 没被求值 → 按「没给」处理,不去猜
+
+  try{
+    var r=await xbridge.runDataFlow("read",{});
+    var dd=(r&&r.data)||{};
+    var list=Array.isArray(dd.items)?dd.items:[];
+    var idx=-1, i;
+    for(i=0;i<list.length&&i<8;i++) if(list[i].id===ID) idx=i;
+    // ⚠️ 找不到就**停在这里**,不回落到第一件事 —— 首页那种回落是为了「看错一件事」,
+    // 而这里会**写数据**,写到别人头上是不可逆的。
+    if(idx<0){ show("·", t("gone"), "", true); return; }
+
+    var raw=dd["l"+idx]; raw=Array.isArray(raw)?raw.slice():[];
+    raw.sort(function(a,b){return b-a;});
+    var it={id:list[idx].id,name:list[idx].name,icon:icName(list[idx].icon||"target"),
+            pal:Number(list[idx].pal)||1,kind:list[idx].kind,
+            goal:Number(list[idx].goal)||1,log:raw};
+
+    var k=kindOf(it), had=countOn(it,Date.now());
+    if(k==="check" && had>0){
+      // 已经记过 —— 只提示,不追加(卡上连点两下不该变成两条)。也不当失败,所以照常自动退。
+      show(it.icon, it.name+" · "+t("dup"), t("streak").replace("{n}",streakOf(it)));
+    }else{
+      it.log.push(Date.now()); it.log.sort(function(a,b){return b-a;});
+      await xbridge.runFlow("save",{id:it.id,log:it.log,
+        stat:computeStat(effLog(it),goalOf(it),
+          {pal:it.pal,icon:icName(it.icon),name:it.name,kind:kindOf(it)})});
+      var n=countOn(it,Date.now());
+      show(it.icon, it.name+" · "+t("done"),
+           k==="count" ? t("added").replace("{n}",n) : t("streak").replace("{n}",streakOf(it)));
+    }
+    // 让人看清写的是哪件事、结果是什么,再退。太快等于没显示。
+    setTimeout(function(){ if(window.xbridge&&xbridge.closePage) xbridge.closePage(); }, 900);
+  }catch(e){
+    // ⚠️ 到这里说明读或写炸了 —— **绝不自动退**。
+    show("·", t("fail"), t("failD"), true);
+  }
+})();
+</script>
+</body></html>

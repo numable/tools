@@ -1,0 +1,1983 @@
+{
+  "_note": "维护日程看板(44)。顶条 = 全局状态 + 进行中事件数,下面 5 行 = 正在进行的维护 + 最近的计划维护。生成器 gen_cloudflare.py(维护段的改动见那里的注释)。命中你所连节点(cdn-cgi/trace 的 colo)的那行标源色竖条。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "MONE",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_now",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzL",
+        "value": "$[calc::(formatDate::(${_now},HH)*60+formatDate::(${_now},mm))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzM",
+        "value": "$[floor::(calc::(${_now}/60000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzD",
+        "value": "$[floor::(calc::(${_now}/86400000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzX",
+        "value": "$[calc::(${_tzL}-(${_tzM}-${_tzD}*1440))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzO",
+        "value": "$[if::(gt::(${_tzX},840),calc::(${_tzX}-1440),if::(lt::(${_tzX},-720),calc::(${_tzX}+1440),${_tzX}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMs",
+        "value": "$[calc::(${_tzO}*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d0",
+        "value": "$[formatDate::(${_now},yyyyMMdd)]"
+      },
+      "_note": "今天 / 明天的日期码(纯数字,eq 数字比较在各端一致)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d1",
+        "value": "$[formatDate::(calc::(${_now}+86400000),yyyyMMdd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wToday",
+        "value": "今天"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wTodayE",
+        "value": "Today"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wTmr",
+        "value": "明天"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wTmrE",
+        "value": "Tomorrow"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_re",
+        "value": "^[A-Z]{3} \\x28.*"
+      },
+      "_note": "数据中心维护的标题形如「SYD (Sydney) on 2026-10-08」。正则先落成键再传(方法参数会吃括号);括号写 \\x28 / \\x29(字面括号过不了生成器的括号配平检查)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lp",
+        "value": "\\x28"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_rp",
+        "value": "\\x29"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CITY",
+        "value": "~AMS=阿姆斯特丹~AMM=安曼~ADL=阿德莱德~QWJ=亚美利加纳~ACC=阿克拉~AMD=艾哈迈达巴德~ABQ=阿尔伯克基~AKL=奥克兰~ATH=雅典~ARI=阿里卡~ALG=阿尔及尔~ALA=阿拉木图~LLK=阿斯塔拉~ANC=安克雷奇~IAD=阿什本~BNE=布里斯班~BCN=巴塞罗那~BGW=巴格达~ASU=亚松森~AAE=安纳巴~ATL=亚特兰大~BEG=贝尔格莱德~GYD=巴库~BLR=班加罗尔~TNR=塔那那利佛~CBR=堪培拉~BEL=贝伦~TXL=柏林~BKK=曼谷~CPT=开普敦~CNF=贝洛奥里藏特~BSR=巴士拉~CHC=基督城~AUS=奥斯汀~BEY=贝鲁特~BWN=斯里巴加湾~GUM=阿加尼亚~BGR=班戈~BOD=波尔多~BOS=波士顿~BOG=波哥大~DKR=达喀尔~DMM=达曼~BTS=布拉迪斯拉发~MEL=墨尔本~DOH=多哈~BRU=布鲁塞尔~DAR=达累斯萨拉姆~BSB=巴西利亚~EZE=布宜诺斯艾利斯~OTP=布加勒斯特~DXB=迪拜~JIB=吉布提~YYC=卡尔加里~CEB=宿务~NOU=努美阿~PER=珀斯~BUD=布达佩斯~DUR=德班~CLT=夏洛特~CFC=卡萨多尔~EBL=埃尔比勒~IXC=昌迪加尔~ORD=芝加哥~SYD=悉尼~KIV=基希讷乌~VCP=坎皮纳斯~CGD=常德~HFA=海法~GBE=哈博罗内~CPH=哥本哈根~MAA=金奈~HRE=哈拉雷~JED=吉达~PPT=塔希提~CLE=克利夫兰~JNB=约翰内斯堡~KWI=科威特城~DUB=都柏林~CMH=哥伦布~COR=科尔多瓦~SUV=苏瓦~DFW=达拉斯~DUS=杜塞尔多夫~BAH=麦纳麦~KGL=基加利~CGP=吉大港~HBA=霍巴特~FRA=法兰克福~MCT=马斯喀特~DEN=丹佛~CMB=科伦坡~LOS=拉各斯~CWB=库里蒂巴~WLG=惠灵顿~LAD=罗安达~DTW=底特律~GVA=日内瓦~DAC=达卡~FLN=弗洛里亚诺波利斯~NJF=纳杰夫~FOR=福塔莱萨~GOT=哥德堡~MPM=马普托~FUO=佛山~XNH=纳西里耶~RDU=达勒姆~MBA=蒙巴萨~HAM=汉堡~ZDM=拉姆安拉~GEO=乔治敦~FUK=福冈~GDL=瓜达拉哈拉~HEL=赫尔辛基~RUH=利雅得~NBO=内罗毕~GYN=戈亚尼亚~FOC=福州~YHZ=哈利法克斯~CAN=广州~IST=伊斯坦布尔~GUA=危地马拉城~HNL=檀香山~ISU=苏莱曼尼亚~ORN=奥兰~TLV=特拉维夫~IAH=休斯敦~GYE=瓜亚基尔~HAK=海口~OUA=瓦加杜古~ADB=伊兹密尔~KBP=基辅~MRU=路易港~IND=印第安纳波利斯~HAN=河内~LIS=里斯本~JAX=杰克逊维尔~SJW=衡水~JOI=若茵维莱~LHR=伦敦~MCI=堪萨斯城~SGN=胡志明市~TUN=突尼斯~JDO=北茹阿泽鲁~HKG=香港~LIM=利马~LUX=卢森堡~KIN=金斯敦~FIH=金沙萨~LAS=拉斯维加斯~HYD=海得拉巴~MAO=马瑙斯~LYS=里昂~CAI=开罗~LAX=洛杉矶~MAD=马德里~MDE=麦德林~ISB=伊斯兰堡~WDH=温得和克~MAN=曼彻斯特~MEM=孟菲斯~CGK=雅加达~NQN=内乌肯~ASK=亚穆苏克罗~MRS=马赛~PTY=巴拿马城~MEX=墨西哥城~ABJ=阿比让~MIA=迈阿密~MXP=米兰~TNA=济南~PBM=帕拉马里博~EBB=坎帕拉~MSP=明尼阿波利斯~POA=阿雷格里港~MSQ=明斯克~YUL=蒙特利尔~DME=莫斯科~RUN=圣但尼~UIO=基多~MUC=慕尼黑~KNU=坎普尔~BNA=纳什维尔~EWR=纽瓦克~LCA=尼科西亚~KHH=高雄~REC=累西腓~OSL=奥斯陆~ORF=诺福克~KHI=卡拉奇~RAO=里贝朗普雷图~GIG=里约热内卢~KTM=加德满都~PMO=巴勒莫~OKC=俄克拉何马城~CDG=巴黎~OMA=奥马哈~PRG=布拉格~CCU=加尔各答~SJO=圣何塞~SCL=圣地亚哥~KEF=雷克雅未克~PHL=费城~LUN=卢萨卡~KUL=吉隆坡~PHX=凤凰城~RIX=里加~SDQ=圣多明各~ADD=亚的斯亚贝巴~FCO=罗马~PIT=匹兹堡~SJP=里约普雷图~PDX=波特兰~LED=圣彼得堡~PKX=廊坊~SJK=圣若泽杜斯坎普斯~CZL=君士坦丁~GRU=圣保罗~QRO=克雷塔罗~MLA=圣韦内拉~DLA=杜阿拉~RIC=里士满~SOD=索罗卡巴~SKP=斯科普里~LLW=利隆圭~SOF=索非亚~MFM=澳门~SMF=萨克拉门托~ARN=斯德哥尔摩~SLC=盐湖城~MLE=马累~TGU=特古西加尔巴~NVT=廷博~STR=斯图加特~SAT=圣安东尼奥~MNL=马尼拉~SAN=圣迭戈~TLL=塔林~UDI=乌贝兰迪亚~BOM=孟买~TBS=第比利斯~SFO=旧金山~VIX=维多利亚~SJC=圣何塞~SKG=塞萨洛尼基~NAG=那格浦尔~YXE=萨斯卡通~OKA=那霸~TIA=地拉那~CAW=坎普斯~SEA=西雅图~VIE=维也纳~DEL=新德里~XAP=沙佩科~KIX=大阪~VNO=维尔纽斯~FSD=苏福尔斯~BGI=布里奇敦~WAW=华沙~STL=圣路易斯~PAT=巴特那~GND=圣乔治~PNH=金边~TLH=塔拉哈西~STI=圣地亚哥-德洛斯卡瓦列罗斯~WRO=弗罗茨瓦夫~ZAG=萨格勒布~TAO=青岛~TPA=坦帕~LPB=拉巴斯~YYZ=多伦多~ICN=首尔~ZRH=苏黎世~YVR=温哥华~SHA=上海~SJU=圣胡安~SIN=新加坡~YWG=温尼伯~BAQ=巴兰基亚~URT=素叻他尼~PMW=帕尔马斯~CVG=辛辛那提~TPE=台北~ARU=阿拉萨图巴~POS=西班牙港~SSA=萨尔瓦多~NRT=东京~ULN=乌兰巴托~VTE=万象~KHN=新余~EVN=埃里温~JOG=日惹~CGY=卡加延德奥罗~LJU=卢布尔雅那~COK=科钦~CGB=库亚巴~DPS=登巴萨~CNN=坎努尔~CLO=卡利~SAP=圣佩德罗苏拉~SZX=深圳~KWE=贵阳~HGH=绍兴~CZX=常州~KMG=昆明~CNX=清迈~CGO=郑州~TYN=阳泉~CSX=长沙~DLC=大连~CKG=重庆~XFN=襄阳~DAD=岘港~JXG=嘉兴~CRK=打拉~PBH=廷布~XIY=宝鸡~KCH=古晋~AKX=阿克托别~TEN=铜仁~HYN=台州~FRU=比什凯克~MLG=玛琅~LHE=拉合尔~CTU=成都~AGR=阿格拉~CJB=哥印拜陀~ACX=兴义~BBI=布巴内斯瓦尔~LYA=洛阳~PNQ=浦那~JRG=桑巴尔布尔~AVA=安顺~NQZ=阿斯塔纳~BDQ=贾姆讷格尔~UDR=乌代浦~AIP=贾朗达尔~LHW=兰州~DYU=杜尚别~LUH=卢迪亚纳~"
+      },
+      "_note": "三字码 → 中文城市(cf_iata_zh.py)。按「~码=」切两半取值,缺码自然得空。"
+    },
+    {
+      "id": "st",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflarestatus.com/api/v2/status.json",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "inc",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflarestatus.com/api/v2/incidents/unresolved.json",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "up",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflarestatus.com/api/v2/scheduled-maintenances/upcoming.json",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "ac",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflarestatus.com/api/v2/scheduled-maintenances/active.json",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "raw",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflare.com/cdn-cgi/trace",
+        "method": "GET",
+        "formatType": "string",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "text/plain"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "colo",
+        "value": "$[index::(split::(index::(split::(${raw},\\ncolo=),1),\\n),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lv",
+        "value": "$[if::(eq::(${st.status.indicator},none),0,if::(eq::(${st.status.indicator},maintenance),1,if::(eq::(${st.status.indicator},minor),2,if::(eq::(${st.status.indicator},major),3,if::(eq::(${st.status.indicator},critical),3,-1)))))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${st.status.indicator}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_status_unreachable"
+          }
+        }
+      ],
+      "_note": "主干 = 全局状态。事件 / 维护 / 本机节点都是可选增强。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nInc",
+        "value": "$[length::(${inc.incidents})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nA",
+        "value": "$[findNotEmpty::(length::(${ac.scheduled_maintenances}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nU",
+        "value": "$[findNotEmpty::(length::(${up.scheduled_maintenances}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "total",
+        "value": "$[calc::(${nA}+${nU})]"
+      },
+      "_note": "进行中 + 即将开始;渲染层只画前 5 行。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hasColo",
+        "value": "$[if::(ge::(length::(${colo}),3),1,0)]"
+      },
+      "_note": "trace 取不到时 colo 为空,contains(x, \"\") 恒真 —— 先闸长度,免得 5 行全标成「你的节点」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0a",
+        "value": "$[if::(lt::(0,${nA}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0k",
+        "value": "$[if::(lt::(0,${nA}),0,round::(calc::(0-${nA})))]"
+      },
+      "_note": "进行中的排完再接即将开始的;round 防 Android 把下标串成「2.0」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0nm",
+        "value": "$[if::(eq::(${_b0a},1),${ac.scheduled_maintenances[0].name},get::(${up},scheduled_maintenances[${_b0k}].name))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0sf",
+        "value": "$[if::(eq::(${_b0a},1),${ac.scheduled_maintenances[0].scheduled_for},get::(${up},scheduled_maintenances[${_b0k}].scheduled_for))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0su",
+        "value": "$[if::(eq::(${_b0a},1),${ac.scheduled_maintenances[0].scheduled_until},get::(${up},scheduled_maintenances[${_b0k}].scheduled_until))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(length::(${_b0sf}),10),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0pop",
+            "value": "$[if::(matches::(${_b0nm},${_re}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0cd",
+            "value": "$[subString::(${_b0nm},0,3)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0ce",
+            "value": "$[index::(split::(index::(split::(${_b0nm},${_lp}),1),${_rp}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0cz",
+            "value": "$[index::(split::(index::(split::(${CITY},~${_b0cd}=),1),~),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0Y",
+            "value": "$[if::(eq::(${_zh},1),findNotEmpty::(${_b0cz},${_b0ce}),${_b0ce})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0C",
+            "value": "$[if::(eq::(${_b0pop},1),${_b0cd},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0T",
+            "value": "$[if::(eq::(${_b0pop},1),${_b0cd} ${b0Y},${_b0nm})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0S",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b0sf},0,10),yyyy-MM-dd)+subString::(${_b0sf},11,13)*3600000+subString::(${_b0sf},14,16)*60000)+${tzMs})]"
+          },
+          "_note": "UTC 串按本地解析再加回偏移 = 真实时刻;再 formatDate 就是本地时间。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0e",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b0su},0,10),yyyy-MM-dd)+subString::(${_b0su},11,13)*3600000+subString::(${_b0su},14,16)*60000)+${tzMs})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0H",
+            "value": "$[parseNumber::(calc::((${_b0e}-${b0S})/3600000),0.#)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0ST",
+            "value": "$[formatDate::(${b0S},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0ET",
+            "value": "$[formatDate::(${_b0e},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDdc",
+            "value": "$[formatDate::(${b0S},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDmo",
+            "value": "$[parseNumber::(formatDate::(${b0S},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDdy",
+            "value": "$[parseNumber::(formatDate::(${b0S},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDme",
+            "value": "$[index::(${MONE},calc::(${_b0SDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDmz",
+            "value": "${_b0SDmo}月${_b0SDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDmn",
+            "value": "${_b0SDme} ${_b0SDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b0SDmz},${_b0SDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0SDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0SD",
+            "value": "$[if::(eq::(${_b0SDdc},${_d0}),${_b0SDtd},if::(eq::(${_b0SDdc},${_d1}),${_b0SDtm},${_b0SDmd}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDdc",
+            "value": "$[formatDate::(${_b0e},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDmo",
+            "value": "$[parseNumber::(formatDate::(${_b0e},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDdy",
+            "value": "$[parseNumber::(formatDate::(${_b0e},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDme",
+            "value": "$[index::(${MONE},calc::(${_b0EDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDmz",
+            "value": "${_b0EDmo}月${_b0EDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDmn",
+            "value": "${_b0EDme} ${_b0EDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b0EDmz},${_b0EDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0EDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b0ED",
+            "value": "$[if::(eq::(${_b0EDdc},${_d0}),${_b0EDtd},if::(eq::(${_b0EDdc},${_d1}),${_b0EDtm},${_b0EDmd}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0Za",
+        "value": "进行中 · ${b0ED} ${b0ET} 结束"
+      },
+      "_note": "文案先落成普通值,方法参数里只放键(全角标点闸看得懂)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0Zb",
+        "value": "${b0SD} ${b0ST} 开始 · ${b0H} 小时"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0Ea",
+        "value": "In progress · ends ${b0ED} ${b0ET}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0Eb",
+        "value": "${b0SD} ${b0ST} · ${b0H} h"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0Lz",
+        "value": "$[if::(eq::(${_b0a},1),${_b0Za},${_b0Zb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0Le",
+        "value": "$[if::(eq::(${_b0a},1),${_b0Ea},${_b0Eb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0L",
+        "value": "$[if::(ge::(length::(${b0ST}),5),if::(eq::(${_zh},1),${_b0Lz},${_b0Le}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0h",
+        "value": "$[if::(eq::(${_hasColo},1),if::(contains::(${_b0nm},${colo}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1a",
+        "value": "$[if::(lt::(1,${nA}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1k",
+        "value": "$[if::(lt::(1,${nA}),0,round::(calc::(1-${nA})))]"
+      },
+      "_note": "进行中的排完再接即将开始的;round 防 Android 把下标串成「2.0」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1nm",
+        "value": "$[if::(eq::(${_b1a},1),${ac.scheduled_maintenances[1].name},get::(${up},scheduled_maintenances[${_b1k}].name))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1sf",
+        "value": "$[if::(eq::(${_b1a},1),${ac.scheduled_maintenances[1].scheduled_for},get::(${up},scheduled_maintenances[${_b1k}].scheduled_for))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1su",
+        "value": "$[if::(eq::(${_b1a},1),${ac.scheduled_maintenances[1].scheduled_until},get::(${up},scheduled_maintenances[${_b1k}].scheduled_until))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(length::(${_b1sf}),10),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1pop",
+            "value": "$[if::(matches::(${_b1nm},${_re}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1cd",
+            "value": "$[subString::(${_b1nm},0,3)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1ce",
+            "value": "$[index::(split::(index::(split::(${_b1nm},${_lp}),1),${_rp}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1cz",
+            "value": "$[index::(split::(index::(split::(${CITY},~${_b1cd}=),1),~),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1Y",
+            "value": "$[if::(eq::(${_zh},1),findNotEmpty::(${_b1cz},${_b1ce}),${_b1ce})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1C",
+            "value": "$[if::(eq::(${_b1pop},1),${_b1cd},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1T",
+            "value": "$[if::(eq::(${_b1pop},1),${_b1cd} ${b1Y},${_b1nm})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1S",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b1sf},0,10),yyyy-MM-dd)+subString::(${_b1sf},11,13)*3600000+subString::(${_b1sf},14,16)*60000)+${tzMs})]"
+          },
+          "_note": "UTC 串按本地解析再加回偏移 = 真实时刻;再 formatDate 就是本地时间。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1e",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b1su},0,10),yyyy-MM-dd)+subString::(${_b1su},11,13)*3600000+subString::(${_b1su},14,16)*60000)+${tzMs})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1H",
+            "value": "$[parseNumber::(calc::((${_b1e}-${b1S})/3600000),0.#)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1ST",
+            "value": "$[formatDate::(${b1S},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1ET",
+            "value": "$[formatDate::(${_b1e},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDdc",
+            "value": "$[formatDate::(${b1S},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDmo",
+            "value": "$[parseNumber::(formatDate::(${b1S},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDdy",
+            "value": "$[parseNumber::(formatDate::(${b1S},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDme",
+            "value": "$[index::(${MONE},calc::(${_b1SDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDmz",
+            "value": "${_b1SDmo}月${_b1SDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDmn",
+            "value": "${_b1SDme} ${_b1SDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b1SDmz},${_b1SDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1SDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1SD",
+            "value": "$[if::(eq::(${_b1SDdc},${_d0}),${_b1SDtd},if::(eq::(${_b1SDdc},${_d1}),${_b1SDtm},${_b1SDmd}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDdc",
+            "value": "$[formatDate::(${_b1e},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDmo",
+            "value": "$[parseNumber::(formatDate::(${_b1e},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDdy",
+            "value": "$[parseNumber::(formatDate::(${_b1e},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDme",
+            "value": "$[index::(${MONE},calc::(${_b1EDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDmz",
+            "value": "${_b1EDmo}月${_b1EDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDmn",
+            "value": "${_b1EDme} ${_b1EDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b1EDmz},${_b1EDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1EDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b1ED",
+            "value": "$[if::(eq::(${_b1EDdc},${_d0}),${_b1EDtd},if::(eq::(${_b1EDdc},${_d1}),${_b1EDtm},${_b1EDmd}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1Za",
+        "value": "进行中 · ${b1ED} ${b1ET} 结束"
+      },
+      "_note": "文案先落成普通值,方法参数里只放键(全角标点闸看得懂)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1Zb",
+        "value": "${b1SD} ${b1ST} 开始 · ${b1H} 小时"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1Ea",
+        "value": "In progress · ends ${b1ED} ${b1ET}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1Eb",
+        "value": "${b1SD} ${b1ST} · ${b1H} h"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1Lz",
+        "value": "$[if::(eq::(${_b1a},1),${_b1Za},${_b1Zb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1Le",
+        "value": "$[if::(eq::(${_b1a},1),${_b1Ea},${_b1Eb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1L",
+        "value": "$[if::(ge::(length::(${b1ST}),5),if::(eq::(${_zh},1),${_b1Lz},${_b1Le}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1h",
+        "value": "$[if::(eq::(${_hasColo},1),if::(contains::(${_b1nm},${colo}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2a",
+        "value": "$[if::(lt::(2,${nA}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2k",
+        "value": "$[if::(lt::(2,${nA}),0,round::(calc::(2-${nA})))]"
+      },
+      "_note": "进行中的排完再接即将开始的;round 防 Android 把下标串成「2.0」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2nm",
+        "value": "$[if::(eq::(${_b2a},1),${ac.scheduled_maintenances[2].name},get::(${up},scheduled_maintenances[${_b2k}].name))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2sf",
+        "value": "$[if::(eq::(${_b2a},1),${ac.scheduled_maintenances[2].scheduled_for},get::(${up},scheduled_maintenances[${_b2k}].scheduled_for))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2su",
+        "value": "$[if::(eq::(${_b2a},1),${ac.scheduled_maintenances[2].scheduled_until},get::(${up},scheduled_maintenances[${_b2k}].scheduled_until))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(length::(${_b2sf}),10),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2pop",
+            "value": "$[if::(matches::(${_b2nm},${_re}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2cd",
+            "value": "$[subString::(${_b2nm},0,3)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2ce",
+            "value": "$[index::(split::(index::(split::(${_b2nm},${_lp}),1),${_rp}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2cz",
+            "value": "$[index::(split::(index::(split::(${CITY},~${_b2cd}=),1),~),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2Y",
+            "value": "$[if::(eq::(${_zh},1),findNotEmpty::(${_b2cz},${_b2ce}),${_b2ce})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2C",
+            "value": "$[if::(eq::(${_b2pop},1),${_b2cd},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2T",
+            "value": "$[if::(eq::(${_b2pop},1),${_b2cd} ${b2Y},${_b2nm})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2S",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b2sf},0,10),yyyy-MM-dd)+subString::(${_b2sf},11,13)*3600000+subString::(${_b2sf},14,16)*60000)+${tzMs})]"
+          },
+          "_note": "UTC 串按本地解析再加回偏移 = 真实时刻;再 formatDate 就是本地时间。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2e",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b2su},0,10),yyyy-MM-dd)+subString::(${_b2su},11,13)*3600000+subString::(${_b2su},14,16)*60000)+${tzMs})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2H",
+            "value": "$[parseNumber::(calc::((${_b2e}-${b2S})/3600000),0.#)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2ST",
+            "value": "$[formatDate::(${b2S},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2ET",
+            "value": "$[formatDate::(${_b2e},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDdc",
+            "value": "$[formatDate::(${b2S},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDmo",
+            "value": "$[parseNumber::(formatDate::(${b2S},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDdy",
+            "value": "$[parseNumber::(formatDate::(${b2S},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDme",
+            "value": "$[index::(${MONE},calc::(${_b2SDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDmz",
+            "value": "${_b2SDmo}月${_b2SDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDmn",
+            "value": "${_b2SDme} ${_b2SDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b2SDmz},${_b2SDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2SDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2SD",
+            "value": "$[if::(eq::(${_b2SDdc},${_d0}),${_b2SDtd},if::(eq::(${_b2SDdc},${_d1}),${_b2SDtm},${_b2SDmd}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDdc",
+            "value": "$[formatDate::(${_b2e},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDmo",
+            "value": "$[parseNumber::(formatDate::(${_b2e},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDdy",
+            "value": "$[parseNumber::(formatDate::(${_b2e},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDme",
+            "value": "$[index::(${MONE},calc::(${_b2EDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDmz",
+            "value": "${_b2EDmo}月${_b2EDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDmn",
+            "value": "${_b2EDme} ${_b2EDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b2EDmz},${_b2EDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2EDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b2ED",
+            "value": "$[if::(eq::(${_b2EDdc},${_d0}),${_b2EDtd},if::(eq::(${_b2EDdc},${_d1}),${_b2EDtm},${_b2EDmd}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2Za",
+        "value": "进行中 · ${b2ED} ${b2ET} 结束"
+      },
+      "_note": "文案先落成普通值,方法参数里只放键(全角标点闸看得懂)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2Zb",
+        "value": "${b2SD} ${b2ST} 开始 · ${b2H} 小时"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2Ea",
+        "value": "In progress · ends ${b2ED} ${b2ET}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2Eb",
+        "value": "${b2SD} ${b2ST} · ${b2H} h"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2Lz",
+        "value": "$[if::(eq::(${_b2a},1),${_b2Za},${_b2Zb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2Le",
+        "value": "$[if::(eq::(${_b2a},1),${_b2Ea},${_b2Eb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2L",
+        "value": "$[if::(ge::(length::(${b2ST}),5),if::(eq::(${_zh},1),${_b2Lz},${_b2Le}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2h",
+        "value": "$[if::(eq::(${_hasColo},1),if::(contains::(${_b2nm},${colo}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3a",
+        "value": "$[if::(lt::(3,${nA}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3k",
+        "value": "$[if::(lt::(3,${nA}),0,round::(calc::(3-${nA})))]"
+      },
+      "_note": "进行中的排完再接即将开始的;round 防 Android 把下标串成「2.0」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3nm",
+        "value": "$[if::(eq::(${_b3a},1),${ac.scheduled_maintenances[3].name},get::(${up},scheduled_maintenances[${_b3k}].name))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3sf",
+        "value": "$[if::(eq::(${_b3a},1),${ac.scheduled_maintenances[3].scheduled_for},get::(${up},scheduled_maintenances[${_b3k}].scheduled_for))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3su",
+        "value": "$[if::(eq::(${_b3a},1),${ac.scheduled_maintenances[3].scheduled_until},get::(${up},scheduled_maintenances[${_b3k}].scheduled_until))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(length::(${_b3sf}),10),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3pop",
+            "value": "$[if::(matches::(${_b3nm},${_re}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3cd",
+            "value": "$[subString::(${_b3nm},0,3)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3ce",
+            "value": "$[index::(split::(index::(split::(${_b3nm},${_lp}),1),${_rp}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3cz",
+            "value": "$[index::(split::(index::(split::(${CITY},~${_b3cd}=),1),~),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3Y",
+            "value": "$[if::(eq::(${_zh},1),findNotEmpty::(${_b3cz},${_b3ce}),${_b3ce})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3C",
+            "value": "$[if::(eq::(${_b3pop},1),${_b3cd},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3T",
+            "value": "$[if::(eq::(${_b3pop},1),${_b3cd} ${b3Y},${_b3nm})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3S",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b3sf},0,10),yyyy-MM-dd)+subString::(${_b3sf},11,13)*3600000+subString::(${_b3sf},14,16)*60000)+${tzMs})]"
+          },
+          "_note": "UTC 串按本地解析再加回偏移 = 真实时刻;再 formatDate 就是本地时间。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3e",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b3su},0,10),yyyy-MM-dd)+subString::(${_b3su},11,13)*3600000+subString::(${_b3su},14,16)*60000)+${tzMs})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3H",
+            "value": "$[parseNumber::(calc::((${_b3e}-${b3S})/3600000),0.#)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3ST",
+            "value": "$[formatDate::(${b3S},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3ET",
+            "value": "$[formatDate::(${_b3e},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDdc",
+            "value": "$[formatDate::(${b3S},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDmo",
+            "value": "$[parseNumber::(formatDate::(${b3S},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDdy",
+            "value": "$[parseNumber::(formatDate::(${b3S},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDme",
+            "value": "$[index::(${MONE},calc::(${_b3SDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDmz",
+            "value": "${_b3SDmo}月${_b3SDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDmn",
+            "value": "${_b3SDme} ${_b3SDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b3SDmz},${_b3SDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3SDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3SD",
+            "value": "$[if::(eq::(${_b3SDdc},${_d0}),${_b3SDtd},if::(eq::(${_b3SDdc},${_d1}),${_b3SDtm},${_b3SDmd}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDdc",
+            "value": "$[formatDate::(${_b3e},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDmo",
+            "value": "$[parseNumber::(formatDate::(${_b3e},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDdy",
+            "value": "$[parseNumber::(formatDate::(${_b3e},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDme",
+            "value": "$[index::(${MONE},calc::(${_b3EDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDmz",
+            "value": "${_b3EDmo}月${_b3EDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDmn",
+            "value": "${_b3EDme} ${_b3EDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b3EDmz},${_b3EDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3EDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b3ED",
+            "value": "$[if::(eq::(${_b3EDdc},${_d0}),${_b3EDtd},if::(eq::(${_b3EDdc},${_d1}),${_b3EDtm},${_b3EDmd}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3Za",
+        "value": "进行中 · ${b3ED} ${b3ET} 结束"
+      },
+      "_note": "文案先落成普通值,方法参数里只放键(全角标点闸看得懂)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3Zb",
+        "value": "${b3SD} ${b3ST} 开始 · ${b3H} 小时"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3Ea",
+        "value": "In progress · ends ${b3ED} ${b3ET}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3Eb",
+        "value": "${b3SD} ${b3ST} · ${b3H} h"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3Lz",
+        "value": "$[if::(eq::(${_b3a},1),${_b3Za},${_b3Zb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3Le",
+        "value": "$[if::(eq::(${_b3a},1),${_b3Ea},${_b3Eb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3L",
+        "value": "$[if::(ge::(length::(${b3ST}),5),if::(eq::(${_zh},1),${_b3Lz},${_b3Le}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3h",
+        "value": "$[if::(eq::(${_hasColo},1),if::(contains::(${_b3nm},${colo}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4a",
+        "value": "$[if::(lt::(4,${nA}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4k",
+        "value": "$[if::(lt::(4,${nA}),0,round::(calc::(4-${nA})))]"
+      },
+      "_note": "进行中的排完再接即将开始的;round 防 Android 把下标串成「2.0」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4nm",
+        "value": "$[if::(eq::(${_b4a},1),${ac.scheduled_maintenances[4].name},get::(${up},scheduled_maintenances[${_b4k}].name))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4sf",
+        "value": "$[if::(eq::(${_b4a},1),${ac.scheduled_maintenances[4].scheduled_for},get::(${up},scheduled_maintenances[${_b4k}].scheduled_for))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4su",
+        "value": "$[if::(eq::(${_b4a},1),${ac.scheduled_maintenances[4].scheduled_until},get::(${up},scheduled_maintenances[${_b4k}].scheduled_until))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(length::(${_b4sf}),10),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4pop",
+            "value": "$[if::(matches::(${_b4nm},${_re}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4cd",
+            "value": "$[subString::(${_b4nm},0,3)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4ce",
+            "value": "$[index::(split::(index::(split::(${_b4nm},${_lp}),1),${_rp}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4cz",
+            "value": "$[index::(split::(index::(split::(${CITY},~${_b4cd}=),1),~),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4Y",
+            "value": "$[if::(eq::(${_zh},1),findNotEmpty::(${_b4cz},${_b4ce}),${_b4ce})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4C",
+            "value": "$[if::(eq::(${_b4pop},1),${_b4cd},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4T",
+            "value": "$[if::(eq::(${_b4pop},1),${_b4cd} ${b4Y},${_b4nm})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4S",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b4sf},0,10),yyyy-MM-dd)+subString::(${_b4sf},11,13)*3600000+subString::(${_b4sf},14,16)*60000)+${tzMs})]"
+          },
+          "_note": "UTC 串按本地解析再加回偏移 = 真实时刻;再 formatDate 就是本地时间。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4e",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_b4su},0,10),yyyy-MM-dd)+subString::(${_b4su},11,13)*3600000+subString::(${_b4su},14,16)*60000)+${tzMs})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4H",
+            "value": "$[parseNumber::(calc::((${_b4e}-${b4S})/3600000),0.#)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4ST",
+            "value": "$[formatDate::(${b4S},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4ET",
+            "value": "$[formatDate::(${_b4e},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDdc",
+            "value": "$[formatDate::(${b4S},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDmo",
+            "value": "$[parseNumber::(formatDate::(${b4S},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDdy",
+            "value": "$[parseNumber::(formatDate::(${b4S},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDme",
+            "value": "$[index::(${MONE},calc::(${_b4SDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDmz",
+            "value": "${_b4SDmo}月${_b4SDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDmn",
+            "value": "${_b4SDme} ${_b4SDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b4SDmz},${_b4SDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4SDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4SD",
+            "value": "$[if::(eq::(${_b4SDdc},${_d0}),${_b4SDtd},if::(eq::(${_b4SDdc},${_d1}),${_b4SDtm},${_b4SDmd}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDdc",
+            "value": "$[formatDate::(${_b4e},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDmo",
+            "value": "$[parseNumber::(formatDate::(${_b4e},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDdy",
+            "value": "$[parseNumber::(formatDate::(${_b4e},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDme",
+            "value": "$[index::(${MONE},calc::(${_b4EDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDmz",
+            "value": "${_b4EDmo}月${_b4EDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDmn",
+            "value": "${_b4EDme} ${_b4EDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDmd",
+            "value": "$[if::(eq::(${_zh},1),${_b4EDmz},${_b4EDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4EDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "b4ED",
+            "value": "$[if::(eq::(${_b4EDdc},${_d0}),${_b4EDtd},if::(eq::(${_b4EDdc},${_d1}),${_b4EDtm},${_b4EDmd}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4Za",
+        "value": "进行中 · ${b4ED} ${b4ET} 结束"
+      },
+      "_note": "文案先落成普通值,方法参数里只放键(全角标点闸看得懂)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4Zb",
+        "value": "${b4SD} ${b4ST} 开始 · ${b4H} 小时"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4Ea",
+        "value": "In progress · ends ${b4ED} ${b4ET}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4Eb",
+        "value": "${b4SD} ${b4ST} · ${b4H} h"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4Lz",
+        "value": "$[if::(eq::(${_b4a},1),${_b4Za},${_b4Zb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4Le",
+        "value": "$[if::(eq::(${_b4a},1),${_b4Ea},${_b4Eb})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4L",
+        "value": "$[if::(ge::(length::(${b4ST}),5),if::(eq::(${_zh},1),${_b4Lz},${_b4Le}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4h",
+        "value": "$[if::(eq::(${_hasColo},1),if::(contains::(${_b4nm},${colo}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rows",
+        "value": [
+          {
+            "n": "${b0T}",
+            "d": "${_b0L}",
+            "act": "${_b0a}",
+            "hit": "${_b0h}"
+          },
+          {
+            "n": "${b1T}",
+            "d": "${_b1L}",
+            "act": "${_b1a}",
+            "hit": "${_b1h}"
+          },
+          {
+            "n": "${b2T}",
+            "d": "${_b2L}",
+            "act": "${_b2a}",
+            "hit": "${_b2h}"
+          },
+          {
+            "n": "${b3T}",
+            "d": "${_b3L}",
+            "act": "${_b3a}",
+            "hit": "${_b3h}"
+          },
+          {
+            "n": "${b4T}",
+            "d": "${_b4L}",
+            "act": "${_b4a}",
+            "hit": "${_b4h}"
+          }
+        ]
+      },
+      "_note": "定长 5 槽(不透传 33KB 原始维护对象)。多余槽位字段为空,渲染层按 total 截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${_now},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "lv",
+          "nInc",
+          "total",
+          "rows",
+          "colo",
+          "at"
+        ]
+      }
+    }
+  ]
+}

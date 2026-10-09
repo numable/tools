@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Manage services</title>
+<style>
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;--tile:#E7E9EE;--add:#EEF0F4;
+  --src:#7A4FD8;--srcSoft:rgba(122,79,216,.11);--shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--line:#262A31;--tile:#20232A;
+  --add:#252930;--src:#B49BFF;--srcSoft:rgba(180,155,255,.15);--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC",sans-serif;font-variant-numeric:tabular-nums;
+  padding:calc(var(--xb-content-top) + 12px) 14px calc(var(--xb-content-bottom) + 28px)}
+button{font:inherit;color:inherit}
+svg{display:block}
+.hd{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.hd h1{flex:1 1 auto;min-width:0;font-size:24px;font-weight:700;margin:0;letter-spacing:-.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 段标题 = 左名字 + 右摘要/动作(github 同款:13/700,上 22 下 8,不做 uppercase) */
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:22px 0 8px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:20px}
+.sec em{font-style:normal;font-weight:500;font-size:12px}
+.lnk{border:0;background:none;color:var(--src);font-size:13px;font-weight:700;padding:8px 2px;margin:-8px 0;cursor:pointer}
+/* 卡片:无描边 + 极浅投影;列表型卡片 overflow:hidden 让按压洗色跟着圆角走 */
+.grp{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--f);flex:0 0 auto}
+.lw{color:var(--c);font-weight:600}
+.state{color:var(--sub);font-size:13px;text-align:center;padding:22px 14px}
+.foot{color:var(--sub);font-size:11px;line-height:1.7;margin-top:18px;background:var(--tile);border-radius:14px;padding:12px 14px}
+.foot b{color:var(--fg);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0 0 6px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.orig{font-size:10.5px;color:var(--sub);font-weight:500;border:1px solid var(--line);border-radius:5px;padding:0 5px;
+  margin-left:6px;white-space:nowrap}
+/* 近 N 天日格:无事故 = tile;有事故 = 当天最重影响的状态色 */
+.days{display:flex;gap:3px;flex:0 0 auto}
+.days i{display:block;width:11px;height:11px;border-radius:3px;background:var(--tile)}
+.days i[class*="lv"]{background:var(--f)}
+.days.sk i{opacity:.5}
+.days i.na,.bar i.na{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+/* 次要动作:源色浅底胶囊;已关注 = 中性灰;满额 = 灰且不可点 */
+.chip{flex:0 0 auto;border:0;border-radius:999px;background:var(--srcSoft);color:var(--src);
+  font-size:12.5px;font-weight:600;min-height:30px;min-width:64px;padding:0 13px;cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--tile);color:var(--sub)}
+.chip:disabled{background:var(--tile);color:var(--sub);opacity:.55;cursor:default}
+.ib{flex:0 0 auto;width:30px;height:30px;border:0;border-radius:15px;background:var(--tile);color:var(--sub);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.ib:disabled{opacity:.35;cursor:default}
+.lv0{--c:#1E9E62;--f:#1E9E62}
+.lv1{--c:#2F6FDB;--f:#2F6FDB}
+.lv2{--c:#A86E00;--f:#E0A100}
+.lv3{--c:#D9600F;--f:#D9600F}
+.lv4{--c:#D93A34;--f:#D93A34}
+.lvU{--c:#6B7280;--f:#6B7280}
+html[data-theme="dark"] .lv0{--c:#3DD68C;--f:#3DD68C}
+html[data-theme="dark"] .lv1{--c:#6EA8FE;--f:#6EA8FE}
+html[data-theme="dark"] .lv2{--c:#E8B339;--f:#E8B339}
+html[data-theme="dark"] .lv3{--c:#FF9148;--f:#FF9148}
+html[data-theme="dark"] .lv4{--c:#FF6B61;--f:#FF6B61}
+html[data-theme="dark"] .lvU{--c:#8E939B;--f:#8E939B}
+
+.sub{color:var(--sub);font-size:13px;margin:0}
+/* 两种行同一套几何:左 14 | 22 宽的标记位(序号圆标 / 状态点)| 10 | 名字 | 按钮 | 右 14;
+   分隔线从名字起点(14 + 22 + 10 = 46)缩进 */
+.it{display:flex;align-items:center;gap:10px;min-height:56px;padding:8px 14px;position:relative}
+.it+.it::before{content:"";position:absolute;left:46px;right:0;top:0;border-top:1px solid var(--line)}
+.it .mk{flex:0 0 22px;height:22px;display:flex;align-items:center;justify-content:center}
+.it .nm{flex:1 1 auto;min-width:0}
+.it .nm b{display:block;font-size:14.5px;font-weight:600;line-height:1.35}
+.it .nm small{display:block;font-size:11.5px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it .nm small .lw{font-weight:600}
+.ord{width:22px;height:22px;border-radius:50%;background:var(--tile);color:var(--sub);font-size:11.5px;font-weight:700;
+  display:flex;align-items:center;justify-content:center}
+.it .dot.ld{background:var(--tile)}
+.acts{flex:0 0 auto;display:flex;gap:8px}
+.full{display:flex;align-items:center;gap:8px;margin:12px 0 0;padding:10px 14px;border-radius:14px;background:var(--srcSoft);
+  color:var(--src);font-size:12.5px;font-weight:600}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.xb-tap{position:relative}
+.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.chip,.ib,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.chip:active,.ib:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+</head>
+<body>
+<div class="hd"><h1 data-i="title"></h1></div>
+<div class="sub" id="cnt"></div>
+<div id="full"></div>
+<div class="sec"><span data-i="secMine"></span></div>
+<div id="mine"></div>
+<div id="cat"></div>
+<div class="foot" data-i="foot"></div>
+
+<script>
+var I18N = {
+ "zh": {
+  "lvU": "状态未知",
+  "lv0": "运行正常",
+  "lv1": "维护中",
+  "lv2": "轻微异常",
+  "lv3": "部分中断",
+  "lv4": "重大中断",
+  "stInv": "调查中",
+  "stIdf": "已定位",
+  "stMon": "观察恢复中",
+  "stUpd": "处理中",
+  "stSch": "已排期",
+  "stIng": "进行中",
+  "uMin": " 分钟",
+  "uH": " 小时",
+  "uD": " 天",
+  "sp": " ",
+  "lastToday": "最近一次在今天",
+  "lastYday": "最近一次在昨天",
+  "lastPre": "最近一次在 ",
+  "lastSuf": " 天前",
+  "pickT": "添加组件",
+  "pickS": "在面板里挑，确认后加到仪表盘",
+  "title": "管理关注",
+  "secMine": "已关注（按这个顺序显示）",
+  "cntPre": "已关注 ",
+  "cntSuf": "，改动立即生效",
+  "mineNone": "还没有关注的服务，从下面的目录里选",
+  "follow": "关注",
+  "following": "已关注",
+  "full": "最多关注 6 个服务，先移除一个",
+  "fullNote": "已关注满 6 个。想换一个，先在上面移除一个。",
+  "remove": "移除",
+  "up": "上移",
+  "saveFail": "保存失败，请重试",
+  "foot": "服务名左边的圆点是它此刻的状态。只能从这份内置目录里选择——每个服务的状态页地址都随这个工具一起经过审核，不能填写任意网址。"
+ },
+ "en": {
+  "lvU": "Unknown",
+  "lv0": "Operational",
+  "lv1": "Maintenance",
+  "lv2": "Minor issues",
+  "lv3": "Partial outage",
+  "lv4": "Major outage",
+  "stInv": "Investigating",
+  "stIdf": "Identified",
+  "stMon": "Monitoring",
+  "stUpd": "In progress",
+  "stSch": "Scheduled",
+  "stIng": "In progress",
+  "uMin": "m",
+  "uH": "h",
+  "uD": "d",
+  "sp": " ",
+  "lastToday": "latest today",
+  "lastYday": "latest yesterday",
+  "lastPre": "latest ",
+  "lastSuf": "d ago",
+  "pickT": "Add widgets",
+  "pickS": "Pick in the panel, then confirm",
+  "title": "Manage services",
+  "secMine": "Watching (shown in this order)",
+  "cntPre": "Watching ",
+  "cntSuf": " · changes apply right away",
+  "mineNone": "Nothing watched yet — pick from the list below",
+  "follow": "Watch",
+  "following": "Watching",
+  "full": "You can watch up to 6 services. Remove one first.",
+  "fullNote": "You're watching 6 services, the maximum. Remove one above to swap it.",
+  "remove": "Remove",
+  "up": "Move up",
+  "saveFail": "Couldn't save. Try again.",
+  "foot": "The dot next to each service shows its status right now. You can only pick from this built-in list — each status page address ships reviewed with this tool; arbitrary addresses aren't allowed."
+ }
+};
+var CAT = [{"id": "github", "n": "GitHub", "h": "www.githubstatus.com", "k": "sp", "g": "code"}, {"id": "claude", "n": "Claude", "h": "status.claude.com", "k": "sp", "g": "ai"}, {"id": "openai", "n": "OpenAI", "h": "status.openai.com", "k": "io", "g": "ai"}, {"id": "vercel", "n": "Vercel", "h": "www.vercel-status.com", "k": "sp", "g": "cloud"}, {"id": "cursor", "n": "Cursor", "h": "status.cursor.com", "k": "sp", "g": "ai"}, {"id": "npm", "n": "npm", "h": "status.npmjs.org", "k": "sp", "g": "code"}, {"id": "docker", "n": "Docker", "h": "www.dockerstatus.com", "k": "io", "g": "code"}, {"id": "bitbucket", "n": "Bitbucket", "h": "bitbucket.status.atlassian.com", "k": "sp", "g": "code"}, {"id": "circleci", "n": "CircleCI", "h": "status.circleci.com", "k": "sp", "g": "code"}, {"id": "netlify", "n": "Netlify", "h": "www.netlifystatus.com", "k": "sp", "g": "cloud"}, {"id": "supabase", "n": "Supabase", "h": "status.supabase.com", "k": "sp", "g": "cloud"}, {"id": "render", "n": "Render", "h": "status.render.com", "k": "sp", "g": "cloud"}, {"id": "digitalocean", "n": "DigitalOcean", "h": "status.digitalocean.com", "k": "sp", "g": "cloud"}, {"id": "mongodb", "n": "MongoDB Cloud", "h": "status.mongodb.com", "k": "sp", "g": "cloud"}, {"id": "sentry", "n": "Sentry", "h": "status.sentry.io", "k": "sp", "g": "tools"}, {"id": "datadog", "n": "Datadog", "h": "status.datadoghq.com", "k": "sp", "g": "tools"}, {"id": "linear", "n": "Linear", "h": "linearstatus.com", "k": "io", "g": "tools"}, {"id": "notion", "n": "Notion", "h": "www.notion-status.com", "k": "io", "g": "tools"}, {"id": "figma", "n": "Figma", "h": "status.figma.com", "k": "sp", "g": "tools"}, {"id": "postman", "n": "Postman", "h": "status.postman.com", "k": "sp", "g": "tools"}, {"id": "discord", "n": "Discord", "h": "discordstatus.com", "k": "sp", "g": "comm"}, {"id": "reddit", "n": "Reddit", "h": "www.redditstatus.com", "k": "sp", "g": "comm"}];
+var GROUPS = {"ai": {"zh": "AI 服务", "en": "AI"}, "code": {"zh": "代码与构建", "en": "Code & builds"}, "cloud": {"zh": "托管与数据库", "en": "Hosting & data"}, "tools": {"zh": "开发工具", "en": "Dev tools"}, "comm": {"zh": "社区", "en": "Community"}};
+var DEFAULT = ["github", "claude", "openai", "vercel"], MAXF = 6, SCHEMA = 2;
+var ICO = { up: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 19V5M6 11l6-6 6 6\"/></svg>", x: "<svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg>", bell: "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9\"/><path d=\"M10.3 21a1.94 1.94 0 0 0 3.4 0\"/></svg>" };
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。缺键回落英文表。 */
+var LANG = nbLang(document.documentElement.getAttribute("data-lang"));
+function t(k){ var m=I18N[LANG]; if (m && Object.prototype.hasOwnProperty.call(m,k)) return m[k]; return I18N.en[k]!==undefined?I18N.en[k]:k; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function byId(id){ for (var i=0;i<CAT.length;i++) if (CAT[i].id===id) return CAT[i]; return null; }
+/* 桥的 call 型方法四端一律 resolve {code,msg,data}、从不 reject(G49)—— 统一在这里拆信封。 */
+function un(r){ if (r && typeof r==="object" && "code" in r){ if (r.code!==0) throw new Error(r.msg||("code "+r.code)); return r.data; } return r; }
+function toast(s){ try { xbridge.toast && xbridge.toast(s); } catch(e){} }
+async function ready(){
+  for (var i=0;i<24 && !window.xbridge;i++) await new Promise(function(r){ setTimeout(r,50); });
+  return !!(window.xbridge && xbridge.isXBundleEnv && xbridge.isXBundleEnv());
+}
+async function env(){
+  var a = await nbInfo();
+  LANG = nbLang(a.language || a.locale);
+  if (a.theme && !document.documentElement.dataset.theme) document.documentElement.setAttribute("data-theme", a.theme);
+}
+async function getFollow(){
+  var v = null;
+  try { v = (await xbridge.getData("follow").then(un)); } catch(e){ v = null; }
+  if (typeof v === "string"){ try { v = JSON.parse(v); } catch(e){ v = null; } }
+  if (!Array.isArray(v)) v = DEFAULT.slice();
+  var out = [];
+  v.forEach(function(id){ if (byId(id) && out.indexOf(id) < 0 && out.length < MAXF) out.push(id); });
+  return out;
+}
+/* ── 状态档:与组件 follow.df 同一套判据 ──
+   -1 未知 · 0 正常 · 1 维护 · 2 降级 · 3 部分中断 · 4 重大中断 */
+function indLv(ind){ return ({none:0,maintenance:1,minor:2,major:3,critical:4})[ind]; }
+function impLv(imp){ return ({critical:4,major:3,maintenance:1})[imp] || 2; }
+function compLv(s){ return ({operational:0,under_maintenance:1,degraded_performance:2,partial_outage:3,major_outage:4})[s]; }
+function openOf(inc){ var s=String(inc&&inc.status||""); return s && ["resolved","postmortem","completed"].indexOf(s)<0; }
+function lvKey(lv){ return lv==null||lv<0 ? "U" : String(lv); }
+function lvWord(lv){ return t("lv"+lvKey(lv)); }
+function stWord(s){ return t(({investigating:"stInv",identified:"stIdf",monitoring:"stMon",verifying:"stMon",
+  scheduled:"stSch",in_progress:"stIng"})[s]||"stUpd"); }
+function pad(n){ return ("0"+n).slice(-2); }
+/* 月日:中文「9月25日」/ 英文「Sep 25」(doc/overseas-first.md §5,不出现纯数字月日)。 */
+var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDay(ms){ var d=new Date(ms); return LANG==="zh" ? (d.getMonth()+1)+"月"+d.getDate()+"日" : MON[d.getMonth()]+" "+d.getDate(); }
+function fmtTime(ms, nowMs){
+  var d=new Date(ms), n=new Date(nowMs||Date.now());
+  var hm=pad(d.getHours())+":"+pad(d.getMinutes());
+  if (d.toDateString()===n.toDateString()) return hm;
+  return fmtDay(ms)+" "+hm;
+}
+function fmtDur(ms){
+  var m=Math.max(0,Math.floor(ms/60000)), h=Math.floor(m/60), d=Math.floor(h/24);
+  if (m<60) return m+t("uMin");
+  if (h<24) return h+t("uH")+(m%60 ? t("sp")+(m%60)+t("uMin") : "");
+  return d+t("uD")+(h%24 ? t("sp")+(h%24)+t("uH") : "");
+}
+/* ── 一批服务此刻的状态(home.df 的原始响应 → 精简模型;首页与管理页共用)── */
+function statusModel(d, ids){
+  var now = Number(d.nowMs)||Date.now();
+  return { now: now, svcs: ids.map(function(id){
+    var c = byId(id), st = d["st_"+id], ind = st && st.status && st.status.indicator;
+    var raw = c.k==="sp" ? ((d["ur_"+id]||{}).incidents||[]) : ((d["ih_"+id]||{}).incidents||[]).filter(openOf);
+    var incs = raw.map(function(x){ return { n: x.name, l: impLv(x.impact), s: x.status, st: Date.parse(x.started_at||x.created_at)||0 }; });
+    var base = indLv(ind), lv = base==null ? -1 : Math.max.apply(null, [base].concat(incs.map(function(x){ return x.l; })));
+    return { id: id, lv: lv, incs: incs.slice(0,3), nInc: incs.length };
+  }) };
+}
+/* ── 事故历史(hist.df;与组件 week.df 同一套判据)──
+   sp = history.json:本季度逐月块,timestamp 是「Sep 24, 16:51 - 20:41 UTC」这样的展示串,时区取 start_time 的偏移;
+   io = incidents.json 最新 25 条。计划维护单列(m),不计入事故数。 */
+var MON3 = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function histFrom(d, c){
+  var out = [], seen = {}, trunc = false;
+  function push(x){ if (!x.s || seen[x.u||x.n+x.s]) return; seen[x.u||x.n+x.s] = 1; out.push(x); }
+  if (c.k === "sp"){
+    [d.h, d.g].forEach(function(H){
+      if (!H || !H.months) return;
+      var mo = /([+-])(\d\d):?(\d\d)$/.exec(String(H.start_time||"")), off = mo ? (mo[1]==="-"?-1:1)*(+mo[2]*60 + +mo[3]) : 0;
+      H.months.forEach(function(b){ (b.incidents||[]).forEach(function(x){
+        var p = String(x.timestamp||"").replace(/<[^>]+>/g,"");
+        var m = /([A-Z][a-z]{2})\s+(\d+),\s+(\d\d):(\d\d)(?:\s*-\s*(?:([A-Z][a-z]{2})\s+(\d+),\s+)?(\d\d):(\d\d))?/.exec(p);
+        if (!m || MON3[m[1]]==null) return;
+        var y = Number(b.year)||new Date().getFullYear(), mon = MON3[m[1]];
+        var s = Date.UTC(y, mon, +m[2], +m[3], +m[4]) - off*60000, e = 0;
+        if (m[7]){
+          var mon2 = m[5] ? MON3[m[5]] : mon, d2 = m[6] ? +m[6] : +m[2];
+          e = Date.UTC(y + (mon2 < mon ? 1 : 0), mon2, d2, +m[7], +m[8]) - off*60000;
+          if (e < s) e += 86400000;
+        }
+        push({ n: x.name, l: x.impact==="maintenance" ? 1 : impLv(x.impact), m: x.impact==="maintenance" ? 1 : 0, s: s, e: e,
+               u: x.code ? "https://"+c.h+"/incidents/"+x.code : "" });
+      }); });
+    });
+  } else {
+    var arr = (d.h||{}).incidents||[];
+    arr.forEach(function(x){
+      push({ n: x.name, l: x.impact==="maintenance" ? 1 : impLv(x.impact), m: x.impact==="maintenance" ? 1 : 0,
+             s: Date.parse(x.started_at||x.created_at)||0, e: openOf(x) ? 0 : (Date.parse(x.resolved_at||"")||0), u: x.shortlink||"" });
+    });
+    trunc = arr.length >= 25;      /* 只有最新 25 条:更早的看不到 */
+  }
+  out.sort(function(a,b){ return b.s - a.s; });
+  var now = Number(d.nowMs)||Date.now(), cut = now - 36*86400000;
+  var keep = out.filter(function(x, i){ return x.s >= cut || i < 8; });
+  var oldest = out.length ? out[out.length-1].s : now;
+  var up = ((d.u||{}).scheduled_maintenances||[]).slice(0,4).map(function(x){
+    return { n: x.name, a: Date.parse(x.scheduled_for)||0, b: Date.parse(x.scheduled_until)||0, u: x.shortlink||"" }; });
+  return { list: keep, oldest: trunc ? oldest : 0, up: up };
+}
+/* 近 N 天:每天最重的事故影响、事故数、最近一次在几天前(按设备时区的自然日;0 = 今天)。
+   atLeast = 数据源只给到最新 25 条、而第 25 条仍在窗口内 → 真实数只会更多,文案写「至少」。 */
+function dayStats(H, days, now){
+  var z = new Date(now); z.setHours(0,0,0,0); var t0 = +z;
+  var cells = [], cnt = 0, last = null;
+  for (var i=0;i<days;i++) cells.push(0);
+  (H.list||[]).forEach(function(x){
+    if (x.m || !x.s || x.s > now) return;
+    var ago = x.s >= t0 ? 0 : Math.floor((t0 - x.s)/86400000) + 1;
+    if (last===null || ago < last) last = ago;
+    if (ago < days){ cnt++; cells[ago] = Math.max(cells[ago], x.l); }
+  });
+  var atLeast = !!(H.oldest && H.oldest > t0 - (days-1)*86400000);
+  /* 数据只覆盖到最早那一条(io 只给 25 条):更早的日子是「不知道」,不能画成「无事故」 */
+  var cover = atLeast ? Math.floor((t0 - H.oldest)/86400000) + 1 : days;
+  return { cells: cells, cnt: cnt, last: last, atLeast: atLeast, cover: cover };
+}
+function daysHtml(st, n){
+  var h = "";
+  for (var i=n-1;i>=0;i--){ var l = st ? st.cells[i] : 0; h += '<i'+(st && i >= st.cover ? ' class="na"' : l>=2 ? ' class="lv'+l+'"' : '')+'></i>'; }
+  return '<span class="days'+(st ? '' : ' sk')+'">'+h+'</span>';
+}
+function lastWord(last){
+  if (last===null) return "";
+  return last===0 ? t("lastToday") : last===1 ? t("lastYday") : t("lastPre")+last+t("lastSuf");
+}
+/* 近 30 天的窗口跨进上一季度 → hist.df 另取 page 2(history.json 只覆盖当前季度)。 */
+function needP2(now){
+  var d = new Date(now - 31*86400000), n = new Date(now);
+  return Math.floor(d.getMonth()/3) !== Math.floor(n.getMonth()/3) ? 1 : 0;
+}
+/* ── 首屏缓存三态(G23,JS 层 flowCached):有缓存必先渲(过期也先渲),过期则后台校新,失败不覆盖 ── */
+async function cacheGet(key){
+  try { var v = (await xbridge.getData(key).then(un)); if (typeof v==="string") v = JSON.parse(v);
+    return (v && v.schema===SCHEMA && v.ts) ? v : null; } catch(e){ return null; }
+}
+async function cacheSet(key, model){
+  try { await xbridge.setData(key, JSON.stringify({schema:SCHEMA, ts:Date.now(), m:model})); } catch(e){}
+}
+async function flowCached(key, ttl, hard, fetcher, paint, force){
+  var c = force ? null : await cacheGet(key), age = c ? Date.now()-c.ts : 1e15;
+  if (c && age < hard){ paint(c.m, c.ts, false); if (age < ttl) return; }
+  var fresh = null;
+  try { fresh = await fetcher(); } catch(e){ fresh = null; }
+  if (fresh){ await cacheSet(key, fresh); paint(fresh, Date.now(), false); }
+  else if (!c || age >= hard) paint(null, 0, true);
+}
+/* 一个服务的事故历史(1 小时新鲜;首页与详情页共用这份缓存)。 */
+function histOf(id, force, paint){
+  var c = byId(id);
+  return flowCached("c.hist."+id, 3600000, 24*3600000, async function(){
+    var d = (await xbridge.runDataFlow("hist", { id: id, p2: needP2(Date.now()) }, 30000).then(un));
+    return d && d.h && (d.h.months||d.h.incidents) ? histFrom(d, c) : null;
+  }, paint, force);
+}
+/* 并发上限:同时最多 n 个 runDataFlow,别一口气打 22 个状态页。 */
+async function pool(items, n, fn){
+  var i = 0;
+  async function worker(){ while (i < items.length){ var k = i++; try { await fn(items[k], k); } catch(e){} } }
+  var ws = []; for (var j=0;j<Math.min(n, items.length);j++) ws.push(worker());
+  await Promise.all(ws);
+}
+
+function legendHtml(){
+  return '<div class="legend">'+[0,1,2,3,4].map(function(l){
+    return '<span class="lv'+l+'"><i class="dot"></i>'+esc(lvWord(l))+'</span>'; }).join("")+'</div>';
+}
+
+/* 管理关注:上面是已关注(可上移 / 移除),下面是内置目录(每个服务带此刻的状态点,挑的时候就知道谁在出事)。
+   目录状态分批取:每批 6 个服务、同时最多 2 批(22 个状态页不一口气打出去);按批先后逐个点亮,
+   取不到的保持灰点。结果缓存 3 分钟,再进来先画缓存。 */
+var FOLLOW = [], BUSY = false, ST = {}, STDONE = false;
+async function save(){
+  BUSY = true;
+  try { (await xbridge.runActionFlow("save", { follow: FOLLOW.slice() }).then(un)); } catch(e){ toast(t("saveFail")); }
+  BUSY = false;
+}
+function isFull(){ return FOLLOW.length >= MAXF; }
+function dotHtml(id){
+  var lv = ST[id];
+  if (lv === undefined) return '<i class="dot ld'+(STDONE ? '' : ' xb-sk')+'"></i>';
+  return '<i class="dot lv'+lvKey(lv)+'"></i>';
+}
+function stLine(c){
+  var lv = ST[c.id];
+  if (lv != null && lv !== 0) return '<span class="lv'+lvKey(lv)+'"><span class="lw">'+esc(lvWord(lv))+'</span></span> · '+esc(c.h);
+  return esc(c.h);
+}
+function paintCnt(){
+  document.getElementById("cnt").textContent = t("cntPre")+FOLLOW.length+" / "+MAXF+t("cntSuf");
+  document.getElementById("full").innerHTML = isFull() ? '<div class="full">'+esc(t("fullNote"))+'</div>' : "";
+}
+function paintMine(){
+  var box = document.getElementById("mine");
+  if (!FOLLOW.length){ box.innerHTML = '<div class="grp"><div class="state">'+esc(t("mineNone"))+'</div></div>'; return; }
+  box.innerHTML = '<div class="grp">'+FOLLOW.map(function(id, i){
+    var c = byId(id);
+    return '<div class="it"><span class="mk"><span class="ord">'+(i+1)+'</span></span><div class="nm"><b>'+esc(c.n)+'</b><small>'+stLine(c)+'</small></div>'+
+      '<span class="acts"><button class="ib" data-up="'+i+'" aria-label="'+esc(t("up"))+'"'+(i===0?" disabled":"")+'>'+ICO.up+'</button>'+
+      '<button class="ib" data-rm="'+esc(id)+'" aria-label="'+esc(t("remove"))+'">'+ICO.x+'</button></span></div>';
+  }).join("")+'</div>';
+}
+function paintCat(){
+  var html = "", full = isFull();
+  Object.keys(GROUPS).forEach(function(g){
+    var items = CAT.filter(function(c){ return c.g===g; });
+    html += '<div class="sec"><span>'+esc(GROUPS[g][LANG])+'</span></div><div class="grp">'+items.map(function(c){
+      var on = FOLLOW.indexOf(c.id)>=0;
+      return '<div class="it"><span class="mk">'+dotHtml(c.id)+'</span><div class="nm"><b>'+esc(c.n)+'</b><small>'+stLine(c)+'</small></div>'+
+        '<button class="chip'+(on?" on":"")+'" data-tg="'+esc(c.id)+'"'+(!on && full ? " disabled" : "")+'>'+esc(on ? t("following") : t("follow"))+'</button></div>';
+    }).join("")+'</div>';
+  });
+  document.getElementById("cat").innerHTML = html;
+}
+function paint(){
+  document.querySelectorAll("[data-i]").forEach(function(el){ var k=el.dataset.i; if (k==="foot") el.innerHTML=t(k); else el.textContent=t(k); });
+  paintCnt(); paintMine(); paintCat();
+}
+async function loadStatus(){
+  var c = await cacheGet("c.cat"), fresh = c && Date.now()-c.ts < 180000;
+  if (c && c.m){ ST = c.m; paintMine(); paintCat(); }
+  if (fresh){ STDONE = true; paintCat(); return; }
+  var ids = CAT.map(function(x){ return x.id; }), batches = [], got = {};
+  for (var i=0;i<ids.length;i+=6) batches.push(ids.slice(i, i+6));
+  await pool(batches, 2, async function(b){
+    var d = null;
+    try { d = (await xbridge.runDataFlow("home", { ids: b.join("~") }, 30000).then(un)); } catch(e){ d = null; }
+    var m = d ? statusModel(d, b) : null;
+    b.forEach(function(id){
+      var s = m && m.svcs.filter(function(x){ return x.id===id; })[0];
+      ST[id] = s ? s.lv : -1; got[id] = 1;
+    });
+    paintMine(); paintCat();
+  });
+  STDONE = true; paintCat();
+  if (Object.keys(got).some(function(id){ return ST[id] >= 0; })) cacheSet("c.cat", ST);
+}
+document.addEventListener("click", async function(e){
+  var el;
+  if (BUSY) return;
+  if ((el = e.target.closest("[data-tg]"))){
+    if (el.disabled) return;
+    var id = el.dataset.tg, i = FOLLOW.indexOf(id);
+    if (i>=0) FOLLOW.splice(i,1);
+    else { if (isFull()){ toast(t("full")); return; } FOLLOW.push(id); }
+    xbridge.haptic && xbridge.haptic("selection"); paint(); await save(); return;
+  }
+  if ((el = e.target.closest("[data-rm]"))){
+    FOLLOW = FOLLOW.filter(function(x){ return x!==el.dataset.rm; });
+    xbridge.haptic && xbridge.haptic("selection"); paint(); await save(); return;
+  }
+  if ((el = e.target.closest("[data-up]"))){
+    var k = Number(el.dataset.up); if (k<=0) return;
+    var tmp = FOLLOW[k-1]; FOLLOW[k-1] = FOLLOW[k]; FOLLOW[k] = tmp;
+    xbridge.haptic && xbridge.haptic("selection"); paint(); await save(); return;
+  }
+});
+addEventListener("languagechange", async function(){ await env(); paint(); });
+(async function boot(){
+  if (!(await ready())){ paint(); return; }
+  await env(); FOLLOW = await getFollow(); paint(); loadStatus();
+})();
+
+</script>
+</body></html>

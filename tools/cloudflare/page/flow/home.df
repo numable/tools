@@ -1,0 +1,946 @@
+{
+  "_note": "首页页面级取数(XPage 的 `depends` 一次取、hero 与所有行共用)。四个端点合计约 34KB,其中 upcoming 一个就占 33KB —— 每块面板各自取数的话这一份要重复拉四次。\n\n事件与维护都做**定长槽结构化瘦身**(事件 3 槽 / 维护 5 槽),理由与 board.df 相同:原始条目带完整 `incident_updates` 与组件对象,整份透传会落进渲染数据与磁盘缓存。\n\n⚠️ `nInc` 与 `mTotal` 是两个**独立**的截断依据,不能共用一个 total —— 事件列表与维护列表长度无关。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "MONE",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "cf_token"
+      },
+      "_note": "**一次性清理老令牌**(2026-09-09 迁凭证中心的收尾)。v28 及以前把 Cloudflare 令牌明文存在 `data.*` 包级沙盒的 `cf_token` 键上;v29 起改由 App 凭证中心保管,这个键**再没有任何人读**。\n⚠️ 不删不行:`data.*` bundle scope 是本地备份(.nbk)的**必备项**,而凭证是备份的红线项 —— 留着它 = 用户以为已经迁到保险箱了,实际那把明文钥匙还躺在磁盘上、还会被每一次备份带走。一次安全迁移留下一个孤儿密钥,等于没迁。\n⚠️ 挂在首页取数流的**最前面**:这条流每次开首页都跑,幂等(键不存在时 data.remove 是 no-op),不需要额外的迁移钩子,也不占一次网络往返。\n⚠️ 用 `data.remove` 而不是写空值 —— 写空值仍然是一次 `data.set`,那个键会继续存在于沙盒与备份里。\n老用户需要在「设置 → 去凭证管理绑定令牌」重新绑一次(令牌本体无法自动搬:包读得到它就说明迁移没做干净,而写入凭证中心只有用户在宿主面板里的手势能做,credential-vault §7)。\n可在若干版之后删除本动作。"
+    },
+    {
+      "_note": "入参必须先 op:set 落地成 data 域的键,方法参数里才看得见(§9.5 #3)。`.xwidget` 不传 → 空串 → 归 0 → 全程不碰缓存。",
+      "op": "set",
+      "props": {
+        "key": "cacheIn",
+        "value": "${_cache}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "useCache",
+        "value": "$[parseNumber::(${cacheIn},0)]"
+      }
+    },
+    {
+      "_note": "键**不再含「绑没绑」那一维**(旧值 `c.cf.{hasTk}`)—— 令牌迁进凭证中心后,绑定态在取数之前根本算不出来(没有查询绑定状态的 action,credential-vault §6)。\n两态共用一槽是安全的:G23 的「有缓存必先渲(stale 也渲)+ 后台校新」会在下次开页把它纠正过来(stale 窗 2min / 硬 TTL 6h)。代价是绑定之后第一眼可能闪一下旧态。\n⚠️ 旧方案能定点清 `c.cf.1`,靠的是 `token-save.af` 那个「存完令牌」的钩子;绑定现在发生在**宿主的凭证面板**里,包拿不到回调,那个钩子结构上不存在了。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "c.cf"
+      }
+    },
+    {
+      "_note": "读缓存。`default:{}` 让下面的 ${hit.ts} 在无缓存时安全取空,而不是整条流断掉。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "**结构版本号**:pack 的字段集变了就 +1(§5.5 契约 7)。它管的不是「数据新不新」而是「这份数据的**形状**还认不认」—— 缓存键只含对象维度、不含包代际,不盖这个戳,升级后首屏就会拿上一版的 pack 去渲新模板:少的字段取空,尺寸串里的 calc 一算 null,整卡白块,且不报错。\n⚠️ **从 1 起,绝不能用 0** —— `eq::` 是数字化比较,`eq::(空,0)` 恒为 true,旧缓存(没有 schema 字段)会被判成匹配,闸就等于没上。\n⚠️ 刻意**不用 `manifest.version`**:①flow 里拿不到(`@app` 只有 language/locale);②那会过度失效 —— 只改配色也丢全部缓存、白等一轮网络。手写常量只在结构真变时 +1。",
+      "op": "set",
+      "props": {
+        "key": "SCHEMA",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitSchema",
+        "value": "${hit.schema}"
+      }
+    },
+    {
+      "_note": "hardTTL = 21600s。超过就当没有缓存 —— 太旧的数先渲出来再改口,不如老实等一次。嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里。\n⚠️ 最外层是**结构比对**:pack 的形状对不上就当没有缓存(同步真取数),而不是「先渲出来再说」—— 旧形状渲新模板是白块,比等一次网络糟得多。",
+      "op": "set",
+      "props": {
+        "key": "hasHit",
+        "value": "$[if::(eq::(${hitSchema},${SCHEMA}),if::(gt::(${hitTs},0),if::(lt::(${age},21600000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "ttl = 120s(§5.5.3)。纯新鲜度,不掺 useCache —— 掺进去 `_stale` 就算不对了。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},120000),1,0),0)]"
+      }
+    },
+    {
+      "_note": "「这次先出的是旧货,请后台校新」。**必须进 resultFilter** —— 校新那条路靠它,漏了就是永不校新。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),if::(eq::(${fresh},1),0,1),0),0)]"
+      }
+    },
+    {
+      "_note": "只有「开了缓存 且 有没超 hardTTL 的货」才跳过网络 —— 连接都不建立。⚠️ **stale 也走这条跳过**(首屏零等待是三态的全部价值);写成「不 fresh 就打」= 退回两态,首屏照样白等。卡片(useCache=0)与冷启一律落进 items 真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "st",
+          "action": "request",
+          "params": {
+            "url": "https://www.cloudflarestatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "id": "inc",
+          "action": "request",
+          "params": {
+            "url": "https://www.cloudflarestatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "id": "up",
+          "action": "request",
+          "params": {
+            "url": "https://www.cloudflarestatus.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "id": "raw",
+          "action": "request",
+          "params": {
+            "url": "https://www.cloudflare.com/cdn-cgi/trace",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable",
+              "Accept": "text/plain"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "colo",
+            "value": "$[index::(split::(index::(split::(${raw},\\ncolo=),1),\\n),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "loc",
+            "value": "$[index::(split::(index::(split::(${raw},\\nloc=),1),\\n),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv",
+            "value": "$[if::(eq::(${st.status.indicator},none),0,if::(eq::(${st.status.indicator},maintenance),1,if::(eq::(${st.status.indicator},minor),2,if::(eq::(${st.status.indicator},major),3,if::(eq::(${st.status.indicator},critical),3,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nInc",
+            "value": "$[length::(${inc.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mTotal",
+            "value": "$[length::(${up.scheduled_maintenances})]"
+          }
+        },
+        {
+          "_note": "列表为空时**整个键都不发**,而不是发 3 个空槽。①空槽是纯浪费:它们会原样进渲染数据、磁盘缓存与渲染图;②「没有进行中事件」是常态(实测多数时刻 nInc=0),让它长期表现成「一堆空字段」会把 L1 的空值告警变成恒红噪音,而恒红的门等于没有门。渲染层对此已就绪:forEach 遍历不存在的键渲不出任何行,空态由 nInc<1 的分支承接。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(ge::(findNotEmpty::(${nInc},0),1),1,0)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "_md1Iso",
+                "value": "$[subString::(${inc.incidents[0].updated_at},0,10)]"
+              },
+              "_note": "月日:中文「9月25日」/ 英文「Sep 25」(doc/overseas-first.md §5,不出现纯数字月日)。拼接先落 Z / E 两个键再在 if 里引用。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md1Mo",
+                "value": "$[parseNumber::(subString::(${_md1Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md1Dy",
+                "value": "$[parseNumber::(subString::(${_md1Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md1Me",
+                "value": "$[index::(${MONE},calc::(${_md1Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md1Z",
+                "value": "${_md1Mo}月${_md1Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md1E",
+                "value": "${_md1Me} ${_md1Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md1",
+                "value": "$[if::(eq::(length::(${_md1Iso}),10),if::(startsWith::(${@app.language},zh),${_md1Z},${_md1E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md2Iso",
+                "value": "$[subString::(${inc.incidents[1].updated_at},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md2Mo",
+                "value": "$[parseNumber::(subString::(${_md2Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md2Dy",
+                "value": "$[parseNumber::(subString::(${_md2Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md2Me",
+                "value": "$[index::(${MONE},calc::(${_md2Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md2Z",
+                "value": "${_md2Mo}月${_md2Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md2E",
+                "value": "${_md2Me} ${_md2Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md2",
+                "value": "$[if::(eq::(length::(${_md2Iso}),10),if::(startsWith::(${@app.language},zh),${_md2Z},${_md2E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md3Iso",
+                "value": "$[subString::(${inc.incidents[2].updated_at},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md3Mo",
+                "value": "$[parseNumber::(subString::(${_md3Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md3Dy",
+                "value": "$[parseNumber::(subString::(${_md3Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md3Me",
+                "value": "$[index::(${MONE},calc::(${_md3Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md3Z",
+                "value": "${_md3Mo}月${_md3Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md3E",
+                "value": "${_md3Me} ${_md3Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md3",
+                "value": "$[if::(eq::(length::(${_md3Iso}),10),if::(startsWith::(${@app.language},zh),${_md3Z},${_md3E}),)]"
+              }
+            },
+            {
+              "_note": "进行中事件 3 槽。`imp` 是 Statuspage 的 impact(none/minor/major/critical),渲染层用它挑行首圆点的颜色。",
+              "op": "set",
+              "props": {
+                "key": "incs",
+                "value": [
+                  {
+                    "n": "${inc.incidents[0].name}",
+                    "imp": "${inc.incidents[0].impact}",
+                    "d": "${_md1}"
+                  },
+                  {
+                    "n": "${inc.incidents[1].name}",
+                    "imp": "${inc.incidents[1].impact}",
+                    "d": "${_md2}"
+                  },
+                  {
+                    "n": "${inc.incidents[2].name}",
+                    "imp": "${inc.incidents[2].impact}",
+                    "d": "${_md3}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "_note": "同上:维护列表为空时不发 rows,空态由 total/mTotal < 1 的分支承接。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(ge::(findNotEmpty::(${mTotal},0),1),1,0)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "_md4Iso",
+                "value": "$[subString::(${up.scheduled_maintenances[0].scheduled_for},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md4Mo",
+                "value": "$[parseNumber::(subString::(${_md4Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md4Dy",
+                "value": "$[parseNumber::(subString::(${_md4Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md4Me",
+                "value": "$[index::(${MONE},calc::(${_md4Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md4Z",
+                "value": "${_md4Mo}月${_md4Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md4E",
+                "value": "${_md4Me} ${_md4Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md4",
+                "value": "$[if::(eq::(length::(${_md4Iso}),10),if::(startsWith::(${@app.language},zh),${_md4Z},${_md4E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md5Iso",
+                "value": "$[subString::(${up.scheduled_maintenances[1].scheduled_for},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md5Mo",
+                "value": "$[parseNumber::(subString::(${_md5Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md5Dy",
+                "value": "$[parseNumber::(subString::(${_md5Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md5Me",
+                "value": "$[index::(${MONE},calc::(${_md5Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md5Z",
+                "value": "${_md5Mo}月${_md5Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md5E",
+                "value": "${_md5Me} ${_md5Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md5",
+                "value": "$[if::(eq::(length::(${_md5Iso}),10),if::(startsWith::(${@app.language},zh),${_md5Z},${_md5E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md6Iso",
+                "value": "$[subString::(${up.scheduled_maintenances[2].scheduled_for},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md6Mo",
+                "value": "$[parseNumber::(subString::(${_md6Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md6Dy",
+                "value": "$[parseNumber::(subString::(${_md6Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md6Me",
+                "value": "$[index::(${MONE},calc::(${_md6Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md6Z",
+                "value": "${_md6Mo}月${_md6Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md6E",
+                "value": "${_md6Me} ${_md6Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md6",
+                "value": "$[if::(eq::(length::(${_md6Iso}),10),if::(startsWith::(${@app.language},zh),${_md6Z},${_md6E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md7Iso",
+                "value": "$[subString::(${up.scheduled_maintenances[3].scheduled_for},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md7Mo",
+                "value": "$[parseNumber::(subString::(${_md7Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md7Dy",
+                "value": "$[parseNumber::(subString::(${_md7Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md7Me",
+                "value": "$[index::(${MONE},calc::(${_md7Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md7Z",
+                "value": "${_md7Mo}月${_md7Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md7E",
+                "value": "${_md7Me} ${_md7Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md7",
+                "value": "$[if::(eq::(length::(${_md7Iso}),10),if::(startsWith::(${@app.language},zh),${_md7Z},${_md7E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md8Iso",
+                "value": "$[subString::(${up.scheduled_maintenances[4].scheduled_for},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md8Mo",
+                "value": "$[parseNumber::(subString::(${_md8Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md8Dy",
+                "value": "$[parseNumber::(subString::(${_md8Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md8Me",
+                "value": "$[index::(${MONE},calc::(${_md8Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md8Z",
+                "value": "${_md8Mo}月${_md8Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md8E",
+                "value": "${_md8Me} ${_md8Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_md8",
+                "value": "$[if::(eq::(length::(${_md8Iso}),10),if::(startsWith::(${@app.language},zh),${_md8Z},${_md8E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "rows",
+                "value": [
+                  {
+                    "n": "${up.scheduled_maintenances[0].name}",
+                    "d": "${_md4}",
+                    "t": "$[subString::(${up.scheduled_maintenances[0].scheduled_for},11,16)]",
+                    "hit": "$[if::(ge::(length::(${colo}),3),if::(contains::(${up.scheduled_maintenances[0].name},${colo}),1,0),0)]"
+                  },
+                  {
+                    "n": "${up.scheduled_maintenances[1].name}",
+                    "d": "${_md5}",
+                    "t": "$[subString::(${up.scheduled_maintenances[1].scheduled_for},11,16)]",
+                    "hit": "$[if::(ge::(length::(${colo}),3),if::(contains::(${up.scheduled_maintenances[1].name},${colo}),1,0),0)]"
+                  },
+                  {
+                    "n": "${up.scheduled_maintenances[2].name}",
+                    "d": "${_md6}",
+                    "t": "$[subString::(${up.scheduled_maintenances[2].scheduled_for},11,16)]",
+                    "hit": "$[if::(ge::(length::(${colo}),3),if::(contains::(${up.scheduled_maintenances[2].name},${colo}),1,0),0)]"
+                  },
+                  {
+                    "n": "${up.scheduled_maintenances[3].name}",
+                    "d": "${_md7}",
+                    "t": "$[subString::(${up.scheduled_maintenances[3].scheduled_for},11,16)]",
+                    "hit": "$[if::(ge::(length::(${colo}),3),if::(contains::(${up.scheduled_maintenances[3].name},${colo}),1,0),0)]"
+                  },
+                  {
+                    "n": "${up.scheduled_maintenances[4].name}",
+                    "d": "${_md8}",
+                    "t": "$[subString::(${up.scheduled_maintenances[4].scheduled_for},11,16)]",
+                    "hit": "$[if::(ge::(length::(${colo}),3),if::(contains::(${up.scheduled_maintenances[4].name},${colo}),1,0),0)]"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "at",
+            "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+          }
+        },
+        {
+          "id": "zr",
+          "action": "request",
+          "params": {
+            "url": "https://api.cloudflare.com/client/v4/zones?per_page=5&status=active",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json",
+              "User-Agent": "Numable"
+            },
+            "credential": "cf"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hasToken",
+            "value": "$[if::(eq::(${zr},),0,1)]"
+          },
+          "_note": "「绑了吗」从响应本身推:未绑时宿主抛 `credential_required(cf)`,请求不发、zr 为空。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nZone",
+            "value": "$[length::(${zr.result})]"
+          }
+        },
+        {
+          "_note": "有域才发 zones 键(与事件/维护两个列表同一条纪律:空列表整个键不发,别发一串空槽)。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(ge::(findNotEmpty::(${nZone},0),1),1,0)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "zones",
+                "value": [
+                  {
+                    "id": "${zr.result[0].id}",
+                    "n": "${zr.result[0].name}",
+                    "st": "${zr.result[0].status}",
+                    "pl": "${zr.result[0].plan.name}"
+                  },
+                  {
+                    "id": "${zr.result[1].id}",
+                    "n": "${zr.result[1].name}",
+                    "st": "${zr.result[1].status}",
+                    "pl": "${zr.result[1].plan.name}"
+                  },
+                  {
+                    "id": "${zr.result[2].id}",
+                    "n": "${zr.result[2].name}",
+                    "st": "${zr.result[2].status}",
+                    "pl": "${zr.result[2].plan.name}"
+                  },
+                  {
+                    "id": "${zr.result[3].id}",
+                    "n": "${zr.result[3].name}",
+                    "st": "${zr.result[3].status}",
+                    "pl": "${zr.result[3].plan.name}"
+                  },
+                  {
+                    "id": "${zr.result[4].id}",
+                    "n": "${zr.result[4].name}",
+                    "st": "${zr.result[4].status}",
+                    "pl": "${zr.result[4].plan.name}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "_note": "写回哨兵:直接取响应字段,不加兜底 —— 取数失败时必空。",
+          "op": "set",
+          "props": {
+            "key": "_guard",
+            "value": "${st.status.indicator}"
+          }
+        },
+        {
+          "_note": "整份渲染输入打包落盘。⚠️ 键集必须与 resultFilter 完全一致 —— 少一个,命中缓存那趟就少一个字段(而且不报错)。",
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "lv": "${lv}",
+              "nInc": "${nInc}",
+              "mTotal": "${mTotal}",
+              "incs": "${incs}",
+              "rows": "${rows}",
+              "colo": "${colo}",
+              "loc": "${loc}",
+              "at": "${at}",
+              "hasToken": "${hasToken}",
+              "zones": "${zones}",
+              "nZone": "${nZone}",
+              "ts": "${nowMs}",
+              "schema": "${SCHEMA}"
+            }
+          }
+        },
+        {
+          "_note": "契约 4(§5.5.2):哨兵非空才写回。⚠️ 两次踩坑记在这里 —— `at` 是 `formatDate(@time.nowMs)`即本地时钟、失败照样非空;`lv` 在全不匹配时算成 `-1`、长度是 2 也非空。**判据必须是直接来自响应、不带任何兜底的哨兵**,即下面的 `_guard`。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${_guard}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中那条少算一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lv",
+        "value": "${box.lv}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nInc",
+        "value": "${box.nInc}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mTotal",
+        "value": "${box.mTotal}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "incs",
+        "value": "${box.incs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rows",
+        "value": "${box.rows}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "colo",
+        "value": "${box.colo}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "loc",
+        "value": "${box.loc}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "${box.at}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasToken",
+        "value": "${box.hasToken}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zones",
+        "value": "${box.zones}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nZone",
+        "value": "${box.nZone}"
+      }
+    },
+    {
+      "_note": "外传①:这次渲染用的缓存键。跑在 reloadPage **之后**的流(下拉穿透、切对象校新)拿不到 depends 输出,只能读盘;让它们读结果而不是重算判据 —— AF 没有子流程调用,判据抄几份就会有一天「删的键 ≠ 渲的键」,那时下拉安静地刷不动、日志还全绿。",
+      "action": "data.set",
+      "params": {
+        "key": "c.cf._cur",
+        "value": "${ckey}"
+      }
+    },
+    {
+      "_note": "外传②:这次出的是不是旧货。",
+      "action": "data.set",
+      "params": {
+        "key": "c.cf._stale",
+        "value": "${_stale}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "_stale",
+          "ckey",
+          "lv",
+          "nInc",
+          "mTotal",
+          "incs",
+          "rows",
+          "colo",
+          "loc",
+          "at",
+          "hasToken",
+          "zones",
+          "nZone"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。⚠️ `_stale`/`ckey` 是校新那条路的入参,别删。"
+    }
+  ]
+}

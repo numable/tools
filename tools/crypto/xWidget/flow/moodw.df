@@ -1,0 +1,324 @@
+{
+  "version": 1,
+  "_note": "情绪走势:恐惧贪婪近 31 天(纵轴固定 0–100,25 / 75 两条淡参考线 = 恐惧 / 贪婪分界)。",
+  "i18n": {
+    "zh-CN": {
+      "noData": "暂时取不到情绪指数"
+    },
+    "en-US": {
+      "noData": "Fear & Greed unavailable"
+    }
+  },
+  "actions": [
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "action": "request",
+          "id": "f",
+          "params": {
+            "url": "https://api.alternative.me/fng/?limit=31",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "g",
+          "params": {
+            "url": "https://api.coingecko.com/api/v3/global",
+            "method": "GET",
+            "formatType": "json"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v",
+        "value": [
+          "$[get::(index::(${f.data},30),value)]",
+          "$[get::(index::(${f.data},29),value)]",
+          "$[get::(index::(${f.data},28),value)]",
+          "$[get::(index::(${f.data},27),value)]",
+          "$[get::(index::(${f.data},26),value)]",
+          "$[get::(index::(${f.data},25),value)]",
+          "$[get::(index::(${f.data},24),value)]",
+          "$[get::(index::(${f.data},23),value)]",
+          "$[get::(index::(${f.data},22),value)]",
+          "$[get::(index::(${f.data},21),value)]",
+          "$[get::(index::(${f.data},20),value)]",
+          "$[get::(index::(${f.data},19),value)]",
+          "$[get::(index::(${f.data},18),value)]",
+          "$[get::(index::(${f.data},17),value)]",
+          "$[get::(index::(${f.data},16),value)]",
+          "$[get::(index::(${f.data},15),value)]",
+          "$[get::(index::(${f.data},14),value)]",
+          "$[get::(index::(${f.data},13),value)]",
+          "$[get::(index::(${f.data},12),value)]",
+          "$[get::(index::(${f.data},11),value)]",
+          "$[get::(index::(${f.data},10),value)]",
+          "$[get::(index::(${f.data},9),value)]",
+          "$[get::(index::(${f.data},8),value)]",
+          "$[get::(index::(${f.data},7),value)]",
+          "$[get::(index::(${f.data},6),value)]",
+          "$[get::(index::(${f.data},5),value)]",
+          "$[get::(index::(${f.data},4),value)]",
+          "$[get::(index::(${f.data},3),value)]",
+          "$[get::(index::(${f.data},2),value)]",
+          "$[get::(index::(${f.data},1),value)]",
+          "$[get::(index::(${f.data},0),value)]"
+        ]
+      },
+      "_note": "alternative.me 是**降序**(第 0 条 = 今天)→ 翻成升序。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fv",
+        "value": "$[index::(${v},30)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${fv}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "${@i18n.noData}"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v7",
+        "value": "$[index::(${v},23)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v30",
+        "value": "$[index::(${v},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avg",
+        "value": "$[parseNumber::(calc::(sum::(${v})/31),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "band",
+        "value": "$[if::(lt::(${fv},25),0,if::(lt::(${fv},45),1,if::(le::(${fv},55),2,if::(lt::(${fv},75),3,4))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi",
+        "value": "100"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pts_a",
+        "value": [
+          "0.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},0)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "5.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},1)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "10.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},2)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "16.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},3)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "21.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},4)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "27.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},5)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "32.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},6)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "38.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},7)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "43.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},8)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "48.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},9)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "54.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},10)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "59.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},11)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "65.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},12)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "70.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},13)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "76.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},14)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "81.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},15)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "86.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},16)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "92.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},17)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "97.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},18)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "103.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},19)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "108.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},20)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "114.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},21)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "119.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},22)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "125.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},23)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "130.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},24)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "135.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},25)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "141.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},26)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "146.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},27)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "152.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},28)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "157.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},29)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]",
+          "163.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${v},30)-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pts",
+        "value": "$[join::(${pts_a},\\,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lastY",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((${fv}-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y75",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((75-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y25",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((25-${lo})/(${hi}-${lo})))*60.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "btcD",
+        "value": "$[parseNumber::(${g.data.market_cap_percentage.btc},0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mc",
+        "value": "$[parseNumber::(${g.data.market_cap_change_percentage_24h_usd},0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcUp",
+        "value": "$[if::(gt::(length::(${mc}),0),if::(ge::(${mc},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcFl",
+        "value": "$[if::(gt::(length::(${mc}),0),if::(lt::(calc::(${mc}*${mc}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcTA",
+        "value": "$[if::(gt::(${mc},0),${mc},calc::(0-${mc}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcTF",
+        "value": "$[if::(ne::(findNotEmpty::(${mc},__none__),__none__),parseNumber::(${mcTA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcT",
+        "value": "$[if::(ne::(findNotEmpty::(${mc},__none__),__none__),if::(eq::(${mcTF},0),connect::(${mcTF},%),connect::(if::(gt::(${mc},0),+,−),${mcTF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "fv",
+          "v7",
+          "v30",
+          "avg",
+          "band",
+          "pts",
+          "lastY",
+          "y75",
+          "y25",
+          "btcD",
+          "mcT",
+          "mcUp",
+          "mcFl",
+          "at"
+        ]
+      }
+    }
+  ]
+}

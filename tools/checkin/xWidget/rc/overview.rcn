@@ -1,0 +1,1006 @@
+{
+  "rc": {
+    "i18n": {
+      "zh-CN": {
+        "streak": "连续",
+        "days": "天",
+        "recent": "近 30 天",
+        "best": "最长连续",
+        "total": "总计",
+        "avg": "平均间隔",
+        "doneToday": "今天已达标",
+        "todayIs": "今天",
+        "never": "还没有记录",
+        "pickItem": "选择事项",
+        "masked": "已隐藏",
+        "uD": "天",
+        "uT": "次",
+        "nbsp": " "
+      },
+      "en-US": {
+        "streak": "Streak",
+        "days": "d",
+        "recent": "Last 30 days",
+        "best": "Best streak",
+        "total": "Total",
+        "avg": "Avg gap",
+        "doneToday": "Goal met",
+        "todayIs": "Today",
+        "never": "No entries yet",
+        "pickItem": "Pick a habit",
+        "masked": "Hidden",
+        "uD": "days",
+        "uT": "times",
+        "nbsp": " "
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#F9FCFB\\,#EEF7F3)@90|linear(#15171A\\,#161B1D\\,#182221)@90"
+      },
+      {
+        "_note": "源色点(card-design-system §2):5pt 圆点 / 卡名左侧 / 间距 9pt / 每张卡恰好一次。⚠️ 色值恒 #2E9E6B|#45C793,**不跟事项的调色板走** —— 这颗点答的是「这是 checkin 的卡」,不是「这件事是紫色的」;跟着 pal 变会让同一个包在盘上看着像六个源。⚠️ y 引用顶层的 nm2(不带图标那份名字,带图标时 hide 但照样布局,与 nm1 同 y 同字号):锚点不能落进 op:if 分支,否则另一档整卡算不出来(2026-10-03 第一行统一)。",
+        "id": "dot",
+        "type": "layer",
+        "x": "14pt",
+        "y": "{nm2.y}+({nm2.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#2E9E6B|#45C793",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "_note": "卡名行最右那一格恒有内容(card-design-system §3 + §5):常态渲 MM-DD 日期锚(零网络包,锚答的是「这一屏说的是哪天」);打码态改渲状态标记 —— 打码 ≠ 空态,空态是 `--`/空槽加事实陈述,打码是主动语态的一句状态,而那一刻这张卡上没有任何随时间变的可见量、锚零信息量。⚠️ 与网格下方那对坐标轴刻度**刻意重复右端那个日期**:轴读作刻度、右上角读作时间戳,两者在读者那里不是同一件事,而少了右上角这一格,这张卡在一屏 20 张卡里就是唯一空着右上角的那张。",
+        "id": "mk",
+        "type": "txt",
+        "x": "{parent.w}-94pt",
+        "y": "15pt",
+        "w": "80pt",
+        "h": "-1",
+        "alignmentH": "2",
+        "maxLines": "1",
+        "text": "$[if::(eq::(${mask},1),${@i18n.masked},findNotEmpty::(${atLbl},--))]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${hicon},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "ic",
+            "type": "img",
+            "x": "23pt",
+            "y": "10pt",
+            "w": "16pt",
+            "h": "16pt",
+            "url": "@[file://xWidget/assets/ic/${icon}.$[if::(eq::(${theme},dark),d,l)].uri]"
+          },
+          {
+            "id": "nm1",
+            "type": "txt",
+            "x": "{ic.r}+5pt",
+            "y": "12pt",
+            "w": "{parent.w}-37pt-{ic.w}-5pt-88pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${iname},${@i18n.pickItem})]",
+            "fontSize": "13pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "id": "nm2",
+        "type": "txt",
+        "x": "23pt",
+        "y": "12pt",
+        "w": "{parent.w}-37pt-88pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${iname},${@i18n.pickItem})]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "hide": "$[if::(eq::(${hicon},1),1,0)]"
+      },
+      {
+        "id": "lbl",
+        "type": "txt",
+        "x": "14pt",
+        "y": "35pt",
+        "w": "-1",
+        "h": "-1",
+        "text": "${@i18n.streak}",
+        "fontSize": "11pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "_note": "数字与单位的对齐(2026-09-07,与 intimacy v31 同一轮):StaticCanvas 的 txt 盒顶 = 该行字形 ink 顶(不是盒顶+字体 ascent),44pt 粗体数字基线在 y+31、12pt 汉字基线在 y+9.5 → 单位盒顶放 y+21.5(40pt 数字则 +20.5);老写法 82/80 是按 ascent 猜的,汉字比数字低 11pt。`••` 打码也是紧排会被顶到盒顶,故单独分支压到基线(y = 基线 − 11pt)。量法见 Numable-bundles/tools/rcnrender。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "13pt",
+            "w": "-1",
+            "h": "-1",
+            "fontSize": "40pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "id": "num",
+            "y": "52pt",
+            "text": "$[findNotEmpty::(${streak},0)]"
+          },
+          {
+            "type": "txt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${@i18n.days}",
+            "fontSize": "12pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1",
+            "id": "unit",
+            "x": "{num.r}+5pt",
+            "y": "70.5pt"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "13pt",
+            "w": "-1",
+            "h": "-1",
+            "fontSize": "40pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "id": "numM",
+            "y": "70pt",
+            "text": "••"
+          },
+          {
+            "type": "txt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${@i18n.days}",
+            "fontSize": "12pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1",
+            "id": "unitM",
+            "x": "{numM.r}+5pt",
+            "y": "70.5pt"
+          }
+        ]
+      },
+      {
+        "_note": "30 天切成上下两条带而不是缩小格子（标准 §4.5 #5）：15 列时格子约 18pt，30 列挤在同一行只有 8pt，可读性差一个量级。上带 = 较早 15 天，下带 = 最近 15 天，左上到右下时间递增。",
+        "id": "a0",
+        "type": "layer",
+        "x": "14pt",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c29},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a1",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*1",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c28},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a2",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*2",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c27},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a3",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*3",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c26},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a4",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*4",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c25},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a5",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*5",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c24},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a6",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*6",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c23},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a7",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*7",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c22},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a8",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*8",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c21},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a9",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*9",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c20},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a10",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*10",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c19},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a11",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*11",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c18},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a12",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*12",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c17},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a13",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*13",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c16},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "a14",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*14",
+        "y": "110pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c15},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b0",
+        "type": "layer",
+        "x": "14pt",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c14},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b1",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*1",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c13},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b2",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*2",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c12},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b3",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*3",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c11},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b4",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*4",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c10},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b5",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*5",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c9},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b6",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*6",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c8},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b7",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*7",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c7},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b8",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*8",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c6},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b9",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*9",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c5},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b10",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*10",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c4},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b11",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*11",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c3},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b12",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*12",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c2},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b13",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*13",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c1},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "b14",
+        "type": "layer",
+        "x": "14pt+({parent.w}-25pt)/15*14",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)+4pt",
+        "w": "(({parent.w}-25pt)/15-3pt)",
+        "h": "(({parent.w}-25pt)/15-3pt)",
+        "bgColor": "$[findNotEmpty::(${c0},#EDEEF0|#20232A)]",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "id": "dl",
+        "type": "txt",
+        "x": "14pt",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)*2+18pt",
+        "w": "-1",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${d0Lbl},--)]",
+        "fontSize": "10pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "id": "dr",
+        "type": "txt",
+        "x": "{parent.w}-70pt",
+        "y": "110pt+(({parent.w}-25pt)/15-3pt)*2+18pt",
+        "w": "56pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${d1Lbl},--)]",
+        "fontSize": "10pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "2"
+      },
+      {
+        "id": "t1",
+        "type": "layer",
+        "x": "14pt",
+        "y": "186pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "60pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "t1L",
+        "type": "txt",
+        "x": "{t1.x}+10pt",
+        "y": "{t1.y}+10pt",
+        "w": "{t1.w}-20pt",
+        "h": "-1",
+        "text": "${@i18n.best}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "id": "t1V",
+        "type": "richText",
+        "x": "{t1.x}+10pt",
+        "y": "{t1.y}+27pt",
+        "w": "{t1.w}-20pt",
+        "h": "-1",
+        "maxLines": "1",
+        "spans": [
+          {
+            "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${best},0))]",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          },
+          {
+            "text": "${@i18n.nbsp}",
+            "fontSize": "14pt",
+            "textColor": "#6B7280|#8E939B"
+          },
+          {
+            "text": "${@i18n.uD}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ],
+        "_note": "数字带单位(2026-10-08 评审 checkin-1:「平均间隔 3.5」不知道是什么的 3.5)。"
+      },
+      {
+        "id": "t2",
+        "type": "layer",
+        "x": "14pt+({parent.w}-36pt)/2+8pt",
+        "y": "186pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "60pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "t2L",
+        "type": "txt",
+        "x": "{t2.x}+10pt",
+        "y": "{t2.y}+10pt",
+        "w": "{t2.w}-20pt",
+        "h": "-1",
+        "text": "${@i18n.recent}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "id": "t2V",
+        "type": "richText",
+        "x": "{t2.x}+10pt",
+        "y": "{t2.y}+27pt",
+        "w": "{t2.w}-20pt",
+        "h": "-1",
+        "maxLines": "1",
+        "spans": [
+          {
+            "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${days30},0))]",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          },
+          {
+            "text": "${@i18n.nbsp}",
+            "fontSize": "14pt",
+            "textColor": "#6B7280|#8E939B"
+          },
+          {
+            "text": "${@i18n.uD}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ],
+        "_note": "数字带单位(2026-10-08 评审 checkin-1:「平均间隔 3.5」不知道是什么的 3.5)。"
+      },
+      {
+        "id": "t3",
+        "type": "layer",
+        "x": "14pt",
+        "y": "254pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "60pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "t3L",
+        "type": "txt",
+        "x": "{t3.x}+10pt",
+        "y": "{t3.y}+10pt",
+        "w": "{t3.w}-20pt",
+        "h": "-1",
+        "text": "${@i18n.total}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "id": "t3V",
+        "type": "richText",
+        "x": "{t3.x}+10pt",
+        "y": "{t3.y}+27pt",
+        "w": "{t3.w}-20pt",
+        "h": "-1",
+        "maxLines": "1",
+        "spans": [
+          {
+            "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${total},0))]",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          },
+          {
+            "text": "${@i18n.nbsp}",
+            "fontSize": "14pt",
+            "textColor": "#6B7280|#8E939B"
+          },
+          {
+            "text": "${@i18n.uT}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ],
+        "_note": "数字带单位(2026-10-08 评审 checkin-1:「平均间隔 3.5」不知道是什么的 3.5)。"
+      },
+      {
+        "id": "t4",
+        "type": "layer",
+        "x": "14pt+({parent.w}-36pt)/2+8pt",
+        "y": "254pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "60pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "t4L",
+        "type": "txt",
+        "x": "{t4.x}+10pt",
+        "y": "{t4.y}+10pt",
+        "w": "{t4.w}-20pt",
+        "h": "-1",
+        "text": "${@i18n.avg}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "_note": "空值两支(2026-09-25 第三轮):定高 + alignmentV 居中时「--」仍比数字墨迹中线高约 0.12×字号;有值支保留原节点(几何不动),「--」支单列一个 h:-1 的 txt(盒顶 = 墨迹顶),y 按 rcnrender 实测压到数字墨迹中线。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),1,if::(eq::(findNotEmpty::(${avgGap},--),--),0,1))]"
+        },
+        "react": [
+          {
+            "id": "t4V",
+            "type": "richText",
+            "x": "{t4.x}+10pt",
+            "y": "{t4.y}+27pt",
+            "w": "{t4.w}-20pt",
+            "h": "-1",
+            "maxLines": "1",
+            "spans": [
+              {
+                "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${avgGap},--))]",
+                "fontSize": "20pt",
+                "typeface": "System-Bold",
+                "textColor": "#0E1116|#F3F4F6"
+              },
+              {
+                "text": "${@i18n.nbsp}",
+                "fontSize": "14pt",
+                "textColor": "#6B7280|#8E939B"
+              },
+              {
+                "text": "${@i18n.uD}",
+                "fontSize": "11pt",
+                "textColor": "#6B7280|#8E939B"
+              }
+            ],
+            "_note": "数字带单位(2026-10-08 评审 checkin-1:「平均间隔 3.5」不知道是什么的 3.5)。"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),0,if::(eq::(findNotEmpty::(${avgGap},--),--),1,0))]"
+        },
+        "react": [
+          {
+            "id": "t4E",
+            "type": "txt",
+            "x": "{t4.x}+10pt",
+            "y": "{t4.y}+20.5pt+13.75pt",
+            "w": "{t4.w}-20pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "_note": "底部脚注不要胶囊底(2026-08-27 用户拍板,与 gold banks 基准价同规则)。此层保留为纯锚点:cT/cN 等以 {chip.x/y/w} 定位,删层会断锚 → 透明化即可。",
+        "id": "chip",
+        "type": "layer",
+        "x": "14pt",
+        "y": "322pt",
+        "w": "{parent.w}-28pt",
+        "h": "22pt",
+        "bgColor": "#00000000|#00000000"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${done},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "cD",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.doneToday}",
+            "fontSize": "11pt",
+            "textColor": "${mc}",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${has},1),if::(eq::(${done},0),1,0),0)]"
+        },
+        "react": [
+          {
+            "id": "cT",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.todayIs} $[findNotEmpty::(${todayCnt},0)]/$[findNotEmpty::(${goal},1)]",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${has},1),0,1)]"
+        },
+        "react": [
+          {
+            "id": "cN",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.never}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ]
+  }
+}

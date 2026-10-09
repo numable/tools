@@ -1,0 +1,238 @@
+{
+  "_note": "本盒余量(11,68×60,card-design-system §8.2):名 / 还剩几片 + 已用细轨 / 几天后停药(或开新盒);停药期写「停药 · 第 N 天」。2026-10-08 新增,零新增请求:复用 flow/w.df 的 pillsLeft / pkind / nDays / todayIdx / active(与首页「还剩 8 片」同一个量)。默认脱敏同 today:名字是用户自设别名。",
+  "rc": {
+    "i18n": {
+      "zh-CN": {
+        "defaultAlias": "每日记录",
+        "unit": "片",
+        "nbsp": " ",
+        "toBreak": " 天后停药",
+        "toNew": " 天后新盒",
+        "rest": "停药",
+        "dayPre": "第 ",
+        "dayPost": " 天",
+        "setup": "点开设置",
+        "notStarted": "未开始"
+      },
+      "en-US": {
+        "defaultAlias": "Doses",
+        "unit": "left",
+        "nbsp": " ",
+        "toBreak": "d to break",
+        "toNew": "d to new",
+        "rest": "Break",
+        "dayPre": "Day ",
+        "dayPost": "",
+        "setup": "Tap to set",
+        "notStarted": "Not started"
+      }
+    },
+    "i18nEmptyOk": [
+      "dayPost"
+    ],
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#F9FCFB\\,#EDF7F4)@90|linear(#15171A\\,#161A1D\\,#192021)@90"
+      },
+      {
+        "id": "dot",
+        "type": "layer",
+        "x": "8pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#128F66|#6FE8BE",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "17pt",
+        "y": "7pt",
+        "w": "43pt",
+        "h": "-1",
+        "maxLines": "1",
+        "lineBreak": "0",
+        "text": "$[findNotEmpty::(${alias},${@i18n.defaultAlias})]",
+        "fontSize": "10pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6"
+      },
+      {
+        "_note": "服药期:主值 = 本盒还剩几片(w.df 的 pillsLeft,≤ 2 位数,字号恒 20pt)+ 一条已用 / 活性片数的细轨。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${pkind},0),1),1,if::(eq::(findNotEmpty::(${pkind},0),2),1,0))]"
+        },
+        "react": [
+          {
+            "id": "num",
+            "type": "richText",
+            "x": "8pt",
+            "y": "21pt",
+            "w": "54pt",
+            "h": "-1",
+            "maxLines": "1",
+            "spans": [
+              {
+                "text": "${pillsLeft}",
+                "fontSize": "20pt",
+                "typeface": "System-Bold",
+                "textColor": "#0E1116|#F3F4F6"
+              },
+              {
+                "text": "${@i18n.nbsp}",
+                "fontSize": "10pt",
+                "textColor": "#6B7280|#8E939B"
+              },
+              {
+                "text": "${@i18n.unit}",
+                "fontSize": "10pt",
+                "textColor": "#6B7280|#8E939B"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_den",
+              "value": "$[if::(ge::(findNotEmpty::(${active},0),1),${active},1)]"
+            }
+          },
+          {
+            "_note": "已用比例的终点(轨盒 54×3、圆头 → 可用 [1.5,52.5]);外层 round 防 Android calc 出 double。",
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_px",
+              "value": "$[round::(calc::(1.5+51*(${_den}-${pillsLeft})/${_den}),1)]"
+            }
+          },
+          {
+            "id": "trk",
+            "type": "line",
+            "points": "[1.5,1.5,52.5,1.5]",
+            "x": "8pt",
+            "y": "40pt",
+            "w": "54pt",
+            "h": "3pt",
+            "lineWidth": "3pt",
+            "lineCap": "round",
+            "strokeColor": "#E7E9EE|#2A2D33"
+          },
+          {
+            "id": "fil",
+            "type": "line",
+            "points": "[1.5,1.5,$[findNotEmpty::(${_px},1.5)],1.5]",
+            "x": "8pt",
+            "y": "40pt",
+            "w": "54pt",
+            "h": "3pt",
+            "lineWidth": "3pt",
+            "lineCap": "round",
+            "strokeColor": "#128F66|#6FE8BE"
+          },
+          {
+            "id": "foot",
+            "type": "txt",
+            "x": "8pt",
+            "y": "47pt",
+            "w": "54pt",
+            "h": "-1",
+            "maxLines": "1",
+            "lineBreak": "0",
+            "text": "$[if::(eq::(${pkind},1),${nDays}${@i18n.toBreak},${nDays}${@i18n.toNew})]",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ]
+      },
+      {
+        "_note": "停药期:主值写「停药」,底行「第 N 天」(停药期内的第几天)。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${pkind},0),3),1,0)]"
+        },
+        "react": [
+          {
+            "id": "rst",
+            "type": "txt",
+            "x": "8pt",
+            "y": "22pt",
+            "w": "54pt",
+            "h": "-1",
+            "maxLines": "1",
+            "lineBreak": "0",
+            "text": "${@i18n.rest}",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          },
+          {
+            "id": "rstN",
+            "type": "txt",
+            "x": "8pt",
+            "y": "46pt",
+            "w": "54pt",
+            "h": "-1",
+            "maxLines": "1",
+            "lineBreak": "0",
+            "text": "${@i18n.dayPre}$[round::(calc::(${todayIdx}-${active}+1))]${@i18n.dayPost}",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ]
+      },
+      {
+        "_note": "没设计划 / 计划未开始 / 取不到:值位「--」,底行一句状态。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${pkind},0),0),1,0)]"
+        },
+        "react": [
+          {
+            "id": "numE",
+            "type": "txt",
+            "x": "8pt",
+            "y": "28pt",
+            "w": "54pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "--",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          },
+          {
+            "id": "footE",
+            "type": "txt",
+            "x": "8pt",
+            "y": "46pt",
+            "w": "54pt",
+            "h": "-1",
+            "maxLines": "1",
+            "lineBreak": "0",
+            "text": "$[if::(eq::(findNotEmpty::(${hasPlan},-1),0),${@i18n.setup},if::(eq::(findNotEmpty::(${future},0),1),${@i18n.notStarted},--))]",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ]
+      }
+    ]
+  }
+}

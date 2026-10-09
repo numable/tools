@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<!--
+  城市管理页(路由 /city;也是「我的城市」组件的 onEdit)。
+  管三件事:空气质量标准(中国 / 美国)· 我的城市(上移 / 删除,每行带 AQI 与档位色点)· 添加城市(常用城市 + 搜索)。
+  数组增删放在这张 H5 页:ActionFlow 没有数组追加/删除原语,JS 改完整份交给 cities-save.af 原样落盘。
+  第一个城市是首页「添加组件」的默认城市,所以排序有意义 —— 用显式的「上移」钮,不做「点一下就移到最上面」的隐藏交互。
+-->
+<html lang="en"><head>
+<title>My Cities</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--faint:#9AA0A6;--line:#E4E7EC;--tile:#E7E9EE;
+  --src:#1B8EB0;--srcSoft:rgba(27,142,176,.12);--segOn:#FFFFFF;--danger:#E5392F;
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--faint:#6B7078;--line:#262A31;--tile:#20232A;
+  --src:#58C6E8;--srcSoft:rgba(88,198,232,.15);--segOn:#3A3F48;--danger:#FF6259;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;
+  /* 容器 chrome 浮在内容之上:顶部让位读 --xb-content-top,不写就被胶囊压住 */
+  padding:calc(var(--xb-content-top) + 12px) 16px calc(var(--xb-content-bottom) + 28px)}
+button{font:inherit;color:inherit}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:13px;margin:2px 2px 4px}
+.sec{font-size:13px;color:var(--sub);font-weight:500;margin:22px 2px 8px}
+/* 卡片左右内边距 14,行的分隔线画在行顶 —— 于是分隔线从文字起点开始、到右内边距为止 */
+.card{background:var(--card);box-shadow:var(--shadow);border-radius:14px;padding:0 14px}
+.row{display:flex;align-items:center;gap:10px;min-height:56px;padding:8px 0;border-top:1px solid var(--line);cursor:pointer}
+.row:first-child{border-top:0}
+.row .grow{flex:1 1 auto;min-width:0}
+.row b{display:block;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row small{display:block;color:var(--sub);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row.static{cursor:default}
+.dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dot.sel{background:var(--src)}
+.dot.off{background:transparent}
+.aq{flex:0 0 auto;min-width:34px;text-align:right;font-size:17px;font-weight:700}
+.aq.na{color:var(--faint);font-weight:500}
+.tag{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:600;color:var(--src);background:var(--srcSoft);
+  border-radius:5px;padding:0 5px;vertical-align:2px}
+/* 图标钮:命中区 40×44,右侧那颗往外让 10px —— 字形右缘落在卡片右内边距附近,左右看起来对称 */
+.ib{flex:0 0 40px;height:44px;border:0;background:none;color:var(--sub);font-size:17px;line-height:1;padding:0;
+  cursor:pointer;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.ib:last-child{margin-right:-10px}
+.ib:disabled{opacity:.25;cursor:default}
+.ib.del:active{color:var(--danger)}
+/* 次要动作(添加 / 常用城市):本包源色浅底胶囊;已添加 = 中性灰底灰字。平台 accent 实底只留给「添加组件」 */
+.add{flex:0 0 auto;border:0;background:var(--srcSoft);color:var(--src);font-size:13px;font-weight:600;
+  border-radius:999px;padding:6px 14px;min-height:32px;cursor:pointer}
+.add.done,.add[disabled]{background:var(--tile);color:var(--sub);cursor:default}
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.chip{border:0;border-radius:999px;min-height:38px;background:var(--srcSoft);color:var(--src);font-size:13.5px;font-weight:600;
+  cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 8px}
+.chip.done{background:var(--tile);color:var(--sub);cursor:default}
+/* 分段控件:与首页页头同一个样子 */
+.seg{display:flex;background:var(--tile);border-radius:12px;padding:3px}
+.seg button{flex:1 1 0;border:0;background:none;border-radius:9px;min-height:36px;font-size:14px;font-weight:600;color:var(--sub);cursor:pointer}
+.seg button.on{background:var(--segOn);color:var(--fg);box-shadow:0 1px 2px rgba(15,20,30,.12)}
+.hint{color:var(--sub);font-size:12px;margin:8px 2px 0;line-height:1.55}
+/* font-size 16px 是硬下限:iOS 聚焦 <16px 的输入控件会把整页放大 */
+input.q{width:100%;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:12px;padding:11px 14px;font-size:16px;outline:none}
+input.q:focus{border-color:var(--src)}
+.state{color:var(--sub);font-size:13px;padding:16px 0;text-align:center}
+.foot{color:var(--sub);font-size:11px;margin:24px 2px 0;line-height:1.6}
+.row,.xb-tap{position:relative}
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.mine,.hit,.xb-tap{position:relative}
+.mine::after,.hit::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.mine:active::after,.hit:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.del,.add,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.del:active,.add:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+
+</head>
+<body>
+  <h1 id="h1" data-i="title"></h1>
+  <div class="sub" data-i="sub"></div>
+
+  <div class="sec" data-i="stdSec"></div>
+  <div class="seg" id="seg">
+    <button type="button" data-std="cn" data-i="segCn" class="xb-press"></button>
+    <button type="button" data-std="us" data-i="segUs" class="xb-press"></button>
+  </div>
+  <div class="hint" data-i="stdHint"></div>
+
+  <div class="sec" data-i="mineSec"></div>
+  <div id="mine" class="card"></div>
+
+  <div class="sec" data-i="hotSec"></div>
+  <div id="hot" class="chips"></div>
+
+  <div class="sec" data-i="searchSec"></div>
+  <input id="q" class="q" type="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <div id="hits" class="card" style="display:none;margin-top:10px"></div>
+
+  <div class="foot" data-i="foot"></div>
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#mine";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<script>
+var MAX = 8;   // 与首页的城市行槽位数一致(XPage 没有循环,列表按 8 个槽位展开)
+var HOT = {"zh": [{"name": "北京", "lat": "39.9042", "lon": "116.4074", "where": "北京 · 中国"}, {"name": "上海", "lat": "31.2222", "lon": "121.4581", "where": "上海 · 中国"}, {"name": "广州", "lat": "23.1291", "lon": "113.2644", "where": "广东 · 中国"}, {"name": "成都", "lat": "30.5728", "lon": "104.0668", "where": "四川 · 中国"}, {"name": "西安", "lat": "34.3416", "lon": "108.9398", "where": "陕西 · 中国"}, {"name": "香港", "lat": "22.3193", "lon": "114.1694", "where": "香港 · 中国"}], "en": [{"name": "New York", "lat": "40.7128", "lon": "-74.0060", "where": "New York · United States"}, {"name": "London", "lat": "51.5074", "lon": "-0.1278", "where": "England · United Kingdom"}, {"name": "Delhi", "lat": "28.6139", "lon": "77.2090", "where": "Delhi · India"}, {"name": "Tokyo", "lat": "35.6762", "lon": "139.6503", "where": "Tokyo · Japan"}, {"name": "Paris", "lat": "48.8566", "lon": "2.3522", "where": "Île-de-France · France"}, {"name": "Los Angeles", "lat": "34.0522", "lon": "-118.2437", "where": "California · United States"}]};
+var I18N = {
+  "zh": {"title":"我的城市","sub":"第一个城市是添加组件时的默认城市","stdSec":"空气质量标准","segCn":"中国标准","segUs":"美国标准",
+         "stdHint":"中国标准按 HJ 633-2012 计算（优、良、轻度污染……），美国标准是 EPA 的 US AQI。首页、详情页和组件一起切换。",
+         "mineSec":"我的城市","hotSec":"常用城市","searchSec":"搜索其他城市","ph":"搜索城市，如 上海 / Tokyo","add":"添加","added":"已添加",
+         "searching":"搜索中…","noHit":"没有找到匹配的城市，换个说法试试","searchFail":"搜索失败，请检查网络后重试。",
+         "dup":"已在列表里","full":"最多 8 个城市","empty":"还没有城市，从下面的常用城市或搜索添加。",
+         "del":"删除","up":"上移","first":"默认",
+         "foot":"城市列表与标准设置默认只保存在这台设备上。城市检索结果含 OpenStreetMap 数据（© OSM 贡献者）。",
+         "notX":"请在 Numable 里打开这个页面。"},
+  "en": {"title":"My cities","sub":"Your first city is the default when you add widgets","stdSec":"Air quality standard","segCn":"China","segUs":"US",
+         "stdHint":"China's standard follows HJ 633-2012 (excellent, good, light pollution…); the US standard is the EPA's US AQI. The home page, details and widgets all switch together.",
+         "mineSec":"My cities","hotSec":"Popular cities","searchSec":"Search another city","ph":"Search a city, e.g. Tokyo","add":"Add","added":"Added",
+         "searching":"Searching…","noHit":"No matching city. Try another spelling.","searchFail":"Search failed. Check your connection and try again.",
+         "dup":"Already added","full":"Up to 8 cities","empty":"No cities yet. Add one from the popular cities or search below.",
+         "del":"Remove","up":"Move up","first":"Default",
+         "foot":"Your city list and standard setting stay on this device by default. City search results include data from OpenStreetMap (© OSM contributors).",
+         "notX":"Open this page in Numable."}
+};
+var LANG = 'en', list = [], std = '', aqi = {}, aqiSeq = 0, CND = false;
+// 作为「我的城市」组件的编辑面板打开时,平台面板顶栏已经写着「我的城市」—— 页内大标题不再重复
+var brickId = new URLSearchParams(location.search).get('brickId') || '';
+/* ⚠️ 桥的 call 型方法四端一律 resolve {code,msg,data}、从不 reject —— 取 .data 前先看 .code(G49)。 */
+function ok(r){ return r && r.code === 0 ? (r.data || {}) : null; }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 缺键回落英文(§2) */  /* 空串是合法译文(如英文的后缀),不能当缺键回落中文 */
+function paint(){
+  Array.prototype.forEach.call(document.querySelectorAll('[data-i]'), function(el){ el.textContent = t(el.dataset.i); });
+  document.getElementById('q').placeholder = t('ph');
+}
+/* 主题与语言:宿主在页面加载前已写好 <html data-theme / data-lang>;这里再读一次 appInfo 兜底,
+   并监听切换事件(切换时页面不重载)。 */
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+function readLang(){
+  var l = document.documentElement.getAttribute('data-lang') || '';
+  return l ? nbLang(l) : '';
+}
+async function boot(done){
+  LANG = readLang() || LANG;
+  if (!window.xbridge){ paint(); document.getElementById('mine').innerHTML = '<div class="state">' + t('notX') + '</div>'; return; }
+  var d = await nbInfo();   /* numable-env:等桥、处理信封,缺语言退回 data-lang;缺省英文 */
+  if (d.theme === 'dark' || d.theme === 'light') document.documentElement.setAttribute('data-theme', d.theme);
+  if (!readLang() && (d.language || d.locale)) LANG = nbLang(d.language || d.locale);
+  CND = nbCnDefault(d);
+  paint();
+  window.addEventListener('languagechange', function(){ LANG = readLang() || LANG; paint(); renderMine(); });
+  done();
+}
+
+/* 城市检索结果合并(geo.df 发了「裸词」与「词+市」两路,都交白卷时再补 OSM)。
+   按人口降序:open-meteo 的返回顺序不按重要性(搜「长沙」裸搜回来的是同名村镇,湖南长沙市只在「长沙市」那一路)。
+   按坐标去重。Nominatim 条目名字带简繁双写,取第一段;用 importance 折算伪人口参与同一套排序。 */
+function normNom(x){
+  var a = x.address || {};
+  var cut = function(s){ return String(s == null ? '' : s).split(/[;/]/)[0].trim(); };
+  var lat = parseFloat(x.lat), lon = parseFloat(x.lon);
+  if (!isFinite(lat) || !isFinite(lon)) return null;
+  return { name: cut(x.name || a.city), latitude: lat, longitude: lon, admin1: cut(a.state), country: cut(a.country), cc: String(a.country_code || '').toUpperCase(),
+           population: Math.round((x.importance || 0) * 1e7) };
+}
+function mergeHits(data){
+  var a = (data && data.listC) || [], b = (data && data.list) || [];
+  var c = ((data && data.listN) || []).map(normNom).filter(Boolean);
+  var seen = {}, out = [];
+  [].concat(a, b, c).forEach(function(x){
+    if (!x || x.latitude == null || x.longitude == null) return;
+    var k = x.latitude + ',' + x.longitude;
+    if (seen[k]) return;
+    seen[k] = 1; out.push(x);
+  });
+  out.sort(function(p, q){ return (q.population || 0) - (p.population || 0); });
+  return out.slice(0, 8);
+}
+/* 港澳台按「地区 · 中国」显示,不与国家并列(doc/cn-review-standard.md CN-3)—— 只在国内默认(CND,doc/overseas-first.md §8)时;海外默认照数据源原样显示。open-meteo 搜「Taipei」回的 country 是「台湾」。 */
+var CN_SAR = {TW: ['台湾', 'Taiwan'], HK: ['香港', 'Hong Kong'], MO: ['澳门', 'Macau']};
+function whereOf(c){
+  var r = CN_SAR[String((c && (c.country_code || c.cc)) || '').toUpperCase()];
+  if (r && CND){ var zh = LANG === 'zh'; return (zh ? r[0] : r[1]) + ' · ' + (zh ? '中国' : 'China'); }
+  return [c.admin1, c.country].filter(Boolean).join(' · ');
+}
+
+/* 边打字边搜:每次请求领一个号,回来时号对不上就丢弃 —— 否则慢请求晚回,会把后发的正确结果盖掉。
+   单字不搜(中文城市名至少两字,单字只会搜出一屏无关的小地方)。 */
+var seq = 0, timer = null;
+function bindSearch(onHits){
+  document.getElementById('q').addEventListener('input', function(e){
+    var kw = e.target.value.trim(); clearTimeout(timer);
+    var box = document.getElementById('hits');
+    if (kw.length < 2){ box.style.display = 'none'; seq++; return; }
+    timer = setTimeout(async function(){
+      box.style.display = 'block'; box.innerHTML = '<div class="state">' + t('searching') + '</div>';
+      var my = ++seq;
+      var hits = [];
+      try { var d = ok(await xbridge.runDataFlow('geo', { kw: kw, lang: LANG === 'zh' ? 'zh' : 'en' }, 12000)); hits = d ? mergeHits(d) : null; }
+      catch (err) { hits = null; }
+      if (my !== seq) return;
+      if (hits === null){ box.innerHTML = '<div class="state">' + t('searchFail') + '</div>'; return; }
+      if (!hits.length){ box.innerHTML = '<div class="state">' + t('noHit') + '</div>'; return; }
+      onHits(box, hits);
+    }, 400);
+  });
+}
+
+
+function key(c){ return String(c.lat) + ',' + String(c.lon); }
+function dark(){ return document.documentElement.getAttribute('data-theme') === 'dark'; }
+function paintOf(s){ var p = String(s || '').split('|'); return p.length === 2 ? (dark() ? p[1] : p[0]) : ''; }
+
+function renderStd(){
+  Array.prototype.forEach.call(document.querySelectorAll('#seg button'), function(b){
+    b.classList.toggle('on', b.dataset.std === std);
+  });
+}
+function renderMine(){
+  var box = document.getElementById('mine');
+  if (!list.length){ box.innerHTML = '<div class="state">' + t('empty') + '</div>'; renderHot(); return; }
+  box.innerHTML = list.map(function(c, i){
+    var a = aqi[key(c)] || {};
+    var col = paintOf(a.s);
+    return '<div class="row static">' +
+      '<span class="dot"' + (col ? ' style="background:' + esc(col) + '"' : '') + '></span>' +
+      '<div class="grow"><b>' + esc(c.name) + (i === 0 ? '<span class="tag">' + esc(t('first')) + '</span>' : '') + '</b>' +
+      '<small>' + esc(c.where || '') + '</small></div>' +
+      '<span class="aq' + (a.v ? '' : ' na') + '"' + (col && a.v ? ' style="color:' + esc(col) + '"' : '') + '>' + esc(a.v || '--') + '</span>' +
+      '<button class="ib xb-press" data-up="' + i + '" aria-label="' + esc(t('up')) + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+      '<button class="ib del xb-press" data-del="' + i + '" aria-label="' + esc(t('del')) + '">✕</button></div>';
+  }).join('');
+  renderHot();
+}
+function renderHot(){
+  var rows = HOT[LANG] || HOT.en;
+  var box = document.getElementById('hot');
+  box.innerHTML = rows.map(function(c, i){
+    var have = list.some(function(x){ return key(x) === key(c); });
+    return '<button class="chip xb-press' + (have ? ' done' : '') + '" data-hot="' + i + '"' + (have ? ' disabled' : '') + '>' + esc(c.name) + '</button>';
+  }).join('');
+}
+document.addEventListener('click', function(e){
+  var el;
+  if ((el = e.target.closest('[data-up]'))){ var i = +el.dataset.up; if (i > 0){ var c = list.splice(i, 1)[0]; list.splice(i - 1, 0, c); renderMine(); save(); } return; }
+  if ((el = e.target.closest('[data-del]'))){ var c2 = list.splice(+el.dataset.del, 1)[0]; renderMine(); save(c2); return; }
+  if ((el = e.target.closest('[data-hot]'))){
+    var h = (HOT[LANG] || HOT.en)[+el.dataset.hot];
+    /* 常用城市的「香港 · 中国」只在国内默认时这样写(§8);海外默认只写城市名 */
+    var hw = (!CND && /^(香港|澳门|台北)/.test(h.name)) ? h.name : h.where;
+    var err = addCity({ lat: h.lat, lon: h.lon, name: h.name, where: hw });
+    if (err && window.xbridge) xbridge.toast(err);
+    return;
+  }
+  if ((el = e.target.closest('[data-std]'))){
+    var s = el.dataset.std;
+    if (s === std || !window.xbridge) return;
+    std = s; renderStd(); aqi = {}; renderMine();
+    xbridge.runFlow('std-save', { s: s }, 8000).then(function(){ loadAqi(1); });
+  }
+});
+function save(drop){
+  var p = { list: list };
+  if (drop){ p.dropLat = String(drop.lat); p.dropLon = String(drop.lon); }
+  return xbridge.runFlow('cities-save', p, 8000);
+}
+function addCity(c){
+  if (list.length >= MAX) return t('full');
+  if (list.some(function(x){ return key(x) === key(c); })) return t('dup');
+  list.push(c); renderMine();
+  save().then(function(){ loadAqi(0); });
+  return null;
+}
+/* 每行的 AQI:先读首页各行写好的缓存(_cache:1,不打网络);缺的再真取一次(_cache:0)。领号防乱序。 */
+async function loadAqi(useCache){
+  if (!list.length) return;
+  var my = ++aqiSeq, snap = list.slice();
+  var d = null;
+  try { d = ok(await xbridge.runDataFlow('cities-aqi', { _cache: useCache }, 15000)); } catch (e) { d = null; }
+  if (my !== aqiSeq || !d) return;
+  snap.forEach(function(c, i){
+    var v = d['aq' + (i + 1)], s = d['lvS' + (i + 1)];
+    if (v !== undefined && v !== null && String(v) !== '') aqi[key(c)] = { v: String(v), s: s };
+  });
+  renderMine();
+  if (useCache && Number(d.miss) > 0) loadAqi(0);
+}
+
+if (brickId) document.getElementById('h1').style.display = 'none';
+// 明暗切换时页面不重载:色点是「浅|深」两档,要按新主题重画
+if (window.MutationObserver) new MutationObserver(function(){ renderMine(); })
+  .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+boot(async function(){
+  try {
+    var d = ok(await xbridge.runDataFlow('cities-read', {}, 8000));
+    list = (d && Array.isArray(d.list)) ? d.list : [];
+    std = (d && (d.std === 'cn' || d.std === 'us')) ? d.std : '';
+  } catch (e) { list = []; }
+  renderStd(); renderMine(); loadAqi(1);
+  bindSearch(function(box, hits){
+    box.innerHTML = hits.map(function(c, i){
+      var have = list.some(function(x){ return key(x) === String(c.latitude) + ',' + String(c.longitude); });
+      return '<div class="row static"><div class="grow"><b>' + esc(c.name) + '</b><small>' + esc(whereOf(c)) +
+        '</small></div><button class="add xb-press' + (have ? ' done' : '') + '" data-k="' + i + '"' + (have ? ' disabled' : '') + '>' +
+        t(have ? 'added' : 'add') + '</button></div>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.add'), function(btn){
+      btn.addEventListener('click', function(){
+        var c = hits[+btn.dataset.k];
+        var err = addCity({ lat: String(c.latitude), lon: String(c.longitude), name: c.name, where: whereOf(c) });
+        if (!err){ btn.textContent = t('added'); btn.classList.add('done'); btn.disabled = true; return; }
+        // 失败(已满 / 重复)保持可点,文案 1.6 秒后复位 —— 别把重试路径也关掉
+        btn.textContent = err;
+        setTimeout(function(){ btn.textContent = t('add'); }, 1600);
+      });
+    });
+  });
+});
+</script>
+</body></html>

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Package</title>
+<style>
+/* 版式对齐 weather / github / tubewatch(2026-09 v2):页边距 14、卡片圆角 14 + 同一套投影(暗色换 .5px 细边)、
+   段标题 13px/600 次级灰、列表行左右内边距同为 14、分隔线从文字起点缩进。
+   次要动作(关注 / 选这个)= 源色浅底胶囊,已关注 = 中性灰底灰字;平台 accent 绿只留给「添加组件」。 */
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--faint:#9AA0A6;--tile:#E7E9EE;--rail:#D6DAE1;--line:#E4E7EC;
+  --src:#B4329B;--srcBg:rgba(180,50,155,.10);--srcSoft:#B4329B66;--amb:#B45309;--ambBg:rgba(180,83,9,.11);
+  --edge:transparent;--shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--faint:#5E636B;--tile:#20232A;--rail:#2C313A;--line:#262A31;
+  --src:#EE7FD6;--srcBg:rgba(238,127,214,.14);--srcSoft:#EE7FD666;--amb:#F5A524;--ambBg:rgba(245,165,36,.14);
+  --edge:rgba(255,255,255,.06);--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+[hidden]{display:none!important}   /* .seg / .card 等带 display 的类会压过 hidden 属性(v2 选择页单槽模式下空出一条分段栏) */
+body{font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC",sans-serif;font-variant-numeric:tabular-nums;
+  padding:calc(var(--xb-content-top) + 12px) 14px calc(var(--xb-content-bottom) + 28px)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+svg{display:block}
+.hd{display:flex;align-items:flex-start;gap:10px}
+.hd .tx{flex:1 1 auto;min-width:0}
+.hd h1{font-size:24px;line-height:1.25;font-weight:700;margin:0;letter-spacing:-.3px;word-break:break-all}
+.hd .sub{color:var(--sub);font-size:13px;margin-top:3px}
+.card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);border:.5px solid var(--edge)}
+.pad{padding:14px}
+.list{background:var(--card);border-radius:14px;box-shadow:var(--shadow);border:.5px solid var(--edge);overflow:hidden}
+.sec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 2px 8px;font-size:13px;font-weight:600;color:var(--sub)}
+.sec .v{font-weight:400;font-size:12px}
+.sec .lnk{color:var(--src);font-weight:600;font-size:13px;padding:6px 0 6px 12px;margin:-6px 0}
+/* 列表行:左右内边距同为 14;分隔线从文字起点(左 14)缩进到右缘 */
+.row{display:flex;align-items:center;gap:10px;padding:12px 14px;min-height:60px;position:relative}
+.row+.row::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
+.row .l{flex:1 1 auto;min-width:0}
+.row .l b{display:block;font-size:15px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .m{display:flex;align-items:center;gap:6px;margin-top:4px;color:var(--sub);font-size:11.5px;min-width:0}
+.eco{display:inline-block;font-size:10.5px;line-height:1;padding:3px 6px;border-radius:6px;background:var(--tile);color:var(--sub);white-space:nowrap}
+.pill{display:inline-block;font-size:12px;font-weight:700;line-height:1.3;border-radius:8px;padding:2px 7px;white-space:nowrap;background:var(--tile);color:var(--sub)}
+.pill.up,.pill.src{background:var(--srcBg);color:var(--src)}
+.pill.dn{background:var(--ambBg);color:var(--amb)}
+.c-up{color:var(--src)} .c-dn{color:var(--amb)} .c-flat{color:var(--sub)}
+.act{flex:0 0 auto;min-width:64px;height:32px;border-radius:16px;padding:0 14px;font-size:13px;font-weight:600;background:var(--srcBg);color:var(--src);white-space:nowrap}
+.act.on{background:var(--tile);color:var(--sub)}
+.spk .spl{fill:none;stroke:var(--src);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.spk .g0{stop-color:var(--src);stop-opacity:.22} .spk .g1{stop-color:var(--src);stop-opacity:0}
+.spk .spd{fill:var(--src)}
+.chev{flex:0 0 auto;color:var(--faint);font-size:17px;line-height:1}
+.foot{color:var(--sub);font-size:11px;line-height:1.7;margin:22px 2px 0}
+.state{color:var(--sub);font-size:13px;text-align:center;padding:22px 12px}
+.warn{color:var(--amb);font-size:12px;margin:10px 0 0}
+.sk{display:inline-block;background:var(--tile);border-radius:6px;color:transparent}
+.seg{display:flex;background:var(--tile);border-radius:10px;padding:3px}
+.seg button{flex:1 1 0;font-size:13px;min-height:34px;border-radius:8px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}
+.seg button.on{background:var(--card);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+html[data-theme="dark"] .seg button.on{background:var(--rail);box-shadow:none}
+.addrow{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:0 14px;margin-top:10px;text-align:left}
+.addrow .g{flex:1 1 auto;min-width:0}
+.addrow b{display:block;font-size:14px;font-weight:600}
+.addrow small{display:block;color:var(--sub);font-size:11.5px;margin-top:1px}
+.addrow i{flex:0 0 auto;font-style:normal;color:var(--src);font-size:20px;font-weight:600;line-height:1}
+/* 搜索框:字号必须 ≥16px(iOS 聚焦 <16px 的输入框会放大整页,G15) */
+.sbox{display:flex;gap:8px;margin-top:10px}
+.sbox input{flex:1 1 auto;min-width:0;font-size:16px;height:44px;border-radius:12px;border:.5px solid var(--edge);padding:0 14px;background:var(--card);color:var(--fg);
+  box-shadow:var(--shadow);outline:none;-webkit-appearance:none}
+.sbox button{flex:0 0 auto;min-width:64px;height:44px;border-radius:22px;background:var(--srcBg);color:var(--src);font-weight:600;font-size:14px;padding:0 16px}
+.hint{color:var(--sub);font-size:11.5px;margin:8px 2px 0}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.row,.addrow,.xb-tap{position:relative}
+.row::after,.addrow::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.row:active::after,.addrow:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.act,.ib,.seg button,.sbox button,.watch,.wst button,.lnk,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.act:active,.ib:active,.seg button:active,.sbox button:active,.watch:active,.wst button:active,.lnk:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+<style>
+.hero .k{color:var(--sub);font-size:12px}
+.hero .big{font-size:40px;line-height:1.1;font-weight:700;margin-top:4px;letter-spacing:-.5px}
+.hero .chg{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px;color:var(--sub);min-width:0}
+.hero .chg span:last-child{min-width:0;line-height:1.4}   /* 缺天时多一句「按有数据的 N 天」,允许折行,不截断 */
+.chart{margin-top:8px}
+.chart .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.chart .seg{display:inline-flex;padding:2px;border-radius:9px}
+.chart .seg button{flex:0 0 auto;font-size:12px;padding:0 12px;min-height:30px;border-radius:7px}
+.rd{font-size:12px;color:var(--sub);text-align:right;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rd b{color:var(--fg)}
+#bars{display:block;width:100%;height:150px;margin-top:10px;touch-action:pan-y}
+#bars .b0{fill:var(--rail)} #bars .b1{fill:var(--srcSoft)} #bars .b2{fill:var(--src)} #bars .bg{fill:var(--faint)} #bars .sel{fill:var(--fg)}
+.ax{display:flex;justify-content:space-between;align-items:center;color:var(--sub);font-size:10.5px;margin-top:6px;gap:8px}
+.lg{display:inline-flex;align-items:center;gap:4px}
+.lg i{display:inline-block;width:7px;height:7px;border-radius:4px;background:var(--src)} .lg i.p{background:var(--srcSoft)} .lg i.g{background:var(--faint)} .lg .gx{display:inline-flex;align-items:center;gap:4px} .lg .gx[hidden]{display:none}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.tiles>div{padding:12px 14px;min-width:0}
+.tiles .k{color:var(--sub);font-size:11.5px}
+.tiles .v{font-size:20px;font-weight:700;margin-top:2px;white-space:nowrap}
+.tiles .f{color:var(--sub);font-size:11px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ver .vv{font-size:20px;font-weight:700}
+.ver .vd{color:var(--sub);font-size:12px;margin-top:2px}
+.ver .ds{font-size:13px;margin-top:10px;line-height:1.55;color:var(--fg)}
+.hist .row{min-height:48px;padding-top:10px;padding-bottom:10px}
+.hist .row b{font-size:14px}
+.hist .d{flex:0 0 auto;color:var(--sub);font-size:12px}
+.hist .a{flex:0 0 auto;min-width:58px;text-align:right;color:var(--sub);font-size:12px}
+.hist .a.src{color:var(--src);font-weight:600}
+.links .row{min-height:48px;cursor:pointer}
+.links .row .l{font-size:14px;flex:0 0 auto}
+.links .u{flex:1 1 auto;min-width:0;color:var(--sub);font-size:12px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.watch{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:48px;border-radius:14px;margin-top:10px;
+  font-size:14px;font-weight:600;background:var(--srcBg);color:var(--src)}
+.wst{display:flex;align-items:center;gap:8px;min-height:48px;margin-top:10px;padding:0 6px 0 14px}
+.wst .ok{flex:1 1 auto;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
+.wst .ok i{font-style:normal;color:var(--src);font-weight:700}
+.wst button{flex:0 0 auto;color:var(--sub);font-size:13px;padding:0 10px;min-height:40px}
+</style>
+<header class="hd"><div class="tx"><h1 id="nm">--</h1><div class="sub" id="sub"></div></div>
+  <button class="xb-at" id="at" type="button"></button></header>
+<section class="card pad hero" style="margin-top:16px">
+  <div class="k" data-i="wk7"></div>
+  <div class="big" id="big">--</div>
+  <div class="chg"><span class="pill" id="pc">--</span><span id="pcs"></span></div>
+</section>
+<section class="card pad chart">
+  <div class="top"><div class="seg" id="seg"><button data-r="30" class="on" type="button" data-i="r30"></button><button data-r="90" type="button" data-i="r90"></button></div>
+    <div class="rd" id="rd"></div></div>
+  <svg id="bars" preserveAspectRatio="none"></svg>
+  <div class="ax"><span id="a0">--</span><span class="lg"><i></i><span data-i="lgNow"></span>&nbsp;&nbsp;<i class="p"></i><span data-i="lgPrev"></span><span class="gx" id="lgG" hidden>&nbsp;&nbsp;<i class="g"></i><span data-i="lgGap"></span></span></span><span id="a1">--</span></div>
+  <div class="warn" id="zw" hidden></div>
+</section>
+<section class="tiles" id="tiles"></section>
+<div class="sec"><span data-i="verT"></span><span class="v" id="verAgo"></span></div>
+<section class="card pad ver"><div class="vv" id="vv">--</div><div class="vd" id="vd"></div><div class="ds" id="ds" hidden></div></section>
+<div id="histW" hidden><div class="sec"><span data-i="histT"></span></div>
+<section class="list hist" id="hist"></section></div>
+<div id="linksW"><div class="sec"><span data-i="linksT"></span></div>
+<section class="list links" id="links"></section></div>
+<div id="watchW"></div>
+<button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg"><b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button>
+<p class="foot" id="foot"></p>
+<script>
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* ── ps kit(包下载量四页共用,由生成脚本注入每一页;包内容必须自包含,不跨文件引用)──
+   数据全部来自 npm / pypistats / PyPI / crates.io 的公开接口,经 page/flow/*.df 原样取回
+   (CSP connect-src 'none',页面不能直连),解析与派生在这里用 JS 做。 */
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。 */
+var LANG = nbLang(document.documentElement.getAttribute("data-lang")), I18N = { zh: {}, en: {} };
+function i18n(o) { for (var l in o) { I18N[l] = I18N[l] || {}; for (var k in o[l]) I18N[l][k] = o[l][k]; } }
+i18n({
+  zh: { notX: "请在 Numable 里打开这个页面",
+    wan: "万", yi: "亿", vsWk: "较上周", flat: "与上周持平", flatS: "持平", noCmp: "上周没有下载",
+    fail: "获取数据失败，显示的是上次的数据", failCold: "暂时取不到数据，请稍后点右上角的日期重试",
+    notFound: "找不到这个开源包，请检查名称", ago: "%s 天前", today: "今天" },
+  en: { notX: "Open this page in Numable",
+    vsWk: "vs prev week", flat: "Flat vs prev week", flatS: "Flat", noCmp: "No downloads last week",
+    fail: "Couldn't update. Showing the last data", failCold: "Couldn't get data right now. Tap the date to retry",
+    notFound: "Package not found. Check the name", ago: "%sd ago", today: "today" }
+});
+function t(k, a) { var s = I18N[LANG] && I18N[LANG][k]; if (s == null) s = I18N.en[k]; if (s == null) s = k;
+  if (a != null) s = String(s).replace("%s", a); return s; }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+  return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+function $(id) { return document.getElementById(id); }
+function paintI18n() { var els = document.querySelectorAll("[data-i]");
+  for (var i = 0; i < els.length; i++) els[i].textContent = t(els[i].getAttribute("data-i"));
+  var ph = document.querySelectorAll("[data-ph]");
+  for (var j = 0; j < ph.length; j++) ph[j].setAttribute("placeholder", t(ph[j].getAttribute("data-ph"))); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+async function ready() { for (var i = 0; i < 30 && !window.xbridge; i++) await sleep(50); return !!window.xbridge; }
+/* G49:call 型桥方法回的是信封 {code,msg,data};老宿主可能直接给 data —— 两种都吃。 */
+async function call(p) { var r = await p;
+  if (r && typeof r === "object" && "code" in r) { if (r.code !== 0) throw new Error(r.msg || "bridge"); return r.data; }
+  return r; }
+async function sGet(k) { try { var v = await call(xbridge.getData(k)); return (v == null || v === "") ? null : String(v); } catch (e) { return null; } }
+async function sGetJ(k) { var v = await sGet(k); if (v == null) return null; try { return JSON.parse(v); } catch (e) { return null; } }
+function sSet(k, v) { try { xbridge.setData(k, typeof v === "string" ? v : JSON.stringify(v)); } catch (e) {} }
+function toast(m) { try { xbridge.toast(m); } catch (e) {} }
+function haptic(k) { try { xbridge.haptic(k || "selection"); } catch (e) {} }
+function go(path) { haptic(); try { xbridge.route("numable://self/page" + path); } catch (e) {} }
+function openUrl(u) { haptic(); try { xbridge.route(u); } catch (e) {} }
+
+async function bootEnv(onChange) {
+  var de = document.documentElement, d = await nbInfo();
+  if (!de.getAttribute("data-theme") && d.theme) de.setAttribute("data-theme", d.theme === "dark" ? "dark" : "light");
+  LANG = nbLang(d.language || d.locale);
+  de.lang = LANG === "zh" ? "zh-CN" : "en"; paintI18n();
+  addEventListener("languagechange", function (e) {
+    LANG = nbLang((e && e.detail && e.detail.language) || de.getAttribute("data-lang"));
+    de.lang = LANG === "zh" ? "zh-CN" : "en"; paintI18n(); onChange && onChange("lang"); });
+  addEventListener("themechange", function () { onChange && onChange("theme"); });
+}
+
+/* ── 生态 ── */
+var ECO = { npm: "npm", pypi: "PyPI", crates: "crates.io" };
+function normE(e) { e = String(e || "").toLowerCase(); return ECO[e] ? e : "npm"; }
+function normN(e, n) { n = String(n || "").trim(); return e === "npm" ? n : n.toLowerCase(); }
+function pyName(n) { return String(n).toLowerCase().replace(/[._]+/g, "-"); }
+function regUrl(e, n) { return e === "npm" ? "https://www.npmjs.com/package/" + n
+  : e === "pypi" ? "https://pypi.org/project/" + n + "/" : "https://crates.io/crates/" + n; }
+
+/* ── 关注列表:data.ps_list(组件 board.df 读同一个键;顺序 = 首页与「关注列表」组件的显示顺序)── */
+var DEF = [{ e: "npm", n: "react" }, { e: "pypi", n: "requests" }, { e: "crates", n: "serde" }];
+var WL_MAX = 12;
+/* ⚠️ 读法两种都吃:save.af 用 data.set 存的是结构化数组,桥 getData 可能原样给数组,也可能给 JSON 串。 */
+async function wlRaw() { try { var v = await call(xbridge.getData("ps_list"));
+  if (typeof v === "string") { try { v = JSON.parse(v); } catch (e) { v = null; } } return v; } catch (e) { return null; } }
+async function wlLoad() { var a = await wlRaw(); if (!Array.isArray(a)) return DEF.slice();
+  var out = [], seen = {};
+  a.forEach(function (x) { if (!x || !x.n) return; var e = normE(x.e), n = normN(e, x.n), k = e + ":" + n;
+    if (!seen[k]) { seen[k] = 1; out.push({ e: e, n: n }); } });
+  return out; }
+async function wlSave(a) { try { await call(xbridge.runFlow("save", { list: a.slice(0, WL_MAX) })); } catch (e) {} }
+function wlHas(a, e, n) { for (var i = 0; i < a.length; i++) if (a[i].e === e && a[i].n === n) return true; return false; }
+
+/* ── 取数:原样取回 + 本页解析 ── */
+async function raw(flow, p) { var d = await call(xbridge.runDataFlow(flow, { p: p }, 20000));
+  return String((d && d.raw) || ""); }
+async function rawJ(flow, p) { var s = await raw(flow, p); if (!s) throw new Error("empty");
+  var j = JSON.parse(s); if (j && j.error && !j.downloads && !j.crate && !j.objects && !j.versions) throw new Error("notfound"); return j; }
+/* pypistats 按 IP 限流(连打偶发 429):一律排队串行,失败隔 1.5 秒重试一次。 */
+var pyQ = Promise.resolve();
+function pyQueue(fn) { var p = pyQ.then(function () { return fn(); }); pyQ = p.then(function () { return sleep(350); }, function () { return sleep(350); }); return p; }
+async function retry(fn) { try { return await fn(); } catch (e) { if (e && e.message === "notfound") throw e; await sleep(1500); return await fn(); } }
+
+/* 逐日序列 → { days:[{d,v}], end }(旧 → 新,只含完整的日子) */
+async function series(e, n, long) {
+  if (e === "npm") {
+    var j = await retry(function () { return rawJ("npm", "range/" + (long ? "last-year" : "last-month") + "/" + n); });
+    var a = (j.downloads || []).map(function (x) { return { d: x.day, v: +x.downloads || 0 }; });
+    if (!a.length) throw new Error("notfound");
+    return { days: a.slice(long ? -90 : -30), end: j.end || a[a.length - 1].d };
+  }
+  if (e === "pypi") {
+    var jp = await pyQueue(function () { return retry(function () { return rawJ("pystats", pyName(n) + "/overall?mirrors=false"); }); });
+    var b = (jp.data || []).filter(function (x) { return !x.category || x.category === "without_mirrors"; })
+      .map(function (x) { return { d: x.date, v: +x.downloads || 0 }; }).sort(function (x, y) { return x.d < y.d ? -1 : 1; });
+    if (!b.length) throw new Error("notfound");
+    b = b.slice(long ? -90 : -30); return { days: b, end: b[b.length - 1].d };
+  }
+  var jc = await retry(function () { return rawJ("crates", "crates/" + n + "/downloads"); });
+  var acc = {}, ex = (jc.meta && jc.meta.extra_downloads) || [];
+  (jc.version_downloads || []).concat(ex).forEach(function (x) { acc[x.date] = (acc[x.date] || 0) + (+x.downloads || 0); });
+  var ks = Object.keys(acc).sort();
+  /* 最后一天是「今天(UTC)」,还没过完:丢掉,只用完整的日子(与组件同一条判据)。 */
+  ks.pop();
+  if (!ks.length) throw new Error("notfound");
+  var c = ks.map(function (k) { return { d: k, v: acc[k] }; }).slice(long ? -90 : -30);
+  return { days: c, end: c[c.length - 1].d };
+}
+/* 缺天判据(与组件 pkg.df / board.df / cmp.df 同一条):某天为 0,且最近 30 天里非零日的中位数 ≥ 100
+   → 视为「数据源当天没有统计」,不是「没人下载」。小包真的一天 0 下载不受影响。
+   npm 的逐日统计会整天缺失(2026-09 实测 react 两周缺 3 天),不处理的话环比会报出假下跌。 */
+function gapMask(v) {
+  var w = v.slice(-30), nz = w.filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
+  var med = !nz.length ? 0 : nz.length % 2 ? nz[(nz.length - 1) / 2] : (nz[nz.length / 2 - 1] + nz[nz.length / 2]) / 2;
+  var gap = med >= 100;
+  return v.map(function (x) { return gap && !(x > 0); });
+}
+function stats(s) {
+  var v = s.days.map(function (x) { return x.v; }), n = v.length, miss = gapMask(v);
+  function sum(a, b) { var z = 0; for (var i = Math.max(0, a); i < b; i++) z += v[i]; return z; }
+  function cnt(a, b) { var z = 0; for (var i = Math.max(0, a); i < b; i++) if (!miss[i]) z++; return z; }
+  var wk = sum(n - 7, n), pw = sum(n - 14, n - 7), mo = sum(n - 30, n), wkN = cnt(n - 7, n), pwN = cnt(n - 14, n - 7);
+  /* 环比 = 近 7 天有数据日的日均 ÷ 前 7 天有数据日的日均 − 1;任一边不足 4 天不下结论。大字仍是官方合计。 */
+  var chg = (wkN >= 4 && pwN >= 4 && pw > 0) ? ((wk / wkN) / (pw / pwN) - 1) * 100 : null;
+  /* 近 30 天较前 30 天:同一口径(有数据日的日均),需要 60 天序列(详情页取 90 天)。 */
+  var moN = cnt(n - 30, n), pm = n >= 60 ? sum(n - 60, n - 30) : 0, pmN = n >= 60 ? cnt(n - 60, n - 30) : 0;
+  var moChg = (moN >= 20 && pmN >= 20 && pm > 0) ? ((mo / moN) / (pm / pmN) - 1) * 100 : null;
+  var gaps = 0; for (var i = Math.max(0, n - 14); i < n; i++) if (miss[i]) gaps++;
+  var pk = null; for (var j = 0; j < n; j++) if (!miss[j] && (!pk || v[j] > pk.v)) pk = { v: v[j], d: s.days[j].d };
+  return { wk: wk, pw: pw, mo: mo, d1: v[n - 1], d1d: s.days[n - 1].d, chg: chg, end: s.end, gaps: gaps,
+    wkN: wkN, avg: wkN ? wk / wkN : null, moChg: moChg, peak: pk, n: n };
+}
+/* 折线用:缺天沿用前一天的值,不画成跌到 0 */
+function fillGaps(v) { var miss = gapMask(v), out = [], last = null;
+  for (var i = 0; i < v.length; i++) { if (miss[i]) out.push(last); else { out.push(v[i]); last = v[i]; } }
+  var first = null; for (var j = 0; j < out.length; j++) if (out[j] != null) { first = out[j]; break; }
+  return out.map(function (x) { return x == null ? (first || 0) : x; }); }
+
+/* 元数据:最新版本 / 发布日 / 简介 / 主页 / 仓库;hist = 最近 5 个正式版(PyPI / crates.io)。
+   npm 不做发布记录:带时间的版本表只在完整文档里,react 一份 2.9MB,为一个列表每天拉它不值当。 */
+function isRel(v) { return /^\d+(\.\d+)*$/.test(String(v || "")); }
+async function meta(e, n, withHist) {
+  if (e === "npm") {
+    var l = await retry(function () { return rawJ("reg", n + "/latest"); });
+    var date = "";
+    try { var sj = await rawJ("reg", "-/v1/search?text=" + encodeURIComponent(n) + "&size=5");
+      (sj.objects || []).some(function (o) { if (o.package && o.package.name === n) { date = o.package.date || ""; return true; } }); } catch (x) {}
+    var repo = l.repository && (l.repository.url || l.repository);
+    return { v: l.version || "", date: String(date).slice(0, 10), desc: l.description || "", home: l.homepage || "",
+      repo: cleanRepo(typeof repo === "string" ? repo : ""), hist: null };
+  }
+  if (e === "pypi") {
+    var xml = await retry(function () { return raw("pypi", "rss/project/" + pyName(n) + "/releases.xml"); });
+    var its = rssItems(xml);
+    if (!its) throw new Error("notfound");
+    var rel = its.filter(function (x) { return isRel(x.v); });   /* 跳过 a / b / rc / dev 预发布 */
+    var pick = rel[0] || its[0] || { v: "", date: "", desc: "" };
+    return { v: pick.v, date: pick.date, desc: pick.desc, home: "", repo: "",
+      hist: rel.slice(0, 5).map(function (x) { return { v: x.v, date: x.date }; }) };
+  }
+  var c = await retry(function () { return rawJ("crates", "crates/" + n + "?include=default_version"); });
+  var cr = c.crate || {}, vv = (c.versions && c.versions[0]) || {}, hist = null;
+  if (withHist) {
+    try { var hv = await rawJ("crates", "crates/" + n + "/versions?per_page=8&sort=date");
+      hist = (hv.versions || []).filter(function (x) { return !x.yanked && isRel(x.num); }).slice(0, 5)
+        .map(function (x) { return { v: x.num, date: String(x.created_at || "").slice(0, 10) }; }); } catch (x) { hist = null; }
+  }
+  return { v: cr.default_version || cr.max_stable_version || "", date: String(vv.created_at || "").slice(0, 10),
+    desc: cr.description || "", home: cr.homepage || "", repo: cleanRepo(cr.repository || ""), hist: hist };
+}
+/* PyPI 发布 RSS → [{v,date,desc}];不是 RSS(包不存在时 pypi.org 回一张 404 网页,某些宿主会把网页原文交回来)→ null */
+function rssItems(xml) {
+  if (!xml || !/<rss[\s>]/.test(xml)) return null;
+  var doc = new DOMParser().parseFromString(xml, "text/xml"), items = doc.getElementsByTagName("item"), out = [];
+  for (var i = 0; i < items.length; i++) { var pd = txtOf(items[i], "pubDate");
+    out.push({ v: txtOf(items[i], "title"), date: pd ? isoDay(new Date(pd)) : "", desc: txtOf(items[i], "description") }); }
+  return out.length ? out : null;
+}
+function txtOf(el, tag) { var x = el.getElementsByTagName(tag)[0]; return x ? String(x.textContent || "").trim() : ""; }
+function isoDay(d) { if (!d || isNaN(d)) return ""; return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+function cleanRepo(u) { u = String(u || "").replace(/^git\+/, "").replace(/^git:\/\//, "https://").replace(/\.git$/, "");
+  return /^https?:\/\//.test(u) ? u : ""; }
+
+/* ── 首屏缓存(G23 三态):存解析后的精简模型,s = 结构版本,对不上当没有(v2 模型加了字段 → 2)── */
+var SCHEMA = 2, TTL = 3600e3, HARD = 48 * 3600e3;
+async function cacheGet(k) { var o = await sGetJ(k); if (!(o && o.s === SCHEMA && o.t && o.d)) return null;
+  var age = Date.now() - o.t; if (age > HARD) return null; o.stale = age > TTL; return o; }
+function cachePut(k, d) { sSet(k, { s: SCHEMA, t: Date.now(), d: d }); }
+function ckey(kind, e, n) { return "c.ps." + kind + "." + e + "." + n; }
+
+/* ── 格式 ── */
+function num(v) { var n = +v; return isFinite(n) ? n : null; }
+function sig(x) { return x >= 100 ? String(Math.round(x)) : x >= 10 ? String(+x.toFixed(1)) : String(+x.toFixed(2)); }
+function cmp(v) { var n = num(v); if (n === null) return "--"; var a = Math.abs(n);
+  if (LANG === "zh") { if (a >= 1e8) return sig(n / 1e8) + t("yi"); if (a >= 1e4) return sig(n / 1e4) + t("wan"); return String(Math.round(n)); }
+  if (a >= 1e9) return sig(n / 1e9) + "B"; if (a >= 1e6) return sig(n / 1e6) + "M"; if (a >= 1e3) return sig(n / 1e3) + "K";
+  return String(Math.round(n)); }
+function full(v) { var n = num(v); return n === null ? "--" : Math.round(n).toLocaleString("en-US"); }
+function dir(c) { if (c === null || c === undefined) return ""; if (Math.abs(c) < 0.5) return "flat"; return c > 0 ? "up" : "dn"; }
+function pctTxt(c) { if (c === null || c === undefined) return "--"; if (Math.abs(c) < 0.5) return t("flat");
+  return (c > 0 ? "+" : "−") + Math.abs(c).toFixed(1) + "%"; }
+/* yyyy-MM-dd → 中文「9月25日」/ 英文「Sep 25」(doc/overseas-first.md §5,不出现纯数字月日)。 */
+var MON_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function mmdd(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); if (!m) return "--";
+  return LANG === "zh" ? (+m[2]) + "月" + (+m[3]) + "日" : MON_EN[+m[2] - 1] + " " + (+m[3]); }
+function daysAgo(iso) { if (!iso) return null; var d = new Date(iso + "T00:00:00"); if (isNaN(d)) return null;
+  var t0 = new Date(); t0.setHours(0, 0, 0, 0); return Math.max(0, Math.round((t0 - d) / 86400000)); }
+function agoTxt(n) { return n == null ? "" : n === 0 ? t("today") : t("ago", n); }
+/* 迷你走势:纵轴按这段序列自己的 min..max(上下各留一点),面积 = 源色低透明度渐变到透明,末端一个点。
+   ⚠️ 不从 0 起画:下载量动辄上亿,从 0 起线全贴在顶上、下面一整块实色 —— v1 在 iOS 上就被读成一块粉色色块。
+   做法与 stock / forex 首页的迷你走势一致(按区间归一 + 低透明面积)。 */
+var SPK = 0;
+function sparkSvg(vals, w, h) {
+  if (!vals || vals.length < 2) return '<svg class="spk" width="' + w + '" height="' + h + '"></svg>';
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = (hi - lo) * 0.12 || hi * 0.05 || 1;
+  lo = Math.max(0, lo - pad); hi = hi + pad * 0.5;
+  var n = vals.length, r = 2.5, pts = [], id = "psg" + (++SPK);
+  for (var i = 0; i < n; i++) pts.push((r + i * (w - 2 * r) / (n - 1)).toFixed(1) + "," + (r + (1 - (vals[i] - lo) / (hi - lo)) * (h - 2 * r)).toFixed(1));
+  var line = pts.join(" "), last = pts[n - 1].split(","), area = r.toFixed(1) + "," + h + " " + line + " " + last[0] + "," + h;
+  return '<svg class="spk" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h + '">' +
+    '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="g0"/><stop offset="1" class="g1"/></linearGradient></defs>' +
+    '<polygon points="' + area + '" fill="url(#' + id + ')"/><polyline points="' + line + '" class="spl"/>' +
+    '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="2.3" class="spd"/></svg>';
+}
+
+i18n({
+  zh: { wk7: "近 7 天下载", r30: "30 天", r90: "90 天", lgNow: "近 7 天", lgPrev: "前 7 天",
+    tDay: "最近一天", tPrev: "前 7 天", tMo: "近 30 天", tPeak: "90 天单日最高", moVs: "较前 30 天 %s",
+    avg: "日均 %s", avgN: "日均 %s · 按有数据的 %d 天",
+    verT: "最新版本", histT: "发布记录", linksT: "链接", released: "发布于 %s",
+    onReg: "在 %s 上查看", home: "主页", repo: "代码仓库",
+    watchAdd: "＋ 关注", watchOn: "已关注", unwatch: "取消关注", added: "已关注 %s", removed: "已取消关注 %s", full: "最多关注 %s 个开源包",
+    pickT: "添加「%s」的组件", pickS: "周下载 · 新版本 · 下载趋势 · 下载全景",
+    zeros: "%s 这两周有 %d 天没有统计数据，涨跌按有数据的日子的日均计算。", lgGap: "无统计",
+    noPkg: "没有指定开源包，请从首页或组件进入", noVer: "暂时取不到版本信息",
+    foot: "%s 数据截至 %s（按该源最新一天往前数）。版本信息来自 %s。只在这台设备上读取，不会上传到我们的服务器。" },
+  en: { wk7: "Downloads, last 7 days", r30: "30 days", r90: "90 days", lgNow: "Last 7 days", lgPrev: "Prev 7 days",
+    tDay: "Latest day", tPrev: "Prev 7 days", tMo: "Last 30 days", tPeak: "Best day in 90", moVs: "%s vs prev 30 days",
+    avg: "%s / day", avgN: "%s / day (%d days with data)",
+    verT: "Latest version", histT: "Recent releases", linksT: "Links", released: "Released %s",
+    onReg: "View on %s", home: "Homepage", repo: "Repository",
+    watchAdd: "＋ Watch", watchOn: "Watching", unwatch: "Unwatch", added: "Watching %s", removed: "Stopped watching %s", full: "You can watch up to %s packages",
+    pickT: "Add widgets for %s", pickS: "Weekly · Release · Trend · Overview",
+    zeros: "%s has no stats for %d days in these two weeks. Changes use the daily average of days with data.", lgGap: "No data",
+    noPkg: "No package selected. Open it from the home page or a widget", noVer: "Couldn't get version info right now",
+    foot: "%s data as of %s (counting back from the source's latest day). Version info from %s. Everything is read on this device and never uploaded to our servers." }
+});
+var Q = new URLSearchParams(location.search), E = normE(Q.get("eco")), N = normN(E, Q.get("name") || Q.get("pkg") || "");
+var S = { r: 30, s: null, m: null, meta: null, sel: -1, wl: [] };
+function paintHead() {
+  $("nm").textContent = N || "--";
+  var m = S.m;
+  $("sub").textContent = ECO[E] + (m ? " · " + (LANG === "zh" ? "近 7 天 " : "7d ") + cmp(m.wk) : "");
+  xbAt.set("at", m ? m.end : null, { day: 1 });
+}
+function paintHero() {
+  var m = S.m, d = m ? dir(m.chg) : "";
+  $("big").textContent = m ? cmp(m.wk) : "--";
+  $("pc").className = "pill " + d; $("pc").textContent = m ? (m.chg == null ? "--" : d === "flat" ? t("flatS") : pctTxt(m.chg)) : "--";
+  /* 日均 = 有数据的日子的日均(与涨跌同一口径);缺天时注明按几天算 */
+  var av = m && m.avg != null ? (m.wkN < 7 ? t("avgN", cmp(m.avg)).replace("%d", m.wkN) : t("avg", cmp(m.avg))) : "";
+  $("pcs").textContent = m ? (m.chg == null ? t("noCmp") : t("vsWk") + (av ? " · " + av : "")) : "";
+}
+function paintChart() {
+  var s = S.s, svg = $("bars"), W = 300, H = 150;
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  var days = s ? s.days.slice(-S.r) : [];
+  if (!days.length) { svg.innerHTML = '<rect x="0" y="' + (H - 1) + '" width="' + W + '" height="1" class="b0"/>'; $("a0").textContent = "--"; $("a1").textContent = "--"; $("rd").textContent = ""; return; }
+  var n = days.length, mx = 1; days.forEach(function (x) { if (x.v > mx) mx = x.v; });
+  var step = W / n, bw = Math.max(1.2, step * 0.62), h = "", miss = gapMask(days.map(function (x) { return x.v; }));
+  $("lgG").hidden = miss.indexOf(true) < 0;
+  days.forEach(function (x, i) {
+    /* 缺天:一截中性灰短桩,不画成一根跌到 0 的柱 */
+    var bh = miss[i] ? 6 : Math.max(1.5, x.v / mx * (H - 6)), cls = miss[i] ? "bg" : i >= n - 7 ? "b2" : i >= n - 14 ? "b1" : "b0";
+    if (i === S.sel) cls += " sel";
+    h += '<rect data-k="' + i + '" x="' + (i * step + (step - bw) / 2).toFixed(2) + '" y="' + (H - bh).toFixed(2) + '" width="' + bw.toFixed(2) +
+      '" height="' + bh.toFixed(2) + '" rx="' + Math.min(2, bw / 2).toFixed(2) + '" class="' + cls + '"/>';
+  });
+  svg.innerHTML = h;
+  $("a0").textContent = mmdd(days[0].d); $("a1").textContent = mmdd(days[n - 1].d);
+  var pi = S.sel >= 0 && S.sel < n ? S.sel : n - 1, pick = days[pi];
+  $("rd").innerHTML = miss[pi] ? esc(mmdd(pick.d)) + " · " + esc(t("lgGap"))
+    : LANG === "zh" ? esc(mmdd(pick.d)) + " · <b>" + esc(full(pick.v)) + "</b> 次"
+    : esc(mmdd(pick.d)) + " · <b>" + esc(full(pick.v)) + "</b>";
+  var z = S.m && S.m.gaps; $("zw").hidden = !z;
+  if (z) $("zw").textContent = t("zeros", ECO[E]).replace("%d", z);
+}
+function paintTiles() {
+  var m = S.m;
+  function tl(k, v, f, cls) { return '<div class="card"><div class="k">' + esc(t(k)) + '</div><div class="v">' + esc(m && v != null ? cmp(v) : "--") +
+    '</div><div class="f' + (cls ? " " + cls : "") + '">' + esc(m ? f : "") + "</div></div>"; }
+  if (!m) { $("tiles").innerHTML = tl("tDay") + tl("tPrev") + tl("tMo") + tl("tPeak"); return; }
+  var mc = m.moChg == null ? full(m.mo) : t("moVs", pctTxt(m.moChg));
+  $("tiles").innerHTML = tl("tDay", m.d1, mmdd(m.d1d)) + tl("tPrev", m.pw, full(m.pw)) +
+    tl("tMo", m.mo, mc, m.moChg == null ? "" : "c-" + dir(m.moChg)) + tl("tPeak", m.peak ? m.peak.v : null, m.peak ? mmdd(m.peak.d) : "");
+}
+function paintMeta() {
+  var x = S.meta;
+  $("vv").textContent = x && x.v ? x.v : (S.metaErr ? t("noVer") : "--");
+  $("vd").textContent = x && x.date ? t("released", x.date) : "";
+  $("verAgo").textContent = x && x.date ? agoTxt(daysAgo(x.date)) : "";
+  $("ds").hidden = !(x && x.desc); $("ds").textContent = x && x.desc ? x.desc : "";
+  /* 发布记录:PyPI(发布 RSS)/ crates.io(versions)。npm 不显示这一块 —— 见 kit meta() 的注释 */
+  var hs = x && x.hist && x.hist.length ? x.hist : null;
+  $("histW").hidden = !hs;
+  if (hs) {
+    $("hist").innerHTML = hs.map(function (r) { var a = daysAgo(r.date);
+      return '<div class="row"><div class="l"><b>' + esc(r.v) + '</b></div><span class="d">' + esc(r.date || "--") +
+        '</span><span class="a' + (a != null && a <= 7 ? " src" : "") + '">' + esc(agoTxt(a)) + "</span></div>"; }).join("");
+  }
+  var ls = [{ l: t("onReg", ECO[E]), u: regUrl(E, N) }];
+  if (x && x.home && x.home !== x.repo) ls.push({ l: t("home"), u: x.home });
+  if (x && x.repo) ls.push({ l: t("repo"), u: x.repo });
+  $("links").innerHTML = ls.map(function (o) { return '<div class="row" data-u="' + esc(o.u) + '"><span class="l">' + esc(o.l) +
+    '</span><span class="u">' + esc(o.u.replace(/^https?:\/\//, "").replace(/\/$/, "")) + '</span><span class="chev">›</span></div>'; }).join("");
+  $("foot").textContent = t("foot", E === "pypi" ? "pypistats.org" : ECO[E]).replace("%s", S.m ? S.m.end : "--").replace("%s", E === "pypi" ? "pypi.org" : E === "npm" ? "registry.npmjs.org" : "crates.io");
+}
+function paintWatch() { var on = wlHas(S.wl, E, N);
+  $("watchW").innerHTML = on ? '<div class="card wst"><span class="ok"><i>✓</i>' + esc(t("watchOn")) + '</span><button type="button" id="unw">' + esc(t("unwatch")) + "</button></div>"
+    : '<button class="watch" type="button" id="dow">' + esc(t("watchAdd")) + "</button>";
+  var pt = document.querySelector('#pickw [data-i="pickT"]'); if (pt) pt.textContent = t("pickT", N); }
+function paintAll() { paintHead(); paintHero(); paintChart(); paintTiles(); paintMeta(); paintWatch(); }
+
+async function loadSeries(force) {
+  var k = ckey("90", E, N), c = force ? null : await cacheGet(k);
+  if (c) { S.s = c.d; S.m = stats(S.s); paintAll(); if (!c.stale) return true; }
+  try { var s = await series(E, N, true); S.s = s; S.m = stats(s); cachePut(k, s); paintAll(); return true; }
+  catch (e) { if (!S.s) { $("big").textContent = "--"; $("pcs").textContent = e && e.message === "notfound" ? t("notFound") : t("failCold"); } return false; }
+}
+async function loadMeta(force) {
+  var k = ckey("mh", E, N), c = force ? null : await cacheGet(k);
+  if (c) { S.meta = c.d; paintMeta(); if (!c.stale) return; }
+  try { S.meta = await meta(E, N, true); S.metaErr = 0; cachePut(k, S.meta); } catch (e) { S.metaErr = 1; }
+  paintMeta();
+}
+async function refresh(force) {
+  xbAt.busy("at", true);
+  var ok = await loadSeries(force); await loadMeta(force);
+  xbAt.busy("at", false);
+  if (force && !ok) toast(t("fail"));
+}
+async function setWatch(on) {
+  var a = await wlLoad();
+  if (!on) { a = a.filter(function (x) { return !(x.e === E && x.n === N); }); await wlSave(a); toast(t("removed", N)); }
+  else { if (a.length >= WL_MAX) { toast(t("full", WL_MAX)); return; } if (!wlHas(a, E, N)) a.push({ e: E, n: N }); await wlSave(a); toast(t("added", N)); }
+  haptic("success"); S.wl = a; paintWatch();
+}
+(async function boot() {
+  if (!(await ready())) { $("sub").textContent = t("notX"); return; }
+  await bootEnv(function () { paintAll(); });
+  S.wl = await wlLoad();
+  if (!N) { paintAll(); $("sub").textContent = t("noPkg"); $("watchW").hidden = true; $("pickw").hidden = true;
+    $("linksW").hidden = true; $("foot").hidden = true; return; }
+  paintAll();
+  $("at").onclick = function () { haptic(); refresh(true); };
+  $("seg").onclick = function (e) { var b = e.target.closest("button"); if (!b) return; haptic();
+    S.r = +b.getAttribute("data-r"); S.sel = -1;
+    [].forEach.call($("seg").children, function (x) { x.className = x === b ? "on" : ""; }); paintChart(); };
+  function pickAt(ev) { var r = $("bars").getBoundingClientRect(), n = S.s ? Math.min(S.r, S.s.days.length) : 0; if (!n) return;
+    var i = Math.floor((ev.clientX - r.left) / r.width * n); S.sel = Math.max(0, Math.min(n - 1, i)); paintChart(); }
+  $("bars").addEventListener("click", function (ev) { haptic(); pickAt(ev); });
+  $("links").onclick = function (e) { var b = e.target.closest(".row"); if (b) openUrl(b.getAttribute("data-u")); };
+  $("watchW").onclick = function (e) { var b = e.target.closest("button"); if (!b) return; setWatch(b.id === "dow"); };
+  $("pickw").onclick = function () { haptic(); var p = { eco: E, pkg: N };
+    xbridge.pickWidgets([{ id: "pkg", params: p }, { id: "release", params: p }, { id: "trend", params: p }, { id: "detail", params: p }]); };
+  refresh(false);
+})();
+</script>
+
+</body></html>

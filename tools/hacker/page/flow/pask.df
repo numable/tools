@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowS0",
+        "value": "$[parseNumber::(calc::(${@time.nowMs}/1000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "since",
+        "value": "$[parseNumber::(calc::(${nowS0}-172800),0)]"
+      }
+    },
+    {
+      "_note": "入参必须先 op:set 落地成 data 域的键,方法参数里才看得见(§9.5 #3)。`.xwidget` 不传 → 空串 → 归 0 → 全程不碰缓存。",
+      "op": "set",
+      "props": {
+        "key": "cacheIn",
+        "value": "${_cache}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "useCache",
+        "value": "$[parseNumber::(${cacheIn},0)]"
+      }
+    },
+    {
+      "_note": "**结构版本号**:pack 的字段集变了就 +1。它管的不是「数据新不新」而是「这份数据的**形状**还认不认」——缓存键只含对象维度、不含包代际,不盖这个戳,升级后首屏就会拿上一版的 pack 去渲新模板:少的字段取空,尺寸串里的 calc 一算 null,**整卡白块且不报错**。\n⚠️ 从 1 起、绝不能用 0(`eq::(空,0)` 恒为 true,旧缓存会被判成匹配)。⚠️ 刻意不用 `manifest.version`:flow 拿不到,且那会过度失效(只改配色也丢全部缓存)。",
+      "op": "set",
+      "props": {
+        "key": "SCHEMA",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缓存键。⚠️ 凡是影响结果的入参都要进键,且**绝不能用下标**(下标随增删漂移,漂移后会把 A 的数据渲成 B 的,还不报错)。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "c.hn.pask"
+      }
+    },
+    {
+      "_note": "读缓存。`default:{}` 让下面的 ${hit.ts} 在无缓存时安全取空,而不是整条流断掉。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitSchema",
+        "value": "${hit.schema}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "两道闸:**结构比对**(pack 形状对不上就当没有缓存 —— 旧形状渲新模板是白块,比等一次网络糟得多)+ hardTTL = 86400s(太旧的数先渲出来再改口,不如老实等一次)。嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里。",
+      "op": "set",
+      "props": {
+        "key": "hasHit",
+        "value": "$[if::(eq::(${hitSchema},${SCHEMA}),if::(gt::(${hitTs},0),if::(lt::(${age},86400000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "ttl = 600s(§5.5.3)。纯新鲜度,不掺 useCache —— 掺进去 `_stale` 就算不对了。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},600000),1,0),0)]"
+      }
+    },
+    {
+      "_note": "「这次先出的是旧货,请后台校新」。**必须进 resultFilter** —— 校新那条路靠它,漏了就是永不校新。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),if::(eq::(${fresh},1),0,1),0),0)]"
+      }
+    },
+    {
+      "_note": "只有「开了缓存 且 有没超 hardTTL 的货」才跳过网络 —— 连接都不建立。⚠️ **stale 也走这条跳过**(首屏零等待是三态的全部价值);写成「不 fresh 就打」= 退回两态,首屏照样白等。卡片(useCache=0)与冷启一律落进 items 真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),0,1),1)]"
+      },
+      "items": [
+        {
+          "action": "request",
+          "id": "resp",
+          "params": {
+            "url": "https://hn.algolia.com/api/v1/search?tags=ask_hn&numericFilters=created_at_i%3E${since}&hitsPerPage=20&attributesToRetrieve=title,url,points,num_comments,author,created_at_i,objectID&attributesToHighlight=none",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "list",
+            "value": "${resp.hits}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nowS",
+            "value": "$[parseNumber::(calc::(${@time.nowMs}/1000),0)]"
+          }
+        },
+        {
+          "_note": "写回哨兵:**直接取响应字段,不加任何兜底** —— 取数失败/响应变形时它必空。别拿加工后的显示字段当判据,那些几乎都带兜底,拦不住任何东西。",
+          "op": "set",
+          "props": {
+            "key": "_guard",
+            "value": "${resp.hits[0].objectID}"
+          }
+        },
+        {
+          "_note": "整份渲染输入打包落盘。⚠️ 键集必须与 resultFilter 完全一致 —— 少一个,命中缓存那趟就少一个字段(而且不报错)。",
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "list": "${list}",
+              "nowS": "${nowS}",
+              "ts": "${nowMs}",
+              "schema": "${SCHEMA}"
+            }
+          }
+        },
+        {
+          "_note": "契约 4(§5.5.2):关键字段非空才写回。`_guard` 在取数失败/响应变形时必空 —— 此时什么都不写,盘上的旧货留着继续渲。一次超时把 pack 写成空,就把这页永久钉死在空态上直到下次恰好成功。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${_guard}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中那条少算一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "list",
+        "value": "${box.list}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowS",
+        "value": "${box.nowS}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "_stale",
+          "ckey",
+          "list",
+          "nowS"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。⚠️ `_stale`/`ckey` 是校新那条路的入参,别删。"
+    }
+  ]
+}

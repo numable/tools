@@ -1,0 +1,246 @@
+{
+  "_note": "三态循环:未标记 → 已服 → 未服 → 未标记。\n\n⚠️ v2 起入口有两个:hero 大圆(传 `day=${todayStr}`)与整盒点阵的 35 个手写靶\n   (传 `i=<字面量序号>` + `base=${baseMs}`,日期由下面 `d` 那条自己算出来)。\n   下面这段是 v1 的记录,说的是**为什么格子不能靠循环变量传参**,结论仍然有效:\n⚠️ (v1)入口曾经只有 hero 的大圆(传环境值 `${todayStr}`,已真机验证)。\n   点阵格子那条路被平台缺口卡住:RCN cell 的 `events.params` 在 **XPage 节点作用域**里求值,\n   取不到 RCN 循环内部的 `${_i}`(2026-08-16 iOS 实测,探针实收 `i=[${_i}]` 原样透传)。\n   环境值(如 `${baseMs}`)能传,循环索引不能。详见下面 `d` 那条注释与本包 TODO。\n\n⚠️ 为什么单击循环三态、而不是「单击打卡 + 长按菜单」:\n  ① 一个手势覆盖全部场景(今天打卡 / 补三天前 / 改上个月都是同一个动作);\n  ② 桌面小组件点进来也只有「点」这一种输入;\n  ③ 三态里没有一个是危险的 —— 记错了再点两下就回到未标记,没有不可逆动作。\n\n⚠️ 全用**纯表达式**分支(`if::` 嵌套),不用 `op:if`:operation 的循环/分支会在退出时\n**完整恢复外层绑定**(见 xbundle-operation ForOperation 的 finally),在分支里 `op:set` 出来的\n键拿不到外面。`if::` 是 eager 的方法调用,三个参数都会求值,但三个都是纯串函数,无副作用。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "⚠️ **写盘流的第一步恒是触觉反馈**(infosource-standard G22):RCN 没有动画能力,\n从点下去到画面变化之间 ~250ms 全无反馈,用户会以为没点上、再点一次 ——\n而这条流是**三态循环**,多点一次就是把刚记的那笔翻成别的态。\n放在 actions[0] 而不是写盘之后:反馈要在动作**开始**时给,不是结束时。",
+      "action": "ui.haptic"
+    },
+    {
+      "id": "taken",
+      "action": "data.get",
+      "params": {
+        "key": "taken",
+        "default": "_"
+      }
+    },
+    {
+      "id": "skipped",
+      "action": "data.get",
+      "params": {
+        "key": "skipped",
+        "default": "_"
+      }
+    },
+    {
+      "id": "start",
+      "action": "data.get",
+      "params": {
+        "key": "start",
+        "default": ""
+      }
+    },
+    {
+      "id": "active",
+      "action": "data.get",
+      "params": {
+        "key": "active",
+        "default": 21
+      }
+    },
+    {
+      "id": "rest",
+      "action": "data.get",
+      "params": {
+        "key": "rest",
+        "default": 7
+      }
+    },
+    {
+      "_note": "日期有两条来路,取先到的非空那个:\n  · `day`  —— hero 的大圆传的是**环境值** `${todayStr}`,直接就是日期串;\n  · `i`+`base` —— 点阵格子传的是**循环索引**加本盒起始正午,日期在这里算。\n\n⚠️ 为什么格子不直接传日期:RCN 里 cell 的 `events.onClick.params` **取不到循环体内\n   `op:set` 产生的局部变量**(2026-08-16 iOS 实测)。同一个 cell 的 `x`/`y`/`text`\n   用 `${_x}`/`${_dd}` 全部正常,只有 events 那条路拿不到 —— 传过去是**空串**,\n   于是往哨兵串上追加出一个 `__`,**全程不报错**。\n   循环索引 `${_i}` 与环境值 `${baseMs}` 都能传(前者是 p-cities.rcn 已验证过的形状)。\n\n⚠️ `findNotEmpty` 的兜底方向不能反:`day` 缺席时是空串,不是字面量 `${day}`,所以拿它当\n   第一顺位是安全的。",
+      "op": "set",
+      "props": {
+        "key": "d",
+        "value": "$[findNotEmpty::(${day},formatDate::(calc::(${base}+${i}*86400000),yyyy-MM-dd))]"
+      }
+    },
+    {
+      "_note": "今天(自然日 0 点)。下面的未来闸要拿它跟目标日比 —— 比毫秒不比字符串:\nVParser 的比较方法会先 toNumber,拿 `2026-08-22` 这种串去比是未定义行为。",
+      "op": "set",
+      "props": {
+        "key": "tStr",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tMs",
+        "value": "$[parseDate::(${tStr},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMs",
+        "value": "$[parseDate::(${d},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "_note": "停药日判定(v14,与 home.df 的 isRest 同一套日历算术,但按**目标日**算而不是按今天 ——\n补录旧盒的停药格同样要认得出)。从日期反推而不是信 `i` 入参:hero 那条路只传 `day` 不传 `i`。\n⚠️ 依赖链:sd0 → sMs0 → dIdx → inPack → restDay,op:set 无依赖图,顺序就是依赖。\n⚠️ d 早于起始日时 dIdx 为负、`%` 语义未定,单开一支判 0(那种格子本就不存在)。",
+      "op": "set",
+      "props": {
+        "key": "sd0",
+        "value": "$[findNotEmpty::(${start},2026-01-01)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sMs0",
+        "value": "$[parseDate::(${sd0},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cyc",
+        "value": "$[calc::(${active}+${rest})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dIdx",
+        "value": "$[round::(calc::((${dMs}-${sMs0})/86400000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "inPack",
+        "value": "$[calc::(${dIdx}%${cyc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "restDay",
+        "value": "$[if::(lt::(${dIdx},0),0,if::(ge::(${inPack},${active}),1,0))]"
+      }
+    },
+    {
+      "_note": "合法性闸,两条:\n  ① 算得出日期(长度恰好 10)—— 参数没传到 / base 为空时,`d` 会是空串或半截。\n  ② **不是未来的日子**(v2 新增)。点阵搬回首页后,盒子里「还没到的格子」就在屏幕上,\n     一伸手就能点到;往未来写「已服用」会让盒子从明天起开始撒谎,而且撤销入口只管今天。\n     ⚠️ 翻盒的 `canNext` 已经挡住了「翻到未来的盒」,但**当前盒里今天之后的格子**挡不住 ——\n     那正是这道闸存在的理由。\n⚠️ `ok=0` 时下面所有分支都原样返回旧串,一个字节都不写(不是「写空」)。",
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(eq::(length::(${d}),10),if::(gt::(${dMs},${tMs}),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tag",
+        "value": "$[connect::(_,${d},_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isT",
+        "value": "$[if::(contains::(${taken},${tag}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isS",
+        "value": "$[if::(contains::(${skipped},${tag}),1,0)]"
+      }
+    },
+    {
+      "_note": "已服 → 摘出去(转未服);未服 → 保持不在;未标记 → 追加进来。\n`replaceAll(串, _日期_, _)` 会把两侧哨兵合并回一个,不会留下 `__`。\n\n⚠️ 停药日(restDay,v14)三态循环整个换一套:那几天**不用记录**(用户 2026-08-26 拍板),\n  · 未标记 → **不写**(下面另有 toast 说明为什么没反应);\n  · 已服 → 直接清回未标记(**跳过「未服」**:停药日写「未服」是在报一个不存在的过错);\n  · 未服 → 清回未标记。\n  即停药格只能「清」不能「立」—— 已有的记录(安慰剂方案补录、旧数据)仍显示、仍可清除。\n  显式补录走 `+` 的表单,不受这道闸管(那条路是写明意图的动作)。",
+      "op": "set",
+      "props": {
+        "key": "nt",
+        "value": "$[if::(eq::(${ok},0),${taken},if::(eq::(${isT},1),replaceAll::(${taken},${tag},_),if::(eq::(${isS},1),${taken},if::(eq::(${restDay},1),${taken},connect::(${taken},${d},_)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ns",
+        "value": "$[if::(eq::(${ok},0),${skipped},if::(eq::(${isT},1),if::(eq::(${restDay},1),${skipped},connect::(${skipped},${d},_)),if::(eq::(${isS},1),replaceAll::(${skipped},${tag},_),${skipped})))]"
+      }
+    },
+    {
+      "action": "data.set",
+      "params": {
+        "key": "taken",
+        "value": "${nt}"
+      }
+    },
+    {
+      "action": "data.set",
+      "params": {
+        "key": "skipped",
+        "value": "${ns}"
+      }
+    },
+    {
+      "_note": "⚠️ 手动改过今天之后,**撤销锚点必须清掉**。\n`autoMark` 的语义是「今天这一笔是从卡片一键记下的」——用户一旦自己动过手,\n那句话就不再为真,而首页的撤销按钮只看 `autoMark == 今天`(见 home.df 的 showUndo)。\n不清的后果:三态循环转一圈回到「已服用」时,撤销按钮会带着一句\n「刚从卡片记下」重新冒出来,而那是假的。\n\n⚠️ 只在真写了盘(ok==1)时清 —— 合法性闸拦下的那一支什么都没改,\n   顺手清掉锚点等于把一个有效的撤销入口无声弄没。",
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${ok},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "autoMark",
+            "value": ""
+          }
+        }
+      ]
+    },
+    {
+      "_note": "转到「已服」这一支才撤当天的服药提醒(doc/alert-design.md §4.4,三条记录路之一,\n另两条在 xWidget/flow/mark-today.af 与 page/flow/log-save.af —— 漏一条 = 从那条路记的\n「已服」不销当天提醒,施工单 §4.7 #5)。\n\n判据四条,缺一不可:\n  · `ok==1`     —— 合法性闸没拦下(真写了盘);\n  · `dMs==tMs`  —— **改的是今天**。三态循环也能补录旧格子,补三天前的一笔跟今天那一发无关,\n                   撤了就是把今天的提醒白白吞掉。⚠️ 比**毫秒**不比日期串:VParser 的 eq 会先\n                   数字化,`2026-09-15` 这种串去比是未定义行为(同本文件 tMs 那条注释)。\n  · `isT+isS==0` —— 这一下是**未标记 → 已服**。从「未服」转过去的那一支在本文件里不存在\n                   (已服 → 未服 → 未标记),而已标过的格子再点是**清除**,清除当然不该销提醒。\n  · `restDay==0` —— 停药日一个字节都没写(见下一条 toast),没写就没有「已服」可言。\n\n⚠️ `params` 省略 = 本规则全部实例;幂等;只撤到今天零点,明天照常响。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${ok},1),if::(eq::(${dMs},${tMs}),if::(eq::(calc::(${isT}+${isS}),0),if::(eq::(${restDay},0),1,0),0),0),0)]"
+      },
+      "items": [
+        {
+          "action": "alert.skip",
+          "params": {
+            "id": "dose",
+            "until": "today"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "停药格上的空点(什么都没写)要说一句为什么 —— 触觉已经给了、格子却不变,\n不解释就是「点了没反应」,用户会再点、然后去怀疑 App 坏了。\n只在真的一字未写时说(有记录的停药格点了是清除,画面自己会变,不用说)。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${ok},1),if::(eq::(${restDay},1),if::(eq::(calc::(${isT}+${isS}),0),1,0),0),0)]"
+      },
+      "items": [
+        {
+          "action": "ui.toast",
+          "params": {
+            "message": "${@i18n.toastRest}",
+            "type": "info",
+            "duration": 2000
+          }
+        }
+      ]
+    },
+    {
+      "_note": "必须 reloadPage(重跑 depends 把新串读回来),不能 redrawPage —— 后者不重跑 depends,\n点了会看起来「没反应」。reloadPage 的语义是「重跑 depends、不重跑 onLoad、**不闪**」\n(actionflow-actions.md §18),而这里的 depends 是纯本地读,代价可以忽略。",
+      "action": "xpage.reloadPage"
+    },
+    {
+      "_note": "⚠️ `xpage.reloadPage` 只刷**这张页**,仪表盘上那张卡不会动 —— 用户记完一笔退回仪表盘,\n看到的还是旧点阵(卡的 depends 也是纯本地读 data.*,但没人叫它重跑)。\n本包的 refresh 声明是 1 小时一拍,所以最坏要等一小时才自己对上。\n`widget.refresh` 补的正是这一步:清取数计时 + 让本包的卡真取数重渲(不是 reload,\n渲染图缓存 key 不含数据维度,reload 会命中旧图)。\nscope 缺省 = bundle = 本包全部卡(today/cycle/mini 三张都该跟着变),\ndesktop 缺省 = true,桌面小组件一并踢。见 doc/widget-refresh-primitive.md。",
+      "action": "widget.refresh"
+    }
+  ],
+  "i18n": {
+    "zh-CN": {
+      "toastRest": "停药期，无需记录"
+    },
+    "en-US": {
+      "toastRest": "Break day — no log needed"
+    }
+  }
+}

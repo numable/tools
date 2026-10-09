@@ -1,0 +1,28 @@
+{
+ "_note": "写「我的倒数日」清单。入参 {days} = 整份数组(新增/改名/改期/删除都走这条 —— flow 没有 push/remove 原语,只能整份写回)。\n⚠️ **2026-09-09 起这份清单开始喂卡片了**:44 卡 progress 的上半区经 `xWidget/flow/upcoming.df` 读同一个 `days` 键。所以末尾那句 `widget.refresh` **不能再省** —— 不踢它,改完清单要等到下一个 interval(1 小时)才看得到,而日志全绿(memory [[widget-refresh-idle-cache]] 的形状)。\n⚠️ scope 收到 **widget/progress** 而不是 bundle:`countdown` 卡吃的是自己的实例参数、`year` 卡不读清单,踢它们是白打一轮网络(本包零网络,但仍要白渲一遍)。\n⚠️ 不是 reload:渲染图缓存的 key 不含数据维度,reload 的第一步 cacheGet 会命中旧图,刷了等于没刷(doc/widget-refresh-primitive.md §3)。",
+ "version": 1,
+ "actions": [
+  {
+   "_note": "⚠️ **写盘流的第一步恒是触觉反馈**(doc/feedback-primitives-spec.md §8 / infosource lint G22)。写盘动作的触觉由 flow 首位发,H5 侧只管不写盘的交互 —— 两边都发会撞在一起(原语层只有 80ms 节流,而「跨桥 + AF 启动」经常超过它,一次动作听见两下含糊的响)。",
+   "action": "ui.haptic",
+   "params": {
+    "type": "tap"
+   }
+  },
+  {
+   "action": "data.set",
+   "params": {
+    "key": "days",
+    "value": "${days}"
+   }
+  },
+  {
+   "_note": "必须放在 data.set **之后**。scope=widget 时 widgetId 是 `.xwidget` 的文件名(不含后缀)。",
+   "action": "widget.refresh",
+   "params": {
+    "scope": "widget",
+    "widgetId": "progress"
+   }
+  }
+ ]
+}

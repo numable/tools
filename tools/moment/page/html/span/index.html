@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Time Span</title>
+<style>
+
+/* 与卡片同源(infosource-standard §4.2b):同一套块、**同一种格子**、同一个源色(靛)。
+   v10 起页面与卡片说同一句话 —— 本月一格一天 / 本季一格一周 / 今年一格一月,
+   三态色也逐格对齐(已过实底 / 当下半透明 / 未来轨色 / 不存在的日子几乎不出声)。
+   本页**零网络、零 flow** —— 全部时间量在 JS 里现算。理由与包本身一致:
+   任何数据源都可能挂,这一页不会;也因此它在飞行模式下与联网时完全一样。 */
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --tile:#E7E9EE;--rail:#D6DAE1;--void:#EEF0F4;--accent:#128F66;
+  --src:#5B5BD6;--srcCur:rgba(91,91,214,.5);--srcSoft:rgba(91,91,214,.12);
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--tile:#20232A;--rail:#2C313A;--void:#252930;--accent:#6FE8BE;
+  --src:#A5A3FF;--srcCur:rgba(165,163,255,.5);--srcSoft:rgba(165,163,255,.18);--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  font-variant-numeric:tabular-nums;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:16px}
+/* §2 段标题 = 左名字 + 右摘要,13pt/Medium/sub;段间 20pt、到第一张卡 8pt。 */
+.sec{font-size:13px;color:var(--sub);font-weight:500;margin:20px 0 8px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.sec em{font-style:normal;font-weight:500;font-size:13px;color:var(--sub);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec em b{font-weight:600;color:var(--fg)}
+
+/* 一段 = 一块:标签 + 百分比 + 一行格子 + 图例/剩余。与 44 卡逐行同构。 */
+.seg{background:var(--tile);border-radius:12px;padding:12px;margin-bottom:8px}
+.seg .top{display:flex;align-items:baseline;gap:8px}
+.seg .lab{font-size:12px;font-weight:600}
+.seg .pct{margin-left:auto;font-size:19px;font-weight:700}
+.seg .pct em{font-size:11px;font-style:normal;color:var(--sub);font-weight:600}
+.cells{display:flex;gap:2px;margin-top:10px}
+.cells i{flex:1 1 0;height:18px;border-radius:3px;background:var(--rail);display:block}
+.cells i.on{background:var(--src)}
+.cells i.cur{background:var(--srcCur)}
+.cells i.void{background:var(--void)}
+.seg .foot2{display:flex;margin-top:6px;color:var(--sub);font-size:11px}
+.seg .foot2 span+span{margin-left:auto}
+
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.row{display:flex;align-items:center;gap:10px}
+.row+.row{margin-top:10px}
+.lbl{flex:0 0 52px;color:var(--sub);font-size:12px}
+/* ⚠️ 输入框字号必须显式 ≥16px:iOS WebView 上小于 16px 聚焦会把**整页**放大,而且退不回去
+   (memory [[ios-webview-focus-zoom-16px]])。lint 会查这一条。 */
+input{flex:1 1 0;min-width:0;border:0;background:var(--tile);border-radius:10px;
+  padding:11px 12px;font-family:inherit;font-size:16px;font-weight:600;line-height:1.15;
+  color:var(--fg);outline:2px solid transparent}
+input:focus{outline-color:var(--src)}
+.prev{display:flex;align-items:baseline;gap:8px;margin-top:12px;padding-top:12px;
+  border-top:1px solid var(--line);min-height:34px}
+.prev .big{font-size:26px;font-weight:700;letter-spacing:-.5px}
+.prev .unit{font-size:12px;color:var(--sub)}
+.prev .st{color:var(--sub);font-size:12px}
+/* 点阵:与 22 卡上那张同一个隐喻 —— 一格一天,可数 */
+.grid{display:flex;flex-wrap:wrap;gap:3px;margin-top:12px}
+.grid i{width:11px;height:11px;border-radius:3px;background:var(--tile);display:block}
+.grid i.on{background:var(--src)}
+.gridNote{color:var(--sub);font-size:11px;margin-top:7px}
+.picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{border:0;background:var(--tile);color:var(--fg);border-radius:8px;padding:8px 11px;
+  font:600 13px/1 inherit;cursor:pointer}
+
+/* 入口行:与加卡按钮同高同圆角,但**没有 ＋** —— 那个符号是「加卡」的专属信号,
+   借给别的动作用会让两种按钮读起来一样。 */
+.entry{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:0 16px;
+  margin:0;background:var(--card);border:0;border-radius:14px;text-align:left;
+  font:inherit;color:var(--fg);cursor:pointer;box-shadow:var(--shadow)}
+.entry .g{flex:1 1 auto;min-width:0}
+.entry b{display:block;font-size:13.5px;font-weight:700;line-height:1.25}
+.entry .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:var(--sub)}
+.entry .ar{flex:0 0 auto;color:var(--sub);font-size:15px;opacity:.55}
+/* 段可点:箭头是唯一信号(这一页格子已经很密,再加底色会把「数据」与「控件」搅在一起) */
+.seg[data-k]{cursor:pointer}
+.seg .lab .ar{color:var(--sub);font-size:12px;opacity:.55;margin-left:4px}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.7}
+/* ── 段详情 ─────────────────────────────────────────────── */
+.hrow{display:flex;align-items:baseline;gap:12px}
+.pctBig{font-size:44px;font-weight:700;letter-spacing:-1.4px;line-height:1;color:var(--src)}
+.pctBig em{font-size:20px;font-style:normal;opacity:.55;letter-spacing:-.4px}
+.hside{margin-left:auto;text-align:right}
+.hside .k{display:block;font-size:10.5px;color:var(--sub)}
+.hside .v{display:block;font-size:15px;font-weight:700;margin-top:1px}
+.barw{height:6px;border-radius:3px;background:var(--rail);margin-top:14px;overflow:hidden}
+.barw i{display:block;height:100%;border-radius:3px;background:var(--src)}
+/* 详情页的格子比首页大一档:这一页只讲这一段,格子是主角 */
+.cells.big i{height:26px;border-radius:3px}
+.frow{display:flex;align-items:baseline;padding:9px 0;font-size:12.5px;color:var(--sub)}
+.frow + .frow{border-top:1px solid var(--line)}
+.frow b{margin-left:auto;color:var(--fg);font-size:13.5px;font-weight:600}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.entry,.seg[data-k],.xb-tap{position:relative}
+.entry::after,.seg[data-k]::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.entry:active::after,.seg[data-k]:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#hero,#cells,#facts";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+</head>
+<body>
+  <h1 id="h1">—</h1>
+  <div class="sub" id="sub"></div>
+
+  <div class="card" id="hero"></div>
+
+  <div class="sec" data-i="secCells"></div>
+  <div class="card"><div class="cells big" id="cells"></div>
+    <div class="gridNote" id="cellNote"></div></div>
+
+  <div class="sec" data-i="secFacts"></div>
+  <div class="card" id="facts"></div>
+
+  <button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg">
+    <b data-i="addT"></b><span class="d" id="addS"></span></span></button>
+
+  <div class="foot" data-i="foot"></div>
+<script>
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+var I18N = {
+ zh:{secCells:"格子",secFacts:"这一段",addT:"添加组件",
+   dMonth:"本月",dQuarter:"本季",dYear:"今年",
+   perDay:"一格一天",perWeek:"一格一周",perMonth:"一格一月",
+   past:"已过",left:"还剩",day:" 天",nthK:"今天是第",
+   from:"起点",to:"终点",total:"共",elapsed:"已过",remain:"还剩",today:"今天是第",cellU:" 格",
+   addS:"加一个「{n}」的组件",
+   foot:"这个工具不联网，所有数字都根据设备时间计算，开启飞行模式也同样准确。格子有四种状态：实色表示已过去，半透明表示正在进行，灰色表示尚未到来，最浅的是这一段没有的格子（例如 2 月只有 28 格为实色）。"},
+ en:{secCells:"Cells",secFacts:"This stretch",addT:"Add widgets",
+   dMonth:"This month",dQuarter:"This quarter",dYear:"This year",
+   perDay:"1 cell = 1 day",perWeek:"1 cell = 1 week",perMonth:"1 cell = 1 month",
+   past:"elapsed",left:"left",day:" days","day.one":" day",nthK:"Day",
+   from:"From",to:"To",total:"Total",elapsed:"Elapsed",remain:"Left",today:"Now in cell",cellU:"",
+   addS:"Add a “{n}” widget",
+   foot:"This tool uses no network at all: every number is computed from the device clock, so it is just as accurate in airplane mode. Cells have four states: solid = elapsed, translucent = the one you are in, grey = still ahead, faintest = slots this stretch does not have (February shows only 28 solid ones)."}
+};
+var LANG="en";
+/* 空串 = 刻意为空的译文,不回落中文(i18n 契约 A 表同规):英文 cellU 是 "",原写法 `||` 把它当缺失,
+   英文页渲出「Total 30 格 · Now in cell 25 格」。 */
+function t(k){ var L=I18N[LANG]; if (L && Object.prototype.hasOwnProperty.call(L,k)) return L[k];
+  return (I18N.en[k]!=null) ? I18N.en[k] : k; }  /* 缺键回落英文(doc/overseas-first.md §2) */
+function tp(k,n){var T=I18N[LANG]; return (Math.abs(n)===1&&T&&Object.prototype.hasOwnProperty.call(T,k+".one"))?T[k+".one"]:t(k);}  /* 单复数:英文 n = 1 取 <key>.one(doc/copy-style-guide.md);中文不设 .one */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function applyTheme(th){
+  var dark = th ? th==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark?"dark":"light");
+}
+function pad(n){ return (n<10?"0":"")+n; }
+function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+/* ⚠️ 两端都归到**当天 0 点**再相减:直接拿时间戳差会让同一天的上午与下午差出一天,
+   而「还剩几天」是个自然日概念。 */
+function midnight(s){ var p=String(s).split("-"); return new Date(+p[0],+p[1]-1,+p[2]).getTime(); }
+var ENV={};
+/* 启动顺序照 market boot()(doc/overseas-first.md §1–§2):先读宿主写好的 <html data-lang>,
+   再等 appInfo(nbInfo 处理信封);**缺省英文**。 */
+async function boot(paint){
+  var de=document.documentElement;
+  if (de.getAttribute("data-lang")) LANG=nbLang(de.getAttribute("data-lang"));
+  ENV=await nbInfo();
+  applyTheme(ENV.theme || de.getAttribute("data-theme") || undefined);
+  LANG=nbLang(ENV.language||ENV.locale);
+  paint();
+}
+/* 日期写法(doc/overseas-first.md §5):中文 2026 年 9 月 25 日 / 英文 Sep 25, 2026;英文不出现 09-25。 */
+var MON_EN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDate(d){ return LANG==="zh" ? d.getFullYear()+" 年 "+(d.getMonth()+1)+" 月 "+d.getDate()+" 日"
+  : MON_EN[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear(); }
+function fmtYmd(s){ var p=String(s||"").split("-"); return p.length<3 ? String(s||"") : fmtDate(new Date(+p[0],+p[1]-1,+p[2])); }
+
+var N_MONTH=31, N_QUARTER=13, N_YEAR=12;
+var KEY="month";
+/* 一段 = 一个对象。⚠️ 三段的**格子含义各不相同**(天/周/月),所以「共几格」「今天是第几格」
+   这两句话必须跟着段走,不能写死成天数 —— 写死的话本季那页会说「共 13 天」。 */
+function seg(){
+  var now=new Date(), t0=now.getTime(), y=now.getFullYear(), m=now.getMonth();
+  var D=86400000, W=604800000;
+  if (KEY==="quarter"){
+    var q=Math.floor(m/3), a=new Date(y,q*3,1), b=new Date(y,q*3+3,1);
+    return {k:"dQuarter", unit:"perWeek", n:N_QUARTER, slots:N_QUARTER,
+      idx:Math.min(Math.floor((t0-a.getTime())/W),N_QUARTER-1), a:a, b:b, cell:W, w:"countdown"};
+  }
+  if (KEY==="year"){
+    var ya=new Date(y,0,1), yb=new Date(y+1,0,1);
+    return {k:"dYear", unit:"perMonth", n:N_YEAR, slots:N_YEAR, idx:m, a:ya, b:yb, cell:0, w:"year"};
+  }
+  var ma=new Date(y,m,1), mb=new Date(y,m+1,1);
+  return {k:"dMonth", unit:"perDay", n:N_MONTH, slots:Math.round((mb-ma)/D),
+    idx:now.getDate()-1, a:ma, b:mb, cell:D, w:"progress"};
+}
+function paint(){
+  document.querySelectorAll("[data-i]").forEach(function(el){
+    var k=el.dataset.i;
+    if (k==="foot") el.innerHTML=t(k); else el.textContent=t(k);
+  });
+  var s=seg(), now=Date.now(), D=86400000;
+  var a=s.a.getTime(), b=s.b.getTime();
+  var pct=Math.round((now-a)/(b-a)*100);
+  /* ⚠️ 三个数必须加得起来:`今天是第 K 天` + `还剩 M 天` = `共 N 天`。
+     「还剩」与卡片、与首页、与本包倒数日**同一套**(round((区间末 − 现在)/天));
+     「已过」若写成 floor 会比 K 少 1(今天还没过完),两个数放一起就对不上账 ——
+     所以这一页说的是「今天是第 K 天」而不是「已过 K 天」。 */
+  var totalD=Math.round((b-a)/D), leftD=Math.round((b-now)/D), nthD=totalD-leftD;
+  document.getElementById("h1").textContent=t(s.k);
+  document.title=t(s.k);
+  document.getElementById("sub").textContent=fmtDate(s.a)+" → "+fmtDate(new Date(b-D));
+
+  document.getElementById("hero").innerHTML=
+    '<div class="hrow"><span class="pctBig">'+pct+'<em>%</em></span>'+
+    '<span class="hside"><span class="k">'+esc(t("left"))+'</span><span class="v">'+
+      leftD+esc(tp("day",leftD))+"</span></span>"+
+    '<span class="hside"><span class="k">'+esc(t("nthK"))+'</span><span class="v">'+
+      nthD+esc(tp("day",nthD))+"</span></span></div>"+
+    '<div class="barw"><i style="width:'+Math.max(0,Math.min(100,pct))+'%"></i></div>';
+
+  var cells=""; for (var i=0;i<s.n;i++){
+    var cls = i<s.idx ? "on" : (i===s.idx ? "cur" : (i<s.slots ? "" : "void"));
+    cells += '<i class="'+cls+'"></i>';
+  }
+  document.getElementById("cells").innerHTML=cells;
+  /* ⚠️ 这两句的单位是**格**不是天:本季一格一周、今年一格一月,
+     写成「今天是第 8 天」在本季那页就是错的(2026-08-25 L2 抓到)。 */
+  document.getElementById("cellNote").textContent=
+    t(s.unit)+" · "+t("total")+" "+s.slots+t("cellU")+" · "+t("today")+" "+(s.idx+1)+t("cellU");
+
+  document.getElementById("facts").innerHTML=
+    ['<div class="frow"><span>'+esc(t("from"))+"</span><b>"+fmtDate(s.a)+"</b></div>",
+     '<div class="frow"><span>'+esc(t("to"))+"</span><b>"+fmtDate(new Date(b-D))+"</b></div>",
+     '<div class="frow"><span>'+esc(t("total"))+"</span><b>"+totalD+esc(tp("day",totalD))+"</b></div>",
+     '<div class="frow"><span>'+esc(t("nthK"))+"</span><b>"+nthD+esc(tp("day",nthD))+"</b></div>",
+     '<div class="frow"><span>'+esc(t("remain"))+"</span><b>"+leftD+esc(tp("day",leftD))+"</b></div>"
+    ].join("");
+  document.getElementById("addS").textContent=t("addS").replace("{n}", t(s.k));
+}
+/* 详情页加卡:这一页讲的就是这一段,候选只给对得上的那张卡(§8.1a 纪律 1)。
+   ⚠️ 三张卡都**零参数**(它们各自锚定一段时间),所以这里不带 params —— 带了也没处放。 */
+document.getElementById("pickw").addEventListener("click", function(){
+  if (!(window.xbridge && xbridge.pickWidgets)) return;
+  var w=seg().w;
+  xbridge.pickWidgets(w==="countdown" ? [{id:"progress"},{id:"year"}] : [{id:w}]);
+});
+(function(){
+  var q=new URLSearchParams(location.search);
+  var k=String(q.get("k")||"month");
+  KEY = (k==="quarter"||k==="year") ? k : "month";
+  boot(paint);
+})();
+</script>
+</body></html>

@@ -1,0 +1,1026 @@
+{
+  "_note": "流量构成 · 近 7 天(mix 卡 + 域名页块)。生成器 gen_cloudflare.py。用 httpRequestsAdaptiveGroups:它能按 count 倒序(1dGroups 的 countryMap 是字母序、DSL 又没有排序),状态码分档靠 edgeResponseStatus 的区间过滤各查一次(别名并在一个请求里)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "_cacheIn",
+        "value": "${cache}"
+      },
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cache",
+        "value": "$[parseNumber::(${_cacheIn},0)]"
+      },
+      "_note": "1 = 首页块(读缓存);组件不传 = 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_t0",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_zk",
+        "value": "${zoneId}"
+      },
+      "_note": "入参先落地,键表达式里才看得见(§9.5 #3)。无域名参数的流里恒空,不影响。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ck",
+        "value": "$[connect::(c.cf.zone.,${_zk},_m)]"
+      }
+    },
+    {
+      "id": "_hit",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hitTs",
+        "value": "$[parseNumber::(${_hit.ts},0)]"
+      }
+    },
+    {
+      "_note": "页面有缓存 → 整段跳过(连接都不建);组件 / 无缓存 → 真取数。取数体里的 fail_unless 失败即终止整条流,所以走到 data.set 的一定是取到了的。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${_cache},1),if::(gt::(${_hitTs},0),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "cred",
+          "action": "credential.state",
+          "params": {
+            "id": "cf"
+          },
+          "_note": "只回 bound / unbound / expired(不回本体)。用来分清「没连接」与「连着但这一轮取不到」:断网时两发请求都为空,光看响应分不出来。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zid",
+            "value": "${zoneId}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zname",
+            "value": "${zoneName}"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(${zid},),1,0)]"
+          },
+          "_note": "没指定域名 → 取账号里第一个兜底。未绑凭证时这一发根本不会发出(宿主抛 credential_required)。",
+          "items": [
+            {
+              "id": "zr",
+              "action": "request",
+              "params": {
+                "url": "https://api.cloudflare.com/client/v4/zones?per_page=1&status=active",
+                "method": "GET",
+                "formatType": "json",
+                "header": {
+                  "User-Agent": "Numable",
+                  "Accept": "application/json"
+                },
+                "credential": "cf"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "zid",
+                "value": "${zr.result[0].id}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "zname",
+                "value": "${zr.result[0].name}"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "have",
+            "value": "$[if::(eq::(${zid},),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dTo",
+            "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dFrom",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-6*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${have}"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "body",
+                "value": "{\"query\":\"{viewer{zones(filter:{zoneTag:\\\"${zid}\\\"}){all:httpRequestsAdaptiveGroups(limit:1,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\"}){count} s2:httpRequestsAdaptiveGroups(limit:1,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\",edgeResponseStatus_geq:200,edgeResponseStatus_lt:300}){count} s3:httpRequestsAdaptiveGroups(limit:1,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\",edgeResponseStatus_geq:300,edgeResponseStatus_lt:400}){count} s4:httpRequestsAdaptiveGroups(limit:1,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\",edgeResponseStatus_geq:400,edgeResponseStatus_lt:500}){count} s5:httpRequestsAdaptiveGroups(limit:1,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\",edgeResponseStatus_geq:500,edgeResponseStatus_lt:600}){count} geo:httpRequestsAdaptiveGroups(limit:5,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\"},orderBy:[count_DESC]){count dimensions{clientCountryName}}}}}\"}"
+              }
+            },
+            {
+              "id": "resp",
+              "action": "request",
+              "params": {
+                "url": "https://api.cloudflare.com/client/v4/graphql",
+                "method": "POST",
+                "formatType": "json",
+                "header": {
+                  "Content-Type": "application/json",
+                  "User-Agent": "Numable",
+                  "Accept": "application/json"
+                },
+                "body": "${body}",
+                "credential": "cf"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_b",
+                "value": "1"
+              },
+              "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gerr",
+                "value": "$[if::(eq::(findNotEmpty::(${resp.errors[0].message},__none__),__none__),0,1)]"
+              },
+              "_note": "GraphQL 体内错误(查询超配额 / 字段不存在 / 无权限):照样 200,只能读 errors[]。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "got",
+                "value": "$[if::(eq::(${resp},),0,1)]"
+              },
+              "_note": "响应回来了吗。未绑/被拒时请求不发,resp 为空。⚠️ 紧跟 request 之后的第一个 set 读不到响应(晚一拍合并)—— 这一条本身就是屏障,下面的键才读得到。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "z",
+                "value": "${resp.data.viewer.zones[0]}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "tot",
+                "value": "$[findNotEmpty::(${z.all[0].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n2",
+                "value": "$[findNotEmpty::(${z.s2[0].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n3",
+                "value": "$[findNotEmpty::(${z.s3[0].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n4",
+                "value": "$[findNotEmpty::(${z.s4[0].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n5",
+                "value": "$[findNotEmpty::(${z.s5[0].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "cls",
+                "value": "$[calc::(${n2}+${n3}+${n4}+${n5})]"
+              },
+              "_note": "分档之和作分母(而不是 all):1xx 与 0(连接中断)不在四档里,混进分母会让四段条铺不满。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "p2",
+                "value": "$[if::(gt::(${cls},0),parseNumber::(calc::(${n2}*100/${cls}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "x2",
+                "value": "$[parseNumber::(max::(calc::(6.0+((${n2})/max::(${cls},1))*298.0),6.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "s2S",
+                "value": "$[if::(ge::(${n2},1000000),connect::(parseNumber::(calc::(${n2}/1000000),0.0),M),if::(ge::(${n2},10000),connect::(parseNumber::(calc::(${n2}/1000),0.0),k),parseNumber::(${n2},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "p3",
+                "value": "$[if::(gt::(${cls},0),parseNumber::(calc::(${n3}*100/${cls}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "x3",
+                "value": "$[parseNumber::(max::(calc::(6.0+((${n2}+${n3})/max::(${cls},1))*298.0),6.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "s3S",
+                "value": "$[if::(ge::(${n3},1000000),connect::(parseNumber::(calc::(${n3}/1000000),0.0),M),if::(ge::(${n3},10000),connect::(parseNumber::(calc::(${n3}/1000),0.0),k),parseNumber::(${n3},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "p4",
+                "value": "$[if::(gt::(${cls},0),parseNumber::(calc::(${n4}*100/${cls}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "x4",
+                "value": "$[parseNumber::(max::(calc::(6.0+((${n2}+${n3}+${n4})/max::(${cls},1))*298.0),6.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "s4S",
+                "value": "$[if::(ge::(${n4},1000000),connect::(parseNumber::(calc::(${n4}/1000000),0.0),M),if::(ge::(${n4},10000),connect::(parseNumber::(calc::(${n4}/1000),0.0),k),parseNumber::(${n4},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "p5",
+                "value": "$[if::(gt::(${cls},0),parseNumber::(calc::(${n5}*100/${cls}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "x5",
+                "value": "$[parseNumber::(max::(calc::(6.0+((${n2}+${n3}+${n4}+${n5})/max::(${cls},1))*298.0),6.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "s5S",
+                "value": "$[if::(ge::(${n5},1000000),connect::(parseNumber::(calc::(${n5}/1000000),0.0),M),if::(ge::(${n5},10000),connect::(parseNumber::(calc::(${n5}/1000),0.0),k),parseNumber::(${n5},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "geoMx",
+                "value": "$[max::(findNotEmpty::(${z.geo[0].count},1),1)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gc0",
+                "value": "${z.geo[0].dimensions.clientCountryName}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gn0",
+                "value": "$[findNotEmpty::(${z.geo[0].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gS0",
+                "value": "$[if::(ge::(${gn0},1000000),connect::(parseNumber::(calc::(${gn0}/1000000),0.0),M),if::(ge::(${gn0},10000),connect::(parseNumber::(calc::(${gn0}/1000),0.0),k),parseNumber::(${gn0},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gp0",
+                "value": "$[if::(gt::(${tot},0),parseNumber::(calc::(${gn0}*100/${tot}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gx0",
+                "value": "$[parseNumber::(max::(calc::(4.0+(${gn0}/${geoMx})*168.0),4.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gc1",
+                "value": "${z.geo[1].dimensions.clientCountryName}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gn1",
+                "value": "$[findNotEmpty::(${z.geo[1].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gS1",
+                "value": "$[if::(ge::(${gn1},1000000),connect::(parseNumber::(calc::(${gn1}/1000000),0.0),M),if::(ge::(${gn1},10000),connect::(parseNumber::(calc::(${gn1}/1000),0.0),k),parseNumber::(${gn1},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gp1",
+                "value": "$[if::(gt::(${tot},0),parseNumber::(calc::(${gn1}*100/${tot}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gx1",
+                "value": "$[parseNumber::(max::(calc::(4.0+(${gn1}/${geoMx})*168.0),4.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gc2",
+                "value": "${z.geo[2].dimensions.clientCountryName}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gn2",
+                "value": "$[findNotEmpty::(${z.geo[2].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gS2",
+                "value": "$[if::(ge::(${gn2},1000000),connect::(parseNumber::(calc::(${gn2}/1000000),0.0),M),if::(ge::(${gn2},10000),connect::(parseNumber::(calc::(${gn2}/1000),0.0),k),parseNumber::(${gn2},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gp2",
+                "value": "$[if::(gt::(${tot},0),parseNumber::(calc::(${gn2}*100/${tot}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gx2",
+                "value": "$[parseNumber::(max::(calc::(4.0+(${gn2}/${geoMx})*168.0),4.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gc3",
+                "value": "${z.geo[3].dimensions.clientCountryName}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gn3",
+                "value": "$[findNotEmpty::(${z.geo[3].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gS3",
+                "value": "$[if::(ge::(${gn3},1000000),connect::(parseNumber::(calc::(${gn3}/1000000),0.0),M),if::(ge::(${gn3},10000),connect::(parseNumber::(calc::(${gn3}/1000),0.0),k),parseNumber::(${gn3},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gp3",
+                "value": "$[if::(gt::(${tot},0),parseNumber::(calc::(${gn3}*100/${tot}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gx3",
+                "value": "$[parseNumber::(max::(calc::(4.0+(${gn3}/${geoMx})*168.0),4.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gc4",
+                "value": "${z.geo[4].dimensions.clientCountryName}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gn4",
+                "value": "$[findNotEmpty::(${z.geo[4].count},0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gS4",
+                "value": "$[if::(ge::(${gn4},1000000),connect::(parseNumber::(calc::(${gn4}/1000000),0.0),M),if::(ge::(${gn4},10000),connect::(parseNumber::(calc::(${gn4}/1000),0.0),k),parseNumber::(${gn4},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gp4",
+                "value": "$[if::(gt::(${tot},0),parseNumber::(calc::(${gn4}*100/${tot}),0.0),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gx4",
+                "value": "$[parseNumber::(max::(calc::(4.0+(${gn4}/${geoMx})*168.0),4.0),0.0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "totS",
+                "value": "$[if::(ge::(${tot},1000000),connect::(parseNumber::(calc::(${tot}/1000000),0.0),M),if::(ge::(${tot},10000),connect::(parseNumber::(calc::(${tot}/1000),0.0),k),parseNumber::(${tot},#\\,##0)))]"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_bound",
+            "value": "$[if::(eq::(${cred.state},bound),1,0)]"
+          },
+          "_note": "令牌绑着没有。⚠️ 宿主在缺凭证时根本不跑这条流(组件画「需要凭证」胶囊 + 空数据模板),所以这里 0 主要出现在页面块与编辑器预览里。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_ok",
+            "value": "$[if::(eq::(${have},0),0,if::(eq::(findNotEmpty::(${gerr},0),1),0,findNotEmpty::(${got},0)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ready",
+            "value": "$[if::(eq::(${_bound},1),${_ok},)]"
+          },
+          "_note": "三态:1 = 有数;0 = 打到了但取不到(GraphQL errors / 被拒 / 账号里没有域名)→「暂时取不到数据」;空 = 令牌没绑 → 「还没连接 Cloudflare 账号」。绑着却取不到(含断网)一律是 0,绝不落到未连接文案。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "at",
+            "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_pack",
+            "value": {
+              "ts": "${@time.nowMs}",
+              "ready": "${ready}",
+              "zname": "${zname}",
+              "at": "${at}",
+              "tot": "${tot}",
+              "totS": "${totS}",
+              "cls": "${cls}",
+              "n2": "${n2}",
+              "p2": "${p2}",
+              "x2": "${x2}",
+              "s2S": "${s2S}",
+              "n3": "${n3}",
+              "p3": "${p3}",
+              "x3": "${x3}",
+              "s3S": "${s3S}",
+              "n4": "${n4}",
+              "p4": "${p4}",
+              "x4": "${x4}",
+              "s4S": "${s4S}",
+              "n5": "${n5}",
+              "p5": "${p5}",
+              "x5": "${x5}",
+              "s5S": "${s5S}",
+              "gc0": "${gc0}",
+              "gn0": "${gn0}",
+              "gS0": "${gS0}",
+              "gp0": "${gp0}",
+              "gx0": "${gx0}",
+              "gc1": "${gc1}",
+              "gn1": "${gn1}",
+              "gS1": "${gS1}",
+              "gp1": "${gp1}",
+              "gx1": "${gx1}",
+              "gc2": "${gc2}",
+              "gn2": "${gn2}",
+              "gS2": "${gS2}",
+              "gp2": "${gp2}",
+              "gx2": "${gx2}",
+              "gc3": "${gc3}",
+              "gn3": "${gn3}",
+              "gS3": "${gS3}",
+              "gp3": "${gp3}",
+              "gx3": "${gx3}",
+              "gc4": "${gc4}",
+              "gn4": "${gn4}",
+              "gS4": "${gS4}",
+              "gp4": "${gp4}",
+              "gx4": "${gx4}"
+            }
+          }
+        },
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${_ck}",
+            "value": "${_pack}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入,两条路径只有一份字段映射。",
+      "id": "_box",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ready",
+        "value": "${_box.ready}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zname",
+        "value": "${_box.zname}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "${_box.at}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tot",
+        "value": "${_box.tot}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "totS",
+        "value": "${_box.totS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cls",
+        "value": "${_box.cls}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n2",
+        "value": "${_box.n2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p2",
+        "value": "${_box.p2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x2",
+        "value": "${_box.x2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2S",
+        "value": "${_box.s2S}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n3",
+        "value": "${_box.n3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p3",
+        "value": "${_box.p3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x3",
+        "value": "${_box.x3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s3S",
+        "value": "${_box.s3S}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n4",
+        "value": "${_box.n4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p4",
+        "value": "${_box.p4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x4",
+        "value": "${_box.x4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s4S",
+        "value": "${_box.s4S}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n5",
+        "value": "${_box.n5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p5",
+        "value": "${_box.p5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x5",
+        "value": "${_box.x5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s5S",
+        "value": "${_box.s5S}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gc0",
+        "value": "${_box.gc0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gn0",
+        "value": "${_box.gn0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gS0",
+        "value": "${_box.gS0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp0",
+        "value": "${_box.gp0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gx0",
+        "value": "${_box.gx0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gc1",
+        "value": "${_box.gc1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gn1",
+        "value": "${_box.gn1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gS1",
+        "value": "${_box.gS1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp1",
+        "value": "${_box.gp1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gx1",
+        "value": "${_box.gx1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gc2",
+        "value": "${_box.gc2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gn2",
+        "value": "${_box.gn2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gS2",
+        "value": "${_box.gS2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp2",
+        "value": "${_box.gp2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gx2",
+        "value": "${_box.gx2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gc3",
+        "value": "${_box.gc3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gn3",
+        "value": "${_box.gn3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gS3",
+        "value": "${_box.gS3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp3",
+        "value": "${_box.gp3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gx3",
+        "value": "${_box.gx3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gc4",
+        "value": "${_box.gc4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gn4",
+        "value": "${_box.gn4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gS4",
+        "value": "${_box.gS4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp4",
+        "value": "${_box.gp4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gx4",
+        "value": "${_box.gx4}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(if::(eq::(${_cache},1),1,if::(ge::(parseNumber::(${_box.ts},0),${_t0}),1,0)),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_zone_unreachable"
+          }
+        }
+      ],
+      "_note": "组件模式:回读到的不是这一轮写的 = 这轮没取到。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ready",
+          "zname",
+          "at",
+          "tot",
+          "totS",
+          "cls",
+          "n2",
+          "p2",
+          "x2",
+          "s2S",
+          "n3",
+          "p3",
+          "x3",
+          "s3S",
+          "n4",
+          "p4",
+          "x4",
+          "s4S",
+          "n5",
+          "p5",
+          "x5",
+          "s5S",
+          "gc0",
+          "gn0",
+          "gS0",
+          "gp0",
+          "gx0",
+          "gc1",
+          "gn1",
+          "gS1",
+          "gp1",
+          "gx1",
+          "gc2",
+          "gn2",
+          "gS2",
+          "gp2",
+          "gx2",
+          "gc3",
+          "gn3",
+          "gS3",
+          "gp3",
+          "gx3",
+          "gc4",
+          "gn4",
+          "gS4",
+          "gp4",
+          "gx4"
+        ]
+      }
+    }
+  ]
+}

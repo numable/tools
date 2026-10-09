@@ -1,0 +1,509 @@
+{
+  "_note": "首屏的主角:**今天那一颗**(v2,2026-08-21 由胶囊改正圆 + 收入设置入口)。\n\n【为什么是正圆 —— 兼一条订正】\n上一版写的是「整卡宽胶囊」,理由是「正圆要居中就得写 `(parentW-150)/2`,而**除法在布局锚点\n表达式里没有先例、不敢赌**」。**那句话是错的**:StaticCanvas 的布局求值规范\n(`docs/legacy/layout-measure-spec.md`)明写 `{parent.*}` 支持 `+ - * / %` 与括号,\n并把 `x = ({parent.w}-{a.w})/2` 列为**居中惯用法**、带单测。\n当时是把它跟另一条**真实**的限制混成了一条 —— 那条是:把 `{parent.w}` 塞进 `$[calc::()]`\n(数据域方法)解析不出来,节点会静默不画(memory [[rcn-layout-anchor-not-in-method]])。\n**两件事的分界:布局字段内的算术 OK,布局锚点进数据域方法不行。**\n\n【为什么它这么大,而且随屏长大】\n这个包 90% 的使用就是点它一下。最高频的靶不该是屏幕上第三大的东西。\n直径写成 `{parent.w}-130pt`(左右各留 65)而不是一个固定数 —— 屏幕越宽它越大,\n**在任何宽度上都恒居中**。圆内两行文字、圆下那条状态行的 y 也全部跟着这个式子走,\n否则宽屏上圆长大了、字还钉在原处。\n⚠️ 卡高由 home.df 的 `hDose` 给(`circleD + 112`)—— **同一个式子在两处各算一遍**,\n   df 那边靠 `@window.width` 反推卡宽。改了这里就得改那里,反之亦然。\n\n【设置为什么在这里】\n它是这个包唯一的全局动作,放首屏第一个元素的左上角(v2 起,原先在页脚的一个按钮里)。\n⚠️ 没有单开一条页面级 header:那条带是容器 chrome(`···` `✕`)的浮动区,再塞东西会跟它抢位置。\n\n【五态】0=未设置/未开始 · 1=已服用 · 2=记为未服 · 3=还没记(活性期) · 4=停药期。\n判据全在 home.df 的 `stKind`,与 xWidget/flow/w.df **逐字同义**(卡上与页内必须是同一个说法)。\n⚠️ 只有 1/2/3 挂 events —— 4 与 0 的圆不可点。",
+  "rc": {
+    "cells": [
+      {
+        "type": "layer",
+        "id": "card",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}-12pt",
+        "bgColor": "#FFFFFF|#15171A",
+        "cornerRadius": {
+          "leftT": "14pt",
+          "leftB": "14pt",
+          "rightT": "14pt",
+          "rightB": "14pt"
+        }
+      },
+      {
+        "_note": "设置入口(2026-08-21 从页脚移到左上角)。**用三线三钮拼,不画 path、不摆 emoji**:\npath 要为一个 22pt 的图标手写贝塞尔,emoji 在四端是不同的字体资源(有的还是彩色的),\n而这六个矩形四端逐像素一致、零资产。形状取自 App 仪表盘右上角那枚,用户认得。",
+        "type": "layer",
+        "id": "gearL1",
+        "x": "18pt",
+        "y": "17.5pt",
+        "w": "22pt",
+        "h": "1.6pt",
+        "bgColor": "#6B7280|#8E939B",
+        "cornerRadius": {
+          "leftT": "0.8pt",
+          "leftB": "0.8pt",
+          "rightT": "0.8pt",
+          "rightB": "0.8pt"
+        }
+      },
+      {
+        "type": "layer",
+        "id": "gearL2",
+        "x": "18pt",
+        "y": "23.0pt",
+        "w": "22pt",
+        "h": "1.6pt",
+        "bgColor": "#6B7280|#8E939B",
+        "cornerRadius": {
+          "leftT": "0.8pt",
+          "leftB": "0.8pt",
+          "rightT": "0.8pt",
+          "rightB": "0.8pt"
+        }
+      },
+      {
+        "type": "layer",
+        "id": "gearL3",
+        "x": "18pt",
+        "y": "28.5pt",
+        "w": "22pt",
+        "h": "1.6pt",
+        "bgColor": "#6B7280|#8E939B",
+        "cornerRadius": {
+          "leftT": "0.8pt",
+          "leftB": "0.8pt",
+          "rightT": "0.8pt",
+          "rightB": "0.8pt"
+        }
+      },
+      {
+        "type": "layer",
+        "id": "gearK1",
+        "x": "31pt",
+        "y": "15.7pt",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#6B7280|#8E939B",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "type": "layer",
+        "id": "gearK2",
+        "x": "23pt",
+        "y": "21.2pt",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#6B7280|#8E939B",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "type": "layer",
+        "id": "gearK3",
+        "x": "33pt",
+        "y": "26.7pt",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#6B7280|#8E939B",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "_note": "图标的点击靶:42×40,比图标本身大一圈(22pt 的图形直接当靶太小)。\n⚠️ 与下面那个圆不重叠(靶止于 y=44,圆起于 48)—— 两个靶叠在一起时命中归谁,四端没对拍过。",
+        "type": "layer",
+        "id": "gearHit",
+        "x": "8pt",
+        "y": "4pt",
+        "w": "42pt",
+        "h": "40pt",
+        "bgColor": "#00FFFFFF|#00000000",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        },
+        "events": {
+          "onClick": "@[file://page/flow/open-setup.af]"
+        }
+      },
+      {
+        "type": "txt",
+        "id": "alias",
+        "x": "52pt",
+        "y": "14pt",
+        "w": "{parent.w}-70pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${alias},${@i18n.defaultAlias})]",
+        "fontSize": "13pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "_note": "① 已服用:实心 accent。⚠️ accent 实底上必须用 onAccent 不用白字(design-tokens §1)。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${stKind},1)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "65pt",
+            "y": "48pt",
+            "w": "{parent.w}-130pt",
+            "h": "{parent.w}-130pt",
+            "bgColor": "#128F66|#6FE8BE",
+            "cornerRadius": {
+              "leftT": "({parent.w}-130pt)/2",
+              "leftB": "({parent.w}-130pt)/2",
+              "rightT": "({parent.w}-130pt)/2",
+              "rightB": "({parent.w}-130pt)/2"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "day": "${todayStr}"
+                }
+              }
+            }
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2-26pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "${@i18n.stTaken}",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#FFFFFF|#0B4B36",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2+6pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "$[connect::(${@i18n.dayPre},${todayNo},${@i18n.dayPost},${@i18n.sep},${@i18n.leftPre},${pillsLeft},${@i18n.leftPost})]",
+            "fontSize": "12pt",
+            "alignmentH": "1",
+            "textColor": "#E3FBF1|#0B4B36",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "② 记为未服:与已服同样有份量,只换色相 —— 不用 destructive 红。「那天没吃」是用户陈述的事实。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${stKind},2)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "65pt",
+            "y": "48pt",
+            "w": "{parent.w}-130pt",
+            "h": "{parent.w}-130pt",
+            "bgColor": "#6B7280|#5A5C63",
+            "cornerRadius": {
+              "leftT": "({parent.w}-130pt)/2",
+              "leftB": "({parent.w}-130pt)/2",
+              "rightT": "({parent.w}-130pt)/2",
+              "rightB": "({parent.w}-130pt)/2"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "day": "${todayStr}"
+                }
+              }
+            }
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2-26pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "${@i18n.stSkipped}",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#FFFFFF|#F3F4F6",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2+6pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "$[connect::(${@i18n.dayPre},${todayNo},${@i18n.dayPost},${@i18n.sep},${@i18n.leftPre},${pillsLeft},${@i18n.leftPost})]",
+            "fontSize": "12pt",
+            "alignmentH": "1",
+            "textColor": "#E5E7EB|#C9CBD0",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "③ 还没记 · 活性期:空心描边 + accent 字,是「等你按」的样子。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${stKind},3)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "65pt",
+            "y": "48pt",
+            "w": "{parent.w}-130pt",
+            "h": "{parent.w}-130pt",
+            "bgColor": "#F5F6F8|#1B1D22",
+            "cornerRadius": {
+              "leftT": "({parent.w}-130pt)/2",
+              "leftB": "({parent.w}-130pt)/2",
+              "rightT": "({parent.w}-130pt)/2",
+              "rightB": "({parent.w}-130pt)/2"
+            },
+            "borderColor": "#128F66|#6FE8BE",
+            "borderWidth": "2pt",
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "day": "${todayStr}"
+                }
+              }
+            }
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2-26pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "${@i18n.logNow}",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#128F66|#6FE8BE",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2+6pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "$[connect::(${@i18n.dayPre},${todayNo},${@i18n.dayPost},${@i18n.sep},${@i18n.leftPre},${pillsLeft},${@i18n.leftPost})]",
+            "fontSize": "12pt",
+            "alignmentH": "1",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "④ 停药期:**不可点** —— 那天本就不该有记录,给个可点的靶等于邀请用户写错。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${stKind},4)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "65pt",
+            "y": "48pt",
+            "w": "{parent.w}-130pt",
+            "h": "{parent.w}-130pt",
+            "bgColor": "#EDEFF2|#22252A",
+            "cornerRadius": {
+              "leftT": "({parent.w}-130pt)/2",
+              "leftB": "({parent.w}-130pt)/2",
+              "rightT": "({parent.w}-130pt)/2",
+              "rightB": "({parent.w}-130pt)/2"
+            }
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2-26pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "${@i18n.stRest}",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#6B7280|#A0A2A8",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2+6pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "$[connect::(${@i18n.restPre},${restNo},${@i18n.restPost},${@i18n.sep},${@i18n.nextPre},${nextStartMd})]",
+            "fontSize": "12pt",
+            "alignmentH": "1",
+            "textColor": "#9AA0A6|#7A8088",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "⑤ 未设置 / 起始日在未来:单行居中,同样不可点。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${stKind},0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "65pt",
+            "y": "48pt",
+            "w": "{parent.w}-130pt",
+            "h": "{parent.w}-130pt",
+            "bgColor": "#EDEFF2|#22252A",
+            "cornerRadius": {
+              "leftT": "({parent.w}-130pt)/2",
+              "leftB": "({parent.w}-130pt)/2",
+              "rightT": "({parent.w}-130pt)/2",
+              "rightB": "({parent.w}-130pt)/2"
+            }
+          },
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "48pt+({parent.w}-130pt)/2-12pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "${@i18n.notStarted}",
+            "fontSize": "18pt",
+            "alignmentH": "1",
+            "textColor": "#6B7280|#A0A2A8",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "撤销行:只在「今天这笔是从卡片一键记下的、且现在还是已服用」时出现(home.df 的 showUndo)。\ntoast 只活 2.5 秒,而误触的发现往往在几分钟后 —— 这个入口常驻到当天结束。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${showUndo},1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "65pt+({parent.w}-130pt)+6pt",
+            "w": "{parent.w}-96pt",
+            "h": "-1",
+            "text": "${@i18n.undoHint}",
+            "fontSize": "12pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "_note": "撤销药丸 = **一个 cell**(底 + 字 + 点击靶同格):底板宽写死而文案会随语言变长短,\n拆两格迟早对不齐,挪位置还要同步改两处坐标而渲染不报错。竖直居中交 alignmentV,\n不再手算 y 偏移。",
+            "type": "txt",
+            "x": "{parent.w}-74pt",
+            "y": "65pt+({parent.w}-130pt)",
+            "w": "56pt",
+            "h": "26pt",
+            "text": "${@i18n.undo}",
+            "fontSize": "12pt",
+            "alignmentH": "1",
+            "alignmentV": "1",
+            "textColor": "#128F66|#6FE8BE",
+            "maxLines": "1",
+            "bgColor": "#EDEFF2|#22252A",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": "@[file://page/flow/undo-mark.af]"
+            }
+          }
+        ]
+      },
+      {
+        "_note": "三态提示:只在圆**可点**且没有撤销行时出现(撤销行优先,两者抢同一条基线)。\n停药态与未设置态不显示 —— 那两态的圆点不动,说「点一下切换」是撒谎。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${showUndo},1),0,if::(eq::(${stKind},0),0,if::(eq::(${stKind},4),0,1)))]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "18pt",
+            "y": "65pt+({parent.w}-130pt)+6pt",
+            "w": "{parent.w}-36pt",
+            "h": "-1",
+            "text": "${@i18n.cycleHint}",
+            "fontSize": "12pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "defaultAlias": "每日记录",
+        "stTaken": "已服用",
+        "stSkipped": "记为未服",
+        "stRest": "今天休息",
+        "logNow": "记录",
+        "notStarted": "计划尚未开始",
+        "dayPre": "第 ",
+        "dayPost": " 天",
+        "sep": " · ",
+        "leftPre": "还剩 ",
+        "leftPost": " 片",
+        "restPre": "停药期第 ",
+        "restPost": " 天",
+        "nextPre": "下一盒 ",
+        "undoHint": "刚从卡片记下",
+        "undo": "撤销",
+        "cycleHint": "点一下切换：已服用 / 记为未服 / 未标记"
+      },
+      "en-US": {
+        "defaultAlias": "Daily log",
+        "stTaken": "Taken",
+        "stSkipped": "Not taken",
+        "stRest": "Break day",
+        "logNow": "Log it",
+        "notStarted": "Not started yet",
+        "dayPre": "Day ",
+        "dayPost": "",
+        "sep": " · ",
+        "leftPre": "",
+        "leftPost": " left",
+        "restPre": "Break day ",
+        "restPost": "",
+        "nextPre": "next pack ",
+        "undoHint": "Just logged from the widget",
+        "undo": "Undo",
+        "cycleHint": "Tap to cycle: taken / not taken / unmarked"
+      }
+    },
+    "i18nEmptyOk": [
+      "dayPost",
+      "leftPre",
+      "restPost"
+    ]
+  }
+}

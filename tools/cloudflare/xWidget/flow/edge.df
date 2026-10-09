@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "id": "raw",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflare.com/cdn-cgi/trace",
+        "method": "GET",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "text/plain"
+        },
+        "formatType": "string"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "colo",
+        "value": "$[index::(split::(index::(split::(${raw},\\ncolo=),1),\\n),0)]"
+      },
+      "items": []
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "loc",
+        "value": "$[index::(split::(index::(split::(${raw},\\nloc=),1),\\n),0)]"
+      },
+      "items": []
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${colo}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_edge_unreachable"
+          }
+        }
+      ],
+      "_note": "主干 = cdn-cgi/trace 里的 colo。这张卡整张就是在讲「你连到哪个节点」,取不到就没内容。\n取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "proto",
+        "value": "$[index::(split::(index::(split::(${raw},\\nhttp=),1),\\n),0)]"
+      },
+      "items": []
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tls",
+        "value": "$[index::(split::(index::(split::(${raw},\\ntls=),1),\\n),0)]"
+      },
+      "items": []
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "warpOn",
+        "value": "$[if::(eq::(index::(split::(index::(split::(${raw},\\nwarp=),1),\\n),0),on),1,0)]"
+      },
+      "items": []
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      },
+      "items": []
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "colo",
+          "loc",
+          "proto",
+          "tls",
+          "warpOn",
+          "at"
+        ]
+      }
+    }
+  ]
+}

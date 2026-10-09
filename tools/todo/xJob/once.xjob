@@ -1,0 +1,74 @@
+{
+  "_note": "一次性提醒:给一件**不重复**的待办排一个准点提醒,只响一次(doc/alert-design.md §4.5)。\n页面在用户选了提醒后调 xbridge.alertAdd 预填 tid / title / date / time;用户在同意面板里点确认才建。\n完成 / 删除 / 改日期时间 → xbridge.alertRemove({id:\"once\", params:{tid}})(§4.6 子集匹配:只按 tid 删,不必知道当初的日期时间)。\n\n⚠️ `tid` 默认值刻意为空串且**不进 form**:「空值 = 必填」只对 form 里的键(§3),用户从「我的 › 提醒」直接加时照样能确认;行摘要只取 form 键(§7.3),所以 tid 不会露出来。\n⚠️ `title` 进 form(文本框,预填可改):管理页那一行才认得出是哪一件 ——「待办提醒 · 买菜」,第 2 行「仅一次 · 10月1日 周三 09:00」。\n⚠️ 不写 tz = 跟着手机走:出差换时区还是当地 9 点,待办要的正是这个。\n⚠️ 重复待办**不走这里**:每完成一次都要挪到下一次,而改时间 = remove + add、add 必弹面板,逐次弹太打扰 —— 它们继续走 due.xjob(动态,尽力而为)。\n⚠️ `events.onClick` 里的 `${tid}` 由宿主在布防 / 发送那一刻代入(§8 R1),点通知直接进这件待办的详情。",
+  "version": 1,
+  "id": "once",
+  "title": "待办提醒",
+  "sub": "给一件待办定个时间，到点准时提醒一次",
+  "i18n": {
+    "en-US": {
+      "title": "To-do reminder",
+      "sub": "Pick a time for a to-do; you're reminded once, right on time",
+      "message": {
+        "title": "${title}",
+        "body": "It's time for this to-do"
+      },
+      "form": {
+        "title": {
+          "title": "To-do"
+        },
+        "date": {
+          "title": "Date"
+        },
+        "time": {
+          "title": "Time"
+        }
+      }
+    }
+  },
+  "params": {
+    "tid": "",
+    "title": "",
+    "date": "",
+    "time": "09:00"
+  },
+  "form": {
+    "title": {
+      "title": "待办",
+      "component": {
+        "type": "textInput"
+      }
+    },
+    "date": {
+      "title": "日期",
+      "component": {
+        "type": "datePicker",
+        "props": {
+          "format": "YYYY-MM-DD"
+        }
+      }
+    },
+    "time": {
+      "title": "时间",
+      "component": {
+        "type": "timePicker"
+      }
+    }
+  },
+  "events": {
+    "onClick": "/item?id=${tid}&name=${title}"
+  },
+  "task": {
+    "refresh": {
+      "at": [
+        "${date} ${time}"
+      ]
+    }
+  },
+  "alert": {
+    "level": "normal",
+    "message": {
+      "title": "${title}",
+      "body": "到时间了，去做这件待办吧"
+    }
+  }
+}

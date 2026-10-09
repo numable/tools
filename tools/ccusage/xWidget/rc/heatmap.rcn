@@ -1,0 +1,1351 @@
+{
+  "rc": {
+    "_note": "⚠️ **表头圆点的 y 锚在标题实测框上,不许写常量**(2026-08-31 全仓收口,canonical=gen_asc.py):\n`y=\"{<标题id>.y}+({<标题id>.h}-<直径>pt)/2\"` —— 标题保持 `h:\"-1\"`,引擎按**真实字体度量**\n量出标题框高、再把圆点摆到正中,换字号/字体/端都自动跟上。\n原先是人肉试出来的常量 y(等于拿肉眼猜行高):2026-08-27 那轮「逐卡调 y 收敛到 <0.9pt」\n治的是症状,同一批卡 08-31 又被用户报出来。\n· 备选写法 `h:\"20pt\" + alignmentV:\"1\"`(定高带内居中)也有效,不用它是因为要凭空定一个带高。\n⚠️ 布局字段里的纯锚点算术是规范允许的(`+ - * / %` 与括号);那条「坐标不支持减法」\n说的是 `${数据变量}pt-24pt`,与纯锚点算术不是一回事。\n2026-09-25 体检:卡名 y 11 / 锚 y 14 与本包其它组件同;零档格改本包暖色轨道(与作息组件同一套色阶);空态改 7×10 空格骨架,删掉中间的操作说明。",
+    "i18n": {
+      "zh-CN": {
+        "title": "活跃热力图",
+        "streak": "连续",
+        "longest": "最长",
+        "unitDay": "天",
+        "empty": "等待首次同步",
+        "winA": "近 ",
+        "winB": " 天里活跃 ",
+        "winC": " 天",
+        "less": "少",
+        "more": "多"
+      },
+      "en-US": {
+        "title": "Activity",
+        "streak": "streak",
+        "longest": "longest",
+        "unitDay": "d",
+        "empty": "Not synced yet",
+        "winA": "Past ",
+        "winB": " days: ",
+        "winC": " active",
+        "less": "Less",
+        "more": "More"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FDFBFA\\,#FBF3F1)@90|linear(#15171A\\,#1A1A1C\\,#221E1F)@90"
+      },
+      {
+        "id": "dot",
+        "type": "layer",
+        "x": "14pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#C15F3C|#E8916B"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "23pt",
+        "y": "12pt",
+        "w": "{parent.w}-120pt",
+        "h": "-1",
+        "text": "${@i18n.title}",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1"
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-104pt",
+        "y": "15pt",
+        "w": "90pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},${@i18n.empty})]",
+        "fontSize": "9pt",
+        "alignmentH": "2",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "_note": "时效锚 y = 卡名 y + 3:txt 盒顶 = 墨迹顶,同盒顶时 9pt 锚的基线比 13pt 卡名高 4.5pt(cell_align 实测),+3 后差 ≤ 1pt(卡片设计系统 §3「与组件名同基线」)"
+      },
+      {
+        "_note": "统计行口径 = 格子窗口(2026-10-08):「近 68 天里活跃 60 天」,原来写全部历史的活跃天数,比格子还多。连续 / 最长仍是全部历史(连续天数不会超过窗口里能看见的那段)。空态一律 --。",
+        "type": "txt",
+        "x": "14pt",
+        "y": "36pt",
+        "w": "{parent.w}-28pt",
+        "h": "-1",
+        "text": "${@i18n.winA}$[findNotEmpty::(${gn},--)]${@i18n.winB}$[findNotEmpty::(${actN},--)]${@i18n.winC} · ${@i18n.streak} $[findNotEmpty::(${streak},--)]${@i18n.unitDay} · ${@i18n.longest} $[findNotEmpty::(${longest},--)]${@i18n.unitDay}",
+        "fontSize": "10pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "_note": "热力格逐格由服务端给好 c/r/l。⚠️ 空态下 grid 为空 → 本循环一格不画，版式由下方那句提示文案承接(G9「看得出这是什么卡」由标题+统计行+提示共同满足)。手写 68 格骨架不划算，故刻意不做。",
+        "type": "op",
+        "action": "forEach",
+        "props": {
+          "items": "${grid}",
+          "key": "_it",
+          "index": "_i"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "14pt+${_it.c}*({parent.w}-28pt)/10",
+            "y": "62pt+${_it.r}*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            },
+            "bgColor": "$[if::(ge::(${_it.l},4),#EA580C|#E8916B,if::(ge::(${_it.l},3),#E8916B|#C15F3C,if::(ge::(${_it.l},2),#FDBA74|#9A3412,if::(ge::(${_it.l},1),#FED7AA|#7C2D12,#EEE4E0|#2A2522))))]"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(ge::(findNotEmpty::(${gn},0),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "14pt+0*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+1*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+2*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+3*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+4*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+5*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+6*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+7*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+8*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+9*({parent.w}-28pt)/10",
+            "y": "62pt+0*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+0*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+1*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+2*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+3*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+4*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+5*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+6*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+7*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+8*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+9*({parent.w}-28pt)/10",
+            "y": "62pt+1*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+0*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+1*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+2*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+3*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+4*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+5*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+6*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+7*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+8*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+9*({parent.w}-28pt)/10",
+            "y": "62pt+2*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+0*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+1*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+2*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+3*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+4*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+5*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+6*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+7*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+8*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+9*({parent.w}-28pt)/10",
+            "y": "62pt+3*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+0*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+1*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+2*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+3*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+4*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+5*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+6*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+7*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+8*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+9*({parent.w}-28pt)/10",
+            "y": "62pt+4*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+0*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+1*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+2*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+3*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+4*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+5*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+6*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+7*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+8*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+9*({parent.w}-28pt)/10",
+            "y": "62pt+5*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+0*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+1*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+2*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+3*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+4*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+5*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+6*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+7*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+8*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "14pt+9*({parent.w}-28pt)/10",
+            "y": "62pt+6*({parent.w}-28pt)/10",
+            "w": "({parent.w}-28pt)/10-2.2pt",
+            "h": "({parent.w}-28pt)/10-2.2pt",
+            "bgColor": "#EEE4E0|#2A2522",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[ge::(findNotEmpty::(${gn},0),1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "62pt+7*({parent.w}-28pt)/10+22pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${startLbl} — ${endLbl}",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[ge::(findNotEmpty::(${gn},0),1)]"
+        },
+        "_note": "月份刻度贴在格子正下方,按列(= 周)对齐。",
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt+0*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk0}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+1*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk1}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+2*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk2}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+3*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk3}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+4*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk4}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+5*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk5}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+6*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk6}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+7*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk7}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+8*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk8}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "14pt+9*({parent.w}-28pt)/10",
+            "y": "62pt+7*({parent.w}-28pt)/10+3pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${mk9}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "图例「少 ■■■■■ 多」(2026-10-08):五档颜色与格子同一张表。右缘自引用对齐(自适应宽 txt 不写 alignmentH)。空态也画 —— 结构先行。",
+        "id": "lgM",
+        "type": "txt",
+        "x": "{parent.w}-14pt-{lgM.w}",
+        "y": "62pt+7*({parent.w}-28pt)/10+22pt",
+        "w": "-1",
+        "h": "-1",
+        "text": "${@i18n.more}",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "id": "lg4",
+        "type": "layer",
+        "x": "{lgM.x}-4pt-9pt",
+        "y": "{lgM.y}+({lgM.h}-9pt)/2",
+        "w": "9pt",
+        "h": "9pt",
+        "cornerRadius": {
+          "leftT": "2pt",
+          "leftB": "2pt",
+          "rightT": "2pt",
+          "rightB": "2pt"
+        },
+        "bgColor": "#EA580C|#E8916B"
+      },
+      {
+        "id": "lg3",
+        "type": "layer",
+        "x": "{lg4.x}-2pt-9pt",
+        "y": "{lgM.y}+({lgM.h}-9pt)/2",
+        "w": "9pt",
+        "h": "9pt",
+        "cornerRadius": {
+          "leftT": "2pt",
+          "leftB": "2pt",
+          "rightT": "2pt",
+          "rightB": "2pt"
+        },
+        "bgColor": "#E8916B|#C15F3C"
+      },
+      {
+        "id": "lg2",
+        "type": "layer",
+        "x": "{lg3.x}-2pt-9pt",
+        "y": "{lgM.y}+({lgM.h}-9pt)/2",
+        "w": "9pt",
+        "h": "9pt",
+        "cornerRadius": {
+          "leftT": "2pt",
+          "leftB": "2pt",
+          "rightT": "2pt",
+          "rightB": "2pt"
+        },
+        "bgColor": "#FDBA74|#9A3412"
+      },
+      {
+        "id": "lg1",
+        "type": "layer",
+        "x": "{lg2.x}-2pt-9pt",
+        "y": "{lgM.y}+({lgM.h}-9pt)/2",
+        "w": "9pt",
+        "h": "9pt",
+        "cornerRadius": {
+          "leftT": "2pt",
+          "leftB": "2pt",
+          "rightT": "2pt",
+          "rightB": "2pt"
+        },
+        "bgColor": "#FED7AA|#7C2D12"
+      },
+      {
+        "id": "lg0",
+        "type": "layer",
+        "x": "{lg1.x}-2pt-9pt",
+        "y": "{lgM.y}+({lgM.h}-9pt)/2",
+        "w": "9pt",
+        "h": "9pt",
+        "cornerRadius": {
+          "leftT": "2pt",
+          "leftB": "2pt",
+          "rightT": "2pt",
+          "rightB": "2pt"
+        },
+        "bgColor": "#EEE4E0|#2A2522"
+      },
+      {
+        "id": "lgL",
+        "type": "txt",
+        "x": "{lg0.x}-4pt-{lgL.w}",
+        "y": "62pt+7*({parent.w}-28pt)/10+22pt",
+        "w": "-1",
+        "h": "-1",
+        "text": "${@i18n.less}",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      }
+    ]
+  }
+}

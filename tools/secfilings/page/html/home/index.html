@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SEC Filings</title>
+<style>
+/* 与组件同源(§4.2b):同一套块、同一个源色;页边距 14、卡片圆角 14、段标题 13/700(status / pkgstats 同款)。
+   源色只做点 / 线 / 胶囊;平台 accent 绿只留给「添加组件」。 */
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--faint:#9AA0A6;--line:#E4E7EC;--tile:#E7E9EE;
+  --src:#1C3F7A;--srcSoft:rgba(28,63,122,.12);--warn:#B45309;--shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--faint:#5E636B;--line:#262A31;--tile:#20232A;
+  --src:#91AEE8;--srcSoft:rgba(145,174,232,.16);--warn:#F5A524;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC",sans-serif;font-variant-numeric:tabular-nums;
+  padding:calc(var(--xb-content-top) + 12px) 14px calc(var(--xb-content-bottom) + 28px)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+a{color:inherit}
+svg{display:block}
+.hd{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.hd h1{flex:1 1 auto;min-width:0;font-size:24px;font-weight:700;margin:0;letter-spacing:-.5px;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{color:var(--sub);font-size:13px;margin:0 0 4px;min-height:19px}
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:22px 2px 8px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:20px}
+.lnk{color:var(--src);font-size:13px;font-weight:700;padding:8px 2px;margin:-8px 0}
+.grp{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.state{color:var(--sub);font-size:13px;text-align:center;padding:22px 14px}
+.warn{color:var(--warn);font-size:12px;margin:10px 2px 0}
+.foot{color:var(--sub);font-size:11px;line-height:1.7;margin-top:18px;background:var(--tile);border-radius:14px;padding:12px 14px}
+.foot b{color:var(--fg);font-weight:600}
+.foot a{color:var(--src);text-decoration:none;font-weight:600}
+/* 类型胶囊:与组件上的同一颗(源色浅底 + 源色字) */
+.fm{display:inline-block;font-size:11.5px;font-weight:700;line-height:1.25;padding:2px 7px;border-radius:7px;
+  background:var(--srcSoft);color:var(--src);white-space:nowrap}
+/* 添加代码:输入框字号必须 ≥16px(iOS 聚焦 <16px 的输入框会放大整页,G15) */
+.addf{display:flex;gap:8px}
+.addf input{flex:1 1 auto;min-width:0;font-size:16px;height:44px;border-radius:12px;border:1px solid var(--line);
+  padding:0 14px;background:var(--card);color:var(--fg);outline:none;-webkit-appearance:none;text-transform:uppercase}
+.addf input::placeholder{text-transform:none;color:var(--faint)}
+.addf button{flex:0 0 auto;min-width:72px;height:44px;border-radius:22px;background:var(--srcSoft);color:var(--src);
+  font-weight:700;font-size:14px;padding:0 16px}
+.addf button:disabled{opacity:.5}
+.msg{min-height:18px;font-size:12px;color:var(--sub);margin:8px 2px 0}
+.msg:empty{display:none}
+.msg.bad{color:var(--warn)}
+/* 常见公司:点一个就关注 */
+.pre{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.pre button{min-height:36px;min-width:64px;padding:0 14px;border-radius:18px;background:var(--srcSoft);color:var(--src);
+  font-size:13px;font-weight:700}
+.pre button.on{background:var(--tile);color:var(--sub)}
+/* 关注的公司:横向一排胶囊,点一个 = 只看这一家(再点一次 / 点「全部公司」回到合并视图) */
+.cos{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -14px;padding:2px 14px 2px}
+.cos::-webkit-scrollbar{display:none}
+.cos button{flex:0 0 auto;min-height:34px;padding:0 13px;border-radius:17px;background:var(--card);box-shadow:var(--shadow);
+  font-size:13px;font-weight:700;color:var(--fg);white-space:nowrap}
+html[data-theme="dark"] .cos button{background:var(--tile)}
+.cos button.on{background:var(--src);color:#FFFFFF;box-shadow:none}
+html[data-theme="dark"] .cos button.on{background:var(--src);color:#0B0C0E}
+.seg{display:flex;background:var(--tile);border-radius:10px;padding:3px;margin:12px 0 4px}
+.seg button{flex:1 1 0;font-size:13px;min-height:34px;border-radius:8px;color:var(--sub);white-space:nowrap}
+.seg button.on{background:var(--card);color:var(--fg);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+html[data-theme="dark"] .seg button.on{background:#2C313A;box-shadow:none}
+/* 时间线:按本机日期分组,一行 = 一份文件。整行是 <a href="SEC 文件索引页">(容器按外部页打开) */
+.day{font-size:12px;font-weight:700;color:var(--sub);margin:16px 4px 6px}
+.fl{display:flex;align-items:center;gap:11px;padding:11px 14px;min-height:60px;text-decoration:none;color:inherit;position:relative}
+.fl+.fl::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
+.fl .fm{flex:0 0 auto;min-width:52px;text-align:center}
+.fl .g{flex:1 1 auto;min-width:0}
+.fl b{display:block;font-size:14.5px;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.fl small{display:block;color:var(--sub);font-size:12px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fl .tm{flex:0 0 auto;color:var(--sub);font-size:12px;align-self:flex-start;margin-top:2px}
+.sk{height:60px;margin:0 14px;border-bottom:1px solid var(--line);position:relative}
+.sk:last-child{border-bottom:0}
+.sk i{position:absolute;left:0;top:22px;width:52px;height:18px;border-radius:7px;background:var(--tile)}
+.sk b{position:absolute;left:63px;top:15px;width:46%;height:12px;border-radius:6px;background:var(--tile)}
+.sk s{position:absolute;left:63px;top:34px;width:30%;height:10px;border-radius:5px;background:var(--tile)}
+.more{color:var(--sub);font-size:12px;line-height:1.7;margin:10px 4px 0}
+.showall{display:block;width:100%;min-height:44px;margin-top:10px;border-radius:12px;background:var(--tile);color:var(--src);
+  font-size:13px;font-weight:700}
+.more a{color:var(--src);font-weight:700;text-decoration:none;margin-right:10px;display:inline-block;padding:4px 0}
+/* 新公告提醒入口 */
+.alert{display:flex;align-items:center;gap:12px;width:100%;margin-top:22px;padding:12px 14px;text-align:left;
+  background:var(--card);border-radius:14px;box-shadow:var(--shadow)}
+.alert .ic{flex:0 0 auto;width:34px;height:34px;border-radius:17px;background:var(--srcSoft);color:var(--src);
+  display:flex;align-items:center;justify-content:center}
+.alert .ic svg{width:18px;height:18px;fill:currentColor}
+.alert .tx{flex:1 1 auto;min-width:0}
+.alert b{display:block;font-size:14px;font-weight:600;line-height:1.35}
+.alert small{display:block;color:var(--sub);font-size:11.5px;margin-top:2px}
+.alert .go{flex:0 0 auto;color:var(--faint);font-size:18px;line-height:1}
+/* 还没关注任何公司:一屏说清要做什么、做完得到什么(§7.1 未就绪态) */
+.setup{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:18px 16px 16px;margin-top:10px}
+.setup h2{font-size:17px;margin:0 0 6px;line-height:1.35}
+.setup p{color:var(--sub);font-size:13px;margin:0 0 14px;line-height:1.6}
+.step{display:flex;gap:10px;margin-top:14px}
+.step .n{flex:0 0 auto;width:22px;height:22px;border-radius:11px;background:var(--src);color:#FFFFFF;font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;margin-top:1px}
+html[data-theme="dark"] .step .n{color:#0B0C0E}
+.step .c{flex:1 1 auto;min-width:0}
+.step .c>b{display:block;font-size:14px;font-weight:600;line-height:1.45;margin-bottom:8px}
+.setup .note{color:var(--sub);font-size:11.5px;line-height:1.6;margin:16px 0 0;padding-top:12px;border-top:1px solid var(--line)}
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.fl,.alert,.showall,.xb-tap{position:relative}
+.fl::after,.alert::after,.showall::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.fl:active::after,.alert:active::after,.showall:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+#seg button,#cos button,.pre button,.addf button,.lnk,.pickb,.more a,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+#seg button:active,#cos button:active,.pre button:active,.addf button:active,.lnk:active,.pickb:active,.more a:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#list";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+<div class="hd"><h1 data-i="title"></h1><button class="xb-at" id="xbAt" type="button"></button></div>
+<div class="sub" id="sub"></div>
+
+<div id="setup" hidden>
+  <div class="setup">
+    <h2 data-i="setupT"></h2>
+    <p data-i="setupS"></p>
+    <div class="step"><span class="n">1</span><div class="c"><b data-i="step1"></b>
+      <div class="addf"><input id="tkIn" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" data-ph="ph"><button id="tkGo" type="button" data-i="follow"></button></div>
+      <div class="msg" id="msg"></div>
+      <div class="pre" id="pre"></div>
+    </div></div>
+    <div class="step"><span class="n">2</span><div class="c"><b data-i="step2"></b></div></div>
+    <div class="note" data-i="footSetup"></div>
+  </div>
+</div>
+
+<div id="main" hidden>
+  <div class="sec"><span data-i="secCo"></span><button class="lnk" id="mg" type="button" data-i="manage"></button></div>
+  <div class="cos" id="cos"></div>
+  <div class="seg" id="seg"><button type="button" data-k="all" data-i="k_all" class="on"></button><button type="button" data-k="cur" data-i="k_cur"></button><button type="button" data-k="fin" data-i="k_fin"></button><button type="button" data-k="ins" data-i="k_ins"></button></div>
+  <div id="warn"></div>
+  <div id="list"></div>
+  <div id="more"></div>
+  <button class="alert" id="alertBtn" type="button" hidden><span class="ic"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M221.8,175.94C216.25,166.38,208,139.33,208,104a80,80,0,1,0-160,0c0,35.34-8.26,62.38-13.81,71.94A16,16,0,0,0,48,200H88.81a40,40,0,0,0,78.38,0H208a16,16,0,0,0,13.8-24.06ZM128,216a24,24,0,0,1-22.62-16h45.24A24,24,0,0,1,128,216ZM48,184c7.7-13.24,16-43.92,16-80a64,64,0,1,1,128,0c0,36.05,8.28,66.73,16,80Z"/></svg></span><span class="tx"><b data-i="alertT"></b><small data-i="alertS"></small></span><span class="go">›</span></button>
+  <button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg"><b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button>
+</div>
+
+<div class="foot" id="foot" data-i="foot"></div>
+<script>
+var I18N = {
+ "zh": {
+  "title": "美股公告",
+  "subPre": "关注 {n} 家公司 · 按提交时间排列 · 本机时间",
+  "subPre1": "关注 {n} 家公司 · 按提交时间排列 · 本机时间",
+  "secCo": "关注的公司",
+  "manage": "管理",
+  "allCo": "全部公司",
+  "k_all": "全部",
+  "k_cur": "8-K",
+  "k_fin": "财报",
+  "k_ins": "内部人",
+  "today": "今天",
+  "yday": "昨天",
+  "wd": [
+   "周日",
+   "周一",
+   "周二",
+   "周三",
+   "周四",
+   "周五",
+   "周六"
+  ],
+  "mo": [],
+  "none": "这几家公司最近没有这类文件",
+  "showAll": "显示更早的 {n} 份",
+  "showAll1": "显示更早的 {n} 份",
+  "noneCo": "{t} 最近没有这类文件",
+  "fail": "暂时连不上 SEC，请稍后点右上角时间重试",
+  "errT": "{t} 的文件暂时获取不到，点右上角时间重试",
+  "more": "每家公司这里最多显示最近 {n} 份，更早的文件在 SEC 网站查看：",
+  "flood": "{t} 每天交几十份发行说明书，这里只看得到 {d} 之后的",
+  "alertT": "新公告提醒",
+  "alertS": "关注的公司交了 8-K、季报或年报时提醒你",
+  "aOk": "提醒已设好",
+  "aQuota": "提醒数量已达上限",
+  "pickT": "添加组件",
+  "pickS": "在面板里挑，确认后加到仪表盘",
+  "setupT": "关注几家美股公司",
+  "setupS": "这里会按时间列出它们最近向美国证监会（SEC）提交的文件：重大事项（8-K）、季报、年报、内部人交易……每份标明类型、提交时间，点开就是 SEC 上的原文件。",
+  "step1": "点一个代码关注，或输入代码",
+  "ph": "输入美股代码，如 AAPL",
+  "follow": "关注",
+  "step2": "关注之后，可以在这一页打开「新公告提醒」，或把组件加到仪表盘",
+  "footSetup": "数据来自 SEC 公开的 EDGAR 数据库，不需要账号，最多关注 8 家。只显示文件的类型与时间，不显示文件内容。",
+  "mChecking": "正在到 SEC 核对 {t}…",
+  "mOk": "已关注 {t}",
+  "mDup": "{t} 已经在关注列表里",
+  "mFull": "最多关注 8 家，先在「管理」里移除一家再添加",
+  "mBad": "代码只能是字母、数字和连字符，如 AAPL、BRK-B",
+  "mNone": "SEC 上没有找到 {t}，换个代码试试",
+  "mNet": "暂时连不上 SEC，请稍后再试",
+  "foot": "数据来源：美国证监会 <b>SEC</b> 的 EDGAR 公开数据库（sec.gov），每 <b>5 分钟</b>更新一次。这里只显示文件的类型与提交时间，<b>不显示文件内容</b>；点一行在 SEC 网站打开这份文件。类型说明是这个工具自己的释义，以 SEC 原文件为准。「全部」不含内部人交易（Form 3、4、5 与 144），在「内部人」里单独看；银行等发行人每天几十份的发行说明书（424B）与补充材料（FWP）按天折成一行。"
+ },
+ "en": {
+  "title": "SEC Filings",
+  "subPre": "{n} companies · newest first · local time",
+  "subPre1": "{n} company · newest first · local time",
+  "secCo": "Companies",
+  "manage": "Manage",
+  "allCo": "All companies",
+  "k_all": "All",
+  "k_cur": "8-K",
+  "k_fin": "Reports",
+  "k_ins": "Insiders",
+  "today": "Today",
+  "yday": "Yesterday",
+  "wd": [
+   "Sun",
+   "Mon",
+   "Tue",
+   "Wed",
+   "Thu",
+   "Fri",
+   "Sat"
+  ],
+  "mo": [
+   "Jan",
+   "Feb",
+   "Mar",
+   "Apr",
+   "May",
+   "Jun",
+   "Jul",
+   "Aug",
+   "Sep",
+   "Oct",
+   "Nov",
+   "Dec"
+  ],
+  "none": "No recent filings of this type",
+  "showAll": "Show {n} older filings",
+  "showAll1": "Show {n} older filing",
+  "noneCo": "No recent filings of this type from {t}",
+  "fail": "Can't reach the SEC right now. Tap the time at the top right to try again.",
+  "errT": "Couldn't load {t}. Tap the time at the top right to try again.",
+  "more": "Up to {n} recent filings per company are shown here. Older ones on the SEC website:",
+  "flood": "{t} files dozens of prospectuses a day, so only filings since {d} are shown",
+  "alertT": "New filing alert",
+  "alertS": "Get notified when a company you follow files an 8-K, 10-Q or 10-K",
+  "aOk": "Alert added",
+  "aQuota": "You've reached the alert limit",
+  "pickT": "Add widgets",
+  "pickS": "Pick in the panel, then confirm",
+  "setupT": "Follow a few US companies",
+  "setupS": "Their latest filings with the SEC show up here in time order — current reports (8-K), quarterly and annual reports, insider trades and more. Each shows its type and filing time, and opens the original on the SEC website.",
+  "step1": "Tap a ticker to follow it, or type one",
+  "ph": "US ticker, e.g. AAPL",
+  "follow": "Follow",
+  "step2": "Then turn on New filing alert on this page, or add a widget to your dashboard",
+  "footSetup": "Data comes from the SEC's public EDGAR database. No account needed; follow up to 8 companies. Only filing types and times are shown, not their contents.",
+  "mChecking": "Checking {t} with the SEC…",
+  "mOk": "Following {t}",
+  "mDup": "{t} is already on your list",
+  "mFull": "You can follow up to 8 companies. Remove one in Manage first.",
+  "mBad": "Use letters, digits and hyphens only, e.g. AAPL or BRK-B",
+  "mNone": "The SEC has no company for {t}. Try another ticker.",
+  "mNet": "Can't reach the SEC right now. Try again later.",
+  "foot": "Source: the SEC's public <b>EDGAR</b> database (sec.gov), updated <b>every 5 minutes</b>. Only filing types and times are shown here, <b>not their contents</b> — tap a row to open the filing on the SEC website. Type labels are our own; the SEC filing is authoritative. All excludes insider filings (Forms 3, 4, 5 and 144) — see Insiders. Prospectuses (424B) and free writing prospectuses (FWP), which banks file dozens of a day, are folded into one row per day."
+ }
+};
+var LANG = "en";
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* ⚠️ 空串是合法译文,不兜底(xbundle-i18n:A 表空串 = 刻意为空)。缺键回落英文表(overseas-first §2)。 */
+function t(k){
+  var m = I18N[LANG];
+  if (m && Object.prototype.hasOwnProperty.call(m, k)) return m[k];
+  return I18N.en[k] !== undefined ? I18N.en[k] : k;
+}
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+/* SEC 的表格名称里偶有 &amp; —— 先解回原字符,再 esc 一次写进 DOM。 */
+function dec(s){ return String(s == null ? "" : s).replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"'); }
+/* SEC 公司名(全大写 + 法律后缀)→ 读法:去末尾连续的 CO / CORP / INC / LTD …,全大写的逐词首字母大写(与 latest.df 同一规则) */
+var NAME_SUF = {CO:1,COM:1,CORP:1,CORPORATION:1,INC:1,INCORPORATED:1,LTD:1,LIMITED:1,PLC:1,LLC:1,LP:1,SA:1,NV:1,AG:1,SE:1,"&":1};
+function nice(s){
+  s = dec(s).trim(); if (!s) return s;
+  var w = s.split(/\s+/), up = s === s.toUpperCase();
+  while (w.length > 1){ var l = w[w.length - 1].replace(/[.,]/g, "").toUpperCase(); if (NAME_SUF[l] || l.charAt(0) === "/") w.pop(); else break; }
+  return w.map(function(x){ x = x.replace(/,$/, ""); return (up && x.indexOf("&") < 0) ? x.charAt(0) + x.slice(1).toLowerCase() : x; }).join(" ");
+}
+/* 只放行 https://www.sec.gov 的链接:行里的 href 来自第三方响应,别让一个 `javascript:` 混进来。 */
+function safeUrl(u){ u = String(u || ""); return /^https:\/\/www\.sec\.gov\//i.test(u) ? u : ""; }
+/* 桥的 call 型方法四端一律 resolve {code,msg,data}、从不 reject(G49)—— 统一在这里拆信封。 */
+function un(r){ if (r && typeof r === "object" && "code" in r){ if (r.code !== 0) throw new Error(r.msg || ("code " + r.code)); return r.data; } return r; }
+function toast(s){ try { xbridge.toast(s); } catch(e){} }
+function applyTheme(th){
+  var dark = th ? th === "dark" : (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+}
+async function ready(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  return !!window.xbridge;
+}
+async function env(){
+  /* 先认宿主 documentStart 写好的 <html data-lang>,appInfo 回来再以它为准;都拿不到 = 英文(overseas-first §1)。 */
+  var hl = document.documentElement.getAttribute("data-lang") || "";
+  if (hl) LANG = nbLang(hl);
+  try { var a = (await xbridge.appInfo().then(un)) || {};
+    applyTheme(a.theme);
+    if (a.language || a.locale) LANG = nbLang(a.language || a.locale);
+  } catch(e){ applyTheme(); }
+  document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+}
+function paintStatic(){
+  if (I18N[LANG] && I18N[LANG].title) document.title = t("title");
+  document.querySelectorAll("[data-i]").forEach(function(el){
+    var k = el.dataset.i; if (/^foot|^step|^setupB/.test(k)) el.innerHTML = t(k); else el.textContent = t(k);
+  });
+  document.querySelectorAll("[data-ph]").forEach(function(el){ el.placeholder = t(el.dataset.ph); });
+}
+/* 并发上限:同时最多 n 个请求(SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟)。 */
+async function pool(items, n, fn){
+  var i = 0;
+  async function worker(){ while (i < items.length){ var k = i++; try { await fn(items[k], k); } catch(e){} } }
+  var ws = []; for (var j = 0; j < Math.min(n, items.length); j++) ws.push(worker());
+  await Promise.all(ws);
+}
+
+/* ── 关注列表(data.sec_list = [{t:"NVDA", n:"NVIDIA CORP"}, …],最多 8 家)── */
+var MAXF = 8, LIST = [];
+async function getList(){
+  var v = null;
+  try { v = await xbridge.getData("sec_list").then(un); } catch(e){ v = null; }
+  if (typeof v === "string"){ try { v = JSON.parse(v); } catch(e){ v = null; } }
+  var out = [], seen = {};
+  (Array.isArray(v) ? v : []).forEach(function(x){
+    var tk = String((x && x.t) || "").toUpperCase();
+    if (tk && !seen[tk] && out.length < MAXF){ seen[tk] = 1; out.push({ t: tk, n: String((x && x.n) || "") }); }
+  });
+  return out;
+}
+async function saveList(){
+  /* 整份数组交给 save.af 落盘(data.set + widget.refresh)。 */
+  await xbridge.runActionFlow("save", { list: LIST.slice() }).then(un);
+}
+/* 代码规整:去空格、转大写、「BRK.B」→「BRK-B」(SEC 只认连字符)。 */
+function normTicker(s){ return String(s || "").trim().toUpperCase().replace(/\s+/g, "").replace(/\./g, "-"); }
+function validTicker(s){ return /^[A-Z][A-Z0-9-]{0,9}$/.test(s); }
+/* 关注一家:先到 SEC 核一次这个代码(probe.df:1 有 / 0 没有 / 空 = 没连上),再落盘。
+   返回 "ok" | "dup" | "full" | "bad" | "none" | "net"。只有成功才算数 —— 失败不锁任何按钮(§9.5 #22)。 */
+async function addTicker(raw){
+  var tk = normTicker(raw);
+  if (!validTicker(tk)) return "bad";
+  if (LIST.some(function(x){ return x.t === tk; })) return "dup";
+  if (LIST.length >= MAXF) return "full";
+  var d = null;
+  try { d = await xbridge.runDataFlow("probe", { t: tk }).then(un); } catch(e){ d = null; }
+  var st = d ? String(d.st == null ? "" : d.st) : "";
+  if (st === "0") return "none";
+  if (st !== "1") return "net";
+  LIST = await getList();
+  if (LIST.some(function(x){ return x.t === tk; })) return "dup";
+  if (LIST.length >= MAXF) return "full";
+  LIST.push({ t: tk, n: dec(d.nm || "") });
+  try { await saveList(); } catch(e){ LIST = await getList(); return "net"; }
+  return "ok";
+}
+function addMsg(code, tk){
+  return ({ ok: t("mOk").replace("{t}", tk), dup: t("mDup").replace("{t}", tk), full: t("mFull"),
+            bad: t("mBad"), none: t("mNone").replace("{t}", tk), net: t("mNet") })[code] || "";
+}
+
+var TB = {"types": {"1": ["重大事项", "Current report"], "2": ["重大事项（更正）", "Current report (amended)"], "3": ["季度报告", "Quarterly report"], "4": ["年度报告", "Annual report"], "5": ["季度报告（更正）", "Quarterly report (amended)"], "6": ["年度报告（更正）", "Annual report (amended)"], "7": ["外国公司临时报告", "Foreign issuer report"], "8": ["外国公司年报", "Foreign annual report"], "9": ["加拿大公司年报", "Canadian annual report"], "10": ["内部人买卖股票", "Insider trade"], "11": ["内部人申报（更正）", "Insider filing (amended)"], "12": ["内部人首次申报持股", "Initial insider holdings"], "13": ["内部人年度持股申报", "Annual insider holdings"], "14": ["内部人拟出售股票", "Planned insider sale"], "15": ["上市招股书", "IPO registration"], "16": ["证券发行注册", "Shelf registration"], "17": ["并购发行注册", "Merger registration"], "18": ["员工股权计划注册", "Employee stock plan"], "19": ["发行说明书", "Prospectus"], "20": ["发行补充材料", "Free writing prospectus"], "21": ["股东大会委托书", "Proxy statement"], "22": ["委托书补充材料", "Additional proxy material"], "23": ["委托书初稿", "Preliminary proxy"], "24": ["持股超 5%（被动）", "5%+ stake (passive)"], "25": ["持股超 5%（主动）", "5%+ stake (active)"], "26": ["机构持仓报告", "Institutional holdings"], "27": ["员工持股计划年报", "Employee plan annual report"], "28": ["冲突矿产披露", "Conflict minerals report"], "29": ["代理投票记录", "Proxy voting record"], "30": ["并购沟通材料", "Merger communication"], "31": ["致股东年报", "Annual report to holders"], "32": ["延期提交通知", "Late filing notice"], "33": ["证券退市", "Delisting"], "34": ["证券挂牌登记", "Exchange listing"], "35": ["与 SEC 往来函件", "SEC correspondence"], "36": ["股东信息声明", "Information statement"], "37": ["要约收购文件", "Tender offer"], "38": ["分拆上市注册", "Spin-off registration"]}, "tmap": {"8-K": 1, "8-K/A": 2, "10-Q": 3, "10-K": 4, "10-Q/A": 5, "10-K/A": 6, "6-K": 7, "6-K/A": 7, "20-F": 8, "20-F/A": 8, "40-F": 9, "40-F/A": 9, "4": 10, "4/A": 11, "3": 12, "3/A": 12, "5": 13, "5/A": 13, "144": 14, "144/A": 14, "S-1": 15, "S-1/A": 15, "F-1": 15, "F-1/A": 15, "S-3": 16, "S-3/A": 16, "S-3ASR": 16, "F-3": 16, "F-3ASR": 16, "S-4": 17, "S-4/A": 17, "F-4": 17, "S-8": 18, "S-8 POS": 18, "FWP": 20, "DEF 14A": 21, "DEFA14A": 22, "PRE 14A": 23, "SC 13G": 24, "SC 13G/A": 24, "SC 13D": 25, "SC 13D/A": 25, "13F-HR": 26, "13F-HR/A": 26, "11-K": 27, "SD": 28, "N-PX": 29, "425": 30, "ARS": 31, "NT 10-K": 32, "NT 10-Q": 32, "NT 20-F": 32, "25-NSE": 33, "25": 33, "8-A12B": 34, "CERT": 34, "8-A12G": 34, "CORRESP": 35, "UPLOAD": 35, "DEF 14C": 36, "PRE 14C": 36, "SC TO-T": 37, "SC TO-I": 37, "SC 14D9": 37, "10-12B": 38, "10-12B/A": 38}, "tpre": [["424B", 19]], "items": [["2.02", "业绩发布", "Earnings results"], ["1.03", "破产或接管", "Bankruptcy"], ["4.02", "既往财报不可再依赖", "Non-reliance on past financials"], ["5.01", "控制权变更", "Change in control"], ["2.01", "完成收购或出售", "Acquisition or disposal"], ["1.01", "签订重大协议", "Material agreement"], ["1.02", "终止重大协议", "Agreement terminated"], ["3.01", "退市或不符上市标准", "Delisting notice"], ["4.01", "更换审计师", "Auditor change"], ["5.02", "高管或董事变动", "Officer or director change"], ["1.05", "网络安全事件", "Cybersecurity incident"], ["2.05", "重组或裁员成本", "Exit or restructuring costs"], ["2.06", "资产减值", "Impairment"], ["2.03", "新增债务", "New debt obligation"], ["3.02", "未注册股份发行", "Unregistered share sale"], ["3.03", "股东权利变更", "Change to shareholder rights"], ["5.03", "公司章程修订", "Charter or bylaw change"], ["5.07", "股东投票结果", "Shareholder vote results"], ["7.01", "公平披露信息", "Reg FD disclosure"], ["8.01", "其他重大事项", "Other events"], ["9.01", "财务报表与附件", "Financial statements and exhibits"]]};
+var KIND = "all", CO = "", DATA = { all:{}, cur:{}, fin:{}, ins:{} }, ERR = { all:{}, cur:{}, fin:{}, ins:{} };
+var BOOTED = false, BUSY = 0, PENDING = {}, SHOWALL = false, PAGE = 30;
+var PRESETS = ["AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "AVGO"];
+
+/* ── 释义:我们自己的词表(8-K 按事项编号,其余按类型);未知类型退回 SEC 的表格名称 ── */
+function typeCode(f){
+  if (!f) return 0;
+  if (Object.prototype.hasOwnProperty.call(TB.tmap, f)) return TB.tmap[f];
+  for (var i = 0; i < TB.tpre.length; i++) if (f.indexOf(TB.tpre[i][0]) === 0) return TB.tpre[i][1];
+  return 99;
+}
+function tl(code){ var x = TB.types[String(code)]; return x ? x[LANG === "zh" ? 0 : 1] : ""; }
+function isNoise(f){ return f === "FWP" || String(f || "").indexOf("424B") === 0; }
+function labelOf(r){
+  if (r.f === "8-K"){
+    var nums = String(r.i || "").match(/\d+\.\d+/g) || [], out = [];
+    TB.items.forEach(function(it){ if (nums.indexOf(it[0]) >= 0) out.push(it); });
+    if (out.length > 1) out = out.filter(function(it){ return it[0] !== "9.01"; });
+    if (out.length){
+      if (LANG === "zh") return out.map(function(it){ return it[1]; }).join("、");
+      /* 英文按句首大写:第二个起首字母小写(「Reg FD」与全大写缩写开头的不动) */
+      return out.map(function(it, i){ var w = it[2]; return (i && !/^(Reg |[A-Z]{2})/.test(w)) ? w.charAt(0).toLowerCase() + w.slice(1) : w; }).join(", ");
+    }
+    return tl(1);
+  }
+  var c = typeCode(r.f);
+  return (c && c !== 99) ? tl(c) : dec(r.n || "");
+}
+/* ── 时间:SEC 的受理时刻带偏移(-04:00),Date 直接解析成绝对时刻,再按本机时区显示 ── */
+function msOf(r){ var m = Date.parse(r.u || ""); if (!isNaN(m)) return m; m = Date.parse((r.d || "") + "T12:00:00Z"); return isNaN(m) ? 0 : m; }
+function pad(n){ return (n < 10 ? "0" : "") + n; }
+function hm(ms){ var d = new Date(ms); return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+function dayKey(ms){ var d = new Date(ms); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+function dayLabel(ms, now){
+  var d = new Date(ms), k = dayKey(ms);
+  if (k === dayKey(now)) return t("today");
+  if (k === dayKey(now - 86400000)) return t("yday");
+  var wd = t("wd")[d.getDay()];
+  if (LANG === "zh") return (d.getMonth() + 1) + "月" + d.getDate() + "日 " + wd +
+    (d.getFullYear() !== new Date(now).getFullYear() ? " · " + d.getFullYear() : "");
+  return wd + ", " + t("mo")[d.getMonth()] + " " + d.getDate() +
+    (d.getFullYear() !== new Date(now).getFullYear() ? ", " + d.getFullYear() : "");
+}
+
+/* ── 取数:一家 × 一个分段一次 runDataFlow(co.df 带三态缓存);同时最多 2 家 ── */
+async function fetchCo(tk, kind, useCache){
+  try { return await xbridge.runDataFlow("co", { t: tk, kind: kind, _cache: useCache ? 1 : 0 }).then(un); }
+  catch(e){ return null; }
+}
+function okData(d){ return !!(d && d.nm && Array.isArray(d.rows)); }
+async function load(kind, force){
+  var ids = LIST.map(function(x){ return x.t; }), stale = [];
+  ids.forEach(function(tk){ PENDING[kind + tk] = 1; });
+  await pool(ids, 2, async function(tk){
+    var d = await fetchCo(tk, kind, !force);
+    delete PENDING[kind + tk];
+    if (okData(d)){ DATA[kind][tk] = d; delete ERR[kind][tk]; if (!force && String(d._stale) === "1") stale.push(tk); }
+    else if (!DATA[kind][tk]) ERR[kind][tk] = 1;                 /* 失败不覆盖已有的数据 */
+    if (kind === KIND) paint();
+  });
+  /* 先出的是旧货(过了 5 分钟):后台真取一次,回来原地替换(G23) */
+  await pool(stale, 2, async function(tk){
+    var f = await fetchCo(tk, kind, false);
+    if (okData(f)){ DATA[kind][tk] = f; if (kind === KIND) paint(); }
+  });
+}
+async function refresh(force){
+  if (force){ BUSY++; xbAt.busy("xbAt", true); }
+  try { await load(KIND, force); } finally { if (force && --BUSY <= 0){ BUSY = 0; xbAt.busy("xbAt", false); } }
+}
+
+/* ── 画 ── */
+function nameOf(tk){ for (var i = 0; i < LIST.length; i++) if (LIST[i].t === tk) return LIST[i].n; return ""; }
+function paintCos(){
+  var el = document.getElementById("cos");
+  el.innerHTML = '<button type="button" data-co=""' + (CO ? "" : ' class="on"') + ">" + esc(t("allCo")) + "</button>" +
+    LIST.map(function(x){ return '<button type="button" data-co="' + esc(x.t) + '"' + (CO === x.t ? ' class="on"' : "") + ">" + esc(x.t) + "</button>"; }).join("");
+}
+function paintSeg(){ document.querySelectorAll("#seg button").forEach(function(b){ b.classList.toggle("on", b.dataset.k === KIND); }); }
+function skel(n){ var s = ""; for (var i = 0; i < n; i++) s += '<div class="sk"><i></i><b></b><s></s></div>'; return '<div class="grp">' + s + "</div>"; }
+var SKT = 0;
+function paint(){
+  var setup = !LIST.length;
+  document.getElementById("setup").hidden = !setup;
+  document.getElementById("main").hidden = setup;
+  document.getElementById("xbAt").hidden = setup;
+  document.getElementById("foot").hidden = setup;           /* 未关注时教程卡里已有一句边界说明 */
+  if (setup){ document.getElementById("sub").textContent = ""; paintPresets(); return; }
+  if (CO && !LIST.some(function(x){ return x.t === CO; })) CO = "";
+  paintCos(); paintSeg();
+  var ids = CO ? [CO] : LIST.map(function(x){ return x.t; });
+  var D = DATA[KIND], rows = [], seen = {}, cut = 0, got = [], full = [], flood = [], errs = [], pend = 0, now = Date.now();
+  var CAP = KIND === "all" ? 20 : 10;          /* co.df:「全部」每家 20 份,其余 10 份 */
+  ids.forEach(function(tk){
+    var d = D[tk];
+    if (!d){ if (ERR[KIND][tk] && !PENDING[KIND + tk]) errs.push(tk); else pend++; return; }
+    got.push(Number(d.fetchedMs) || 0);
+    var rs = (d.rows || []).filter(function(r){ return r && r.f && safeUrl(r.h); });
+    var nz = 0, fold = {};
+    rs.forEach(function(r){
+      if (r.a && seen[r.a]) return;             /* 并购文件会同时挂在两家名下:按编号去重 */
+      if (r.a) seen[r.a] = 1;
+      var ms = msOf(r), nm = nice(d.nm || nameOf(tk));
+      /* 「全部」里的发行说明书(424B*)与发行补充材料(FWP):银行一天几十份。同一家同一天的折成一行「× N」 */
+      if (KIND === "all" && isNoise(r.f)){
+        nz++;
+        var fk = tk + "|" + dayKey(ms) + "|" + (r.f === "FWP" ? "F" : "P");
+        if (fold[fk]){ fold[fk].n++; if (ms > fold[fk].ms) fold[fk].ms = ms; return; }
+        fold[fk] = { tk: tk, nm: nm, ms: ms, r: r, n: 1 }; rows.push(fold[fk]); return;
+      }
+      rows.push({ tk: tk, nm: nm, ms: ms, r: r });
+    });
+    /* SEC 每家每次只给前 CAP 份:列表满了 = 更早的还有。多家合并时,只显示到「各家最早那份里最新的一个」为止,
+       再往前那段不完整(某家更早的文件没取到),不画,改给一行「更早的去 SEC 看」。
+       ⚠️ 例外:列表几乎全是发行说明书的发行人(银行)只覆盖得了几个小时,拿它截断会把别家都截没 ——
+       它不参与截断,单独写一句它只看得到哪儿。 */
+    if (rs.length >= CAP){
+      full.push(tk);
+      var mn = Math.min.apply(null, rs.map(msOf));
+      if (KIND === "all" && nz >= rs.length * 0.8) flood.push({ tk: tk, ms: mn });
+      else if (mn > cut) cut = mn;
+    }
+  });
+  rows.sort(function(a, b){ return b.ms - a.ms; });
+  var shown = ids.length > 1 ? rows.filter(function(x){ return x.ms >= cut; }) : rows;
+  var hidden = (!SHOWALL && shown.length > PAGE + 5) ? shown.length - PAGE : 0;   /* 长列表先给 30 行,其余点一下再展开 */
+  if (hidden) shown = shown.slice(0, PAGE);
+
+  var sub = t(LIST.length === 1 ? "subPre1" : "subPre").replace("{n}", LIST.length);
+  document.getElementById("sub").textContent = sub;
+  xbAt.set(document.getElementById("xbAt"), got.length ? Math.min.apply(null, got) : null);
+
+  var box = document.getElementById("list");
+  clearTimeout(SKT);
+  if (!shown.length){
+    if (pend){ SKT = setTimeout(function(){ if (box.dataset.s !== "sk"){ box.dataset.s = "sk"; box.innerHTML = skel(4); } }, 150); }
+    else if (errs.length < ids.length){ box.dataset.s = ""; box.innerHTML = '<div class="grp"><div class="state">' + esc(CO ? t("noneCo").replace("{t}", CO) : t("none")) + "</div></div>"; }
+    else { box.dataset.s = ""; box.innerHTML = '<div class="grp"><div class="state">' + esc(t("fail")) + "</div></div>"; }
+  } else {
+    box.dataset.s = "";
+    var html = "", cur = "";
+    shown.forEach(function(x){
+      var dk = dayKey(x.ms || now);
+      if (dk !== cur){ if (cur) html += "</div>"; cur = dk; html += '<div class="day">' + esc(x.ms ? dayLabel(x.ms, now) : "") + '</div><div class="grp">'; }
+      var small = CO ? x.nm : (x.tk + (x.nm ? " · " + x.nm : ""));
+      var href = safeUrl(x.r.h), fm = x.r.f, lab = labelOf(x.r) || x.r.f;
+      if (x.n){                                  /* 折叠行:点开 = SEC 上这家这一类的列表 */
+        fm = x.r.f === "FWP" ? "FWP" : "424B";
+        lab = tl(x.r.f === "FWP" ? 20 : 19) + (x.n > 1 ? " × " + x.n : "");
+        href = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + encodeURIComponent(x.tk) +
+               "&type=" + fm + "&dateb=&owner=exclude&count=40";
+      }
+      html += '<a class="fl" href="' + esc(href) + '"><span class="fm">' + esc(fm) + '</span><span class="g"><b>' +
+        esc(lab) + "</b><small>" + esc(small) + '</small></span><span class="tm">' + esc(x.ms ? hm(x.ms) : "") + "</span></a>";
+    });
+    html += "</div>";
+    if (hidden) html += '<button class="showall" id="showall" type="button">' + esc(t(hidden === 1 ? "showAll1" : "showAll").replace("{n}", hidden)) + "</button>";
+    box.innerHTML = html;
+  }
+  document.getElementById("warn").innerHTML = errs.length ? '<div class="warn">' + esc(t("errT").replace("{t}", errs.join(LANG === "zh" ? "、" : ", "))) + "</div>" : "";
+  /* 更早的文件:每家一个到 SEC 公司页的链接(带当前分段的筛选) */
+  var q = ({ all:"&type=&owner=exclude", cur:"&type=8-K&owner=exclude", fin:"&type=10-&owner=exclude", ins:"&type=&owner=only" })[KIND];
+  var mh = "";
+  if (shown.length && full.length){
+    mh = '<div class="more">' + esc(t("more").replace("{n}", CAP)) + "<br>" +
+      ids.map(function(tk){ return '<a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=' + encodeURIComponent(tk) + q.replace(/&/g, "&amp;") + '">' + esc(tk) + " ›</a>"; }).join("") +
+      flood.map(function(f){ return "<br>" + esc(t("flood").replace("{t}", f.tk).replace("{d}", dayLabel(f.ms, now) + " " + hm(f.ms))); }).join("") + "</div>";
+  }
+  document.getElementById("more").innerHTML = mh;
+  document.getElementById("alertBtn").hidden = !(window.xbridge && typeof xbridge.alertAdd === "function");
+}
+
+/* ── 还没关注:常见公司一点即关注 + 输入代码 ── */
+function paintPresets(){
+  document.getElementById("pre").innerHTML = PRESETS.map(function(tk){
+    var on = LIST.some(function(x){ return x.t === tk; });
+    return '<button type="button" data-p="' + tk + '"' + (on ? ' class="on"' : "") + ">" + tk + "</button>";
+  }).join("");
+}
+var ADDING = false;
+async function doAdd(raw){
+  if (ADDING) return;
+  var tk = normTicker(raw), msg = document.getElementById("msg"), go = document.getElementById("tkGo");
+  ADDING = true; go.disabled = true; msg.className = "msg"; msg.textContent = t("mChecking").replace("{t}", tk);
+  var r = "net";
+  try { r = await addTicker(raw); } finally { ADDING = false; go.disabled = false; }
+  msg.className = "msg" + (r === "ok" ? "" : " bad"); msg.textContent = addMsg(r, tk);
+  if (r === "ok"){ document.getElementById("tkIn").value = ""; xbridge.haptic && xbridge.haptic(); await resync(); }
+}
+
+async function addAlert(){
+  xbridge.haptic && xbridge.haptic();
+  try {
+    var d = await xbridge.alertAdd({ id: "new", params: { ins: "0" } }).then(un);
+    if (d === "ok") toast(t("aOk")); else if (d === "quota") toast(t("aQuota"));
+  } catch(e){}
+}
+
+document.addEventListener("click", function(e){
+  var el;
+  if ((el = e.target.closest("#seg button"))){ if (el.dataset.k !== KIND){ KIND = el.dataset.k; SHOWALL = false; paint(); refresh(false); } return; }
+  if ((el = e.target.closest("#cos button"))){ var c = el.dataset.co || ""; CO = (CO === c) ? "" : c; SHOWALL = false; paint(); return; }
+  if (e.target.closest("#showall")){ SHOWALL = true; paint(); return; }
+  if ((el = e.target.closest("#pre button"))){ if (!el.classList.contains("on")) doAdd(el.dataset.p); return; }
+  if (e.target.closest("#tkGo")){ doAdd(document.getElementById("tkIn").value); return; }
+  if (e.target.closest("#mg")){ xbridge.route("/manage"); return; }
+  if (e.target.closest("#alertBtn")){ addAlert(); return; }
+  if (e.target.closest("#xbAt")){ xbridge.haptic && xbridge.haptic(); refresh(true); return; }
+  if (e.target.closest("#pickw")){
+    /* 加组件入口 = 一个按钮(§8.1a):系统面板里挑,调用后不提示「已添加」 */
+    xbridge.pickWidgets();
+  }
+});
+document.addEventListener("keydown", function(e){ if (e.key === "Enter" && e.target.id === "tkIn"){ e.preventDefault(); doAdd(e.target.value); } });
+
+/* 从管理页回来(或 App 回前台):重读关注列表,新关注的公司补取 */
+async function resync(){
+  LIST = await getList();
+  paint();
+  if (LIST.length) await refresh(false);
+}
+document.addEventListener("visibilitychange", function(){ if (BOOTED && document.visibilityState === "visible") resync(); });
+addEventListener("pageshow", function(){ if (BOOTED) resync(); });
+
+(async function boot(){
+  if (!(await ready())){ applyTheme(); paintStatic(); document.getElementById("setup").hidden = false; return; }
+  await env(); paintStatic();
+  LIST = await getList();
+  paint();
+  if (LIST.length) await refresh(false);
+  BOOTED = true;
+})();
+</script>
+</body></html>

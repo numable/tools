@@ -1,0 +1,57 @@
+{
+  "_note": "下拉刷新 = 整页穿透缓存真取数(home.df 当前键 + 两块 Canvas 键)。生成器 gen_cloudflare.py。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "点下去先震一下:RCN 没有按压态,重载要 ~250ms 才有画面变化(G22)。",
+      "action": "ui.haptic"
+    },
+    {
+      "id": "curKey",
+      "action": "data.get",
+      "params": {
+        "key": "c.cf._cur",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "${curKey}"
+      }
+    },
+    {
+      "_note": "空键 = home.df 还没跑完过一次(盘上也没有缓存),不删也照样是真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${k}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "${k}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "两块 Canvas 的缓存一并删 —— 下拉必须整页穿透,漏删一块就是那块永远刷不动。",
+      "action": "data.remove",
+      "params": {
+        "key": "c.cf.rg"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "c.cf.ic"
+      }
+    },
+    {
+      "_note": "无条件重载。⚠️ `onRefresh` 一旦声明就完全接管下拉,这句漏了就永远刷不动。",
+      "action": "xpage.reloadPage"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "version": 2,
+  "title": "K线",
+  "sub": "20 根 · 1 小时 / 4 小时 / 日 / 周可选",
+  "i18n": {
+    "en-US": {
+      "title": "Candles",
+      "sub": "20 candles · 1H, 4H, daily or weekly"
+    }
+  },
+  "layout": 22,
+  "params": {
+    "pair": "BTC-USDT",
+    "name": "BTC",
+    "step": "86400"
+  },
+  "ai": {
+    "shows": "一个币最近 20 根 K 线(1 小时/4 小时/日/周可选)与当前这根的涨跌幅",
+    "params": {
+      "pair": {
+        "kind": "value",
+        "group": [
+          "pair",
+          "name"
+        ],
+        "format": "OKX 交易对:币种-USDT(现货);只有永续合约的币写 币种-USDT-SWAP",
+        "hint": "name 填 pair 的币种部分(BTC-USDT → BTC)",
+        "examples": [
+          "BTC-USDT",
+          "ETH-USDT",
+          "SOL-USDT",
+          "DOGE-USDT"
+        ]
+      },
+      "name": {
+        "kind": "value",
+        "format": "币种代码 = pair 第一段,如 BTC"
+      },
+      "step": {
+        "kind": "enum",
+        "values": {
+          "3600": "1 小时 K",
+          "14400": "4 小时 K",
+          "86400": "日 K",
+          "604800": "周 K"
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "/coin?pair=${pair}&name=${name}",
+    "onEdit": "/pick?ref=k&pair=${pair}&name=${name}&step=${step}"
+  },
+  "canvas": {
+    "source": "@[file://rc/kday.rcn]",
+    "depends": [
+      {
+        "_note": "§D 纯显式:裸 `@[file://…df]` 字符串绑定**传空入参** —— flow 里的 ${x} 取到空、请求打空参,卡片渲一片 `--` 且**不报错**(流仍 success)。要把 widget params 喂给 flow,必须在绑定处显式写 {flow, params}。",
+        "flow": "@[file://flow/kday.df]",
+        "params": {
+          "pair": "${pair}",
+          "step": "${step}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "15"
+      ]
+    }
+  },
+  "jobs": [
+    {
+      "id": "price",
+      "params": {
+        "pair": "${pair}"
+      }
+    },
+    {
+      "id": "move",
+      "params": {
+        "pair": "${pair}"
+      }
+    }
+  ]
+}

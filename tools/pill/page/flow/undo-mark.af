@@ -1,0 +1,70 @@
+{
+  "_note": "撤销「从卡片一键记下的那一笔」。\n\n与 toggle.af 的区别:toggle 是**改成别的态**(已服 → 未服 → 未标记),\n撤销是**当它没发生过** —— 直接回到未标记,并把 autoMark 一起清掉。\n少清 autoMark 的后果:撤销完按钮还在(showUndo 只看 autoMark 与 tState),\n用户会以为没撤成功、再点一次 —— 而那一次已经无事可做。\n\n⚠️ **只摘不加**:把今天从 `taken` 里摘出去,不写进 `skipped`。\n   「我没按那一下」和「我那天没吃」是两回事,后者需要用户自己判断。\n⚠️ 合法性闸同 toggle.af:算不出日期就一个字节都不写。\n⚠️ 纯表达式分支,不用 op:if 算值(operation 的分支退出会恢复外层绑定)。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "⚠️ **写盘流的第一步恒是触觉反馈**(infosource-standard G22):RCN 没有动画能力,\n从点下去到画面变化之间 ~250ms 全无反馈,用户会以为没点上、再点一次 ——\n而这条流是**三态循环**,多点一次就是把刚记的那笔翻成别的态。\n放在 actions[0] 而不是写盘之后:反馈要在动作**开始**时给,不是结束时。",
+      "action": "ui.haptic"
+    },
+    {
+      "id": "taken",
+      "action": "data.get",
+      "params": {
+        "key": "taken",
+        "default": "_"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(eq::(length::(${d}),10),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tag",
+        "value": "$[connect::(_,${d},_)]"
+      }
+    },
+    {
+      "_note": "`replaceAll(串, _日期_, _)` 会把两侧哨兵合并回一个,不会留下 `__`。",
+      "op": "set",
+      "props": {
+        "key": "nt",
+        "value": "$[if::(eq::(${ok},0),${taken},replaceAll::(${taken},${tag},_))]"
+      }
+    },
+    {
+      "action": "data.set",
+      "params": {
+        "key": "taken",
+        "value": "${nt}"
+      }
+    },
+    {
+      "_note": "清撤销锚点。写空串而不是删键 —— data.get 的 default 是空串,两者等价,\n而「写空串」是四端都验过的路,删键不是。",
+      "action": "data.set",
+      "params": {
+        "key": "autoMark",
+        "value": ""
+      }
+    },
+    {
+      "_note": "重跑 depends 把新串读回来。不能 redrawPage —— 后者不重跑 depends,点了会看起来「没反应」。",
+      "action": "xpage.reloadPage"
+    },
+    {
+      "_note": "仪表盘那张卡与桌面小组件不在 reloadPage 那条链上,得自己踢一下(同 toggle.af 结尾)。",
+      "action": "widget.refresh"
+    }
+  ]
+}

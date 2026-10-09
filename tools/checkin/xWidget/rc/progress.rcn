@@ -1,0 +1,295 @@
+{
+ "rc": {
+  "i18n": {
+   "zh-CN": {
+    "title": "今日进度",
+    "leftPre": "还剩 ",
+    "leftSuf": " 件",
+    "allDone": "今天全做完了",
+    "empty": "添加第一件要坚持的事",
+    "masked": "已隐藏"
+   },
+   "en-US": {
+    "title": "Today",
+    "leftPre": "",
+    "leftSuf": " to go",
+    "allDone": "All done today",
+    "empty": "Add a habit to start",
+    "masked": "Hidden"
+   }
+  },
+  "cells": [
+   {
+    "id": "bg",
+    "type": "layer",
+    "x": "0pt",
+    "y": "0pt",
+    "w": "{parent.w}",
+    "h": "{parent.h}",
+    "bgColor": "linear(#FFFFFF\\,#F9FCFB\\,#EEF7F3)@90|linear(#15171A\\,#161B1D\\,#182221)@90"
+   },
+   {
+    "_note": "源色点(card-design-system §2):5pt 圆点 / 卡名左侧 / 间距 9pt / 每张卡恰好一次。⚠️ 色值恒 #2E9E6B|#45C793,**不跟事项的调色板走** —— 这颗点答的是「这是 checkin 的卡」,不是「这件事是紫色的」;跟着 pal 变会让同一个包在盘上看着像六个源。",
+    "id": "dot",
+    "type": "layer",
+    "x": "12pt",
+    "y": "{title.y}+({title.h}-5pt)/2",
+    "w": "5pt",
+    "h": "5pt",
+    "bgColor": "#2E9E6B|#45C793",
+    "cornerRadius": {
+     "leftT": "2.5pt",
+     "leftB": "2.5pt",
+     "rightT": "2.5pt",
+     "rightB": "2.5pt"
+    }
+   },
+   {
+    "id": "title",
+    "type": "txt",
+    "x": "21pt",
+    "y": "11pt",
+    "w": "{parent.w}-79pt",
+    "h": "-1",
+    "text": "${@i18n.title}",
+    "fontSize": "13pt",
+    "textColor": "#0E1116|#F3F4F6",
+    "maxLines": "1",
+    "typeface": "System-Bold"
+   },
+   {
+    "_note": "日期锚(§3):右上角 / 9pt / 次级 / 右对齐 / MM-DD;打码时本格改渲状态标记。",
+    "id": "date",
+    "type": "txt",
+    "x": "{parent.w}-54pt",
+    "y": "14pt",
+    "w": "42pt",
+    "h": "-1",
+    "text": "$[if::(eq::(${mask},1),${@i18n.masked},findNotEmpty::(${dateLbl},--))]",
+    "fontSize": "9pt",
+    "textColor": "#6B7280|#8E939B",
+    "maxLines": "1",
+    "alignmentH": "2"
+   },
+   {
+    "_note": "完成环(2026-10-08,评审 checkin-6):原先「5/8」大数字下一排 8 个小段,中间约 40% 空白;改成环 + 环心「做了几件 / 共几件」,一眼读出比例。21 档仍是条形。环底恒画(空态 / 打码也在),保住版式。",
+    "id": "ringBg",
+    "type": "arc",
+    "x": "39pt",
+    "y": "36pt",
+    "w": "80pt",
+    "h": "80pt",
+    "startAngle": "0",
+    "sweepAngle": "360",
+    "useCenter": "0",
+    "lineWidth": "9pt",
+    "strokeColor": "#E7E9EE|#20232A"
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(ge::(findNotEmpty::(${sweep},0),1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "ring",
+      "type": "arc",
+      "x": "39pt",
+      "y": "36pt",
+      "w": "80pt",
+      "h": "80pt",
+      "startAngle": "-90",
+      "sweepAngle": "$[findNotEmpty::(${sweep},0)]",
+      "useCenter": "0",
+      "lineWidth": "9pt",
+      "lineCap": "round",
+      "strokeColor": "#2E9E6B|#45C793"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${mask},1),0,if::(eq::(findNotEmpty::(${done},_),_),0,1))]"
+    },
+    "react": [
+     {
+      "id": "num",
+      "type": "richText",
+      "x": "39pt",
+      "y": "67.3pt",
+      "w": "80pt",
+      "h": "-1",
+      "maxLines": "1",
+      "alignmentH": "1",
+      "spans": [
+       {
+        "text": "$[findNotEmpty::(${done},0)]",
+        "fontSize": "24pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6"
+       },
+       {
+        "text": "/$[findNotEmpty::(${total},--)]",
+        "fontSize": "12pt",
+        "typeface": "System-Bold",
+        "textColor": "#6B7280|#8E939B"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${mask},1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "numM",
+      "type": "richText",
+      "x": "39pt",
+      "y": "67.0pt",
+      "w": "80pt",
+      "h": "-1",
+      "maxLines": "1",
+      "alignmentH": "1",
+      "spans": [
+       {
+        "text": "••",
+        "fontSize": "24pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6"
+       },
+       {
+        "text": "/••",
+        "fontSize": "12pt",
+        "typeface": "System-Bold",
+        "textColor": "#6B7280|#8E939B"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${mask},1),0,if::(eq::(findNotEmpty::(${done},_),_),1,0))]"
+    },
+    "react": [
+     {
+      "id": "numE",
+      "type": "txt",
+      "x": "39pt",
+      "y": "73.0pt",
+      "w": "80pt",
+      "h": "-1",
+      "text": "--",
+      "fontSize": "24pt",
+      "typeface": "System-Bold",
+      "textColor": "#0E1116|#F3F4F6",
+      "alignmentH": "1",
+      "maxLines": "1"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(findNotEmpty::(${hasAny},-1),1),${allDone},0)]"
+    },
+    "react": [
+     {
+      "id": "fdone",
+      "type": "txt",
+      "x": "12pt",
+      "y": "{parent.h}-24pt",
+      "w": "{parent.w}-24pt",
+      "h": "-1",
+      "text": "${@i18n.allDone}",
+      "fontSize": "11pt",
+      "textColor": "#2E9E6B|#45C793",
+      "alignmentH": "1",
+      "maxLines": "1"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(findNotEmpty::(${hasAny},-1),1),if::(eq::(${allDone},1),0,1),0)]"
+    },
+    "react": [
+     {
+      "id": "fleft",
+      "type": "txt",
+      "x": "12pt",
+      "y": "{parent.h}-24pt",
+      "w": "{parent.w}-24pt",
+      "h": "-1",
+      "text": "${@i18n.leftPre}$[if::(eq::(${mask},1),••,findNotEmpty::(${left},--))]${@i18n.leftSuf}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "alignmentH": "1",
+      "maxLines": "1"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(findNotEmpty::(${hasAny},-1),0),1,0)]"
+    },
+    "react": [
+     {
+      "id": "fempty",
+      "type": "txt",
+      "x": "12pt",
+      "y": "{parent.h}-24pt",
+      "w": "{parent.w}-24pt",
+      "h": "-1",
+      "text": "${@i18n.empty}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "alignmentH": "1",
+      "maxLines": "1"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(findNotEmpty::(${hasAny},-1),-1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "fna",
+      "type": "txt",
+      "x": "12pt",
+      "y": "{parent.h}-24pt",
+      "w": "{parent.w}-24pt",
+      "h": "-1",
+      "text": "--",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "alignmentH": "1",
+      "maxLines": "1"
+     }
+    ]
+   }
+  ],
+  "i18nEmptyOk": [
+   "leftPre"
+  ],
+  "_note": "leftPre 在英文下**刻意为空**:中文是「还剩 3 件」(前缀+数+后缀),英文是「3 to go」(只有后缀)。 底部**三态**:有事项(还剩 N / 全做完)、真的没有事项、取不到数(--)。后两者不能合并 —— 把「取不到数」渲成「还没有事项」等于告诉用户他的记录丢了。"
+ },
+ "_note": "今日进度(22):跨所有事项「今天达标了几件 / 一共几件」。\n段数 = 事项总数(最多 8),超出的段由 df 涂成卡底色隐形 —— 比例条要按数据算宽度,\n而 RCN 的 `{}` 布局表达式里混不进 `${}` 数据变量(三类严格区分)。\n底部三态互斥:没事项 / 全做完 / 还剩 N 件。"
+}

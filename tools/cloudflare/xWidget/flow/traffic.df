@@ -1,0 +1,4251 @@
+{
+  "_note": "近 24 小时请求(traffic / threats 卡 + 域名页块)。生成器 gen_cloudflare.py;小时桶的时区处理见其文件头。入参 zoneId/zoneName,为空回落账号第一个域名。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "_cacheIn",
+        "value": "${cache}"
+      },
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cache",
+        "value": "$[parseNumber::(${_cacheIn},0)]"
+      },
+      "_note": "1 = 首页块(读缓存);组件不传 = 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_t0",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_zk",
+        "value": "${zoneId}"
+      },
+      "_note": "入参先落地,键表达式里才看得见(§9.5 #3)。无域名参数的流里恒空,不影响。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ck",
+        "value": "$[connect::(c.cf.zone.,${_zk},_t)]"
+      }
+    },
+    {
+      "id": "_hit",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hitTs",
+        "value": "$[parseNumber::(${_hit.ts},0)]"
+      }
+    },
+    {
+      "_note": "页面有缓存 → 整段跳过(连接都不建);组件 / 无缓存 → 真取数。取数体里的 fail_unless 失败即终止整条流,所以走到 data.set 的一定是取到了的。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${_cache},1),if::(gt::(${_hitTs},0),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "cred",
+          "action": "credential.state",
+          "params": {
+            "id": "cf"
+          },
+          "_note": "只回 bound / unbound / expired(不回本体)。用来分清「没连接」与「连着但这一轮取不到」:断网时两发请求都为空,光看响应分不出来。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zid",
+            "value": "${zoneId}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zname",
+            "value": "${zoneName}"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(${zid},),1,0)]"
+          },
+          "_note": "没指定域名 → 取账号里第一个兜底。未绑凭证时这一发根本不会发出(宿主抛 credential_required)。",
+          "items": [
+            {
+              "id": "zr",
+              "action": "request",
+              "params": {
+                "url": "https://api.cloudflare.com/client/v4/zones?per_page=1&status=active",
+                "method": "GET",
+                "formatType": "json",
+                "header": {
+                  "User-Agent": "Numable",
+                  "Accept": "application/json"
+                },
+                "credential": "cf"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "zid",
+                "value": "${zr.result[0].id}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "zname",
+                "value": "${zr.result[0].name}"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "have",
+            "value": "$[if::(eq::(${zid},),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_now",
+            "value": "${@time.nowMs}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_tzL",
+            "value": "$[calc::(formatDate::(${_now},HH)*60+formatDate::(${_now},mm))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_tzM",
+            "value": "$[floor::(calc::(${_now}/60000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_tzD",
+            "value": "$[floor::(calc::(${_now}/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_tzX",
+            "value": "$[calc::(${_tzL}-(${_tzM}-${_tzD}*1440))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_tzO",
+            "value": "$[if::(gt::(${_tzX},840),calc::(${_tzX}-1440),if::(lt::(${_tzX},-720),calc::(${_tzX}+1440),${_tzX}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tzMs",
+            "value": "$[calc::(${_tzO}*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_sinceMs",
+            "value": "$[calc::(${_now}-${tzMs}-50*3600000)]"
+          },
+          "_note": "下界 = 50 小时前(按 UTC 落到整点)。⚠️ 免费档 1h 桶的查询窗**不能超过 3 天**:2026-10-08 前用「3 天前 00:00Z」,一过中午就超 3 天,GraphQL 回 errors(code quota)、零个桶,卡上一直是 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sinceD",
+            "value": "$[formatDate::(${_sinceMs},yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sinceH",
+            "value": "$[formatDate::(${_sinceMs},HH)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${have}"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "body",
+                "value": "{\"query\":\"{viewer{zones(filter:{zoneTag:\\\"${zid}\\\"}){httpRequests1hGroups(limit:48,filter:{datetime_geq:\\\"${sinceD}T${sinceH}:00:00Z\\\"},orderBy:[datetime_DESC]){dimensions{datetime} sum{requests threats}}}}}\"}"
+              }
+            },
+            {
+              "id": "resp",
+              "action": "request",
+              "params": {
+                "url": "https://api.cloudflare.com/client/v4/graphql",
+                "method": "POST",
+                "formatType": "json",
+                "header": {
+                  "Content-Type": "application/json",
+                  "User-Agent": "Numable",
+                  "Accept": "application/json"
+                },
+                "body": "${body}",
+                "credential": "cf"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_b",
+                "value": "1"
+              },
+              "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gerr",
+                "value": "$[if::(eq::(findNotEmpty::(${resp.errors[0].message},__none__),__none__),0,1)]"
+              },
+              "_note": "GraphQL 体内错误(查询超配额 / 字段不存在 / 无权限):照样 200,只能读 errors[]。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "got",
+                "value": "$[if::(eq::(${resp},),0,1)]"
+              },
+              "_note": "响应回来了吗。未绑/被拒时请求不发,resp 为空。⚠️ 紧跟 request 之后的第一个 set 读不到响应(晚一拍合并)—— 这一条本身就是屏障,下面的键才读得到。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "g",
+                "value": "${resp.data.viewer.zones[0].httpRequests1hGroups}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n",
+                "value": "$[length::(${g})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "p0",
+                "value": "$[calc::(parseDate::(subString::(${g[0].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[0].dimensions.datetime},11,13)*3600000+subString::(${g[0].dimensions.datetime},14,16)*60000)]"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0",
+            "value": "$[findNotEmpty::(${g[0].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a0",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[0].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[0].dimensions.datetime},11,13)*3600000+subString::(${g[0].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0",
+            "value": "$[if::(lt::(0,findNotEmpty::(${n},0)),if::(lt::(${a0},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v0",
+            "value": "$[if::(lt::(0,findNotEmpty::(${n},0)),if::(ge::(${a0},24),if::(lt::(${a0},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1",
+            "value": "$[findNotEmpty::(${g[1].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a1",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[1].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[1].dimensions.datetime},11,13)*3600000+subString::(${g[1].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1",
+            "value": "$[if::(lt::(1,findNotEmpty::(${n},0)),if::(lt::(${a1},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v1",
+            "value": "$[if::(lt::(1,findNotEmpty::(${n},0)),if::(ge::(${a1},24),if::(lt::(${a1},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2",
+            "value": "$[findNotEmpty::(${g[2].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a2",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[2].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[2].dimensions.datetime},11,13)*3600000+subString::(${g[2].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2",
+            "value": "$[if::(lt::(2,findNotEmpty::(${n},0)),if::(lt::(${a2},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v2",
+            "value": "$[if::(lt::(2,findNotEmpty::(${n},0)),if::(ge::(${a2},24),if::(lt::(${a2},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q3",
+            "value": "$[findNotEmpty::(${g[3].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a3",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[3].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[3].dimensions.datetime},11,13)*3600000+subString::(${g[3].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3",
+            "value": "$[if::(lt::(3,findNotEmpty::(${n},0)),if::(lt::(${a3},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v3",
+            "value": "$[if::(lt::(3,findNotEmpty::(${n},0)),if::(ge::(${a3},24),if::(lt::(${a3},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q4",
+            "value": "$[findNotEmpty::(${g[4].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a4",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[4].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[4].dimensions.datetime},11,13)*3600000+subString::(${g[4].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w4",
+            "value": "$[if::(lt::(4,findNotEmpty::(${n},0)),if::(lt::(${a4},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v4",
+            "value": "$[if::(lt::(4,findNotEmpty::(${n},0)),if::(ge::(${a4},24),if::(lt::(${a4},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q5",
+            "value": "$[findNotEmpty::(${g[5].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a5",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[5].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[5].dimensions.datetime},11,13)*3600000+subString::(${g[5].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w5",
+            "value": "$[if::(lt::(5,findNotEmpty::(${n},0)),if::(lt::(${a5},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v5",
+            "value": "$[if::(lt::(5,findNotEmpty::(${n},0)),if::(ge::(${a5},24),if::(lt::(${a5},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q6",
+            "value": "$[findNotEmpty::(${g[6].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a6",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[6].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[6].dimensions.datetime},11,13)*3600000+subString::(${g[6].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w6",
+            "value": "$[if::(lt::(6,findNotEmpty::(${n},0)),if::(lt::(${a6},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v6",
+            "value": "$[if::(lt::(6,findNotEmpty::(${n},0)),if::(ge::(${a6},24),if::(lt::(${a6},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q7",
+            "value": "$[findNotEmpty::(${g[7].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a7",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[7].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[7].dimensions.datetime},11,13)*3600000+subString::(${g[7].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w7",
+            "value": "$[if::(lt::(7,findNotEmpty::(${n},0)),if::(lt::(${a7},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v7",
+            "value": "$[if::(lt::(7,findNotEmpty::(${n},0)),if::(ge::(${a7},24),if::(lt::(${a7},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q8",
+            "value": "$[findNotEmpty::(${g[8].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a8",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[8].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[8].dimensions.datetime},11,13)*3600000+subString::(${g[8].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w8",
+            "value": "$[if::(lt::(8,findNotEmpty::(${n},0)),if::(lt::(${a8},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v8",
+            "value": "$[if::(lt::(8,findNotEmpty::(${n},0)),if::(ge::(${a8},24),if::(lt::(${a8},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q9",
+            "value": "$[findNotEmpty::(${g[9].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a9",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[9].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[9].dimensions.datetime},11,13)*3600000+subString::(${g[9].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w9",
+            "value": "$[if::(lt::(9,findNotEmpty::(${n},0)),if::(lt::(${a9},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v9",
+            "value": "$[if::(lt::(9,findNotEmpty::(${n},0)),if::(ge::(${a9},24),if::(lt::(${a9},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q10",
+            "value": "$[findNotEmpty::(${g[10].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a10",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[10].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[10].dimensions.datetime},11,13)*3600000+subString::(${g[10].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w10",
+            "value": "$[if::(lt::(10,findNotEmpty::(${n},0)),if::(lt::(${a10},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v10",
+            "value": "$[if::(lt::(10,findNotEmpty::(${n},0)),if::(ge::(${a10},24),if::(lt::(${a10},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q11",
+            "value": "$[findNotEmpty::(${g[11].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a11",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[11].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[11].dimensions.datetime},11,13)*3600000+subString::(${g[11].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w11",
+            "value": "$[if::(lt::(11,findNotEmpty::(${n},0)),if::(lt::(${a11},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v11",
+            "value": "$[if::(lt::(11,findNotEmpty::(${n},0)),if::(ge::(${a11},24),if::(lt::(${a11},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q12",
+            "value": "$[findNotEmpty::(${g[12].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a12",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[12].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[12].dimensions.datetime},11,13)*3600000+subString::(${g[12].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w12",
+            "value": "$[if::(lt::(12,findNotEmpty::(${n},0)),if::(lt::(${a12},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v12",
+            "value": "$[if::(lt::(12,findNotEmpty::(${n},0)),if::(ge::(${a12},24),if::(lt::(${a12},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q13",
+            "value": "$[findNotEmpty::(${g[13].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a13",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[13].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[13].dimensions.datetime},11,13)*3600000+subString::(${g[13].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w13",
+            "value": "$[if::(lt::(13,findNotEmpty::(${n},0)),if::(lt::(${a13},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v13",
+            "value": "$[if::(lt::(13,findNotEmpty::(${n},0)),if::(ge::(${a13},24),if::(lt::(${a13},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q14",
+            "value": "$[findNotEmpty::(${g[14].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a14",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[14].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[14].dimensions.datetime},11,13)*3600000+subString::(${g[14].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w14",
+            "value": "$[if::(lt::(14,findNotEmpty::(${n},0)),if::(lt::(${a14},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v14",
+            "value": "$[if::(lt::(14,findNotEmpty::(${n},0)),if::(ge::(${a14},24),if::(lt::(${a14},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q15",
+            "value": "$[findNotEmpty::(${g[15].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a15",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[15].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[15].dimensions.datetime},11,13)*3600000+subString::(${g[15].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w15",
+            "value": "$[if::(lt::(15,findNotEmpty::(${n},0)),if::(lt::(${a15},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v15",
+            "value": "$[if::(lt::(15,findNotEmpty::(${n},0)),if::(ge::(${a15},24),if::(lt::(${a15},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q16",
+            "value": "$[findNotEmpty::(${g[16].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a16",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[16].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[16].dimensions.datetime},11,13)*3600000+subString::(${g[16].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w16",
+            "value": "$[if::(lt::(16,findNotEmpty::(${n},0)),if::(lt::(${a16},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v16",
+            "value": "$[if::(lt::(16,findNotEmpty::(${n},0)),if::(ge::(${a16},24),if::(lt::(${a16},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q17",
+            "value": "$[findNotEmpty::(${g[17].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a17",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[17].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[17].dimensions.datetime},11,13)*3600000+subString::(${g[17].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w17",
+            "value": "$[if::(lt::(17,findNotEmpty::(${n},0)),if::(lt::(${a17},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v17",
+            "value": "$[if::(lt::(17,findNotEmpty::(${n},0)),if::(ge::(${a17},24),if::(lt::(${a17},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q18",
+            "value": "$[findNotEmpty::(${g[18].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a18",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[18].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[18].dimensions.datetime},11,13)*3600000+subString::(${g[18].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w18",
+            "value": "$[if::(lt::(18,findNotEmpty::(${n},0)),if::(lt::(${a18},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v18",
+            "value": "$[if::(lt::(18,findNotEmpty::(${n},0)),if::(ge::(${a18},24),if::(lt::(${a18},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q19",
+            "value": "$[findNotEmpty::(${g[19].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a19",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[19].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[19].dimensions.datetime},11,13)*3600000+subString::(${g[19].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w19",
+            "value": "$[if::(lt::(19,findNotEmpty::(${n},0)),if::(lt::(${a19},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v19",
+            "value": "$[if::(lt::(19,findNotEmpty::(${n},0)),if::(ge::(${a19},24),if::(lt::(${a19},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q20",
+            "value": "$[findNotEmpty::(${g[20].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a20",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[20].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[20].dimensions.datetime},11,13)*3600000+subString::(${g[20].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w20",
+            "value": "$[if::(lt::(20,findNotEmpty::(${n},0)),if::(lt::(${a20},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v20",
+            "value": "$[if::(lt::(20,findNotEmpty::(${n},0)),if::(ge::(${a20},24),if::(lt::(${a20},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q21",
+            "value": "$[findNotEmpty::(${g[21].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a21",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[21].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[21].dimensions.datetime},11,13)*3600000+subString::(${g[21].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w21",
+            "value": "$[if::(lt::(21,findNotEmpty::(${n},0)),if::(lt::(${a21},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v21",
+            "value": "$[if::(lt::(21,findNotEmpty::(${n},0)),if::(ge::(${a21},24),if::(lt::(${a21},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q22",
+            "value": "$[findNotEmpty::(${g[22].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a22",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[22].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[22].dimensions.datetime},11,13)*3600000+subString::(${g[22].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w22",
+            "value": "$[if::(lt::(22,findNotEmpty::(${n},0)),if::(lt::(${a22},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v22",
+            "value": "$[if::(lt::(22,findNotEmpty::(${n},0)),if::(ge::(${a22},24),if::(lt::(${a22},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q23",
+            "value": "$[findNotEmpty::(${g[23].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a23",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[23].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[23].dimensions.datetime},11,13)*3600000+subString::(${g[23].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w23",
+            "value": "$[if::(lt::(23,findNotEmpty::(${n},0)),if::(lt::(${a23},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v23",
+            "value": "$[if::(lt::(23,findNotEmpty::(${n},0)),if::(ge::(${a23},24),if::(lt::(${a23},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q24",
+            "value": "$[findNotEmpty::(${g[24].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a24",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[24].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[24].dimensions.datetime},11,13)*3600000+subString::(${g[24].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w24",
+            "value": "$[if::(lt::(24,findNotEmpty::(${n},0)),if::(lt::(${a24},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v24",
+            "value": "$[if::(lt::(24,findNotEmpty::(${n},0)),if::(ge::(${a24},24),if::(lt::(${a24},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q25",
+            "value": "$[findNotEmpty::(${g[25].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a25",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[25].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[25].dimensions.datetime},11,13)*3600000+subString::(${g[25].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w25",
+            "value": "$[if::(lt::(25,findNotEmpty::(${n},0)),if::(lt::(${a25},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v25",
+            "value": "$[if::(lt::(25,findNotEmpty::(${n},0)),if::(ge::(${a25},24),if::(lt::(${a25},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q26",
+            "value": "$[findNotEmpty::(${g[26].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a26",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[26].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[26].dimensions.datetime},11,13)*3600000+subString::(${g[26].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w26",
+            "value": "$[if::(lt::(26,findNotEmpty::(${n},0)),if::(lt::(${a26},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v26",
+            "value": "$[if::(lt::(26,findNotEmpty::(${n},0)),if::(ge::(${a26},24),if::(lt::(${a26},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q27",
+            "value": "$[findNotEmpty::(${g[27].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a27",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[27].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[27].dimensions.datetime},11,13)*3600000+subString::(${g[27].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w27",
+            "value": "$[if::(lt::(27,findNotEmpty::(${n},0)),if::(lt::(${a27},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v27",
+            "value": "$[if::(lt::(27,findNotEmpty::(${n},0)),if::(ge::(${a27},24),if::(lt::(${a27},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q28",
+            "value": "$[findNotEmpty::(${g[28].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a28",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[28].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[28].dimensions.datetime},11,13)*3600000+subString::(${g[28].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w28",
+            "value": "$[if::(lt::(28,findNotEmpty::(${n},0)),if::(lt::(${a28},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v28",
+            "value": "$[if::(lt::(28,findNotEmpty::(${n},0)),if::(ge::(${a28},24),if::(lt::(${a28},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q29",
+            "value": "$[findNotEmpty::(${g[29].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a29",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[29].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[29].dimensions.datetime},11,13)*3600000+subString::(${g[29].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w29",
+            "value": "$[if::(lt::(29,findNotEmpty::(${n},0)),if::(lt::(${a29},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v29",
+            "value": "$[if::(lt::(29,findNotEmpty::(${n},0)),if::(ge::(${a29},24),if::(lt::(${a29},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q30",
+            "value": "$[findNotEmpty::(${g[30].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a30",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[30].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[30].dimensions.datetime},11,13)*3600000+subString::(${g[30].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w30",
+            "value": "$[if::(lt::(30,findNotEmpty::(${n},0)),if::(lt::(${a30},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v30",
+            "value": "$[if::(lt::(30,findNotEmpty::(${n},0)),if::(ge::(${a30},24),if::(lt::(${a30},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q31",
+            "value": "$[findNotEmpty::(${g[31].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a31",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[31].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[31].dimensions.datetime},11,13)*3600000+subString::(${g[31].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w31",
+            "value": "$[if::(lt::(31,findNotEmpty::(${n},0)),if::(lt::(${a31},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v31",
+            "value": "$[if::(lt::(31,findNotEmpty::(${n},0)),if::(ge::(${a31},24),if::(lt::(${a31},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q32",
+            "value": "$[findNotEmpty::(${g[32].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a32",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[32].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[32].dimensions.datetime},11,13)*3600000+subString::(${g[32].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w32",
+            "value": "$[if::(lt::(32,findNotEmpty::(${n},0)),if::(lt::(${a32},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v32",
+            "value": "$[if::(lt::(32,findNotEmpty::(${n},0)),if::(ge::(${a32},24),if::(lt::(${a32},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q33",
+            "value": "$[findNotEmpty::(${g[33].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a33",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[33].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[33].dimensions.datetime},11,13)*3600000+subString::(${g[33].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w33",
+            "value": "$[if::(lt::(33,findNotEmpty::(${n},0)),if::(lt::(${a33},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v33",
+            "value": "$[if::(lt::(33,findNotEmpty::(${n},0)),if::(ge::(${a33},24),if::(lt::(${a33},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q34",
+            "value": "$[findNotEmpty::(${g[34].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a34",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[34].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[34].dimensions.datetime},11,13)*3600000+subString::(${g[34].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w34",
+            "value": "$[if::(lt::(34,findNotEmpty::(${n},0)),if::(lt::(${a34},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v34",
+            "value": "$[if::(lt::(34,findNotEmpty::(${n},0)),if::(ge::(${a34},24),if::(lt::(${a34},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q35",
+            "value": "$[findNotEmpty::(${g[35].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a35",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[35].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[35].dimensions.datetime},11,13)*3600000+subString::(${g[35].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w35",
+            "value": "$[if::(lt::(35,findNotEmpty::(${n},0)),if::(lt::(${a35},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v35",
+            "value": "$[if::(lt::(35,findNotEmpty::(${n},0)),if::(ge::(${a35},24),if::(lt::(${a35},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q36",
+            "value": "$[findNotEmpty::(${g[36].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a36",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[36].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[36].dimensions.datetime},11,13)*3600000+subString::(${g[36].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w36",
+            "value": "$[if::(lt::(36,findNotEmpty::(${n},0)),if::(lt::(${a36},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v36",
+            "value": "$[if::(lt::(36,findNotEmpty::(${n},0)),if::(ge::(${a36},24),if::(lt::(${a36},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q37",
+            "value": "$[findNotEmpty::(${g[37].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a37",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[37].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[37].dimensions.datetime},11,13)*3600000+subString::(${g[37].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w37",
+            "value": "$[if::(lt::(37,findNotEmpty::(${n},0)),if::(lt::(${a37},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v37",
+            "value": "$[if::(lt::(37,findNotEmpty::(${n},0)),if::(ge::(${a37},24),if::(lt::(${a37},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q38",
+            "value": "$[findNotEmpty::(${g[38].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a38",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[38].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[38].dimensions.datetime},11,13)*3600000+subString::(${g[38].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w38",
+            "value": "$[if::(lt::(38,findNotEmpty::(${n},0)),if::(lt::(${a38},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v38",
+            "value": "$[if::(lt::(38,findNotEmpty::(${n},0)),if::(ge::(${a38},24),if::(lt::(${a38},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q39",
+            "value": "$[findNotEmpty::(${g[39].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a39",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[39].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[39].dimensions.datetime},11,13)*3600000+subString::(${g[39].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w39",
+            "value": "$[if::(lt::(39,findNotEmpty::(${n},0)),if::(lt::(${a39},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v39",
+            "value": "$[if::(lt::(39,findNotEmpty::(${n},0)),if::(ge::(${a39},24),if::(lt::(${a39},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q40",
+            "value": "$[findNotEmpty::(${g[40].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a40",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[40].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[40].dimensions.datetime},11,13)*3600000+subString::(${g[40].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w40",
+            "value": "$[if::(lt::(40,findNotEmpty::(${n},0)),if::(lt::(${a40},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v40",
+            "value": "$[if::(lt::(40,findNotEmpty::(${n},0)),if::(ge::(${a40},24),if::(lt::(${a40},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q41",
+            "value": "$[findNotEmpty::(${g[41].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a41",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[41].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[41].dimensions.datetime},11,13)*3600000+subString::(${g[41].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w41",
+            "value": "$[if::(lt::(41,findNotEmpty::(${n},0)),if::(lt::(${a41},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v41",
+            "value": "$[if::(lt::(41,findNotEmpty::(${n},0)),if::(ge::(${a41},24),if::(lt::(${a41},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q42",
+            "value": "$[findNotEmpty::(${g[42].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a42",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[42].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[42].dimensions.datetime},11,13)*3600000+subString::(${g[42].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w42",
+            "value": "$[if::(lt::(42,findNotEmpty::(${n},0)),if::(lt::(${a42},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v42",
+            "value": "$[if::(lt::(42,findNotEmpty::(${n},0)),if::(ge::(${a42},24),if::(lt::(${a42},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q43",
+            "value": "$[findNotEmpty::(${g[43].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a43",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[43].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[43].dimensions.datetime},11,13)*3600000+subString::(${g[43].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w43",
+            "value": "$[if::(lt::(43,findNotEmpty::(${n},0)),if::(lt::(${a43},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v43",
+            "value": "$[if::(lt::(43,findNotEmpty::(${n},0)),if::(ge::(${a43},24),if::(lt::(${a43},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q44",
+            "value": "$[findNotEmpty::(${g[44].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a44",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[44].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[44].dimensions.datetime},11,13)*3600000+subString::(${g[44].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w44",
+            "value": "$[if::(lt::(44,findNotEmpty::(${n},0)),if::(lt::(${a44},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v44",
+            "value": "$[if::(lt::(44,findNotEmpty::(${n},0)),if::(ge::(${a44},24),if::(lt::(${a44},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q45",
+            "value": "$[findNotEmpty::(${g[45].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a45",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[45].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[45].dimensions.datetime},11,13)*3600000+subString::(${g[45].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w45",
+            "value": "$[if::(lt::(45,findNotEmpty::(${n},0)),if::(lt::(${a45},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v45",
+            "value": "$[if::(lt::(45,findNotEmpty::(${n},0)),if::(ge::(${a45},24),if::(lt::(${a45},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q46",
+            "value": "$[findNotEmpty::(${g[46].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a46",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[46].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[46].dimensions.datetime},11,13)*3600000+subString::(${g[46].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w46",
+            "value": "$[if::(lt::(46,findNotEmpty::(${n},0)),if::(lt::(${a46},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v46",
+            "value": "$[if::(lt::(46,findNotEmpty::(${n},0)),if::(ge::(${a46},24),if::(lt::(${a46},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q47",
+            "value": "$[findNotEmpty::(${g[47].sum.requests},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "a47",
+            "value": "$[round::(calc::((${p0}-calc::(parseDate::(subString::(${g[47].dimensions.datetime},0,10),yyyy-MM-dd)+subString::(${g[47].dimensions.datetime},11,13)*3600000+subString::(${g[47].dimensions.datetime},14,16)*60000))/3600000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w47",
+            "value": "$[if::(lt::(47,findNotEmpty::(${n},0)),if::(lt::(${a47},24),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "v47",
+            "value": "$[if::(lt::(47,findNotEmpty::(${n},0)),if::(ge::(${a47},24),if::(lt::(${a47},48),1,0),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq0",
+            "value": "$[findNotEmpty::(${g[0].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq1",
+            "value": "$[findNotEmpty::(${g[1].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq2",
+            "value": "$[findNotEmpty::(${g[2].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq3",
+            "value": "$[findNotEmpty::(${g[3].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq4",
+            "value": "$[findNotEmpty::(${g[4].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq5",
+            "value": "$[findNotEmpty::(${g[5].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq6",
+            "value": "$[findNotEmpty::(${g[6].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq7",
+            "value": "$[findNotEmpty::(${g[7].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq8",
+            "value": "$[findNotEmpty::(${g[8].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq9",
+            "value": "$[findNotEmpty::(${g[9].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq10",
+            "value": "$[findNotEmpty::(${g[10].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq11",
+            "value": "$[findNotEmpty::(${g[11].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq12",
+            "value": "$[findNotEmpty::(${g[12].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq13",
+            "value": "$[findNotEmpty::(${g[13].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq14",
+            "value": "$[findNotEmpty::(${g[14].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq15",
+            "value": "$[findNotEmpty::(${g[15].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq16",
+            "value": "$[findNotEmpty::(${g[16].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq17",
+            "value": "$[findNotEmpty::(${g[17].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq18",
+            "value": "$[findNotEmpty::(${g[18].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq19",
+            "value": "$[findNotEmpty::(${g[19].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq20",
+            "value": "$[findNotEmpty::(${g[20].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq21",
+            "value": "$[findNotEmpty::(${g[21].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq22",
+            "value": "$[findNotEmpty::(${g[22].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tq23",
+            "value": "$[findNotEmpty::(${g[23].sum.threats},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cur",
+            "value": "$[calc::(${q0}*${w0}+${q1}*${w1}+${q2}*${w2}+${q3}*${w3}+${q4}*${w4}+${q5}*${w5}+${q6}*${w6}+${q7}*${w7}+${q8}*${w8}+${q9}*${w9}+${q10}*${w10}+${q11}*${w11}+${q12}*${w12}+${q13}*${w13}+${q14}*${w14}+${q15}*${w15}+${q16}*${w16}+${q17}*${w17}+${q18}*${w18}+${q19}*${w19}+${q20}*${w20}+${q21}*${w21}+${q22}*${w22}+${q23}*${w23}+${q24}*${w24}+${q25}*${w25}+${q26}*${w26}+${q27}*${w27}+${q28}*${w28}+${q29}*${w29}+${q30}*${w30}+${q31}*${w31}+${q32}*${w32}+${q33}*${w33}+${q34}*${w34}+${q35}*${w35}+${q36}*${w36}+${q37}*${w37}+${q38}*${w38}+${q39}*${w39}+${q40}*${w40}+${q41}*${w41}+${q42}*${w42}+${q43}*${w43}+${q44}*${w44}+${q45}*${w45}+${q46}*${w46}+${q47}*${w47})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "prv",
+            "value": "$[calc::(${q0}*${v0}+${q1}*${v1}+${q2}*${v2}+${q3}*${v3}+${q4}*${v4}+${q5}*${v5}+${q6}*${v6}+${q7}*${v7}+${q8}*${v8}+${q9}*${v9}+${q10}*${v10}+${q11}*${v11}+${q12}*${v12}+${q13}*${v13}+${q14}*${v14}+${q15}*${v15}+${q16}*${v16}+${q17}*${v17}+${q18}*${v18}+${q19}*${v19}+${q20}*${v20}+${q21}*${v21}+${q22}*${v22}+${q23}*${v23}+${q24}*${v24}+${q25}*${v25}+${q26}*${v26}+${q27}*${v27}+${q28}*${v28}+${q29}*${v29}+${q30}*${v30}+${q31}*${v31}+${q32}*${v32}+${q33}*${v33}+${q34}*${v34}+${q35}*${v35}+${q36}*${v36}+${q37}*${v37}+${q38}*${v38}+${q39}*${v39}+${q40}*${v40}+${q41}*${v41}+${q42}*${v42}+${q43}*${v43}+${q44}*${v44}+${q45}*${v45}+${q46}*${v46}+${q47}*${v47})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "thr",
+            "value": "$[calc::(${tq0}*${w0}+${tq1}*${w1}+${tq2}*${w2}+${tq3}*${w3}+${tq4}*${w4}+${tq5}*${w5}+${tq6}*${w6}+${tq7}*${w7}+${tq8}*${w8}+${tq9}*${w9}+${tq10}*${w10}+${tq11}*${w11}+${tq12}*${w12}+${tq13}*${w13}+${tq14}*${w14}+${tq15}*${w15}+${tq16}*${w16}+${tq17}*${w17}+${tq18}*${w18}+${tq19}*${w19}+${tq20}*${w20}+${tq21}*${w21}+${tq22}*${w22}+${tq23}*${w23})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pk",
+            "value": "$[max::(calc::(${q0}*${w0}),calc::(${q1}*${w1}),calc::(${q2}*${w2}),calc::(${q3}*${w3}),calc::(${q4}*${w4}),calc::(${q5}*${w5}),calc::(${q6}*${w6}),calc::(${q7}*${w7}),calc::(${q8}*${w8}),calc::(${q9}*${w9}),calc::(${q10}*${w10}),calc::(${q11}*${w11}),calc::(${q12}*${w12}),calc::(${q13}*${w13}),calc::(${q14}*${w14}),calc::(${q15}*${w15}),calc::(${q16}*${w16}),calc::(${q17}*${w17}),calc::(${q18}*${w18}),calc::(${q19}*${w19}),calc::(${q20}*${w20}),calc::(${q21}*${w21}),calc::(${q22}*${w22}),calc::(${q23}*${w23}),1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tpk",
+            "value": "$[max::(calc::(${tq0}*${w0}),calc::(${tq1}*${w1}),calc::(${tq2}*${w2}),calc::(${tq3}*${w3}),calc::(${tq4}*${w4}),calc::(${tq5}*${w5}),calc::(${tq6}*${w6}),calc::(${tq7}*${w7}),calc::(${tq8}*${w8}),calc::(${tq9}*${w9}),calc::(${tq10}*${w10}),calc::(${tq11}*${w11}),calc::(${tq12}*${w12}),calc::(${tq13}*${w13}),calc::(${tq14}*${w14}),calc::(${tq15}*${w15}),calc::(${tq16}*${w16}),calc::(${tq17}*${w17}),calc::(${tq18}*${w18}),calc::(${tq19}*${w19}),calc::(${tq20}*${w20}),calc::(${tq21}*${w21}),calc::(${tq22}*${w22}),calc::(${tq23}*${w23}),1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "curS",
+            "value": "$[if::(ge::(${cur},1000000),connect::(parseNumber::(calc::(${cur}/1000000),0.0),M),if::(ge::(${cur},10000),connect::(parseNumber::(calc::(${cur}/1000),0.0),k),parseNumber::(${cur},#\\,##0)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pkS",
+            "value": "$[if::(ge::(${pk},1000000),connect::(parseNumber::(calc::(${pk}/1000000),0.0),M),if::(ge::(${pk},10000),connect::(parseNumber::(calc::(${pk}/1000),0.0),k),parseNumber::(${pk},#\\,##0)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "thrS",
+            "value": "$[if::(ge::(${thr},1000000),connect::(parseNumber::(calc::(${thr}/1000000),0.0),M),if::(ge::(${thr},10000),connect::(parseNumber::(calc::(${thr}/1000),0.0),k),parseNumber::(${thr},#\\,##0)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "thrP",
+            "value": "$[if::(gt::(${cur},0),if::(gt::(${thr},0),if::(lt::(calc::(${thr}*100/${cur}),1),<1,parseNumber::(calc::(${thr}*100/${cur}),0.#)),0),)]"
+          },
+          "_note": "拦截占请求的百分比;<1% 写「<1」,不把 0.3% 截成 0%。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chg",
+            "value": "$[if::(gt::(findNotEmpty::(${prv},0),0),round::(calc::((${cur}-${prv})*100/${prv})),)]"
+          },
+          "_note": "比前 24 小时。前一段为 0(新接入 / 零流量)不说 —— 不兜 0%。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chgA",
+            "value": "$[if::(ge::(${chg},0),${chg},calc::(0-${chg}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "up",
+            "value": "$[if::(eq::(findNotEmpty::(${chg},__none__),__none__),,if::(ge::(${chg},0),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h0",
+            "value": "$[if::(eq::(${w0},1),max::(round::(calc::(${q0}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y0",
+            "value": "$[findNotEmpty::(calc::(126.0-${h0}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s0",
+            "value": "$[findNotEmpty::(calc::(23-${a0}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th0",
+            "value": "$[if::(eq::(${w0},1),if::(gt::(${tq0},0),max::(round::(calc::(${tq0}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty0",
+            "value": "$[findNotEmpty::(calc::(126.0-${th0}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h1",
+            "value": "$[if::(eq::(${w1},1),max::(round::(calc::(${q1}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y1",
+            "value": "$[findNotEmpty::(calc::(126.0-${h1}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s1",
+            "value": "$[findNotEmpty::(calc::(23-${a1}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th1",
+            "value": "$[if::(eq::(${w1},1),if::(gt::(${tq1},0),max::(round::(calc::(${tq1}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty1",
+            "value": "$[findNotEmpty::(calc::(126.0-${th1}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h2",
+            "value": "$[if::(eq::(${w2},1),max::(round::(calc::(${q2}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y2",
+            "value": "$[findNotEmpty::(calc::(126.0-${h2}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s2",
+            "value": "$[findNotEmpty::(calc::(23-${a2}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th2",
+            "value": "$[if::(eq::(${w2},1),if::(gt::(${tq2},0),max::(round::(calc::(${tq2}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty2",
+            "value": "$[findNotEmpty::(calc::(126.0-${th2}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h3",
+            "value": "$[if::(eq::(${w3},1),max::(round::(calc::(${q3}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y3",
+            "value": "$[findNotEmpty::(calc::(126.0-${h3}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s3",
+            "value": "$[findNotEmpty::(calc::(23-${a3}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th3",
+            "value": "$[if::(eq::(${w3},1),if::(gt::(${tq3},0),max::(round::(calc::(${tq3}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty3",
+            "value": "$[findNotEmpty::(calc::(126.0-${th3}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h4",
+            "value": "$[if::(eq::(${w4},1),max::(round::(calc::(${q4}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y4",
+            "value": "$[findNotEmpty::(calc::(126.0-${h4}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s4",
+            "value": "$[findNotEmpty::(calc::(23-${a4}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th4",
+            "value": "$[if::(eq::(${w4},1),if::(gt::(${tq4},0),max::(round::(calc::(${tq4}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty4",
+            "value": "$[findNotEmpty::(calc::(126.0-${th4}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h5",
+            "value": "$[if::(eq::(${w5},1),max::(round::(calc::(${q5}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y5",
+            "value": "$[findNotEmpty::(calc::(126.0-${h5}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s5",
+            "value": "$[findNotEmpty::(calc::(23-${a5}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th5",
+            "value": "$[if::(eq::(${w5},1),if::(gt::(${tq5},0),max::(round::(calc::(${tq5}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty5",
+            "value": "$[findNotEmpty::(calc::(126.0-${th5}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h6",
+            "value": "$[if::(eq::(${w6},1),max::(round::(calc::(${q6}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y6",
+            "value": "$[findNotEmpty::(calc::(126.0-${h6}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s6",
+            "value": "$[findNotEmpty::(calc::(23-${a6}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th6",
+            "value": "$[if::(eq::(${w6},1),if::(gt::(${tq6},0),max::(round::(calc::(${tq6}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty6",
+            "value": "$[findNotEmpty::(calc::(126.0-${th6}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h7",
+            "value": "$[if::(eq::(${w7},1),max::(round::(calc::(${q7}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y7",
+            "value": "$[findNotEmpty::(calc::(126.0-${h7}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s7",
+            "value": "$[findNotEmpty::(calc::(23-${a7}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th7",
+            "value": "$[if::(eq::(${w7},1),if::(gt::(${tq7},0),max::(round::(calc::(${tq7}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty7",
+            "value": "$[findNotEmpty::(calc::(126.0-${th7}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h8",
+            "value": "$[if::(eq::(${w8},1),max::(round::(calc::(${q8}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y8",
+            "value": "$[findNotEmpty::(calc::(126.0-${h8}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s8",
+            "value": "$[findNotEmpty::(calc::(23-${a8}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th8",
+            "value": "$[if::(eq::(${w8},1),if::(gt::(${tq8},0),max::(round::(calc::(${tq8}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty8",
+            "value": "$[findNotEmpty::(calc::(126.0-${th8}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h9",
+            "value": "$[if::(eq::(${w9},1),max::(round::(calc::(${q9}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y9",
+            "value": "$[findNotEmpty::(calc::(126.0-${h9}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s9",
+            "value": "$[findNotEmpty::(calc::(23-${a9}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th9",
+            "value": "$[if::(eq::(${w9},1),if::(gt::(${tq9},0),max::(round::(calc::(${tq9}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty9",
+            "value": "$[findNotEmpty::(calc::(126.0-${th9}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h10",
+            "value": "$[if::(eq::(${w10},1),max::(round::(calc::(${q10}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y10",
+            "value": "$[findNotEmpty::(calc::(126.0-${h10}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s10",
+            "value": "$[findNotEmpty::(calc::(23-${a10}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th10",
+            "value": "$[if::(eq::(${w10},1),if::(gt::(${tq10},0),max::(round::(calc::(${tq10}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty10",
+            "value": "$[findNotEmpty::(calc::(126.0-${th10}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h11",
+            "value": "$[if::(eq::(${w11},1),max::(round::(calc::(${q11}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y11",
+            "value": "$[findNotEmpty::(calc::(126.0-${h11}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s11",
+            "value": "$[findNotEmpty::(calc::(23-${a11}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th11",
+            "value": "$[if::(eq::(${w11},1),if::(gt::(${tq11},0),max::(round::(calc::(${tq11}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty11",
+            "value": "$[findNotEmpty::(calc::(126.0-${th11}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h12",
+            "value": "$[if::(eq::(${w12},1),max::(round::(calc::(${q12}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y12",
+            "value": "$[findNotEmpty::(calc::(126.0-${h12}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s12",
+            "value": "$[findNotEmpty::(calc::(23-${a12}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th12",
+            "value": "$[if::(eq::(${w12},1),if::(gt::(${tq12},0),max::(round::(calc::(${tq12}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty12",
+            "value": "$[findNotEmpty::(calc::(126.0-${th12}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h13",
+            "value": "$[if::(eq::(${w13},1),max::(round::(calc::(${q13}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y13",
+            "value": "$[findNotEmpty::(calc::(126.0-${h13}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s13",
+            "value": "$[findNotEmpty::(calc::(23-${a13}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th13",
+            "value": "$[if::(eq::(${w13},1),if::(gt::(${tq13},0),max::(round::(calc::(${tq13}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty13",
+            "value": "$[findNotEmpty::(calc::(126.0-${th13}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h14",
+            "value": "$[if::(eq::(${w14},1),max::(round::(calc::(${q14}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y14",
+            "value": "$[findNotEmpty::(calc::(126.0-${h14}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s14",
+            "value": "$[findNotEmpty::(calc::(23-${a14}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th14",
+            "value": "$[if::(eq::(${w14},1),if::(gt::(${tq14},0),max::(round::(calc::(${tq14}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty14",
+            "value": "$[findNotEmpty::(calc::(126.0-${th14}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h15",
+            "value": "$[if::(eq::(${w15},1),max::(round::(calc::(${q15}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y15",
+            "value": "$[findNotEmpty::(calc::(126.0-${h15}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s15",
+            "value": "$[findNotEmpty::(calc::(23-${a15}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th15",
+            "value": "$[if::(eq::(${w15},1),if::(gt::(${tq15},0),max::(round::(calc::(${tq15}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty15",
+            "value": "$[findNotEmpty::(calc::(126.0-${th15}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h16",
+            "value": "$[if::(eq::(${w16},1),max::(round::(calc::(${q16}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y16",
+            "value": "$[findNotEmpty::(calc::(126.0-${h16}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s16",
+            "value": "$[findNotEmpty::(calc::(23-${a16}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th16",
+            "value": "$[if::(eq::(${w16},1),if::(gt::(${tq16},0),max::(round::(calc::(${tq16}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty16",
+            "value": "$[findNotEmpty::(calc::(126.0-${th16}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h17",
+            "value": "$[if::(eq::(${w17},1),max::(round::(calc::(${q17}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y17",
+            "value": "$[findNotEmpty::(calc::(126.0-${h17}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s17",
+            "value": "$[findNotEmpty::(calc::(23-${a17}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th17",
+            "value": "$[if::(eq::(${w17},1),if::(gt::(${tq17},0),max::(round::(calc::(${tq17}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty17",
+            "value": "$[findNotEmpty::(calc::(126.0-${th17}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h18",
+            "value": "$[if::(eq::(${w18},1),max::(round::(calc::(${q18}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y18",
+            "value": "$[findNotEmpty::(calc::(126.0-${h18}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s18",
+            "value": "$[findNotEmpty::(calc::(23-${a18}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th18",
+            "value": "$[if::(eq::(${w18},1),if::(gt::(${tq18},0),max::(round::(calc::(${tq18}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty18",
+            "value": "$[findNotEmpty::(calc::(126.0-${th18}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h19",
+            "value": "$[if::(eq::(${w19},1),max::(round::(calc::(${q19}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y19",
+            "value": "$[findNotEmpty::(calc::(126.0-${h19}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s19",
+            "value": "$[findNotEmpty::(calc::(23-${a19}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th19",
+            "value": "$[if::(eq::(${w19},1),if::(gt::(${tq19},0),max::(round::(calc::(${tq19}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty19",
+            "value": "$[findNotEmpty::(calc::(126.0-${th19}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h20",
+            "value": "$[if::(eq::(${w20},1),max::(round::(calc::(${q20}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y20",
+            "value": "$[findNotEmpty::(calc::(126.0-${h20}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s20",
+            "value": "$[findNotEmpty::(calc::(23-${a20}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th20",
+            "value": "$[if::(eq::(${w20},1),if::(gt::(${tq20},0),max::(round::(calc::(${tq20}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty20",
+            "value": "$[findNotEmpty::(calc::(126.0-${th20}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h21",
+            "value": "$[if::(eq::(${w21},1),max::(round::(calc::(${q21}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y21",
+            "value": "$[findNotEmpty::(calc::(126.0-${h21}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s21",
+            "value": "$[findNotEmpty::(calc::(23-${a21}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th21",
+            "value": "$[if::(eq::(${w21},1),if::(gt::(${tq21},0),max::(round::(calc::(${tq21}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty21",
+            "value": "$[findNotEmpty::(calc::(126.0-${th21}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h22",
+            "value": "$[if::(eq::(${w22},1),max::(round::(calc::(${q22}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y22",
+            "value": "$[findNotEmpty::(calc::(126.0-${h22}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s22",
+            "value": "$[findNotEmpty::(calc::(23-${a22}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th22",
+            "value": "$[if::(eq::(${w22},1),if::(gt::(${tq22},0),max::(round::(calc::(${tq22}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty22",
+            "value": "$[findNotEmpty::(calc::(126.0-${th22}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "h23",
+            "value": "$[if::(eq::(${w23},1),max::(round::(calc::(${q23}*34.0/${pk})),2),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "y23",
+            "value": "$[findNotEmpty::(calc::(126.0-${h23}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "s23",
+            "value": "$[findNotEmpty::(calc::(23-${a23}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "th23",
+            "value": "$[if::(eq::(${w23},1),if::(gt::(${tq23},0),max::(round::(calc::(${tq23}*34.0/${tpk})),2),0),0)]"
+          },
+          "_note": "零拦截的小时不画(高 0 + 隐藏),否则一排 2pt 红桩读成「每小时都有一点」。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ty23",
+            "value": "$[findNotEmpty::(calc::(126.0-${th23}),126.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_bound",
+            "value": "$[if::(eq::(${cred.state},bound),1,0)]"
+          },
+          "_note": "令牌绑着没有。⚠️ 宿主在缺凭证时根本不跑这条流(组件画「需要凭证」胶囊 + 空数据模板),所以这里 0 主要出现在页面块与编辑器预览里。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_ok",
+            "value": "$[if::(eq::(${have},0),0,if::(eq::(findNotEmpty::(${gerr},0),1),0,findNotEmpty::(${got},0)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ready",
+            "value": "$[if::(eq::(${_bound},1),${_ok},)]"
+          },
+          "_note": "三态:1 = 有数;0 = 打到了但取不到(GraphQL errors / 被拒 / 账号里没有域名)→「暂时取不到数据」;空 = 令牌没绑 → 「还没连接 Cloudflare 账号」。绑着却取不到(含断网)一律是 0,绝不落到未连接文案。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "at",
+            "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_pack",
+            "value": {
+              "ts": "${@time.nowMs}",
+              "ready": "${ready}",
+              "zname": "${zname}",
+              "at": "${at}",
+              "n": "${n}",
+              "cur": "${cur}",
+              "curS": "${curS}",
+              "prv": "${prv}",
+              "chg": "${chg}",
+              "chgA": "${chgA}",
+              "up": "${up}",
+              "thr": "${thr}",
+              "thrS": "${thrS}",
+              "thrP": "${thrP}",
+              "pk": "${pk}",
+              "pkS": "${pkS}",
+              "w0": "${w0}",
+              "h0": "${h0}",
+              "y0": "${y0}",
+              "s0": "${s0}",
+              "th0": "${th0}",
+              "ty0": "${ty0}",
+              "w1": "${w1}",
+              "h1": "${h1}",
+              "y1": "${y1}",
+              "s1": "${s1}",
+              "th1": "${th1}",
+              "ty1": "${ty1}",
+              "w2": "${w2}",
+              "h2": "${h2}",
+              "y2": "${y2}",
+              "s2": "${s2}",
+              "th2": "${th2}",
+              "ty2": "${ty2}",
+              "w3": "${w3}",
+              "h3": "${h3}",
+              "y3": "${y3}",
+              "s3": "${s3}",
+              "th3": "${th3}",
+              "ty3": "${ty3}",
+              "w4": "${w4}",
+              "h4": "${h4}",
+              "y4": "${y4}",
+              "s4": "${s4}",
+              "th4": "${th4}",
+              "ty4": "${ty4}",
+              "w5": "${w5}",
+              "h5": "${h5}",
+              "y5": "${y5}",
+              "s5": "${s5}",
+              "th5": "${th5}",
+              "ty5": "${ty5}",
+              "w6": "${w6}",
+              "h6": "${h6}",
+              "y6": "${y6}",
+              "s6": "${s6}",
+              "th6": "${th6}",
+              "ty6": "${ty6}",
+              "w7": "${w7}",
+              "h7": "${h7}",
+              "y7": "${y7}",
+              "s7": "${s7}",
+              "th7": "${th7}",
+              "ty7": "${ty7}",
+              "w8": "${w8}",
+              "h8": "${h8}",
+              "y8": "${y8}",
+              "s8": "${s8}",
+              "th8": "${th8}",
+              "ty8": "${ty8}",
+              "w9": "${w9}",
+              "h9": "${h9}",
+              "y9": "${y9}",
+              "s9": "${s9}",
+              "th9": "${th9}",
+              "ty9": "${ty9}",
+              "w10": "${w10}",
+              "h10": "${h10}",
+              "y10": "${y10}",
+              "s10": "${s10}",
+              "th10": "${th10}",
+              "ty10": "${ty10}",
+              "w11": "${w11}",
+              "h11": "${h11}",
+              "y11": "${y11}",
+              "s11": "${s11}",
+              "th11": "${th11}",
+              "ty11": "${ty11}",
+              "w12": "${w12}",
+              "h12": "${h12}",
+              "y12": "${y12}",
+              "s12": "${s12}",
+              "th12": "${th12}",
+              "ty12": "${ty12}",
+              "w13": "${w13}",
+              "h13": "${h13}",
+              "y13": "${y13}",
+              "s13": "${s13}",
+              "th13": "${th13}",
+              "ty13": "${ty13}",
+              "w14": "${w14}",
+              "h14": "${h14}",
+              "y14": "${y14}",
+              "s14": "${s14}",
+              "th14": "${th14}",
+              "ty14": "${ty14}",
+              "w15": "${w15}",
+              "h15": "${h15}",
+              "y15": "${y15}",
+              "s15": "${s15}",
+              "th15": "${th15}",
+              "ty15": "${ty15}",
+              "w16": "${w16}",
+              "h16": "${h16}",
+              "y16": "${y16}",
+              "s16": "${s16}",
+              "th16": "${th16}",
+              "ty16": "${ty16}",
+              "w17": "${w17}",
+              "h17": "${h17}",
+              "y17": "${y17}",
+              "s17": "${s17}",
+              "th17": "${th17}",
+              "ty17": "${ty17}",
+              "w18": "${w18}",
+              "h18": "${h18}",
+              "y18": "${y18}",
+              "s18": "${s18}",
+              "th18": "${th18}",
+              "ty18": "${ty18}",
+              "w19": "${w19}",
+              "h19": "${h19}",
+              "y19": "${y19}",
+              "s19": "${s19}",
+              "th19": "${th19}",
+              "ty19": "${ty19}",
+              "w20": "${w20}",
+              "h20": "${h20}",
+              "y20": "${y20}",
+              "s20": "${s20}",
+              "th20": "${th20}",
+              "ty20": "${ty20}",
+              "w21": "${w21}",
+              "h21": "${h21}",
+              "y21": "${y21}",
+              "s21": "${s21}",
+              "th21": "${th21}",
+              "ty21": "${ty21}",
+              "w22": "${w22}",
+              "h22": "${h22}",
+              "y22": "${y22}",
+              "s22": "${s22}",
+              "th22": "${th22}",
+              "ty22": "${ty22}",
+              "w23": "${w23}",
+              "h23": "${h23}",
+              "y23": "${y23}",
+              "s23": "${s23}",
+              "th23": "${th23}",
+              "ty23": "${ty23}"
+            }
+          }
+        },
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${_ck}",
+            "value": "${_pack}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入,两条路径只有一份字段映射。",
+      "id": "_box",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ready",
+        "value": "${_box.ready}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zname",
+        "value": "${_box.zname}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "${_box.at}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "${_box.n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cur",
+        "value": "${_box.cur}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curS",
+        "value": "${_box.curS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "prv",
+        "value": "${_box.prv}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chg",
+        "value": "${_box.chg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgA",
+        "value": "${_box.chgA}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "up",
+        "value": "${_box.up}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "thr",
+        "value": "${_box.thr}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "thrS",
+        "value": "${_box.thrS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "thrP",
+        "value": "${_box.thrP}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pk",
+        "value": "${_box.pk}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pkS",
+        "value": "${_box.pkS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0",
+        "value": "${_box.w0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h0",
+        "value": "${_box.h0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "${_box.y0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "${_box.s0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th0",
+        "value": "${_box.th0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty0",
+        "value": "${_box.ty0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1",
+        "value": "${_box.w1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h1",
+        "value": "${_box.h1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "${_box.y1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s1",
+        "value": "${_box.s1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th1",
+        "value": "${_box.th1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty1",
+        "value": "${_box.ty1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2",
+        "value": "${_box.w2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h2",
+        "value": "${_box.h2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y2",
+        "value": "${_box.y2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2",
+        "value": "${_box.s2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th2",
+        "value": "${_box.th2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty2",
+        "value": "${_box.ty2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3",
+        "value": "${_box.w3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h3",
+        "value": "${_box.h3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y3",
+        "value": "${_box.y3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s3",
+        "value": "${_box.s3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th3",
+        "value": "${_box.th3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty3",
+        "value": "${_box.ty3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w4",
+        "value": "${_box.w4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h4",
+        "value": "${_box.h4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y4",
+        "value": "${_box.y4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s4",
+        "value": "${_box.s4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th4",
+        "value": "${_box.th4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty4",
+        "value": "${_box.ty4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w5",
+        "value": "${_box.w5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h5",
+        "value": "${_box.h5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y5",
+        "value": "${_box.y5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s5",
+        "value": "${_box.s5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th5",
+        "value": "${_box.th5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty5",
+        "value": "${_box.ty5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w6",
+        "value": "${_box.w6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h6",
+        "value": "${_box.h6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y6",
+        "value": "${_box.y6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s6",
+        "value": "${_box.s6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th6",
+        "value": "${_box.th6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty6",
+        "value": "${_box.ty6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w7",
+        "value": "${_box.w7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h7",
+        "value": "${_box.h7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y7",
+        "value": "${_box.y7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s7",
+        "value": "${_box.s7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th7",
+        "value": "${_box.th7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty7",
+        "value": "${_box.ty7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w8",
+        "value": "${_box.w8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h8",
+        "value": "${_box.h8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y8",
+        "value": "${_box.y8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s8",
+        "value": "${_box.s8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th8",
+        "value": "${_box.th8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty8",
+        "value": "${_box.ty8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w9",
+        "value": "${_box.w9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h9",
+        "value": "${_box.h9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y9",
+        "value": "${_box.y9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s9",
+        "value": "${_box.s9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th9",
+        "value": "${_box.th9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty9",
+        "value": "${_box.ty9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w10",
+        "value": "${_box.w10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h10",
+        "value": "${_box.h10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y10",
+        "value": "${_box.y10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s10",
+        "value": "${_box.s10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th10",
+        "value": "${_box.th10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty10",
+        "value": "${_box.ty10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w11",
+        "value": "${_box.w11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h11",
+        "value": "${_box.h11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y11",
+        "value": "${_box.y11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s11",
+        "value": "${_box.s11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th11",
+        "value": "${_box.th11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty11",
+        "value": "${_box.ty11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w12",
+        "value": "${_box.w12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h12",
+        "value": "${_box.h12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y12",
+        "value": "${_box.y12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s12",
+        "value": "${_box.s12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th12",
+        "value": "${_box.th12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty12",
+        "value": "${_box.ty12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w13",
+        "value": "${_box.w13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h13",
+        "value": "${_box.h13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y13",
+        "value": "${_box.y13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s13",
+        "value": "${_box.s13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th13",
+        "value": "${_box.th13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty13",
+        "value": "${_box.ty13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w14",
+        "value": "${_box.w14}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h14",
+        "value": "${_box.h14}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y14",
+        "value": "${_box.y14}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s14",
+        "value": "${_box.s14}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th14",
+        "value": "${_box.th14}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty14",
+        "value": "${_box.ty14}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w15",
+        "value": "${_box.w15}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h15",
+        "value": "${_box.h15}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y15",
+        "value": "${_box.y15}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s15",
+        "value": "${_box.s15}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th15",
+        "value": "${_box.th15}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty15",
+        "value": "${_box.ty15}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w16",
+        "value": "${_box.w16}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h16",
+        "value": "${_box.h16}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y16",
+        "value": "${_box.y16}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s16",
+        "value": "${_box.s16}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th16",
+        "value": "${_box.th16}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty16",
+        "value": "${_box.ty16}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w17",
+        "value": "${_box.w17}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h17",
+        "value": "${_box.h17}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y17",
+        "value": "${_box.y17}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s17",
+        "value": "${_box.s17}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th17",
+        "value": "${_box.th17}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty17",
+        "value": "${_box.ty17}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w18",
+        "value": "${_box.w18}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h18",
+        "value": "${_box.h18}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y18",
+        "value": "${_box.y18}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s18",
+        "value": "${_box.s18}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th18",
+        "value": "${_box.th18}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty18",
+        "value": "${_box.ty18}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w19",
+        "value": "${_box.w19}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h19",
+        "value": "${_box.h19}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y19",
+        "value": "${_box.y19}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s19",
+        "value": "${_box.s19}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th19",
+        "value": "${_box.th19}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty19",
+        "value": "${_box.ty19}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w20",
+        "value": "${_box.w20}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h20",
+        "value": "${_box.h20}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y20",
+        "value": "${_box.y20}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s20",
+        "value": "${_box.s20}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th20",
+        "value": "${_box.th20}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty20",
+        "value": "${_box.ty20}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w21",
+        "value": "${_box.w21}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h21",
+        "value": "${_box.h21}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y21",
+        "value": "${_box.y21}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s21",
+        "value": "${_box.s21}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th21",
+        "value": "${_box.th21}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty21",
+        "value": "${_box.ty21}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w22",
+        "value": "${_box.w22}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h22",
+        "value": "${_box.h22}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y22",
+        "value": "${_box.y22}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s22",
+        "value": "${_box.s22}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th22",
+        "value": "${_box.th22}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty22",
+        "value": "${_box.ty22}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w23",
+        "value": "${_box.w23}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h23",
+        "value": "${_box.h23}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y23",
+        "value": "${_box.y23}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s23",
+        "value": "${_box.s23}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "th23",
+        "value": "${_box.th23}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty23",
+        "value": "${_box.ty23}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(if::(eq::(${_cache},1),1,if::(ge::(parseNumber::(${_box.ts},0),${_t0}),1,0)),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_zone_unreachable"
+          }
+        }
+      ],
+      "_note": "组件模式:回读到的不是这一轮写的 = 这轮没取到。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ready",
+          "zname",
+          "at",
+          "n",
+          "cur",
+          "curS",
+          "prv",
+          "chg",
+          "chgA",
+          "up",
+          "thr",
+          "thrS",
+          "thrP",
+          "pk",
+          "pkS",
+          "w0",
+          "h0",
+          "y0",
+          "s0",
+          "th0",
+          "ty0",
+          "w1",
+          "h1",
+          "y1",
+          "s1",
+          "th1",
+          "ty1",
+          "w2",
+          "h2",
+          "y2",
+          "s2",
+          "th2",
+          "ty2",
+          "w3",
+          "h3",
+          "y3",
+          "s3",
+          "th3",
+          "ty3",
+          "w4",
+          "h4",
+          "y4",
+          "s4",
+          "th4",
+          "ty4",
+          "w5",
+          "h5",
+          "y5",
+          "s5",
+          "th5",
+          "ty5",
+          "w6",
+          "h6",
+          "y6",
+          "s6",
+          "th6",
+          "ty6",
+          "w7",
+          "h7",
+          "y7",
+          "s7",
+          "th7",
+          "ty7",
+          "w8",
+          "h8",
+          "y8",
+          "s8",
+          "th8",
+          "ty8",
+          "w9",
+          "h9",
+          "y9",
+          "s9",
+          "th9",
+          "ty9",
+          "w10",
+          "h10",
+          "y10",
+          "s10",
+          "th10",
+          "ty10",
+          "w11",
+          "h11",
+          "y11",
+          "s11",
+          "th11",
+          "ty11",
+          "w12",
+          "h12",
+          "y12",
+          "s12",
+          "th12",
+          "ty12",
+          "w13",
+          "h13",
+          "y13",
+          "s13",
+          "th13",
+          "ty13",
+          "w14",
+          "h14",
+          "y14",
+          "s14",
+          "th14",
+          "ty14",
+          "w15",
+          "h15",
+          "y15",
+          "s15",
+          "th15",
+          "ty15",
+          "w16",
+          "h16",
+          "y16",
+          "s16",
+          "th16",
+          "ty16",
+          "w17",
+          "h17",
+          "y17",
+          "s17",
+          "th17",
+          "ty17",
+          "w18",
+          "h18",
+          "y18",
+          "s18",
+          "th18",
+          "ty18",
+          "w19",
+          "h19",
+          "y19",
+          "s19",
+          "th19",
+          "ty19",
+          "w20",
+          "h20",
+          "y20",
+          "s20",
+          "th20",
+          "ty20",
+          "w21",
+          "h21",
+          "y21",
+          "s21",
+          "th21",
+          "ty21",
+          "w22",
+          "h22",
+          "y22",
+          "s22",
+          "th22",
+          "ty22",
+          "w23",
+          "h23",
+          "y23",
+          "s23",
+          "th23",
+          "ty23"
+        ]
+      }
+    }
+  ]
+}

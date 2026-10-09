@@ -1,0 +1,85 @@
+{
+  "_note": "单服务(22)。参数 svc = 内置服务目录里的 id;长按「编辑」换服务。点开进该服务的详情页。",
+  "version": 2,
+  "title": "单个服务",
+  "sub": "一个服务此刻的状态与进行中事故",
+  "i18n": {
+    "en-US": {
+      "title": "Single service",
+      "sub": "One service's status and open incident"
+    }
+  },
+  "layout": 22,
+  "params": {
+    "svc": "github"
+  },
+  "ai": {
+    "shows": "一个服务（如 GitHub、Claude、OpenAI）此刻的运行状态，以及进行中的事故与已持续多久",
+    "params": {
+      "svc": {
+        "kind": "enum",
+        "values": {
+          "github": "GitHub（代码与构建）",
+          "claude": "Claude（AI 服务）",
+          "openai": "OpenAI（AI 服务）",
+          "vercel": "Vercel（托管与数据库）",
+          "cursor": "Cursor（AI 服务）",
+          "npm": "npm（代码与构建）",
+          "docker": "Docker（代码与构建）",
+          "bitbucket": "Bitbucket（代码与构建）",
+          "circleci": "CircleCI（代码与构建）",
+          "netlify": "Netlify（托管与数据库）",
+          "supabase": "Supabase（托管与数据库）",
+          "render": "Render（托管与数据库）",
+          "digitalocean": "DigitalOcean（托管与数据库）",
+          "mongodb": "MongoDB Cloud（托管与数据库）",
+          "sentry": "Sentry（开发工具）",
+          "datadog": "Datadog（开发工具）",
+          "linear": "Linear（开发工具）",
+          "notion": "Notion（开发工具）",
+          "figma": "Figma（开发工具）",
+          "postman": "Postman（开发工具）",
+          "discord": "Discord（社区）",
+          "reddit": "Reddit（社区）"
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "numable://self/page/svc?id=${svc}",
+    "onEdit": "@[file://flow/edit-svc.af]"
+  },
+  "canvas": {
+    "source": "@[file://rc/svc.rcn]",
+    "depends": [
+      {
+        "flow": "@[file://flow/week.df]",
+        "params": {
+          "ids": "${svc}"
+        },
+        "_note": "近 7 天方格(只取这一个服务的事故历史);排在前,重名键(at / n / k0n)由 follow.df 胜出。"
+      },
+      {
+        "flow": "@[file://flow/follow.df]",
+        "params": {
+          "ids": "${svc}"
+        }
+      }
+    ],
+    "refresh": {
+      "_note": "状态页 2 分钟一查(infosource-standard §5「状态页」档);只有看得见的组件才会被轮询。",
+      "interval": [
+        "120"
+      ]
+    }
+  },
+  "_note_jobs": "长按 →「添加提醒」:这个服务出事时提醒,参数从组件的 svc 预填。",
+  "jobs": [
+    {
+      "id": "down",
+      "params": {
+        "svc": "${svc}"
+      }
+    }
+  ]
+}

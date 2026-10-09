@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "id": "funding",
+  "title": "资金费率提醒",
+  "sub": "永续资金费率超过你设的阈值时提醒",
+  "_note": "电平型:|当期资金费率| ≥ 阈值(% 口径,如 0.05)就响,冷却 8 小时(= 一个常见结算周期)。费率极端 = 一边拥挤,常是反转或插针前兆,这是盯盘的人最想第一时间知道的那类信号。",
+  "i18n": {
+    "en-US": {
+      "title": "Funding alert",
+      "sub": "When the perp funding rate gets extreme",
+      "message": {
+        "title": "${sym} funding ${frS}",
+        "body": "Settles ${setAt} — past your ±${th}% (positive = longs pay)"
+      },
+      "form": {
+        "pair": {
+          "title": "Coin",
+          "component": {
+            "props": {
+              "placeholder": "e.g. BTC-USDT"
+            }
+          }
+        },
+        "th": {
+          "title": "Threshold (%)",
+          "component": {
+            "props": {
+              "placeholder": "e.g. 0.05"
+            }
+          }
+        }
+      }
+    }
+  },
+  "params": {
+    "pair": "",
+    "th": ""
+  },
+  "form": {
+    "pair": {
+      "title": "币种",
+      "required": true,
+      "component": {
+        "type": "textInput",
+        "props": {
+          "placeholder": "如 BTC-USDT"
+        }
+      }
+    },
+    "th": {
+      "title": "阈值(%)",
+      "required": true,
+      "component": {
+        "type": "numberInput",
+        "props": {
+          "placeholder": "如 0.05"
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "/coin?pair=${pair}"
+  },
+  "task": {
+    "depends": [
+      {
+        "flow": "@[file://xJob/flow/fund.df]",
+        "params": {
+          "pair": "${pair}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "1800"
+      ],
+      "cooldown": 28800
+    }
+  },
+  "alert": {
+    "level": "quiet",
+    "activeCondition": "$[ge::(${frA},${th})]",
+    "message": {
+      "title": "${sym} 资金费率 ${frS}",
+      "body": "${setAt} 结算,超过你设的 ±${th}%(正 = 多头付费)"
+    }
+  }
+}

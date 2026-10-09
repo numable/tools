@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title data-i="dates">Lunar dates</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--fade:#AEB3BB;--line:#E4E7EC;--tile:#E7E9EE;
+  --src:#C8402F;--srcSoft:#F8E3DF;--term:#128F66;--wk:#C0584A;--accent:#128F66;--onSrc:#FFFFFF;
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--fade:#4A4F58;--line:#262A31;
+  --tile:#20232A;--src:#F2735F;--srcSoft:#3A1E19;--term:#6FE8BE;--wk:#E88A7D;--accent:#6FE8BE;--onSrc:#15171A;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"PingFang SC","Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+button{font:inherit;color:inherit}
+.hd{display:flex;align-items:flex-start;gap:10px}
+.hd h1{flex:1 1 auto;min-width:0}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:14px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.sec{font-size:13px;color:var(--sub);font-weight:500;margin:20px 0 8px;display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.sec b{color:var(--fg);font-weight:600}
+.chip{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:0 6px;line-height:18px;vertical-align:1px}
+.chip.off{background:var(--srcSoft);color:var(--src)}
+.chip.work{background:var(--tile);color:var(--sub)}
+.src{color:var(--src)}.term{color:var(--term)}.mut{color:var(--sub)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
+.kv:first-child{border-top:0;padding-top:0}.kv:last-child{padding-bottom:0}
+.kv>span:first-child{color:var(--sub);flex:0 0 auto}
+.kv>span:last-child{text-align:right}
+.lst{background:var(--card);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+.it{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line);width:100%;
+  background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;cursor:pointer}
+.it:first-child{border-top:0}
+.it .m{flex:1;min-width:0}
+.it .m b{display:block;font-size:14.5px;font-weight:600}
+.it .m i{display:block;font-style:normal;font-size:12px;color:var(--sub)}
+.it .v{text-align:right;font-size:13.5px;font-weight:600;white-space:nowrap}
+.it .v i{display:block;font-style:normal;font-weight:400;font-size:11.5px;color:var(--sub)}
+.it.cur{background:color-mix(in srgb,var(--src) 7%,var(--card))}
+.it.past{opacity:.5}
+.chev{color:var(--fade);font-size:18px;line-height:1}
+.seg{display:flex;background:var(--tile);border-radius:10px;padding:2px;gap:2px}
+.seg button{flex:1;border:0;background:none;font-size:12.5px;padding:6px 0;border-radius:8px;font-weight:600;color:var(--sub);cursor:pointer}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.meta{font-size:11.5px;color:var(--sub);margin-top:18px;line-height:1.6}
+.link{background:none;border:0;padding:0;color:var(--accent);font-weight:600;cursor:pointer;font-size:13.5px}
+/* 贴底 sheet(容器内自绘,不用窗口级浮层) */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;transition:opacity .22s;z-index:20}
+.mask.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-radius:18px 18px 0 0;z-index:21;
+  padding:14px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .26s ease;
+  max-height:86vh;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.12);visibility:hidden;transition:transform .26s ease,visibility 0s .26s}
+.sheet.on{transform:none;visibility:visible;transition:transform .26s ease}
+html[data-theme="dark"] .sheet{box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+.sheet h3{margin:0 0 12px;font-size:16px;display:flex;justify-content:space-between;align-items:center}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:12px;color:var(--sub);margin-bottom:5px}
+.fld input,.fld select{width:100%;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+  background:var(--bg);color:var(--fg);appearance:none;-webkit-appearance:none}
+.row2{display:flex;gap:10px}.row2>*{flex:1}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:12px;font-weight:700;font-size:15px;cursor:pointer;
+  background:var(--accent);color:var(--onSrc)}
+html[data-theme="dark"] .btn{color:#0B0C0E}
+.btn.ghost{background:var(--tile);color:var(--fg)}
+.btn.danger{background:none;color:var(--src);font-weight:600}
+.check{display:flex;align-items:center;gap:8px;font-size:14px}
+.check input{width:18px;height:18px}
+.empty{text-align:center;color:var(--sub);padding:26px 10px}
+@media (prefers-reduced-motion:reduce){.sheet,.mask{transition:none}}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+.it .m i .src{font-style:normal}
+.addrow{display:flex;justify-content:flex-end;margin:-4px 0 10px}
+</style>
+</head>
+<body>
+<div class="hd"><h1 data-i="dates"></h1><button class="link" id="add" style="margin-top:6px" data-i="add"></button></div>
+<div class="sub" data-i="datesLead"></div>
+<div class="lst" id="list"></div>
+<button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg"><b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button>
+<div class="meta" data-i="datesMeta"></div>
+
+<div class="mask" id="mask"></div>
+<div class="sheet" id="form">
+  <h3><span id="fTitle"></span><button class="link" id="fCancel" data-i="cancel"></button></h3>
+  <div class="fld"><label data-i="name"></label><input id="fName" maxlength="16"></div>
+  <div class="row2">
+    <div class="fld"><label data-i="lMonth"></label><select id="fM"></select></div>
+    <div class="fld"><label data-i="lDay"></label><select id="fD"></select></div>
+  </div>
+  <div class="fld"><label class="check"><input type="checkbox" id="fLeap"><span data-i="leapBorn"></span></label></div>
+  <div class="fld"><label data-i="kind"></label><div class="seg" id="fKind"><button data-v="b" data-i="kBirth"></button><button data-v="a" data-i="kAnniv"></button><button data-v="m" data-i="kMem"></button></div></div>
+  <div class="fld"><label data-i="lead"></label><div class="seg" id="fLead"><button data-v="0" data-i="ld0"></button><button data-v="1" data-i="ld1"></button><button data-v="3" data-i="ld3"></button><button data-v="7" data-i="ld7"></button></div></div>
+  <p class="meta" id="fPrev" style="margin:0 0 12px"></p>
+  <button class="btn" id="fSave" data-i="save"></button>
+  <button class="btn danger" id="fDel" data-i="del" style="margin-top:6px"></button>
+</div>
+<script>
+/* 万年历页面引擎(由 tools/infosource/calendar/gen.py 内联进各页,别手改)。
+   表与组件的取数流同源(tools/infosource/cncal),覆盖 1901–2100;verify_js.mjs 逐日对拍 Python 真值。
+   日序 dn = 距 1970-01-01 的整天数(本地日历日,与时区无关)。 */
+var CAL = {"NY0":1900,"NY":[-25537,-25153,-24799,-24444,-24061,-23707,-23352,-22968,-22614,-22259,-21875,-21521,-21137,-20783,-20429,-20045,-19691,-19336,-18952,-18597,-18213,-17859,-17505,-17121,-16767,-16413,-16028,-15674,-15319,-14935,-14581,-14198,-13844,-13489,-13105,-12750,-12396,-12012,-11658,-11274,-10920,-10566,-10182,-9827,-9473,-9088,-8734,-8380,-7996,-7642,-7258,-6904,-6549,-6165,-5811,-5456,-5072,-4718,-4335,-3980,-3626,-3242,-2887,-2533,-2149,-1794,-1441,-1057,-702,-318,36,391,775,1129,1483,1867,2221,2605,2959,3314,3698,4053,4407,4791,5145,5529,5883,6237,6621,6976,7331,7715,8069,8423,8806,9161,9545,9899,10254,10638,10992,11346,11730,12084,12439,12823,13177,13562,13916,14270,14654,15008,15362,15746,16101,16485,16839,17194,17578,17932,18286,18670,19024,19379,19763,20117,20501,20855,21209,21593,21948,22302,22686,23041,23425,23779,24133,24517,24871,25225,25609,25964,26319,26703,27057,27441,27795,28149,28533,28887,29242,29626,29981,30365,30719,31073,31456,31811,32165,32549,32904,33258,33642,33996,34380,34734,35089,35473,35827,36182,36566,36920,37304,37658,38012,38396,38751,39105,39489,39844,40198,40582,40936,41320,41674,42029,42413,42767,43122,43505,43859,44243,44597,44952,45336,45691,46045,46429,46783,47137,47521,47875],"LO":["0_29_59_88_117_147_176_206_236_265_295_325_354_384/1_2_3_4_5_6_7_8_r8_9_10_11_12","0_29_59_88_117_147_176_206_235_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_265_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_264_294_324_353_383/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_30_60_89_119_148_177_207_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_236_266_295_325_354_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_148_177_207_236_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_235_265_295_325_354_384/1_2_r2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_235_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_295_324_354_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_177_207_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_237_266_295_325_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_237_266_296_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_208_237_267_296_326_355/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_177_207_236_266_296_325_355_384/1_2_r2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_177_206_236_266_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_265_294_324_354_384/1_2_3_4_5_6_7_r7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_264_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_177_207_236_265_295_324_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_178_207_237_266_296_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_178_207_237_267_296_326_355_385/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_29_58_88_117_147_176_206_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_177_206_236_265_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_264_294_324_354_384/1_2_r2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_264_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_147_177_206_235_265_294_324_354_383/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_90_119_149_178_208_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_178_207_237_266_296_325_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_29_59_88_118_148_177_207_236_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_58_88_117_147_176_206_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_176_206_236_265_295_325_355_384/1_2_3_r3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_176_206_235_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_118_148_177_206_236_265_295_325_354_384/1_2_3_4_5_6_7_r7_8_9_10_11_12","0_30_60_89_118_148_177_206_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_208_237_266_296_325_355_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_207_236_266_296_325_355_385/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_29_58_88_117_146_176_205_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_176_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_118_148_177_206_236_265_295_324_354_384/1_2_r2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_206_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_236_266_295_325_354_384/1_2_3_4_5_6_7_r7_8_9_10_11_12","0_29_59_89_118_148_178_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_206_236_266_295_325_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_29_59_88_117_147_177_206_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_266_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_265_294_324_354_384/1_2_3_r3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_206_236_265_295_324_354_383/1_2_3_4_5_6_7_8_r8_9_10_11_12","0_30_60_90_119_149_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_178_207_237_266_296_325_355_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_59_89_118_148_177_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_265_295_325_355_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_265_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_264_294_324_353/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_90_119_149_178_207_237_266_295_325_355_384/1_2_3_r3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_148_177_207_236_266_295_325_354_384/1_2_3_4_5_6_7_r7_8_9_10_11_12","0_29_59_88_118_147_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_177_207_236_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_235_265_295_325_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_177_207_236_265_295_325_354_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_177_207_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_237_266_295_325_354_384/1_2_3_4_5_6_7_8_r8_9_10_11_12","0_30_59_89_119_148_178_207_237_266_296_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_208_237_267_296_326_355/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_177_207_236_266_296_325_355_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_59_88_118_147_177_206_236_266_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_294_324_354_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_177_207_236_265_295_324_354_384/1_2_3_4_5_6_7_8_9_10_r10_11_12","0_29_59_89_118_148_177_207_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_178_207_237_266_296_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_178_207_237_267_296_326_355_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_59_89_118_148_177_207_237_266_296_326_355/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_177_206_236_265_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_264_294_324_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_264_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_147_177_206_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_236_265_295_324_354_383/1_2_3_r3_4_5_6_7_8_9_10_11_12","0_30_60_90_119_149_178_208_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_237_266_295_325_354_384/1_2_3_4_5_6_7_8_r8_9_10_11_12","0_29_59_88_118_148_177_207_236_266_296_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_207_237_266_296_326_355/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_176_206_236_265_295_325_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_30_59_88_118_147_176_206_235_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_118_148_177_206_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_236_266_295_325_354_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_208_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_148_177_207_236_266_295_325_354_384/1_2_r2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_207_236_266_296_325_355_385/1_2_3_4_5_6_7_r7_8_9_10_11_12","0_29_58_88_117_146_176_205_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_176_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_118_148_177_206_236_265_295_324_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_206_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_237_266_296_325_355_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_206_236_266_295_325_354_384/1_2_3_4_5_6_7_8_9_r9_10_11_12","0_29_59_88_117_147_176_206_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_266_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_265_294_324_354_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_206_236_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_119_148_178_207_236_266_295_325_354_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_177_206_236_266_295_325_354_384/1_2_r2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_265_295_325_355_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_177_207_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_90_119_149_178_207_237_266_295_325_355_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_237_266_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_148_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_237_266_296_325_355_384/1_2_3_r3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_177_207_236_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_235_265_295_325_354_384/1_2_3_4_5_6_7_8_9_10_11_r11_12","0_29_59_88_117_147_176_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_177_207_236_265_295_324_354_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_60_89_119_148_177_207_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_237_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_208_237_267_296_326_355_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_237_267_296_326_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_207_236_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_235_265_295_324_354_384/1_2_r2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_294_324_354_384/1_2_3_4_5_6_7_r7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_207_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_237_266_295_325_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_29_59_89_118_148_178_207_237_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_178_207_237_267_296_326_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_206_236_266_295_325_355_384/1_2_3_r3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_176_206_236_265_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_205_235_264_294_324_354_384/1_2_3_4_5_6_7_8_r8_9_10_11_12","0_29_59_88_117_147_176_205_235_264_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_147_177_206_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_236_265_295_324_354_383/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_60_90_119_149_178_208_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_207_237_266_296_326_355_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_207_236_266_296_326_355/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_88_118_147_176_206_235_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_118_148_177_206_236_265_295_325_355_384/1_2_3_r3_4_5_6_7_8_9_10_11_12","0_30_60_89_118_148_177_206_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_236_266_295_325_354_384/1_2_3_4_5_6_7_r7_8_9_10_11_12","0_30_60_89_119_148_178_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_208_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_148_177_207_236_266_295_325_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_207_236_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_265_295_325_354_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_206_236_265_295_324_354_384/1_2_3_4_5_6_7_8_r8_9_10_11_12","0_30_59_89_118_148_177_206_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_119_148_178_207_237_266_296_325_355_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_30_59_89_118_148_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_177_206_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_266_296_325_355_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_266_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_177_206_236_265_294_324_354_384/1_2_3_r3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_206_236_265_294_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_119_148_177_207_236_266_295_324_354_384/1_2_3_4_5_6_7_r7_8_9_10_11_12","0_29_59_89_118_148_177_207_236_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_148_178_207_237_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_177_206_236_266_295_325_354_384/1_2_3_4_5_r5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_236_265_295_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_118_147_176_206_235_264_294_324_354_383/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_177_206_236_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_90_119_149_178_207_237_266_295_325_355_384/1_2_3_4_5_6_7_8_r8_9_10_11_12","0_30_60_89_119_148_178_207_237_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_208_237_267_296_326_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_89_118_148_177_207_237_266_296_325_355_384/1_2_3_4_5_6_r6_7_8_9_10_11_12","0_29_59_88_118_147_177_207_236_266_296_325_355/1_2_3_4_5_6_7_8_9_10_11_12","0_29_59_88_117_147_176_206_235_265_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_177_206_235_265_295_325_354_384/1_2_3_4_r4_5_6_7_8_9_10_11_12","0_30_59_89_118_147_176_206_235_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_177_206_236_265_295_324_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_207_237_266_295_325_354_384/1_2_r2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_148_178_207_237_266_295_325_354/1_2_3_4_5_6_7_8_9_10_11_12","0_30_60_89_119_149_178_208_237_267_296_325_355_384/1_2_3_4_5_6_7_r7_8_9_10_11_12"],"JQ0":1900,"HY":[2021,2022,2023,2024,2025,2026],"GAN":"甲乙丙丁戊己庚辛壬癸","ZHI":"子丑寅卯辰巳午未申酉戌亥","SX":"鼠牛虎兔龙蛇马羊猴鸡狗猪","SX_EN":["Rat","Ox","Tiger","Rabbit","Dragon","Snake","Horse","Goat","Monkey","Rooster","Dog","Pig"],"GAN_PY":["Jia","Yi","Bing","Ding","Wu","Ji","Geng","Xin","Ren","Gui"],"ZHI_PY":["zi","chou","yin","mao","chen","si","wu","wei","shen","you","xu","hai"],"MGZ_K":12,"FL":[["1-1","春节","Spring Festival","春节"],["1-15","元宵节","Lantern Festival","元宵节"],["2-2","龙抬头","Longtaitou","龙抬头"],["5-5","端午节","Dragon Boat Festival","端午节"],["7-7","七夕节","Qixi Festival","七夕节"],["7-15","中元节","Ghost Festival","中元节"],["8-15","中秋节","Mid-Autumn Festival","中秋节"],["9-9","重阳节","Double Ninth Festival","重阳节"],["12-8","腊八节","Laba Festival","腊八节"],["12-23","北方小年","Little New Year (North)","小年"]],"FS":[["01-01","元旦","New Year's Day","元旦"],["02-14","情人节","Valentine's Day","情人节"],["03-08","妇女节","Women's Day","妇女节"],["03-12","植树节","Arbor Day","植树节"],["05-01","劳动节","Labour Day","劳动节"],["05-04","青年节","Youth Day","青年节"],["06-01","儿童节","Children's Day","儿童节"],["07-01","建党节","CPC Founding Day","建党节"],["08-01","建军节","Army Day","建军节"],["09-10","教师节","Teachers' Day","教师节"],["10-01","国庆节","National Day","国庆节"],["12-24","平安夜","Christmas Eve","平安夜"],["12-25","圣诞节","Christmas","圣诞节"]],"SHORT_EN":{"春节":"Spring Fest","元宵节":"Lantern","龙抬头":"Longtaitou","端午节":"Dragon Boat","七夕节":"Qixi","中元节":"Ghost Fest","中秋节":"Mid-Autumn","重阳节":"Double Ninth","腊八节":"Laba","北方小年":"Little NY","除夕":"NY Eve","元旦":"New Year","情人节":"Valentine's","妇女节":"Women's Day","植树节":"Arbor Day","劳动节":"Labour Day","青年节":"Youth Day","儿童节":"Children's","建党节":"CPC Day","建军节":"Army Day","教师节":"Teachers'","国庆节":"National Day","平安夜":"Xmas Eve","圣诞节":"Christmas","母亲节":"Mother's Day","父亲节":"Father's Day","清明节":"Qingming"},"TERM_SHORT_EN":["Minor Cold","Major Cold","Spring Starts","Rain Water","Insects Wake","Spring Eqx","Qingming","Grain Rain","Summer Starts","Grain Buds","Grain in Ear","Summer Sol","Minor Heat","Major Heat","Autumn Starts","End of Heat","White Dew","Autumn Eqx","Cold Dew","Frost","Winter Starts","Minor Snow","Major Snow","Winter Sol"],"JQN":["小寒","大寒","立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至"],"JQ_EN":["Minor Cold","Major Cold","Start of Spring","Rain Water","Awakening of Insects","Spring Equinox","Clear and Bright","Grain Rain","Start of Summer","Grain Buds","Grain in Ear","Summer Solstice","Minor Heat","Major Heat","Start of Autumn","End of Heat","White Dew","Autumn Equinox","Cold Dew","Frost's Descent","Start of Winter","Minor Snow","Major Snow","Winter Solstice"],"MONTH_ZH":["正月","二月","三月","四月","五月","六月","七月","八月","九月","十月","冬月","腊月"],"DAY_ZH":["初一","初二","初三","初四","初五","初六","初七","初八","初九","初十","十一","十二","十三","十四","十五","十六","十七","十八","十九","二十","廿一","廿二","廿三","廿四","廿五","廿六","廿七","廿八","廿九","三十"],"SHA":["南","东","北","西","南","东","北","西","南","东","北","西"],"HOUE":[["Geese turn north","Magpies nest","Pheasants call"],["Hens brood","Hawks hunt fiercely","Ponds freeze solid"],["East wind thaws ice","Insects stir","Fish rise to the ice"],["Otters lay out fish","Geese return","Plants sprout"],["Peach trees bloom","Orioles sing","Hawks turn to doves"],["Swallows return","Thunder returns","Lightning appears"],["Paulownias bloom","Voles turn to quails","Rainbows appear"],["Duckweed appears","Cuckoos preen","Hoopoes on mulberries"],["Mole crickets chirp","Earthworms surface","Snake gourds grow"],["Sow thistle thrives","Fine grasses wither","Wheat ripens"],["Mantises hatch","Shrikes call","Mockingbirds hush"],["Deer shed antlers","Cicadas sing","Crow-dipper sprouts"],["Warm winds arrive","Crickets shelter","Young hawks hunt"],["Fireflies appear","Soil damp, air muggy","Heavy rains come"],["Cool winds arrive","White dew falls","Cold cicadas sing"],["Hawks lay out prey","Nature turns austere","Grain ripens"],["Geese fly south","Swallows leave","Birds store food"],["Thunder ceases","Insects seal burrows","Waters dry up"],["Geese arrive as guests","Sparrows turn to clams","Chrysanthemums bloom"],["Jackals lay out prey","Leaves turn and fall","Insects go dormant"],["Water freezes","Ground freezes","Pheasants become clams"],["Rainbows hide","Sky and earth part","Winter sets in"],["Night birds go quiet","Tigers court","Irises sprout"],["Earthworms curl up","Elk shed antlers","Springs start to flow"]],"PZG":["甲不开仓财物耗散","乙不栽植千株不长","丙不修灶必见灾殃","丁不剃头头必生疮","戊不受田田主不祥","己不破券二比并亡","庚不经络织机虚张","辛不合酱主人不尝","壬不泱水更难提防","癸不词讼理弱敌强"],"PZZ":["子不问卜自惹祸殃","丑不冠带主不还乡","寅不祭祀神鬼不尝","卯不穿井水泉不香","辰不哭泣必主重丧","巳不远行财物伏藏","午不苫盖屋主更张","未不服药毒气入肠","申不安床鬼祟入房","酉不会客醉坐颠狂","戌不吃犬作怪上床","亥不嫁娶不利新郎"]};
+var CalE = (function () {
+  "use strict";
+  function fl(a) { return Math.floor(a); }
+  function md(a, n) { return ((a % n) + n) % n; }
+  function dnOf(y, m, d) {
+    y -= m <= 2 ? 1 : 0;
+    var era = fl(y / 400), yoe = y - era * 400, mp = m > 2 ? m - 3 : m + 9;
+    var doy = fl((153 * mp + 2) / 5) + d - 1;
+    return era * 146097 + yoe * 365 + fl(yoe / 4) - fl(yoe / 100) + doy - 719468;
+  }
+  function ymd(dn) {
+    var z = dn + 719468, era = fl(z / 146097), doe = z - era * 146097;
+    var yoe = fl((doe - fl(doe / 1460) + fl(doe / 36524) - fl(doe / 146096)) / 365);
+    var doy = doe - (365 * yoe + fl(yoe / 4) - fl(yoe / 100)), mp = fl((5 * doy + 2) / 153);
+    var d = doy - fl((153 * mp + 2) / 5) + 1, m = mp < 10 ? mp + 3 : mp - 9;
+    return { y: yoe + era * 400 + (m <= 2 ? 1 : 0), m: m, d: d };
+  }
+  function wd(dn) { return md(dn + 4, 7); }            /* 0 = 周日 */
+  function todayDn() { var t = new Date(); return dnOf(t.getFullYear(), t.getMonth() + 1, t.getDate()); }
+  function iso(dn) { var x = ymd(dn); return x.y + "-" + (x.m < 10 ? "0" : "") + x.m + "-" + (x.d < 10 ? "0" : "") + x.d; }
+  function inRange(dn) { return dn >= dnOf(1901, 1, 1) && dn <= dnOf(2100, 12, 31); }
+
+  var rowCache = {};
+  function lyRow(ly) {
+    if (rowCache[ly]) return rowCache[ly];
+    var s = CAL.LO[ly - CAL.NY0].split("/"), o = s[0].split("_").map(Number), c = s[1].split("_");
+    return (rowCache[ly] = { ny: CAL.NY[ly - CAL.NY0], off: o.slice(0, o.length - 1), end: o[o.length - 1], codes: c });
+  }
+  /* 公历 → 农历 {ly, code, mno, leap, day, size, i} */
+  function lunar(dn) {
+    var y = ymd(dn).y, ly = dn >= CAL.NY[y - CAL.NY0] ? y : y - 1, r = lyRow(ly), off = dn - r.ny, i = 0;
+    for (var j = 0; j < r.off.length; j++) if (r.off[j] <= off) i = j;
+    var nxt = i + 1 < r.off.length ? r.off[i + 1] : r.end, code = r.codes[i], leap = code.charAt(0) === "r";
+    return { ly: ly, code: code, leap: leap, mno: +(leap ? code.slice(1) : code), day: off - r.off[i] + 1,
+             size: nxt - r.off[i], i: i, start: r.ny + r.off[i] };
+  }
+  /* 农历 → 公历:闰月不存在按正常月;day 超出当月天数取当月最后一天(shifted) */
+  function l2s(ly, m, d, leap) {
+    if (ly < 1901 || ly > 2100) return null;
+    var r = lyRow(ly), code = (leap ? "r" : "") + m, i = r.codes.indexOf(code);
+    if (i < 0) i = r.codes.indexOf(String(m));
+    var size = (i + 1 < r.off.length ? r.off[i + 1] : r.end) - r.off[i];
+    return { dn: r.ny + r.off[i] + Math.min(d, size) - 1, shifted: d > size, size: size, leapUsed: leap && r.codes[i] === code };
+  }
+  function leapOf(ly) { var c = lyRow(ly).codes; for (var i = 0; i < c.length; i++) if (c[i].charAt(0) === "r") return +c[i].slice(1); return 0; }
+  function terms(y) {
+    var a = CAL.JQ[y - CAL.JQ0].split("_").map(Number), t = CAL.JT[y - CAL.JQ0].split("_");
+    return a.map(function (dn, i) { return { dn: dn, t: t[i] === "x" ? "" : t[i], i: i }; });
+  }
+  function gzName(i) { return CAL.GAN.charAt(md(i, 10)) + CAL.ZHI.charAt(md(i, 12)); }
+  function gzPy(i) { return CAL.GAN_PY[md(i, 10)] + CAL.ZHI_PY[md(i, 12)]; }
+  function gzDay(dn) { return md(dn + 17, 60); }
+  function gzYear(ly) { return md(ly - 4, 60); }
+  function gzMonth(dn) {
+    var x = ymd(dn), jie = terms(x.y)[2 * x.m - 2].dn;
+    return md(x.y * 12 + x.m - (dn >= jie ? 0 : 1) + CAL.MGZ_K, 60);
+  }
+  function monthBranch(dn) { var x = ymd(dn); return dn >= terms(x.y)[2 * x.m - 2].dn ? x.m % 12 : (x.m - 1) % 12; }
+  function curTerm(dn) {
+    var y = ymd(dn).y, T = terms(y), cur = null, nxt = null;
+    for (var i = 0; i < 24; i++) { if (T[i].dn <= dn) cur = T[i]; else if (!nxt) nxt = T[i]; }
+    if (!cur) { var P = terms(y - 1); cur = P[23]; }
+    if (!nxt) { nxt = terms(y + 1)[0]; }
+    var hi = Math.min(fl((dn - cur.dn) / 5), 2);
+    return { cur: cur, next: nxt, hou: hi, today: cur.dn === dn ? cur : null };
+  }
+  /* 这一天的全部节日 [{k:'fest'|'sfest', zh, en, sh}],顺序即优先级 */
+  function festivals(dn) {
+    var L = lunar(dn), x = ymd(dn), out = [], key, i;
+    if (dn === lyRow(L.ly + 1).ny - 1) out.push({ k: "fest", zh: "除夕", en: "New Year's Eve", sh: "除夕" });
+    key = L.code + "-" + L.day;
+    for (i = 0; i < CAL.FL.length; i++) if (CAL.FL[i][0] === key) out.push({ k: "fest", zh: CAL.FL[i][1], en: CAL.FL[i][2], sh: CAL.FL[i][3] });
+    key = (x.m < 10 ? "0" : "") + x.m + "-" + (x.d < 10 ? "0" : "") + x.d;
+    for (i = 0; i < CAL.FS.length; i++) if (CAL.FS[i][0] === key) out.push({ k: "sfest", zh: CAL.FS[i][1], en: CAL.FS[i][2], sh: CAL.FS[i][3] });
+    if (x.m === 5 || x.m === 6) {
+      var first = dnOf(x.y, x.m, 1), sun = first + md(7 - wd(first), 7);
+      if (x.m === 5 && dn === sun + 7) out.push({ k: "sfest", zh: "母亲节", en: "Mother's Day", sh: "母亲节" });
+      if (x.m === 6 && dn === sun + 14) out.push({ k: "sfest", zh: "父亲节", en: "Father's Day", sh: "父亲节" });
+    }
+    return out;
+  }
+  /* 格子标签(§4.2):传统节日 > 节气 > 公历节日 > 初一月名 > 农历日。k:2/3/4/5/6 */
+  function tag(dn, en) {
+    var fs = festivals(dn), T = terms(ymd(dn).y), i;
+    for (i = 0; i < fs.length; i++) if (fs[i].k === "fest") return { t: en ? (CAL.SHORT_EN[fs[i].zh] || fs[i].en) : fs[i].sh, k: 2, full: en ? fs[i].en : fs[i].zh };
+    for (i = 0; i < 24; i++) if (T[i].dn === dn) return { t: en ? CAL.TERM_SHORT_EN[i] : CAL.JQN[i], k: 3, full: en ? CAL.JQ_EN[i] : CAL.JQN[i] };
+    for (i = 0; i < fs.length; i++) if (fs[i].k === "sfest") return { t: en ? (CAL.SHORT_EN[fs[i].zh] || fs[i].en) : fs[i].sh, k: 4, full: en ? fs[i].en : fs[i].zh };
+    var L = lunar(dn);
+    if (L.day === 1) return { t: monthName(L, en, true), k: 5, full: monthName(L, en) };
+    return { t: en ? String(L.day) : CAL.DAY_ZH[L.day - 1], k: 6, full: dayName(L, en) };
+  }
+  function monthName(L, en, short) {
+    // 短写(格子 / 月份副标题):「9th mo」「Leap 6」—— 原「M9」读不懂(2026-10-08,与组件同口径)
+    if (en && short) return L.leap ? "Leap " + L.mno : L.mno + (L.mno === 1 ? "st" : L.mno === 2 ? "nd" : L.mno === 3 ? "rd" : "th") + " mo";
+    if (en) return (L.leap ? "Leap Month " : "Month ") + L.mno;
+    return (L.leap ? "闰" : "") + CAL.MONTH_ZH[L.mno - 1];
+  }
+  function dayName(L, en) { return en ? "Day " + L.day : CAL.DAY_ZH[L.day - 1]; }
+  function lunarText(L, en) { return en ? monthName(L, true) + " · " + dayName(L, true) : monthName(L) + dayName(L); }
+  function yearText(ly, en) {
+    var g = gzYear(ly);
+    return en ? gzPy(g) + " · Year of the " + CAL.SX_EN[g % 12] : gzName(g) + CAL.SX.charAt(g % 12) + "年";
+  }
+  /* 休 / 班:{h:1|2, p:假期} 或 null(表外不显示、不猜) */
+  var marks = null;
+  function hd(dn) {
+    if (!marks) {
+      marks = {};
+      CAL.HOL.forEach(function (p) {
+        for (var d = p[0]; d <= p[1]; d++) marks[d] = { h: 1, p: p };
+        p[5].forEach(function (w) { marks[w] = { h: 2, p: p }; });
+      });
+    }
+    return marks[dn] || null;
+  }
+  function holidayYears() { return CAL.HY; }
+  function periods(y) { return CAL.HOL.filter(function (p) { return p[6] === y; }); }
+  /* 黄历 */
+  var yj = null;
+  function yiji(dn) {
+    if (!CAL.YJ) return null;
+    if (!yj) { yj = {}; CAL.YJ.split("~").forEach(function (r) { var i = r.indexOf("="); if (i > 0) yj[r.slice(0, i)] = r.slice(i + 1).split("/"); }); }
+    var g = gzDay(dn), v = yj[CAL.ZHI.charAt(monthBranch(dn)) + gzName(g)];
+    if (!v) return null;
+    var zi = g % 12;
+    return { yi: v[0] ? v[0].split(" ") : [], ji: v[1] ? v[1].split(" ") : [], zx: v[2], ts: v[3],
+             cs: "冲" + CAL.SX.charAt((zi + 6) % 12) + " 煞" + CAL.SHA[zi], pz: CAL.PZG[g % 10] + " · " + CAL.PZZ[zi] };
+  }
+  /* 按立春换年那行(§4.3):只在两种口径分叉的日子返回 */
+  function lichunAlt(dn) {
+    var x = ymd(dn), lc = dn >= terms(x.y)[2].dn ? x.y : x.y - 1, ly = lunar(dn).ly;
+    return lc === ly ? "" : gzName(gzYear(lc));
+  }
+  return { dnOf: dnOf, ymd: ymd, wd: wd, todayDn: todayDn, iso: iso, inRange: inRange, lunar: lunar, l2s: l2s,
+           leapOf: leapOf, terms: terms, curTerm: curTerm, gzName: gzName, gzPy: gzPy, gzDay: gzDay, gzYear: gzYear,
+           gzMonth: gzMonth, festivals: festivals, tag: tag, monthName: monthName, dayName: dayName,
+           lunarText: lunarText, yearText: yearText, hd: hd, periods: periods, holidayYears: holidayYears,
+           yiji: yiji, lichunAlt: lichunAlt, monthBranch: monthBranch };
+})();
+
+/* 万年历页面共享脚本(由 gen.py 内联进各页,别手改)。 */
+var LANG = "en", DARK = false, EN = true, INFO = {};
+var I18N = {"zh":{"title":"万年历","reload":"回到今天","backToday":"回到今天","almanacT":"黄历","folk":"民俗参考","more":"更多","holidays":"放假安排","terms":"二十四节气","dates":"我的农历日子","tools":"日期换算","toolsS":"公历农历互查 · 相差几天","settings":"设置","pickMonth":"选择年月","weekStart":"每周从哪天开始","mon":"周一","sun":"周日","showAlmanac":"黄历","show":"显示","hide":"不显示","showOffwork":"休 / 班标记","owOn":"显示休班","owOff":"不显示休班","setNote":"周首和休 / 班标记也会用在月历、本周等组件上。","off":"休","work":"班","gOff":"休","gWork":"班","wd1":"一,二,三,四,五,六,日","wd0":"日,一,二,三,四,五,六","pending":"{y} 年放假安排尚未公布","weekN":"第 {n} 周","lunar":"农历","big":"大","small":"小","ganzhi":"干支","festival":"节日","dayoff":"放假","offN":"{name} · 第 {n} 天 · 共 {d} 天","workN":"{name}调休，照常上班","term":"节气","termAt":"今天 {t} 交节（北京时间）","termNow":"{a} · 下一个{b} {n} 天后","lichun":"按立春换年为{g}年","yi":"宜","ji":"忌","chongsha":"冲煞","zhishen":"值星 · 值神","pengzu":"彭祖百忌","holNow":"{name}放假中 · 第 {n} 天","holNext":"{name} · {n} 天后","nowTerm":"现在是{a}","datesNext":"{name} · {n} 天后","datesNone":"还没有，点进去添加","wsMon":"周一开始","wsSun":"周日开始","alOn":"显示黄历","alOff":"不显示黄历","meta":"农历与节气覆盖 1901–2100 年，已与香港天文台对照表核对。放假安排来自国务院办公厅通知，已更新至 {y} 年。历法数据参考 6tail/lunar（MIT）与 holiday-cn（MIT）。","saveFail":"没有保存成功，请再试一次","today":"今天","inDays":"{n} 天后","daysAgo":"{n} 天前","pickT":"添加「农历日子」组件","pickS":"最近三个农历日子放在桌面上","holLead":"{y} 年 · 国务院办公厅通知","past":"已过","holOnN":"放假中 · 第 {n} 天","daysN":"{n} 天","paper":"查看通知原文","holMeta":"{y} 年放假安排尚未公布，公布后会随工具更新补上。","nowIs":"现在是","termAtShort":"{t} 交节","nextIn":"{a} {n} 天后","termLead":"交节时刻为北京时间","termMeta":"三候出自《逸周书·时训解》。","add":"添加","datesLead":"按农历记，每年自动换算成公历","datesMeta":"最多 12 条。农历三十出生而当年该月只有 29 天的，按廿九过；闰月出生而当年没有这个闰月的，按正常月过。","cancel":"取消","name":"名称","lMonth":"农历月","lDay":"农历日","leapBorn":"闰月","kind":"类别","kBirth":"生日","kAnniv":"纪念日","kMem":"忌日","lead":"提醒","ld0":"当天","ld1":"提前 1 天","ld3":"提前 3 天","ld7":"提前 7 天","ldS0":"当天提醒","ldS1":"提前 1 天提醒","ldS3":"提前 3 天提醒","ldS7":"提前 7 天提醒","prevNext":"下一次：{d}，{n} 天后","addT":"添加农历日子","editT":"编辑农历日子","save":"保存","del":"删除","needName":"先写个名称","delAsk":"删除「{name}」？","as29":"今年{m}小，按廿九","datesEmpty":"还没有农历日子。点右上角「添加」，记下家人的农历生日。","toolsLead":"范围 1901–2100 年","s2l":"公历 → 农历","l2s":"农历 → 公历","solar":"公历日期","lYear":"农历年","range":"超出万年历范围（1901–2100）","leapHas":"闰月（这一年闰{m}）","leapNone":"闰月（这一年没有闰月）","smallM":"这个月只有 {n} 天，按最后一天算","diffT":"两个日期相差","from":"从","to":"到","weeksN":"约 {w} 周 {d} 天","offT":"往后 / 往前推算","days":"天数","fwd":"往后","bwd":"往前","toolsMeta":"日期按本机所在地的日历对照。"},"en":{"title":"Chinese Calendar","reload":"Back to today","backToday":"Today","almanacT":"Chinese almanac","folk":"folk custom","more":"More","holidays":"China public holidays","terms":"Solar terms","dates":"Lunar dates","tools":"Date tools","toolsS":"Convert dates · days between","settings":"Settings","pickMonth":"Pick a month","weekStart":"Week starts on","mon":"Monday","sun":"Sunday","showAlmanac":"Chinese almanac","show":"Show","hide":"Hide","showOffwork":"China days off","owOn":"Days off shown","owOff":"Days off hidden","setNote":"Also used by the month, week and other widgets.","off":"Off","work":"Work","gOff":"off","gWork":"wk","wd1":"M,T,W,T,F,S,S","wd0":"S,M,T,W,T,F,S","pending":"{y} holiday schedule not yet published","weekN":"week {n}","lunar":"Lunar","big":"30 days","small":"29 days","ganzhi":"Ganzhi","festival":"Festival","dayoff":"Holiday","offN":"{name} · day {n} of {d}","workN":"Make-up workday for {name}","term":"Solar term","termAt":"Begins today at {t} Beijing time","termNow":"{a} · {b} in {n}d","lichun":"","yi":"Good for","ji":"Avoid","chongsha":"Clash","zhishen":"Duty god","pengzu":"Pengzu taboos","holNow":"{name} · day {n}","holNext":"{name} in {n}d","nowTerm":"Now: {a}","datesNext":"{name} in {n}d","datesNone":"None yet","wsMon":"Week starts Monday","wsSun":"Week starts Sunday","alOn":"Almanac shown","alOff":"Almanac hidden","meta":"Lunar dates and solar terms cover 1901–2100, checked against the Hong Kong Observatory tables. Public holidays follow the State Council notices, updated through {y}. Built on 6tail/lunar (MIT) and holiday-cn (MIT).","saveFail":"Couldn't save. Try again.","today":"Today","inDays":"in {n}d","daysAgo":"{n}d ago","pickT":"Add the Lunar dates widget","pickS":"Your next three lunar dates","holLead":"{y} · State Council notice","past":"Past","holOnN":"On now · day {n}","daysN":"{n} days","daysN.one":"{n} day","paper":"Read the official notice","holMeta":"The {y} schedule hasn't been published yet. It'll arrive with an update.","nowIs":"Now","termAtShort":"{t}","nextIn":"{a} in {n}d","termLead":"Times are Beijing time","termMeta":"The three pentads come from the Yi Zhou Shu, loosely translated here.","add":"Add","datesLead":"Kept by the lunar calendar and converted every year","datesMeta":"Up to 12. If the 30th falls in a 29-day month, it moves to the 29th; a leap-month date uses the regular month when there's no leap month.","cancel":"Cancel","name":"Name","lMonth":"Lunar month","lDay":"Lunar day","leapBorn":"Leap month","kind":"Type","kBirth":"Birthday","kAnniv":"Anniversary","kMem":"Memorial","lead":"Remind","ld0":"Same day","ld1":"1 day before","ld3":"3 days before","ld7":"7 days before","ldS0":"Reminds that day","ldS1":"Reminds 1 day before","ldS3":"Reminds 3 days before","ldS7":"Reminds 7 days before","prevNext":"Next: {d}, in {n}d","addT":"Add a lunar date","editT":"Edit lunar date","save":"Save","del":"Delete","needName":"Add a name first","delAsk":"Delete “{name}”?","as29":"short month this year · on the 29th","datesEmpty":"No lunar dates yet. Tap Add to keep a lunar birthday.","toolsLead":"1901–2100","s2l":"Solar → lunar","l2s":"Lunar → solar","solar":"Date","lYear":"Lunar year","range":"Out of range (1901–2100)","leapHas":"Leap month (this year: {m})","leapNone":"Leap month (none this year)","smallM":"This month has {n} days, so the last day is used","diffT":"Days between","from":"From","to":"To","weeksN":"about {w} {wu} {d} {du}","offT":"Count forward / back","days":"Days","fwd":"Forward","bwd":"Back","toolsMeta":"Dates follow your device's local calendar."}};
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 缺键回落英文(doc/overseas-first.md §2);空串是合法译文(hasOwnProperty 判,不用 ||) */
+function t(k) {
+  var T = I18N[LANG];
+  if (T && Object.prototype.hasOwnProperty.call(T, k)) return T[k];
+  return Object.prototype.hasOwnProperty.call(I18N.en, k) ? I18N.en[k] : k;
+}
+function tf(k, o) { return t(k).replace(/\{(\w+)\}/g, function (_, n) { return o[n] == null ? "" : o[n]; }); }
+/* 带数字的句子按单复数取词:n === 1 且本语言有 `<key>.one` 时用它(英文「1 day」) */
+function tp(k, n, o) {
+  var T = I18N[LANG], k1 = k + ".one";
+  return tf(n === 1 && T && Object.prototype.hasOwnProperty.call(T, k1) ? k1 : k, o);
+}
+/* 周首缺省(§6):宿主 firstWeekday(ISO 1 周一 … 7 周日);本包只支持周一 / 周日 → 7 = 周日(0),其余 = 周一(1);
+   老宿主没给 → 国内默认周一、海外默认周日 */
+function defWs() {
+  var fw = String(INFO.firstWeekday == null ? "" : INFO.firstWeekday);
+  if (!fw) return nbCnDefault(INFO) ? 1 : 0;
+  return fw === "7" ? 0 : 1;
+}
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+}
+function $(id) { return document.getElementById(id); }
+function applyTheme(x) {
+  DARK = x ? x === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", DARK ? "dark" : "light");
+}
+/* 桥调用一律先探测(老 App 上缺哪个就是 undefined) */
+function hap(k) { if (window.xbridge && xbridge.haptic) xbridge.haptic(k); }
+function toast(m, ty) { if (window.xbridge && xbridge.toast) xbridge.toast(m, ty); }
+function go(u) { if (window.xbridge && xbridge.route) xbridge.route(u); }
+async function runDF(name, p) {
+  try { var r = await xbridge.runDataFlow(name, p || {}); return (r && r.data) || {}; } catch (e) { return null; }
+}
+async function runAF(name, p) {
+  try { await xbridge.runFlow(name, p || {}); return true; } catch (e) { return false; }
+}
+var WDZ = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"], WDE = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+var MOE = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function wdName(dn) { return (EN ? WDE : WDZ)[CalE.wd(dn)]; }
+function mdText(dn) { var x = CalE.ymd(dn); return EN ? MOE[x.m - 1] + " " + x.d : x.m + " 月 " + x.d + " 日"; }
+function ymdText(dn) { var x = CalE.ymd(dn); return EN ? MOE[x.m - 1] + " " + x.d + ", " + x.y : x.y + " 年 " + x.m + " 月 " + x.d + " 日"; }
+function ymText(y, m) { return EN ? MOE[m - 1] + " " + y : y + " 年 " + m + " 月"; }
+function relDays(n) {
+  if (n === 0) return t("today");
+  return n > 0 ? tf("inDays", { n: n }) : tf("daysAgo", { n: -n });
+}
+function openSheet(id) { $("mask").classList.add("on"); $(id).classList.add("on"); }
+function closeSheets() {
+  $("mask").classList.remove("on");
+  Array.prototype.forEach.call(document.querySelectorAll(".sheet"), function (s) { s.classList.remove("on"); });
+}
+async function boot(main) {
+  /* 启动顺序照 market boot():先用宿主在 documentStart 写好的 <html data-lang / data-theme>,appInfo 回来再以它为准;
+     appInfo 带信封且 code≠0 = 没拿到(nbInfo 已处理)。缺省一律英文。 */
+  var de = document.documentElement;
+  var hostLang = de.getAttribute("data-lang") || "", hostTheme = de.getAttribute("data-theme") || "";
+  if (hostLang) LANG = nbLang(hostLang);
+  INFO = await nbInfo();
+  applyTheme(INFO.theme || hostTheme || undefined);
+  LANG = nbLang(INFO.language || INFO.locale);
+  EN = LANG === "en";
+  de.lang = EN ? "en" : "zh";
+  Array.prototype.forEach.call(document.querySelectorAll("[data-i]"), function (el) { el.textContent = t(el.dataset.i); });
+  var mk = $("mask"); if (mk) mk.addEventListener("click", closeSheets);
+  await main();
+}
+
+var TODAY = CalE.todayDn(), LIST = [], EDIT = null, F = {};
+var MAX = 12, OCC = 12;
+function lunarLabel(e, en) {
+  var m = CAL.MONTH_ZH[e.lm - 1], d = CAL.DAY_ZH[e.ld - 1];
+  if (en) return (e.leap ? "Leap Month " : "Month ") + e.lm + " Day " + e.ld;
+  return (e.leap ? "闰" : "") + m + d;
+}
+/* 预算未来 OCC 次(≥ 今天)的公历日期 —— 组件与提醒只读这份,不在流里换算(设计 §5.5) */
+function occurrences(e) {
+  var ly = CalE.lunar(TODAY).ly - 1, nx = [], nz = [], ne = [], nf = [];
+  for (; nx.length < OCC && ly <= 2100; ly++) {
+    var r = CalE.l2s(ly, e.lm, e.ld, !!e.leap);
+    if (!r || r.dn < TODAY) continue;
+    nx.push(r.dn); nf.push(r.shifted ? 1 : 0);
+    var x = CalE.ymd(r.dn);
+    nz.push(x.m + " 月 " + x.d + " 日 " + WDZ[CalE.wd(r.dn)]);
+    ne.push(MOE[x.m - 1] + " " + x.d + " " + WDE[CalE.wd(r.dn)]);
+  }
+  e.nx = nx.join(":"); e.nf = nf.join(":"); e.nz = nz.join(":"); e.ne = ne.join(":");
+  e.lt = lunarLabel(e, false); e.le = lunarLabel(e, true);
+  return e;
+}
+function next(e) {
+  var nx = String(e.nx || "").split(":").map(Number), nf = String(e.nf || "").split(":");
+  for (var i = 0; i < nx.length; i++) if (nx[i] >= TODAY) return { dn: nx[i], shifted: nf[i] === "1" };
+  return null;
+}
+function paint() {
+  var rows = LIST.map(function (e, i) { return { e: e, i: i, n: next(e) }; });
+  rows.sort(function (a, b) { return (a.n ? a.n.dn : 1e9) - (b.n ? b.n.dn : 1e9); });
+  $("list").innerHTML = rows.length ? rows.map(function (r) {
+    var e = r.e, n = r.n, days = n ? n.dn - TODAY : null;
+    var sub = esc(lunarLabel(e, EN)) + " · " + esc(t("ldS" + (e.lead || 0))) + (n && n.shifted ? '<br><span class="src">' + esc(tf("as29", { m: CAL.MONTH_ZH[e.lm - 1] })) + "</span>" : "");
+    return '<button class="it" data-i2="' + r.i + '"><div class="m"><b>' + esc(e.name) + "</b><i>" + sub + '</i></div><div class="v">' +
+      (n ? (days === 0 ? '<span class="src">' + t("today") + "</span>" : esc(tp("daysN", days, { n: days }))) + "<i>" + esc((CalE.ymd(n.dn).y !== CalE.ymd(TODAY).y ? ymdText(n.dn) : mdText(n.dn)) + " " + wdName(n.dn)) + "</i>" : "--") + "</div></button>";
+  }).join("") : '<div class="empty">' + esc(t("datesEmpty")) + "</div>";
+  $("add").style.visibility = LIST.length >= MAX ? "hidden" : "visible";
+}
+function fillSelects() {
+  var m = "", d = "";
+  for (var i = 1; i <= 12; i++) m += '<option value="' + i + '">' + (EN ? "Month " + i : CAL.MONTH_ZH[i - 1]) + "</option>";
+  for (i = 1; i <= 30; i++) d += '<option value="' + i + '">' + (EN ? "Day " + i : CAL.DAY_ZH[i - 1]) + "</option>";
+  $("fM").innerHTML = m; $("fD").innerHTML = d;
+}
+function segSet(id, v) { Array.prototype.forEach.call($(id).querySelectorAll("button"), function (b) { b.classList.toggle("on", b.dataset.v === String(v)); }); }
+function preview() {
+  var e = { lm: +$("fM").value, ld: +$("fD").value, leap: $("fLeap").checked ? 1 : 0 };
+  var r = CalE.l2s(CalE.lunar(TODAY).ly, e.lm, e.ld, !!e.leap), n = null;
+  occurrences(e); n = next(e);
+  $("fPrev").textContent = n ? tf("prevNext", { d: ymdText(n.dn) + " " + wdName(n.dn), n: n.dn - TODAY }) + (n.shifted ? " · " + tf("as29", { m: CAL.MONTH_ZH[e.lm - 1] }) : "") : "";
+}
+function openForm(i) {
+  EDIT = i == null ? null : i;
+  var e = i == null ? { name: "", lm: 1, ld: 1, leap: 0, kind: "b", lead: 3 } : LIST[i];
+  F = { kind: e.kind || "b", lead: e.lead == null ? 3 : e.lead };
+  $("fTitle").textContent = t(i == null ? "addT" : "editT");
+  $("fName").value = e.name; $("fM").value = e.lm; $("fD").value = e.ld; $("fLeap").checked = !!e.leap;
+  segSet("fKind", F.kind); segSet("fLead", F.lead);
+  $("fDel").style.display = i == null ? "none" : "";
+  preview(); openSheet("form");
+}
+async function persist() {
+  if (!(await runAF("dates", { list: LIST }))) { toast(t("saveFail"), "error"); return false; }
+  return true;
+}
+async function save() {
+  var name = $("fName").value.trim();
+  if (!name) { toast(t("needName"), "error"); $("fName").focus(); return; }
+  var e = occurrences({ id: EDIT == null ? "d" + Date.now().toString(36) : LIST[EDIT].id, name: name, lm: +$("fM").value, ld: +$("fD").value,
+                         leap: $("fLeap").checked ? 1 : 0, kind: F.kind, lead: F.lead });
+  if (EDIT == null) LIST.push(e); else LIST[EDIT] = e;
+  closeSheets(); paint();
+  await persist();
+}
+async function confirmAsk(title) {
+  try {
+    if (window.xbridge && xbridge.confirm) {
+      var r = await xbridge.confirm(title, "", { destructive: true });
+      return !!(r === true || (r && (r.data === true || (r.data && r.data.ok))));
+    }
+  } catch (e) {}
+  return true;
+}
+async function del() {
+  if (EDIT == null) return;
+  if (!(await confirmAsk(tf("delAsk", { name: LIST[EDIT].name })))) return;
+  LIST.splice(EDIT, 1); closeSheets(); paint();
+  await persist();
+}
+async function reload() {
+  var d = await runDF("read", {});
+  if (d) LIST = Array.isArray(d.lunarDates) ? d.lunarDates : [];
+  TODAY = CalE.todayDn();
+  /* 预算的日期快用完(或跨过了新的一年)就在打开页面时顺手续上 —— 组件只能读页面写下的这份 */
+  var stale = LIST.some(function (e) { var nx = String(e.nx || "").split(":").filter(function (x) { return +x >= TODAY; }); return nx.length < OCC - 2; });
+  if (stale) { LIST = LIST.map(occurrences); void persist(); }
+  paint();
+}
+boot(async function () {
+  fillSelects();
+  $("add").addEventListener("click", function () { openForm(null); });
+  $("fCancel").addEventListener("click", closeSheets);
+  $("fSave").addEventListener("click", function () { void save(); });
+  $("fDel").addEventListener("click", function () { void del(); });
+  ["fM", "fD", "fLeap"].forEach(function (id) { $(id).addEventListener("change", preview); });
+  Array.prototype.forEach.call($("fKind").querySelectorAll("button"), function (b) { b.addEventListener("click", function () { F.kind = b.dataset.v; segSet("fKind", F.kind); hap("selection"); }); });
+  Array.prototype.forEach.call($("fLead").querySelectorAll("button"), function (b) { b.addEventListener("click", function () { F.lead = +b.dataset.v; segSet("fLead", F.lead); hap("selection"); }); });
+  $("list").addEventListener("click", function (e) { var b = e.target.closest("[data-i2]"); if (b) openForm(+b.dataset.i2); });
+  $("pickw").addEventListener("click", function () { if (window.xbridge && xbridge.pickWidgets) xbridge.pickWidgets([{ id: "dates", params: {} }]); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) void reload(); });
+  await reload();
+});
+</script>
+</body></html>

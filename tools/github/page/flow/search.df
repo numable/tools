@@ -1,0 +1,116 @@
+{
+ "_note": "仓库搜索(搜索型信息源的入口)。per_page=8 —— 实测全量条目约 6KB/个,取 8 条约 50KB,踩在标准 §3 第 5 条「单次取数 ≤100KB」的线内;再多就该翻页而不是一次拉。⚠️ search 端点自己的限流是 **10 次/分钟**(与 core 的 60 次/小时 分开计),故页面侧必须防抖。 凭证走 manifest credentials(gh)+request.credential 注入,旧 data.get gh_token/op:if 手拼头已删(credential-vault §4.1)。",
+ "version": 1,
+ "actions": [
+  {
+   "op": "set",
+   "props": {
+    "key": "hdr",
+    "value": {
+     "Accept": "application/vnd.github+json",
+     "User-Agent": "Numable"
+    }
+   }
+  },
+  {
+   "id": "resp",
+   "action": "request",
+   "params": {
+    "url": "https://api.github.com/search/repositories?q=${kw}&per_page=8&sort=stars&order=desc",
+    "method": "GET",
+    "header": "${hdr}",
+    "formatType": "json",
+    "credential": "gh"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "total",
+    "value": "$[length::(${resp.items})]"
+   }
+  },
+  {
+   "_note": "定长 8 槽结构化瘦身:search 的原始条目每个约 6KB(含 owner 全档案与十几个 *_url),透传等于把 50KB 喂进渲染数据与磁盘缓存,还会触发 L1 的全空字段误报。",
+   "op": "set",
+   "props": {
+    "key": "list",
+    "value": [
+     {
+      "o": "${resp.items[0].owner.login}",
+      "r": "${resp.items[0].name}",
+      "n": "${resp.items[0].full_name}",
+      "d": "${resp.items[0].description}",
+      "g": "${resp.items[0].language}",
+      "s": "${resp.items[0].stargazers_count}"
+     },
+     {
+      "o": "${resp.items[1].owner.login}",
+      "r": "${resp.items[1].name}",
+      "n": "${resp.items[1].full_name}",
+      "d": "${resp.items[1].description}",
+      "g": "${resp.items[1].language}",
+      "s": "${resp.items[1].stargazers_count}"
+     },
+     {
+      "o": "${resp.items[2].owner.login}",
+      "r": "${resp.items[2].name}",
+      "n": "${resp.items[2].full_name}",
+      "d": "${resp.items[2].description}",
+      "g": "${resp.items[2].language}",
+      "s": "${resp.items[2].stargazers_count}"
+     },
+     {
+      "o": "${resp.items[3].owner.login}",
+      "r": "${resp.items[3].name}",
+      "n": "${resp.items[3].full_name}",
+      "d": "${resp.items[3].description}",
+      "g": "${resp.items[3].language}",
+      "s": "${resp.items[3].stargazers_count}"
+     },
+     {
+      "o": "${resp.items[4].owner.login}",
+      "r": "${resp.items[4].name}",
+      "n": "${resp.items[4].full_name}",
+      "d": "${resp.items[4].description}",
+      "g": "${resp.items[4].language}",
+      "s": "${resp.items[4].stargazers_count}"
+     },
+     {
+      "o": "${resp.items[5].owner.login}",
+      "r": "${resp.items[5].name}",
+      "n": "${resp.items[5].full_name}",
+      "d": "${resp.items[5].description}",
+      "g": "${resp.items[5].language}",
+      "s": "${resp.items[5].stargazers_count}"
+     },
+     {
+      "o": "${resp.items[6].owner.login}",
+      "r": "${resp.items[6].name}",
+      "n": "${resp.items[6].full_name}",
+      "d": "${resp.items[6].description}",
+      "g": "${resp.items[6].language}",
+      "s": "${resp.items[6].stargazers_count}"
+     },
+     {
+      "o": "${resp.items[7].owner.login}",
+      "r": "${resp.items[7].name}",
+      "n": "${resp.items[7].full_name}",
+      "d": "${resp.items[7].description}",
+      "g": "${resp.items[7].language}",
+      "s": "${resp.items[7].stargazers_count}"
+     }
+    ]
+   }
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "list",
+     "total"
+    ]
+   }
+  }
+ ]
+}

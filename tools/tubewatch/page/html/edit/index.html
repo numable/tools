@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Choose a Channel</title>
+<style>
+:root{color-scheme:light dark;--bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --tile:#E7E9EE;--src:#CC0000;--srcSoft:rgba(204,0,0,.10);--onsrc:#FFFFFF;--edge:transparent;
+  --warn:rgba(255,149,0,.12);--warnFg:#C77700;
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--line:#262A31;
+  --tile:#20232A;--src:#FF4E45;--srcSoft:rgba(255,78,69,.14);--onsrc:#0B0C0E;
+  --edge:rgba(255,255,255,.05);--warnFg:#FFB84D;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC",sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:12.5px;margin-bottom:16px;line-height:1.55}
+.inp{width:100%;border:.5px solid transparent;border-radius:12px;padding:11px 13px;font-size:16px;
+  background:rgba(15,20,30,.05);color:var(--fg);outline:none}
+html[data-theme="dark"] .inp{background:rgba(0,0,0,.22)}
+.cta{display:block;width:100%;border:0;border-radius:12px;padding:12px;text-align:center;
+  font-size:14px;font-weight:600;background:var(--src);color:var(--onsrc);margin-top:10px}
+.cta[disabled]{opacity:.45}
+.warn{border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.6;margin-top:10px;
+  background:var(--warn);display:flex;gap:8px}
+.warn b{color:var(--warnFg);flex:0 0 auto}
+.sec{font-size:11.5px;color:var(--sub);font-weight:600;margin:22px 2px 9px;
+  display:flex;align-items:center;gap:8px}
+.sec::before{content:"";width:3px;height:12px;border-radius:2px;background:var(--src);opacity:.85}
+.grp{background:var(--card);border:.5px solid var(--edge);border-radius:14px;
+  box-shadow:var(--shadow);overflow:hidden}
+.row{display:flex;align-items:center;gap:10px;padding:11px 12px}
+.row+.row{border-top:.5px solid var(--line)}
+.av{width:34px;height:34px;border-radius:17px;background:var(--tile);flex:0 0 auto;display:flex;
+  align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--sub)}
+.vx{flex:1 1 auto;min-width:0}
+.vx .a{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vx .b{font-size:10.5px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.x{color:var(--sub);opacity:.6;font-size:16px;padding:4px 6px;flex:0 0 auto}
+.pick{color:var(--src);font-weight:700;font-size:12px;flex:0 0 auto}
+.foot{color:var(--sub);font-size:11px;margin-top:20px;line-height:1.7}
+.empty{color:var(--sub);font-size:12.5px;text-align:center;padding:20px 8px;line-height:1.7}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.xb-tap{position:relative}
+.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.cta,.x,.pick,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.cta:active,.x:active,.pick:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+</head><body>
+<!-- 卡片参数编辑页(.xwidget events.onEdit → /edit)。
+     写回走 xbridge.updateParams(brickId, {cid}) —— G12e 要求 onEdit 目标必须**有写回能力**,
+     静态分析查的就是这一句。改即生效,壳上的「完成」负责关闭。 -->
+<h1 id="t">选择频道</h1>
+<div class="sub" id="s">这个组件显示哪个频道。</div>
+<div class="grp" id="list"></div>
+<div class="foot" id="f">选中即生效。</div>
+<script>
+var L={zh:{title:"选择频道",sub:"这个组件显示哪个频道。",empty:"还没有关注任何频道，请先在「管理关注」中添加。",
+        cur:"当前",foot:"选中即生效。"},
+       en:{title:"Choose a Channel",sub:"Which channel this widget shows.",
+        empty:"No channels yet — add one in Manage Channels first.",cur:"Current",foot:"Takes effect immediately."}};
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。 */
+var T=nbLang(document.documentElement.getAttribute("data-lang"))==="zh"?L.zh:L.en, LIST=[], brickId="", cur="";
+async function ready(){for(var i=0;i<24&&!window.xbridge;i++)await new Promise(function(r){setTimeout(r,50);});return !!window.xbridge;}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function qs(k){var m=new RegExp("[?&]"+k+"=([^&#]*)").exec(location.search+location.hash);return m?decodeURIComponent(m[1]):"";}
+function draw(){
+  var h="";
+  if(!LIST.length) h='<div class="empty">'+esc(T.empty)+'</div>';
+  else LIST.forEach(function(c){
+    h+='<div class="row" data-pick="'+esc(c.id)+'"><div class="av">'+esc((c.name||"?").slice(0,1))+'</div>'
+     + '<div class="vx"><div class="a">'+esc(c.name||c.id)+'</div><div class="b">'+esc(c.id)+'</div></div>'
+     + (c.id===cur?'<span class="pick">✓ '+esc(T.cur)+'</span>':'')+'</div>';
+  });
+  document.getElementById("list").innerHTML=h;
+}
+async function boot(){
+  await ready();
+  brickId=qs("brickId")||qs("brick")||""; cur=qs("cid")||"";
+  var d=await nbInfo();
+  if(d.theme==="dark")document.documentElement.setAttribute("data-theme","dark");
+  T=nbLang(d.language||d.locale)==="zh"?L.zh:L.en;
+  document.getElementById("t").textContent=T.title;
+  document.getElementById("s").textContent=T.sub;
+  document.getElementById("f").textContent=T.foot;
+  try{ var r=await xbridge.runDataFlow("list",{}); var d2=(r&&r.data)||r||{};
+       LIST=Array.isArray(d2.list)?d2.list:[]; }catch(e){ LIST=[]; }
+  draw();
+}
+document.addEventListener("click", function(e){
+  var el=e.target.closest("[data-pick]"); if(!el) return;
+  cur=el.dataset.pick; draw();
+  if(window.xbridge && xbridge.updateParams && brickId) xbridge.updateParams(brickId, { cid: cur });
+});
+boot();
+</script></body></html>

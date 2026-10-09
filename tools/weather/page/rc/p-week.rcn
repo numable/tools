@@ -1,0 +1,567 @@
+{
+  "rc": {
+    "cells": [
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_sky",
+          "value": "$[findNotEmpty::(${sky},overcast)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},clear)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#4C5F6A|#2E4149"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},overcast)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#535A5F|#3D4348"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},rain)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#3D4951|#2C383F"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},snow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#61666A|#47505A"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},night)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#17202B|#101720"
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "16pt",
+        "y": "0pt",
+        "w": "{parent.w}-32pt",
+        "h": "256pt",
+        "bgColor": "#2EFFFFFF|#1FFFFFFF",
+        "cornerRadius": {
+          "leftT": "14pt",
+          "leftB": "14pt",
+          "rightT": "14pt",
+          "rightB": "14pt"
+        }
+      },
+      {
+        "type": "txt",
+        "x": "30pt",
+        "y": "14pt",
+        "w": "{parent.w}-60pt",
+        "h": "-1",
+        "text": "${@i18n.p_week}",
+        "fontSize": "11.5pt",
+        "textColor": "#D6FFFFFF|#CCFFFFFF",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "type": "txt",
+        "x": "{parent.w}-180pt",
+        "y": "14pt",
+        "w": "150pt",
+        "h": "-1",
+        "text": "${@i18n.wkA}$[findNotEmpty::(${rainDays},0)]${@i18n.wkB}",
+        "fontSize": "11.5pt",
+        "textColor": "#D6FFFFFF|#CCFFFFFF",
+        "maxLines": "1",
+        "alignmentH": "2"
+      },
+      {
+        "type": "layer",
+        "x": "30pt",
+        "y": "36pt",
+        "w": "{parent.w}-60pt",
+        "h": "1pt",
+        "bgColor": "#26FFFFFF|#1FFFFFFF"
+      },
+      {
+        "_note": "温标端点与行里的数字同一取整口径(parseNumber(…,0) 截成整数)—— 与组件 week.rcn 同式。\n混着原始小数 tmin/tmax 算,最低那天的条会从灰轨左端凸出、最高那天够不着右端。",
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_tn",
+          "value": "$[parseNumber::(${tmin},0)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_tx",
+          "value": "$[parseNumber::(${tmax},0)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_ts",
+          "value": "$[if::(gt::(${_tx},${_tn}),calc::(${_tx}-${_tn}),1)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "forEach",
+        "props": {
+          "items": "${daily.time}",
+          "key": "_d",
+          "index": "_i"
+        },
+        "react": [
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_y",
+              "value": "$[calc::(48+${_i}*40)]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_hi",
+              "value": "$[parseNumber::(get::(${daily},temperature_2m_max[${_i}]),0)]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_lo",
+              "value": "$[parseNumber::(get::(${daily},temperature_2m_min[${_i}]),0)]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_code",
+              "value": "$[parseNumber::(get::(${daily},weather_code[${_i}]),0)]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_g",
+              "value": "$[if::(le::(${_code},0),clear,if::(le::(${_code},2),partly,if::(le::(${_code},3),cloudy,if::(le::(${_code},48),fog,if::(le::(${_code},57),drizzle,if::(le::(${_code},67),rain,if::(le::(${_code},77),snow,if::(le::(${_code},82),rain,if::(le::(${_code},86),snow,thunder)))))))))]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_r0",
+              "value": "$[calc::(100*(${_lo}-${_tn})/${_ts})]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_rw",
+              "value": "$[if::(gt::(calc::(100*(${_hi}-${_lo})/${_ts}),8),calc::(100*(${_hi}-${_lo})/${_ts}),8)]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_i},0)]"
+            },
+            "react": [
+              {
+                "type": "txt",
+                "x": "30pt",
+                "y": "${_y}pt+10pt",
+                "w": "60pt",
+                "h": "-1",
+                "text": "${@i18n.today}",
+                "fontSize": "12.5pt",
+                "textColor": "#FFFFFF|#FFFFFF",
+                "maxLines": "1",
+                "typeface": "System-Bold"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[gt::(${_i},0)]"
+            },
+            "react": [
+              {
+                "type": "txt",
+                "x": "30pt",
+                "y": "${_y}pt+10pt",
+                "w": "60pt",
+                "h": "-1",
+                "text": "$[findNotEmpty::(index::(${dlab},${_i}),--)]",
+                "fontSize": "12.5pt",
+                "textColor": "#FFFFFF|#FFFFFF",
+                "maxLines": "1"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_g},clear)]"
+            },
+            "react": [
+              {
+                "type": "path",
+                "x": "92pt",
+                "y": "${_y}pt+8pt",
+                "w": "20pt",
+                "h": "20pt",
+                "d": "M12 7.6a4.4 4.4 0 100 8.8 4.4 4.4 0 100-8.8M12 1.6v2.6M12 19.8v2.6M4.65 4.65l1.84 1.84M17.51 17.51l1.84 1.84M1.6 12h2.6M19.8 12h2.6M4.65 19.35l1.84-1.84M17.51 6.49l1.84-1.84",
+                "viewBox": "0 0 24 24",
+                "strokeColor": "#FFFFFF|#FFFFFF",
+                "lineWidth": "1.6pt",
+                "lineCap": "round",
+                "lineJoin": "round"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_g},partly)]"
+            },
+            "react": [
+              {
+                "type": "path",
+                "x": "92pt",
+                "y": "${_y}pt+8pt",
+                "w": "20pt",
+                "h": "20pt",
+                "d": "M8.8 6.2a3.4 3.4 0 014.9 2.2M8.8 1.9v2M3.6 4.1l1.4 1.4M1.9 9.3h2M6.5 18.6h9.9a3.6 3.6 0 000-7.2 5.6 5.6 0 00-10.8 1.5 3 3 0 00.9 5.7z",
+                "viewBox": "0 0 24 24",
+                "strokeColor": "#FFFFFF|#FFFFFF",
+                "lineWidth": "1.6pt",
+                "lineCap": "round",
+                "lineJoin": "round"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_g},cloudy)]"
+            },
+            "react": [
+              {
+                "type": "path",
+                "x": "92pt",
+                "y": "${_y}pt+8pt",
+                "w": "20pt",
+                "h": "20pt",
+                "d": "M6.5 18.6h9.9a3.6 3.6 0 000-7.2 5.6 5.6 0 00-10.8 1.5 3 3 0 00.9 5.7z",
+                "viewBox": "0 0 24 24",
+                "strokeColor": "#FFFFFF|#FFFFFF",
+                "lineWidth": "1.6pt",
+                "lineCap": "round",
+                "lineJoin": "round"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_g},fog)]"
+            },
+            "react": [
+              {
+                "type": "path",
+                "x": "92pt",
+                "y": "${_y}pt+8pt",
+                "w": "20pt",
+                "h": "20pt",
+                "d": "M4 8.5h16M6 12.5h12M4 16.5h16M8 20.5h8",
+                "viewBox": "0 0 24 24",
+                "strokeColor": "#FFFFFF|#FFFFFF",
+                "lineWidth": "1.6pt",
+                "lineCap": "round",
+                "lineJoin": "round"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_g},drizzle)]"
+            },
+            "react": [
+              {
+                "type": "path",
+                "x": "92pt",
+                "y": "${_y}pt+8pt",
+                "w": "20pt",
+                "h": "20pt",
+                "d": "M6.5 15.6h9.9a3.6 3.6 0 000-7.2 5.6 5.6 0 00-10.8 1.5 3 3 0 00.9 5.7zM9 19v1.6M13 19v1.6M17 19v1.6",
+                "viewBox": "0 0 24 24",
+                "strokeColor": "#FFFFFF|#FFFFFF",
+                "lineWidth": "1.6pt",
+                "lineCap": "round",
+                "lineJoin": "round"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_g},rain)]"
+            },
+            "react": [
+              {
+                "type": "path",
+                "x": "92pt",
+                "y": "${_y}pt+8pt",
+                "w": "20pt",
+                "h": "20pt",
+                "d": "M6.5 14.6h9.9a3.6 3.6 0 000-7.2 5.6 5.6 0 00-10.8 1.5 3 3 0 00.9 5.7zM8.5 17.6l-1.2 3.4M12.5 17.6l-1.2 3.4M16.5 17.6l-1.2 3.4",
+                "viewBox": "0 0 24 24",
+                "strokeColor": "#FFFFFF|#FFFFFF",
+                "lineWidth": "1.6pt",
+                "lineCap": "round",
+                "lineJoin": "round"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_g},snow)]"
+            },
+            "react": [
+              {
+                "type": "path",
+                "x": "92pt",
+                "y": "${_y}pt+8pt",
+                "w": "20pt",
+                "h": "20pt",
+                "d": "M6.5 14.6h9.9a3.6 3.6 0 000-7.2 5.6 5.6 0 00-10.8 1.5 3 3 0 00.9 5.7zM8.6 18.4v2.6M7.3 19.1l2.6 1.2M9.9 19.1l-2.6 1.2M15.4 18.4v2.6M14.1 19.1l2.6 1.2M16.7 19.1l-2.6 1.2",
+                "viewBox": "0 0 24 24",
+                "strokeColor": "#FFFFFF|#FFFFFF",
+                "lineWidth": "1.6pt",
+                "lineCap": "round",
+                "lineJoin": "round"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${_g},thunder)]"
+            },
+            "react": [
+              {
+                "type": "path",
+                "x": "92pt",
+                "y": "${_y}pt+8pt",
+                "w": "20pt",
+                "h": "20pt",
+                "d": "M6.5 14.6h9.9a3.6 3.6 0 000-7.2 5.6 5.6 0 00-10.8 1.5 3 3 0 00.9 5.7zM13 17.2l-3.4 4.4h3l-1.2 3",
+                "viewBox": "0 0 24 24",
+                "strokeColor": "#FFFFFF|#FFFFFF",
+                "lineWidth": "1.6pt",
+                "lineCap": "round",
+                "lineJoin": "round"
+              }
+            ]
+          },
+          {
+            "type": "txt",
+            "x": "118pt",
+            "y": "${_y}pt+11pt",
+            "w": "34pt",
+            "h": "-1",
+            "text": "${_lo}°",
+            "fontSize": "12.5pt",
+            "textColor": "#D6FFFFFF|#CCFFFFFF",
+            "maxLines": "1",
+            "alignmentH": "2"
+          },
+          {
+            "type": "layer",
+            "x": "162pt",
+            "y": "${_y}pt+16pt",
+            "w": "({parent.w}-236pt)",
+            "h": "4pt",
+            "bgColor": "#33FFFFFF|#2EFFFFFF",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_c1",
+              "value": "$[if::(le::(${_lo},0),#6FA8DC,if::(le::(${_lo},12),#5AA9E0,if::(le::(${_lo},22),#7FB6D8,if::(le::(${_lo},30),#E8A15C,#E0714B))))]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "_c2",
+              "value": "$[if::(le::(${_hi},0),#6FA8DC,if::(le::(${_hi},12),#5AA9E0,if::(le::(${_hi},22),#7FB6D8,if::(le::(${_hi},30),#E8A15C,#E0714B))))]"
+            }
+          },
+          {
+            "type": "layer",
+            "x": "162pt+({parent.w}-236pt)*${_r0}/100",
+            "y": "${_y}pt+16pt",
+            "w": "({parent.w}-236pt)*${_rw}/100",
+            "h": "4pt",
+            "bgColor": "linear(${_c1}\\,${_c2})@0",
+            "cornerRadius": {
+              "leftT": "2pt",
+              "leftB": "2pt",
+              "rightT": "2pt",
+              "rightB": "2pt"
+            }
+          },
+          {
+            "type": "txt",
+            "x": "{parent.w}-70pt",
+            "y": "${_y}pt+11pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "${_hi}°",
+            "fontSize": "12.5pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "2"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_dn",
+          "value": "$[length::(${daily.time})]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_dn},0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "0pt",
+            "y": "110pt",
+            "w": "{parent.w}",
+            "h": "-1",
+            "text": "—",
+            "fontSize": "16pt",
+            "textColor": "#D6FFFFFF|#CCFFFFFF",
+            "maxLines": "1",
+            "alignmentH": "1"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "p_week": "五日预报",
+        "today": "今天",
+        "wkA": "5 天里 ",
+        "wkB": " 天有雨"
+      },
+      "en-US": {
+        "p_week": "5-DAY FORECAST",
+        "today": "Today",
+        "wkA": "Rain on ",
+        "wkB": " of 5 days"
+      }
+    }
+  },
+  "_note": "首页五日玻璃块。温度条起止按全周区间折算成比例再乘 {parent.w},故随屏宽自适应。"
+}

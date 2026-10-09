@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<!--
+  单个事项详情(路由 /item?id=<事项 id>)。打卡 + 统计 + **月历** + 编辑 + 添加卡片。
+
+  ⚠️ `?id=` 由调用方带(首页的行、卡片的 onClick),读法同 help/topic —— location.search。
+  拿不到 id(或拿到的是没被求值的字面 `${itemId}`)时**回落到第一件事**而不是渲一片空白:
+  卡片的 onClick 里能不能求值 widget params 在四端还没逐个验过,回落让最坏情况只是「点进来选错了事」。
+
+  ⚠️ **一天可以打多次**:主按钮恒是「打卡」,按几次记几条。「总计」数的是**次**,
+  「连续 / 近 30 天」数的是**达标日**(当天次数 ≥ 每日目标),两个口径刻意不同,标签里写死了单位。
+
+  ⚠️ 月历是**唯一的记录编辑入口**:点任意一天 → 那天的 sheet 里逐条改时间 / 删 / 加一次。
+  于是补录不再需要单独一页(原 /log 已删)—— 「补一条过去的记录」就是「点过去的某天 → ＋」。
+
+  ⚠️ 改名/换图标/换色/改目标/删除都收在标题旁的 ✎ 里:删除尤其不该常驻在页面上,
+  它和「改一下时间」不是一个量级的操作。
+
+  ⚠️ 输入控件字号必须 ≥16px(memory [[ios-webview-focus-zoom-16px]])。
+  CSP:离线 html 被注入 `default-src 'self'; connect-src 'none'` —— 本页全自包含。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Habit</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --tile:#E7E9EE;--tile2:#EEF0F4;--warn:#D2536D}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--tile:#20232A;--tile2:#252930;--warn:#E87A93}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:2px}
+.hd .ic{flex:0 0 auto;width:38px;height:38px;border-radius:11px;display:flex;
+  align-items:center;justify-content:center;font-size:20px}
+.hd .ic svg{width:20px;height:20px;display:block}
+.hd .grow{flex:1 1 auto;min-width:0}
+h1{font-size:23px;margin:0;letter-spacing:-.3px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.edit{flex:0 0 auto;border:1px solid var(--line);background:transparent;color:var(--sub);
+  font-size:15px;border-radius:17px;width:34px;height:34px;cursor:pointer;padding:0}
+.sub{color:var(--sub);font-size:13px;margin:0 0 18px 48px}
+/* §2 段标题 13pt/Medium/sub;段间 20pt、到第一张卡 8pt(page-design-system §2.1、§5)。 */
+.sec{font-size:13px;color:var(--sub);font-weight:500;margin:20px 2px 8px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.sec em{font-style:normal;font-weight:500;font-size:13px;color:var(--sub);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec em b{font-weight:600;color:var(--fg)}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05)}
+html[data-theme="dark"] .card{box-shadow:none}
+.plain{padding:14px}
+.rec{width:100%;border:0;color:#fff;font-size:17px;font-weight:700;
+  border-radius:16px;padding:18px 16px;cursor:pointer;letter-spacing:.2px}
+.rec[disabled]{opacity:.5}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.grid .m{background:var(--tile);border-radius:12px;padding:10px}
+.grid .m .k{color:var(--sub);font-size:11px}
+.grid .m .v{font-size:20px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums;line-height:1.15}
+/* ↑ line-height 与 .flip 的 1.15em 同值(2026-09-25 视觉体检):原来 .v 走默认 line-height,「连续」那格的 .flip
+   是 vertical-align:bottom 的 inline-block,数字比隔壁「最长连续」低 2pt。 */
+/* 连续天数的翻牌:旧数上移淡出、新数从下移入。⚠️ 只在**月历补出一段更长的连续**时才翻
+   (见 runChain)——平时的数字变化直接写,动效贬值成转场噪音的常见起点就是「什么都动」。 */
+.flip{display:inline-block;height:1.15em;overflow:hidden;vertical-align:bottom}
+.flip b{display:block;height:1.15em;line-height:1.15em;font-weight:inherit;
+  transition:transform .2s cubic-bezier(.32,.72,0,1)}
+
+/* —— 月历 ——
+   ⚠️ 格子必须是**正方**（padding-top:100% 撑高），不能写死 px:窄屏 320 与手机宽列
+   差出十几 px，写死就会在一端挤成矩形。 */
+.cal{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.cal .m{flex:1 1 auto;text-align:center;font-size:15px;font-weight:600}
+.cal button{flex:0 0 auto;border:0;background:var(--tile);color:var(--fg);width:32px;height:32px;
+  border-radius:16px;font-size:16px;line-height:1;cursor:pointer;padding:0}
+.cal button[disabled]{opacity:.3}
+.wk{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+.wk span{text-align:center;font-size:11px;color:var(--sub)}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dy{position:relative;padding-top:100%;border-radius:9px;background:var(--tile2);cursor:pointer}
+.dy.pad{background:transparent;cursor:default}
+.dy span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-variant-numeric:tabular-nums}
+.dy.fut{opacity:.45}
+.dy.now{box-shadow:inset 0 0 0 2px var(--fg)}
+/* 串联扩散用的那一下弹跳。transform 不影响布局(格子是 padding-top:100% 撑的),不会挤动网格。 */
+.dy{transition:background .2s ease,transform .26s cubic-bezier(.32,.72,0,1)}
+.dy.pulse{transform:scale(1.22)}
+@media (prefers-reduced-motion:reduce){ .dy{transition:background .1s ease} .dy.pulse{transform:none} }
+.lgd{display:flex;align-items:center;gap:6px;margin-top:12px;color:var(--sub);font-size:11px}
+.lgd i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+/* —— 年视图(参照 intimacy 的记录日历,2026-08-31)——
+   月 / 年 分段器住在「日历」节标题右侧;年视图 = GitHub 式全年热力阵列(canvas)+ 12 月块。 */
+.secrow{display:flex;align-items:flex-end;justify-content:space-between;margin:24px 2px 10px}
+.secrow .sec{margin:0}
+.seg{display:flex;background:var(--tile);border-radius:8px;padding:2px}
+.seg button{border:0;background:transparent;color:var(--sub);font-size:12px;font-weight:600;
+  padding:4px 12px;border-radius:7px;cursor:pointer;font-family:inherit}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--fg);
+  box-shadow:0 1px 2px rgba(0,0,0,.1)}
+/* 格子+月份标签 = 一块 canvas 手绘(intimacy v17 定版结论):同一套自算整数像素坐标,
+   引擎布局彻底出局,跨列标签错位在结构上不可能。详见 memory [[github-heatmap-layout-logic]]。 */
+/* ⚠️ 同 .step[hidden] 那条:`[hidden]` 是 UA 的 display:none,优先级低于 .wk/.days 的
+   display:grid —— 不补这两条,切到年视图后月历照样露着。 */
+.wk[hidden],.days[hidden]{display:none}
+.hm{padding:2px 0 8px}
+.hmScroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.hmScroll::-webkit-scrollbar{display:none}
+.hmC{display:block}
+.mons{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.mc{border:0;border-radius:12px;padding:11px 0;text-align:center;background:var(--tile);
+  color:var(--fg);font-family:inherit;cursor:default}
+.mc.has{cursor:pointer}
+.mc b{display:block;font-size:14px;font-weight:600}
+.mc span{display:block;font-size:11px;color:var(--sub);margin-top:2px;font-variant-numeric:tabular-nums}
+
+.row{display:flex;align-items:center;gap:12px}
+.row .grow{flex:1 1 auto;min-width:0}
+.row b{display:block;font-size:15px;font-weight:600}
+.row .d{color:var(--sub);font-size:12px;margin-top:2px}
+.tag{flex:0 0 auto;font-size:11px;color:var(--sub);background:var(--tile);
+  border-radius:6px;padding:2px 6px;font-variant-numeric:tabular-nums}
+.add{flex:0 0 auto;border:1px solid var(--line);background:transparent;color:var(--fg);
+  font-size:13px;font-weight:600;border-radius:16px;padding:7px 16px;cursor:pointer}
+.opt{display:flex;align-items:center;gap:10px;padding:2px 2px 12px}
+.opt .grow{flex:1 1 auto}
+.opt .t{font-size:13px;font-weight:600}
+.opt .d{color:var(--sub);font-size:12px;margin-top:2px}
+.sw{flex:0 0 auto;width:46px;height:28px;border-radius:14px;border:0;background:var(--line);
+  position:relative;cursor:pointer;transition:background .18s}
+.sw i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:11px;
+  background:#fff;transition:transform .18s;display:block}
+.sw[aria-checked="true"] i{transform:translateX(18px)}
+.foot{color:var(--sub);font-size:11px;margin-top:24px;line-height:1.7}
+.state{color:var(--sub);font-size:13px;padding:14px;text-align:center}
+
+/* —— 页内自绘 sheet（同首页那套）——
+   ⚠️ 页内自绘天然收在容器视图里（CLAUDE.md「浮层容器边界」§4），大屏上不会溢出到窗口。
+   动画照同一条契约:遮罩独立淡入淡出、卡片贴底滑上滑下、进退对称。 */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;
+  transition:opacity var(--xb-mask) ease;z-index:10}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);z-index:11;
+  border-radius:18px 18px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));
+  transform:translateY(110%);transition:transform var(--xb-sheet) var(--xb-ease-sheet);
+  box-shadow:0 -8px 30px rgba(0,0,0,.14);max-height:86vh;overflow-y:auto}
+html[data-theme="dark"] .sheet{box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+body.open .mask{opacity:1;pointer-events:auto}
+body.open .sheet.on{transform:translateY(0)}
+.sheet h2{font-size:17px;margin:0 0 4px;font-weight:700}
+.sheet .hint{color:var(--sub);font-size:12px;margin-bottom:14px}
+.sheet label{display:block;font-size:12px;color:var(--sub);margin:14px 0 8px}
+/* font-size 必须 ≥16px：iOS WebView 聚焦小于 16px 的 input 会把整页放大且不回弹 */
+.sheet input{border:1px solid var(--line);background:transparent;color:var(--fg);
+  border-radius:12px;padding:12px 14px;font-size:16px;outline:none;
+  font-variant-numeric:tabular-nums;font-family:inherit;width:100%}
+.lgrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.lgrow input{flex:1 1 auto}
+.del{flex:0 0 auto;border:1px solid var(--line);background:transparent;color:var(--sub);
+  font-size:15px;border-radius:12px;width:46px;height:46px;cursor:pointer}
+.pick{display:flex;flex-wrap:wrap;gap:8px}
+.pick button{border:2px solid transparent;background:var(--tile);border-radius:10px;
+  width:40px;height:40px;font-size:19px;line-height:1;cursor:pointer;padding:0;color:var(--fg)}
+.pick button svg{width:20px;height:20px;display:block;margin:auto}
+.pick button[aria-pressed="true"]{border-color:var(--fg)}
+.pick .swx{border-radius:20px}
+/* 「怎么记」二选一 —— 与首页新建 sheet 同一套语汇(两处必须一起改)。 */
+.kinds{display:flex;flex-direction:column;gap:8px}
+.kind{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;
+  border:1.5px solid var(--line);background:transparent;cursor:pointer;text-align:left;
+  font-family:inherit;color:var(--fg);width:100%}
+.kind[aria-pressed="true"]{border-color:var(--fg)}
+.kind i{flex:0 0 auto;width:30px;height:30px;border-radius:9px;background:var(--tile);
+  display:flex;align-items:center;justify-content:center;font-style:normal;font-size:15px}
+.kind .g{flex:1 1 auto;min-width:0}
+.kind b{display:block;font-size:15px;font-weight:600}
+.kind .g span{display:block;color:var(--sub);font-size:11.5px;margin-top:1px}
+.kind em{flex:0 0 auto;width:18px;height:18px;border-radius:9px;border:1.5px solid var(--line);
+  font-style:normal;display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent}
+.kind[aria-pressed="true"] em{border-color:transparent;color:#FFF}
+.step{display:flex;align-items:center;gap:14px;margin-top:12px}
+/* ⚠️ `[hidden]` 只是 UA 的 `display:none`,**优先级低于类选择器** —— `.step{display:flex}`
+   会把它盖掉,于是 `el.hidden=true` 设了跟没设一样(选「做了就算」时次数 stepper 照样露着,
+   而 JS 里查 `.hidden` 又是 true,对不上)。凡是给带 display 的类加 hidden,都要补这一条。 */
+.step[hidden]{display:none}
+.step button{border:0;background:var(--tile);color:var(--fg);width:44px;height:44px;
+  border-radius:22px;font-size:20px;line-height:1;cursor:pointer}
+.step b{font-size:19px;font-variant-numeric:tabular-nums;min-width:56px;text-align:center}
+.acts{display:flex;gap:10px;margin-top:20px}
+.btn{flex:1 1 0;border:0;color:#fff;font-size:16px;font-weight:700;
+  border-radius:14px;padding:14px 16px;cursor:pointer}
+.btn.ghost{background:var(--tile);color:var(--fg)}
+.btn.warn{background:transparent;color:var(--warn);border:1px solid var(--line)}
+.sepline{height:1px;background:var(--line);margin:20px 0 14px}
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.dy,.mc.has,.xb-tap{position:relative}
+.dy::after,.mc.has::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.dy:active::after,.mc.has:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.edit,.rec,.cal button,.seg button,.add,.del,.step button,.pick button,.btn,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.edit:active,.rec:active,.cal button:active,.seg button:active,.add:active,.del:active,.step button:active,.pick button:active,.btn:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style></head>
+<body>
+  <div class="hd">
+    <span class="ic" id="hic"></span>
+    <div class="grow"><h1 id="h1">--</h1></div>
+    <button class="edit" id="toEdit">✎</button>
+  </div>
+  <div class="sub" id="sub"></div>
+
+  <div class="card">
+    <button class="rec" id="rec"></button>
+    <!-- ⚠️ 只留两格。此前四格(连续/最长/近30天/总计)里,「近 30 天」与「总计」**是下面那张月历
+         已经说过的话** —— 一屏之内把同一件事讲三遍,加起来的效果是「仪表」而不是「一条不断的线」。
+         口径也随之简单到不需要那段说明文(它同一轮删掉了)。 -->
+    <div class="grid">
+      <div class="m"><div class="k" data-i="mStreak"></div>
+        <div class="v"><span class="flip" id="fStreak"><b id="vStreak">0</b></span></div></div>
+      <div class="m"><div class="k" data-i="mBest"></div><div class="v"><span id="vBest">0</span></div></div>
+    </div>
+  </div>
+
+  <!-- 全年阵列单独占一行(2026-08-31 用户点单:不藏在日历的年视图里)。恒显**今年**;
+       翻看往年仍走日历的年视图(月块)。 -->
+  <div class="sec" data-i="secYear"></div>
+  <div class="card plain"><div id="band"></div></div>
+
+  <div class="secrow">
+    <div class="sec" data-i="secCal"></div>
+    <div class="seg">
+      <button id="segM" aria-pressed="true" data-i="segM"></button>
+      <button id="segY" aria-pressed="false" data-i="segY"></button>
+    </div>
+  </div>
+  <div class="card plain">
+    <div class="cal">
+      <button id="prev">‹</button>
+      <div class="m" id="mon"></div>
+      <button id="next">›</button>
+    </div>
+    <div class="wk" id="wk"></div>
+    <div class="days" id="days"></div>
+    <div id="yr" hidden></div>
+    <div class="lgd" id="lgd"></div>
+  </div>
+
+  <div class="sec" data-i="secAdd"></div>
+  <div class="opt">
+    <div class="grow"><div class="t" data-i="maskT"></div><div class="d" data-i="maskD"></div></div>
+    <button class="sw" id="mask" role="switch" aria-checked="false"><i></i></button>
+  </div>
+  <div id="addBox"></div>
+
+  <div class="foot" id="foot"></div>
+
+  <div class="mask" id="backdrop"></div>
+
+  <!-- 某一天的记录:逐条改时间 / 删 / 加一次。**补录也走这里** -->
+  <div class="sheet" id="dSheet" role="dialog" aria-modal="true">
+    <h2 id="dTitle"></h2>
+    <div class="hint" id="dHint"></div>
+    <div id="dList"></div>
+    <div class="acts">
+      <button class="btn ghost" id="dClose"></button>
+      <button class="btn" id="dAdd"></button>
+    </div>
+  </div>
+
+  <!-- 事项本身:图标 / 名字 / 主题色 / 每日目标 / 删除 -->
+  <div class="sheet" id="eSheet" role="dialog" aria-modal="true">
+    <h2 data-i="edT"></h2>
+    <input id="eName" maxlength="12" enterkeyhint="done">
+    <label data-i="fIcon"></label>
+    <div class="pick" id="eIcons"></div>
+    <label data-i="fColor"></label>
+    <div class="pick" id="eCols"></div>
+    <label data-i="fHow"></label>
+    <div class="kinds">
+      <button class="kind" id="kCheck" data-kind="check" aria-pressed="true">
+        <i>✓</i><span class="g"><b data-i="kCheckT"></b><span data-i="kCheckD"></span></span><em>✓</em>
+      </button>
+      <button class="kind" id="kCount" data-kind="count" aria-pressed="false">
+        <i>＃</i><span class="g"><b data-i="kCountT"></b><span data-i="kCountD"></span></span><em>✓</em>
+      </button>
+    </div>
+    <div class="step" id="goalStep" hidden>
+      <button id="gDec">−</button><b id="gVal">2</b><button id="gInc">＋</button>
+      <span class="hint" style="margin:0" id="gHint"></span>
+    </div>
+    <div class="hint" id="kindWarn" hidden></div>
+    <div class="acts">
+      <button class="btn ghost" id="eCancel"></button>
+      <button class="btn" id="eSave"></button>
+    </div>
+    <div class="sepline"></div>
+    <button class="btn warn" id="rm" style="width:100%"></button>
+  </div>
+
+<script>
+var MAX = 8;
+
+/* 六色调色板 —— 与生成 flow / RCN 的 palette.py **同一张表**（改色两边一起改）。 */
+var PAL={1:["#2E9E6B","#45C793"],2:["#2F6FE4","#5C9BFF"],3:["#7A5AF8","#A78BFA"],
+         4:["#E07B39","#F0A05F"],5:["#D2536D","#E87A93"],6:["#0E9AA7","#35C2CE"]};
+/*ICONS:BEGIN*//* 由 tools/infosource/gen_checkin_icons.py 生成,四页逐字同源,勿手改 */
+var ICONS=["target", "sunrise", "footprints", "droplet", "book-open", "flower-2", "dumbbell", "pen-line", "salad", "pill", "cigarette-off", "bed", "coffee", "sprout", "guitar", "paintbrush"];
+var IC={"target": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><circle cx=\"12\" cy=\"12\" r=\"6\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /></svg>", "sunrise": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2v8\" /><path d=\"m4.93 10.93 1.41 1.41\" /><path d=\"M2 18h2\" /><path d=\"M20 18h2\" /><path d=\"m19.07 10.93-1.41 1.41\" /><path d=\"M22 22H2\" /><path d=\"m8 6 4-4 4 4\" /><path d=\"M16 18a4 4 0 0 0-8 0\" /></svg>", "footprints": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z\" /><path d=\"M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z\" /><path d=\"M16 17h4\" /><path d=\"M4 13h4\" /></svg>", "droplet": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" /></svg>", "book-open": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" /></svg>", "flower-2": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 5a3 3 0 1 1 3 3m-3-3a3 3 0 1 0-3 3m3-3v1M9 8a3 3 0 1 0 3 3M9 8h1m5 0a3 3 0 1 1-3 3m3-3h-1m-2 3v-1\" /><circle cx=\"12\" cy=\"8\" r=\"2\" /><path d=\"M12 10v12\" /><path d=\"M12 22c4.2 0 7-1.667 7-5-4.2 0-7 1.667-7 5Z\" /><path d=\"M12 22c-4.2 0-7-1.667-7-5 4.2 0 7 1.667 7 5Z\" /></svg>", "dumbbell": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" /></svg>", "pen-line": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\" /><path d=\"M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z\" /></svg>", "salad": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 21h10\" /><path d=\"M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z\" /><path d=\"M11.38 12a2.4 2.4 0 0 1-.4-4.77 2.4 2.4 0 0 1 3.2-2.77 2.4 2.4 0 0 1 3.47-.63 2.4 2.4 0 0 1 3.37 3.37 2.4 2.4 0 0 1-1.1 3.7 2.51 2.51 0 0 1 .03 1.1\" /><path d=\"m13 12 4-4\" /><path d=\"M10.9 7.25A3.99 3.99 0 0 0 4 10c0 .73.2 1.41.54 2\" /></svg>", "pill": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /><path d=\"m8.5 8.5 7 7\" /></svg>", "cigarette-off": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 12H3a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h13\" /><path d=\"M18 8c0-2.5-2-2.5-2-5\" /><path d=\"m2 2 20 20\" /><path d=\"M21 12a1 1 0 0 1 1 1v2a1 1 0 0 1-.5.866\" /><path d=\"M22 8c0-2.5-2-2.5-2-5\" /><path d=\"M7 12v4\" /></svg>", "bed": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 4v16\" /><path d=\"M2 8h18a2 2 0 0 1 2 2v10\" /><path d=\"M2 17h20\" /><path d=\"M6 8v9\" /></svg>", "coffee": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10 2v2\" /><path d=\"M14 2v2\" /><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\" /><path d=\"M6 2v2\" /></svg>", "sprout": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 20h10\" /><path d=\"M10 20c5.5-2.5.8-6.4 3-10\" /><path d=\"M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z\" /><path d=\"M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z\" /></svg>", "guitar": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m11.9 12.1 4.514-4.514\" /><path d=\"M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z\" /><path d=\"m6 16 2 2\" /><path d=\"M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z\" /><circle cx=\"11.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\" /></svg>", "paintbrush": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m14.622 17.897-10.68-2.913\" /><path d=\"M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z\" /><path d=\"M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15\" /></svg>"};
+var EMO={"🎯": "target", "🌅": "sunrise", "🏃": "footprints", "💧": "droplet", "📖": "book-open", "🧘": "flower-2", "💪": "dumbbell", "✍️": "pen-line", "🥗": "salad", "💊": "pill", "🚭": "cigarette-off", "🛏": "bed", "☕": "coffee", "🌱": "sprout", "🎸": "guitar", "🧹": "paintbrush"};
+function icName(v){ return IC[v]?v:(EMO[v]||"target"); }
+function icSvg(v){ return IC[icName(v)]; }
+/*ICONS:END*/
+/* 月历格的三档浓淡混合比 —— 与 palette.py 的 MIX 同值（卡片热力图与页内月历必须一个深浅，
+   否则同一天在 App 里和桌面卡上是两个颜色，看起来像两份数据）。 */
+var MIX=[0.60,0.80,1.0];   /* 2026-09-07 最浅档 0.30→0.60(与 intimacy 同一轮) */
+
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+var I18N={
+ zh:{pickTPre:"添加「",pickTSuf:"」的组件",pickS:"在面板里挑，确认后加到仪表盘",secCal:"日历",secAdd:"组件",
+     mStreak:"连续（天）",mBest:"最长连续（天）",
+     rec:"打卡",checked:"已打卡",
+     cDo:"打卡",cUndo:"今天已记 · 点一下撤销",cDone:"今天记过了",cUndone:"已撤销",nAdd:"＋ 记一次",
+     fHow:"怎么记",kCheckT:"做了就算",kCheckD:"一天一次，点一下打勾",
+     kCountT:"要数次数",kCountD:"比如喝水 8 杯、背 20 个单词",
+     kToCheck:"改成「做了就算」之后，一天里的多条记录会按天折成一条——记录本身不会被删，改回来就又都在了。",
+     kToCount:"改成「要数次数」之后，此前折起来的同一天多条记录会重新算数。",
+     lgdNo:"没记",lgdYes:"记了",
+     todayN:"今天 {n}/{g} 次",todayOk:"今天已达标 · {n} 次",todo:"今天还没打",never:"还没有记录",
+     wk:["一","二","三","四","五","六","日"],
+     mon:"{y} 年 {m} 月",lgdLess:"少",lgdMore:"多",
+     segM:"月",segY:"年",monY:"{y} 年",yrCnt:"{n} 天",secYear:"全年",
+     dHint:"这一天打了 {n} 次。时间可以直接改。",
+     dHint0:"这一天还没有记录。点「加一次」补上。",
+     dClose:"完成",dAdd:"＋ 加一次",dFut:"这一天还没到",
+     edT:"编辑事项",fIcon:"图标",fColor:"主题色",
+     gHint:"次 / 天",eSave:"保存",eCancel:"取消",saved:"已保存",
+     needName:"名字不能为空",dup:"已经有同名事项了",
+     rm:"删除这件事",rmT:"删除这件事",rmM:"它的全部记录会一起删掉，且无法恢复。",
+     rmOk:"删除",rmCancel:"取消",removed:"已删除",
+     maskT:"组件打码",maskD:"组件上的数字显示为 ••，只有在 App 内才能看到",
+     add:"添加",
+     notFound:"这件事已被删除",
+     notX:"当前不在 XBundle 环境中",
+     footC:"点日历上任意一天即可补记或撤销那一天。昨天记过、今天还没记，连续仍然成立——到今晚零点为止。",
+     footN:"一天可以记多次，「连续」数的是达标日（当天次数达到目标）。昨天达标、今天还没打够，连续仍然成立——到今晚零点为止。点日历上任意一天可以改那天的记录。"},
+ en:{pickTPre:"Add widgets for ",pickTSuf:"",pickS:"Pick in the panel, then confirm",secCal:"Calendar",secAdd:"Widgets",
+     mStreak:"Streak (d)",mBest:"Best streak (d)",
+     rec:"Check in",checked:"Checked in",
+     cDo:"Check in",cUndo:"Done today \u00b7 tap to undo",cDone:"Logged today",cUndone:"Undone",nAdd:"\uff0b Add one",
+     fHow:"How to track",kCheckT:"Just did it",kCheckD:"Once a day \u2014 tap to tick",
+     kCountT:"Count it",kCountD:"e.g. 8 glasses of water, 20 words",
+     kToCheck:"Switching to \u201cJust did it\u201d folds multiple entries on the same day into one. Nothing is deleted \u2014 switch back and they all return.",
+     kToCount:"Switching to \u201cCount it\u201d brings back the entries that were folded away.",
+     lgdNo:"Not logged",lgdYes:"Logged",
+     todayN:"{n}/{g} today",todayOk:"Goal met · {n} today",todo:"Not yet today",never:"No entries yet",
+     wk:["M","T","W","T","F","S","S"],
+     mon:"{m} {y}",lgdLess:"Less",lgdMore:"More",
+     segM:"Month",segY:"Year",monY:"{y}",yrCnt:"{n} days","yrCnt.one":"{n} day",secYear:"This year",
+     dHint:"{n} entries on this day. Times are editable inline.","dHint.one":"{n} entry on this day. The time is editable inline.",
+     dHint0:"Nothing on this day yet. Tap Add one.",
+     dClose:"Done",dAdd:"＋ Add one",dFut:"This day hasn't come yet",
+     edT:"Edit habit",fIcon:"Icon",fColor:"Colour",
+     gHint:"per day",eSave:"Save",eCancel:"Cancel",saved:"Saved",
+     needName:"Name can't be empty",dup:"That name is already taken",
+     rm:"Delete this habit",rmT:"Delete this habit",rmM:"All of its entries go with it. This can't be undone.",
+     rmOk:"Delete",rmCancel:"Cancel",removed:"Deleted",
+     maskT:"Mask on widgets",maskD:"Numbers render as •• ; open the app to see them",
+     add:"Add",
+     notFound:"This habit was deleted",
+     notX:"Not running inside XBundle",
+     footC:"Tap any day in the calendar to log or undo that day. Yesterday's entry keeps the streak alive until tonight.",
+     footN:"You can log several times a day; Streak counts days that met the goal. Yesterday's met goal keeps the streak alive until tonight. Tap any day in the calendar to edit that day."}};
+
+var MONTH_EN=["January","February","March","April","May","June",
+              "July","August","September","October","November","December"];
+
+/* [widgetId, 标题 key, 说明 key, layout, 是否绑当前这件事]
+   ⚠️ 「添加到仪表盘」整段只在本页 —— 首页没有「当前这件事」这个上下文，摆在那儿就得先让用户
+   再选一次事项，而用户刚从列表点进来。这里 itemId 直接取当前 id，一次点击完成。
+   `today` 是唯一不绑事项的一张（它是整份清单的总览），仍留在这里，因为本页是包内唯一的添加入口。 */
+/* 详情页的加卡候选 = **只有吃 itemId 的那四张**(§8.1 的判据:加这张卡需不需要先指定一个对象)。
+   ⚠️ `today` 已从这里移走 —— 它不吃 itemId、讲的是「所有事项」,挂在某一件事的详情页里
+      语义是错的(用户在「喝水」页点加卡,加出来一张跟喝水没关系的总览)。
+      它与新增的 progress / week / month 三张聚合卡一起归**首页**那个按钮。
+   ⚠️ 第 5 个字段(是否吃 itemId)现在恒为 true,留着是因为下面构造候选时按它决定要不要带 itemId,
+      将来若有「本页对象 + 非对象」混排的场景仍用得上。 */
+var WIDGETS=[["streak","w1t","w1d","22",true],["recent","w2t","w2d","22",true],
+             ["rhythm","w3t","w3d","42",true],["overview","w4t","w4d","44",true],
+             ["year","w5t","w5d","42",true],["trend","w6t","w6d","42",true]];
+
+var LANG="en", FW=1, DARK=false, ID="", ITEMS=[], IT=null, MASK=false, BOOTED=false;
+/* 折叠栏标题(container-model §0.2d):容器只认 DOMContentLoaded 之后改出来的 document.title,
+   解析期(含先渲缓存)的调用推迟到其后再写,否则会被记成「静态值」而不采用。 */
+var xbTitle=(function(){ var ok=document.readyState!=="loading", v="";
+  if(!ok) document.addEventListener("DOMContentLoaded",function(){ setTimeout(function(){ ok=true; if(v) document.title=v; },0); });
+  return function(s){ s=String(s==null?"":s).trim(); if(!s||s==="--") return; v=s; if(ok) document.title=s; }; })();
+var HOLD=null;           // 串联动效期间「按住」的连续天数(旧值);null = 正常写
+var CUR=null;            // 月历当前显示的月（该月 1 号的 ms）
+var CALV="m", YR=0;      // 日历视图（m 月 / y 年）与年视图当前年份（0 = 未初始化）
+var HEAT=null;           // 年视图 canvas 的几何与数据（heatHtml 算好、drawHeat 用）
+var DAY=null;            // 正在编辑的那一天（自然日 ms）
+var ED={icon:"target",pal:1,goal:1};
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键;缺键回落英文(doc/overseas-first.md §2) */
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c];});}
+function p2(n){return (n<10?"0":"")+n;}
+function fmtDay(ms){var d=new Date(ms);return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());}
+/* 给人看的日期(doc/overseas-first.md §5):中文 2026年9月25日 / 英文 Sep 25, 2026。fmtDay 只作内部键。 */
+function fmtDate(ms){var d=new Date(ms);return LANG==="zh"?d.getFullYear()+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日"
+  :MONTH_EN[d.getMonth()].slice(0,3)+" "+d.getDate()+", "+d.getFullYear();}
+/* 周首(§6):FW = ISO 1=周一 … 7=周日。月历表头、垫格、全年热力行序**同一个值** ——
+   原来表头英文恒周一起、垫格英文却按周日起,英文月历整体错一列(2026-10-01 修)。
+   wk 词表恒按周一起写,wkAt(i) 取「从周首数第 i 列」;lead0(date) = 这天前面空几格。 */
+/* 单复数(doc/copy-style-guide.md):英文 n = 1 取 <key>.one;中文不设 .one。 */
+function tn(k,n){var T=I18N[LANG]; return (Math.abs(n)===1&&T&&Object.prototype.hasOwnProperty.call(T,k+".one"))?T[k+".one"]:t(k);}
+function wkAt(arr,i){return arr[(i+FW-1)%7];}
+function lead0(dt){return (dt.getDay()-(FW%7)+7)%7;}
+function dayMid(ms){var d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();}
+function accent(pal){ return (PAL[pal]||PAL[1])[DARK?1:0]; }
+/* 主题色实底按钮上的字色:暗色档的主题色是调亮过的浅色,白字对比度不够(2026-10-08 评审 checkin-4),改深字。 */
+function accentOn(){ return DARK ? "#0E1116" : "#fff"; }
+function applyTheme(x){ DARK = x?x==="dark":matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme",DARK?"dark":"light");}
+function toast(m){if(window.xbridge&&xbridge.toast) xbridge.toast(m);}
+
+/* 月历格的底色 = 主题色按 次数/目标 的三档混合。 */
+function mix(hex, k){
+  var bg = DARK ? [0x2A,0x2C,0x32] : [0xED,0xEE,0xF0];
+  var c=[parseInt(hex.substr(1,2),16),parseInt(hex.substr(3,2),16),parseInt(hex.substr(5,2),16)];
+  var o="#"; for(var i=0;i<3;i++){ var v=Math.round(bg[i]+(c[i]-bg[i])*k);
+    o+=("0"+v.toString(16)).slice(-2); }
+  return o;
+}
+function levelColor(n, goal, pal){
+  if(!n) return "";                     // 0 次 = 不着色，用默认底
+  var col=accent(pal);
+  if(n>=goal) return mix(col,MIX[2]);
+  if(n*2>=goal) return mix(col,MIX[1]);
+  return mix(col,MIX[0]);
+}
+
+/* 派生统计全在这里算完、整份写回 —— 与 home 逐字相同的一份实现（两处必须一起改）。
+   ⚠️ 「达标日」= 当天次数 ≥ 每日目标。连续 / 平均间隔 / 最长间隔全部只串达标日 ——
+   目标 3 次时只打 1 次不该算数，否则连续天数会把敷衍的一天也串进去。
+   ⚠️ 连续天数不能存成天数（每过一个午夜就变）——只存 streakStart，读侧投影。 */
+function computeStat(log, goal, meta){
+  goal = goal>=1 ? goal : 1;
+  var s={total:log.length,lastTs:log.length?log[0]:null,avgGap:null,maxGap:null,
+         streakStart:null,best:0,byDay:{}};
+  var cut=dayMid(Date.now())-400*864e5, i;
+  for(i=0;i<log.length;i++){ if(log[i]<cut) continue;
+    var k=fmtDay(log[i]); s.byDay[k]=(s.byDay[k]||0)+1; }
+  var hit=[];
+  for(i=0;i<log.length;i++){
+    var mi=dayMid(log[i]);
+    if(hit.length&&hit[hit.length-1]===mi) continue;
+    if((s.byDay[fmtDay(log[i])]||0)>=goal) hit.push(mi);
+  }
+  var gaps=[];
+  for(i=0;i+1<hit.length;i++) gaps.push(Math.round((hit[i]-hit[i+1])/864e5));
+  if(gaps.length){ var sum=0,mx=0;
+    for(i=0;i<gaps.length;i++){sum+=gaps[i]; if(gaps[i]>mx) mx=gaps[i];}
+    s.avgGap=Math.round(sum/gaps.length*10)/10; s.maxGap=mx; }
+  if(hit.length){
+    // ⚠️ 判「相邻」用 Math.round(差/864e5)===1，不用 ===864e5（夏令时那两天是 23/25 小时）。
+    var start=hit[0];
+    for(i=0;i+1<hit.length;i++){ if(Math.round((hit[i]-hit[i+1])/864e5)===1) start=hit[i+1]; else break; }
+    s.streakStart=start;
+    // ⚠️ `streakEnd` = 当前这段的**最后一个达标日**,与 `lastTs`(最后一条**记录**)不是一回事:
+    // 计次型今天打了 1 次没打够时,lastTs 是今天而 streakEnd 是昨天。用 lastTs 投影会把
+    // 今天白算一天 —— 表现为「连续 10 天」而「最长 9 天」,自相矛盾(2026-08-21 验出的既有 bug)。
+    s.streakEnd=hit[0];
+    var run=1,best=1;
+    for(i=0;i+1<hit.length;i++){
+      if(Math.round((hit[i]-hit[i+1])/864e5)===1){ run++; if(run>best) best=run; } else run=1;
+    }
+    s.best=best;
+  }
+  // 卡片要跟着事项的图标/颜色/目标走，而 widget params 是「添加那一刻」定死的 ——
+  // 所以这四样跟着 stat 一起落盘，days.df / streak.df / today.df 从 stat 里读。
+  if(meta){ s.goal=goal; s.pal=meta.pal||1; s.icon=meta.icon||""; s.name=meta.name||"";
+            s.kind=meta.kind||"check"; }
+  return s;
+}
+/* —— 两型 —— 「做了就算」(check,二值)与「要数次数」(count,+1)。**两个页面各存一份逐字相同的
+   实现,改动时两处必须一起改**(home / item)。
+   ⚠️ 老数据没有 `kind`:读侧推断、不写盘迁移(`goal>1 → count`)。 */
+function kindOf(it){
+  if(it.kind==="count"||it.kind==="check") return it.kind;
+  return (Number(it.goal)||1)>1 ? "count" : "check";
+}
+function goalOf(it){ return kindOf(it)==="count" ? Math.max(1,Number(it.goal)||1) : 1; }
+/* check 型的有效 log = 按天去重(只在读的时候做,`it.log` 原样落盘)。保留当天最早那条。 */
+function effLog(it){
+  if(kindOf(it)==="count") return it.log;
+  var seen={}, out=[], i;
+  for(i=it.log.length-1;i>=0;i--){        // log 是降序,倒着走 = 从早到晚,先到的留下
+    var k=fmtDay(it.log[i]);
+    if(seen[k]) continue;
+    seen[k]=1; out.push(it.log[i]);
+  }
+  out.sort(function(a,b){return b-a;});
+  return out;
+}
+function countOn(it, ms){
+  var d=fmtDay(ms), lg=effLog(it), n=0;
+  for(var i=0;i<lg.length;i++) if(fmtDay(lg[i])===d) n++;
+  return n;
+}
+function doneToday(it){ return countOn(it,Date.now()) >= goalOf(it); }
+function streakNow(s){
+  if(s.streakStart==null||s.streakEnd==null) return 0;
+  // ⚠️ 判「断没断」用 **lastTs**(最后一条记录)而不是 streakEnd —— 这一天的宽限是刻意的:
+  // 计次型今天打了但没打够,不该立刻宣告断签,今天还没过完。
+  // 而**投影天数**必须用 streakEnd(最后一个达标日),否则会把没达标的今天也算进去。
+  var alive=dayMid(s.lastTs!=null?s.lastTs:s.streakEnd), today=dayMid(Date.now());
+  if(today-alive>864e5*1.5) return 0;
+  return Math.round((dayMid(s.streakEnd)-s.streakStart)/864e5)+1;
+}
+/* 跨事项的日聚合 —— 三张**聚合卡**(progress / week / month)的数据底座。
+   **两个页面各存一份逐字相同的实现**(同 computeStat 的既有姿态,页与页之间没有模块系统),
+   改动时 home / item 两处必须一起改。
+
+   ⚠️ **只存历史事实,不存「今天完成了几件」这类会过期的量**。`byDay[日期] = 那天有几件事达标`
+      是钉死的;而「今天」是哪天由**卡片自己**用 `@time.nowMs` 算出来再查表(同 today.df 的姿态)。
+      存成「今天 3/5」的话,用户今天打完卡就不再开 App,明天桌面卡还挂着昨天那个 3/5 ——
+      而且它不会报错,只是**安静地不对**。同 [[runtime-misc-pitfalls]]「随时间变的派生量存锚点」。
+   ⚠️ 判据是**达标**(当天次数 ≥ 该事项的每日目标)不是「记过一笔」:目标 3 次只打 1 次不算,
+      与 computeStat 里连续天数的口径一致,否则同一天在两张卡上一个算数一个不算。
+   ⚠️ 窗口裁到近 60 天:月卡最远看 35 天,余量够了。不裁的话这张表会随年份长大(log 才是真源)。 */
+function computeAgg(){
+  var byDay={}, cut=fmtDay(dayMid(Date.now())-60*864e5), i, k;
+  for(i=0;i<ITEMS.length;i++){
+    var it=ITEMS[i], g=goalOf(it), s=computeStat(effLog(it),g);
+    for(k in s.byDay){
+      if(k<cut) continue;                       // yyyy-MM-dd 定长,字典序即时间序
+      if(s.byDay[k]>=g) byDay[k]=(byDay[k]||0)+1;
+    }
+  }
+  return {total:ITEMS.length, byDay:byDay};
+}
+async function saveLog(){
+  // save.af 末尾自带 widget.refresh(scope=bundle) —— 刷新收在本包作用域内，不踢盘上别的包。
+  await xbridge.runFlow("save",{id:IT.id,log:IT.log,
+    // ⚠️ stat 用 **effLog** 算(check 型按天去重),而落盘的 `log` 是原始那份 —— 两者刻意不同:
+    // 统计要按类型的口径,数据要保真。`kind` 一并进 stat(卡片将来按类型换口径)。
+    stat:computeStat(effLog(IT),goalOf(IT),
+      {pal:IT.pal,icon:icName(IT.icon),name:IT.name,kind:kindOf(IT)}),
+    // ⚠️ 详情页补记/撤销同样改变跨事项聚合 —— 少这一处,从详情页改的记录不会反映到聚合卡上。
+    agg:computeAgg()});
+}
+async function saveItems(){
+  await xbridge.runFlow("items",{items:ITEMS.map(function(x){
+    return {id:x.id,name:x.name,icon:icName(x.icon),pal:x.pal,kind:kindOf(x),goal:goalOf(x),
+            createdAt:x.createdAt};}),
+    agg:computeAgg()});
+}
+
+function paint(){
+  if(!IT){ document.getElementById("sub").textContent=t("notFound"); return; }
+  var s=computeStat(effLog(IT),goalOf(IT)), n=countOn(IT,Date.now()),
+      col=accent(IT.pal), k=kindOf(IT), g=goalOf(IT), ok=n>=g, i;
+  document.getElementById("h1").textContent=IT.name; xbTitle(IT.name);
+  var hic=document.getElementById("hic");
+  hic.innerHTML=icSvg(IT.icon); hic.style.background=col+"22"; hic.style.color=col;
+  // ⚠️ 主按钮**恒是「打卡」**:一天可以打多次。撤销不在这里 —— 一天多条时「撤销今天」是
+  // 整天粒度，会把好的那几条一起抹掉;改/删收在日历里每一天、每一条上。
+  // 副标题:check 型只有「记了 / 还没记」两态,永远不出现次数;count 型才显示 n/goal。
+  document.getElementById("sub").textContent =
+    k==="check"
+      ? (ok ? t("cDone") : (IT.log.length?t("todo"):t("never")))
+      : (ok ? t("todayOk").replace("{n}",n)
+            : (n>0 ? t("todayN").replace("{n}",n).replace("{g}",g)
+                   : (IT.log.length?t("todo"):t("never"))));
+  // ⚠️ 主按钮按类型分叉:check 是 **toggle**(记过就变「点一下撤销」),count 恒是「＋ 记一次」。
+  // 此前它恒是「打卡」+ 一天可多次,于是二值型的事没有任何撤销入口 —— 那正是本轮要修的。
+  var btn=document.getElementById("rec");
+  btn.textContent = k==="check" ? (ok?t("cUndo"):t("cDo")) : t("nAdd");
+  btn.style.background = (k==="check"&&ok) ? "transparent" : col;
+  btn.style.color = (k==="check"&&ok) ? col : accentOn();
+  btn.style.boxShadow = (k==="check"&&ok) ? ("inset 0 0 0 1.5px "+col) : "none";
+
+  document.getElementById("vBest").textContent=s.best||0;
+  // 页脚按类型分叉:check 型不该出现「次」「达标日」这些它根本没有的概念。
+  document.getElementById("foot").textContent = k==="check" ? t("footC") : t("footN");
+  // ⚠️ HOLD:月历串联动效期间**不许**把连续数字写成新值 —— 因果顺序是「先扩散、后翻牌」,
+  // 同时发生就变成两件无关的事在闪(见 runChain)。
+  if(HOLD==null) document.getElementById("vStreak").textContent=streakNow(s);
+  paintCal();
+  paintBand();
+}
+
+/* —— 月历 ——
+   ⚠️ 首列 = 周首 FW(见 lead0 / wkAt)。表头与垫格必须同一个值 —— 各算各的就是英文错一列。 */
+function paintCal(){
+  if(!IT) return;
+  if(CALV==="y"){ paintYear(); return; }
+  document.getElementById("wk").hidden=false;
+  document.getElementById("days").hidden=false;
+  document.getElementById("yr").hidden=true;
+  document.getElementById("prev").disabled=false;
+  if(!CUR) CUR=new Date(new Date().getFullYear(),new Date().getMonth(),1).getTime();
+  var c=new Date(CUR), y=c.getFullYear(), m=c.getMonth(), col=accent(IT.pal), i;
+  document.getElementById("mon").textContent = LANG==="zh"
+    ? t("mon").replace("{y}",y).replace("{m}",m+1)
+    : MONTH_EN[m]+" "+y;
+  var wkNames=t("wk"), h="";
+  for(i=0;i<7;i++) h+="<span>"+esc(wkAt(wkNames,i))+"</span>";
+  document.getElementById("wk").innerHTML=h;
+
+  var pad = lead0(new Date(y,m,1));
+  var last=new Date(y,m+1,0).getDate(), today=dayMid(Date.now());
+  h="";
+  for(i=0;i<pad;i++) h+='<div class="dy pad"></div>';
+  for(var d=1;d<=last;d++){
+    var ms=new Date(y,m,d).getTime(), cnt=countOn(IT,ms);
+    var bg=levelColor(cnt,goalOf(IT),IT.pal);
+    var cls="dy"+(ms===today?" now":"")+(ms>today?" fut":"");
+    // 达标那天底色最深，日号要反白，否则数字糊在色块里
+    var fg = (cnt>0&&cnt>=goalOf(IT)) ? (DARK?"#0E1116":"#FFFFFF") : "";
+    h+='<div class="'+cls+'" data-d="'+ms+'"'+(bg?' style="background:'+bg+'"':"")+
+       '><span'+(fg?' style="color:'+fg+'"':"")+">"+d+"</span></div>";
+  }
+  document.getElementById("days").innerHTML=h;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-d]"),function(el){
+    el.addEventListener("click",function(){ openDay(Number(el.dataset.d)); });
+  });
+  // 未来的月份没有意义（记录只可能在过去或今天）—— 到本月就把 › 关掉
+  var thisM=new Date();
+  document.getElementById("next").disabled = (y===thisM.getFullYear()&&m===thisM.getMonth());
+  // check 型是二值 —— 三档浓淡的图例对它是错的(它只有「记了 / 没记」两格)。
+  var lh;
+  if(kindOf(IT)==="check"){
+    lh='<i style="background:var(--tile2)"></i><span>'+esc(t("lgdNo"))+'</span>'+
+       '<i style="background:'+mix(col,MIX[2])+';margin-left:8px"></i><span>'+esc(t("lgdYes"))+"</span>";
+  }else{
+    lh='<span>'+esc(t("lgdLess"))+'</span><i style="background:var(--tile2)"></i>';
+    for(i=0;i<3;i++) lh+='<i style="background:'+mix(col,MIX[i])+'"></i>';
+    lh+="<span>"+esc(t("lgdMore"))+"</span>";
+  }
+  document.getElementById("lgd").innerHTML=lh;
+}
+
+/* —— 年视图(参照 intimacy 首页「记录日历」的年视图) ——
+   2026-08-31 二改:全年热力阵列抽成**独立一行**(「全年」卡,paintBand,恒显今年),
+   年视图只剩 12 月块 —— 月块口径 = 达标日数(当天次数 ≥ 目标;check 型 goal=1,即记过
+   的天数),与「连续」同一口径。只有有数据的月可点(跳进那个月的月视图)。 */
+function monName(i){ return LANG==="zh" ? (i+1)+"月" : MONTH_EN[i].slice(0,3); }
+function syncSeg(){
+  document.getElementById("segM").setAttribute("aria-pressed",CALV==="m"?"true":"false");
+  document.getElementById("segY").setAttribute("aria-pressed",CALV==="y"?"true":"false");
+}
+function paintYear(){
+  var nowY=new Date().getFullYear(), lg=effLog(IT), i;
+  // 年份范围钳在「最早记录 ↔ 今年」:翻出去只有空白,不如禁掉。没有记录 = 只有今年。
+  var lo=lg.length?new Date(lg[lg.length-1]).getFullYear():nowY;
+  if(!YR) YR=nowY;
+  if(YR<lo) YR=lo;
+  if(YR>nowY) YR=nowY;
+  document.getElementById("wk").hidden=true;
+  document.getElementById("days").hidden=true;
+  var yr=document.getElementById("yr"); yr.hidden=false;
+  document.getElementById("mon").textContent =
+    LANG==="zh" ? t("monY").replace("{y}",YR) : String(YR);
+  document.getElementById("prev").disabled = YR<=lo;
+  document.getElementById("next").disabled = YR>=nowY;
+  // 这一年逐天的次数从 effLog 全量现算 —— computeStat.byDay 裁了 400 天,这里刻意不用。
+  var byDay={}, goal=goalOf(IT), col=accent(IT.pal);
+  for(i=0;i<lg.length;i++){
+    var d=new Date(lg[i]);
+    if(d.getFullYear()===YR){ var k=fmtDay(lg[i]); byDay[k]=(byDay[k]||0)+1; }
+  }
+  var hit=[0,0,0,0,0,0,0,0,0,0,0,0], mx=0, k2;
+  for(k2 in byDay){ if(byDay[k2]>=goal){ var mm=Number(k2.slice(5,7))-1;
+    hit[mm]++; if(hit[mm]>mx) mx=hit[mm]; } }
+  // 达标日最深那天日号反白的同一套字色,给「占比 > 0.6」的深底月块用。
+  // 全年热力阵列不在这里 —— 它单独占一行(「全年」卡,paintBand),年视图只剩月块导航。
+  var fgDeep=DARK?"#0E1116":"#FFFFFF";
+  var h='<div class="mons">';
+  for(i=0;i<12;i++){
+    var n=hit[i], a=n?0.15+0.85*(n/mx):0;
+    // 月块按「占当年最深月」的比例上色;b 从 .mc 继承字色,span 自带 --sub 要单独盖
+    var st=n?' style="background:'+mix(col,a)+(a>0.6?';color:'+fgDeep:"")+'"':"";
+    var st2=(n&&a>0.6)?' style="color:'+fgDeep+'"':"";
+    h+= n>0
+      ? '<button class="mc has" data-mon="'+i+'"'+st+'><b>'+esc(monName(i))+'</b><span'+st2+'>'+
+        esc(tn("yrCnt",n).replace("{n}",n))+'</span></button>'
+      : '<div class="mc"><b>'+esc(monName(i))+'</b><span>·</span></div>';
+  }
+  h+='</div>';
+  yr.innerHTML=h;
+  drawHeat();
+  Array.prototype.forEach.call(yr.querySelectorAll("[data-mon]"),function(el){
+    el.addEventListener("click",function(){          // 点有数据的月 → 跳进那个月
+      CALV="m"; CUR=new Date(YR,Number(el.dataset.mon),1).getTime();
+      syncSeg(); paintCal();
+    });
+  });
+}
+/* 「全年」独立卡:今年的全年热力阵列(2026-08-31 从年视图里抽出,单独占一行)。
+   数据口径与年视图曾经的那份逐字相同(effLog 现算逐天次数)。 */
+function paintBand(){
+  var band=document.getElementById("band");
+  var y=new Date().getFullYear(), lg=effLog(IT), byDay={}, i;
+  for(i=0;i<lg.length;i++){
+    var d=new Date(lg[i]);
+    if(d.getFullYear()===y){ var k=fmtDay(lg[i]); byDay[k]=(byDay[k]||0)+1; }
+  }
+  band.innerHTML=heatHtml(byDay,goalOf(IT),y,band);
+  drawHeat();
+}
+/* GitHub 式全年热力条:y 全年逐天,一块 canvas 手绘 —— 上下两行(每行 6 个月块,整年一屏
+   放下)、月份名画在每行上方的标签行、居中在自己的月块上、周几标签(一/三/五/日)画进每行左侧。
+   ⚠️ 一切尺寸都是整数像素,绝不用 1fr 弹性列 —— fr 分配 + 亚像素取整会让标签与格子各漂各的,
+   canvas 之下引擎布局彻底出局(intimacy 三轮真机漂移换来的定版,memory [[github-heatmap-layout-logic]])。
+   相邻两月共享同一个日历周时(下月 fd>0),两个互补半列横向收回一个格距,月界由阶梯形+缝表达。 */
+function heatHtml(byDay,goal,y,host){
+  var todayMid=dayMid(Date.now());
+  var blocks=[], m;
+  for(m=0;m<12;m++){
+    var fd=lead0(new Date(y,m,1)), dim=new Date(y,m+1,0).getDate();
+    blocks.push({m:m,fd:fd,dim:dim,cols:Math.ceil((fd+dim)/7)});
+  }
+  var GAPM=3, GUT=14, BANDGAP=8, LBLH=14;   // LBLH:每行上方的月份标签行(2026-10-08:水印压格子 → 标签单独一行)
+  var card=host.parentElement;
+  var avail=(card.clientWidth||371)-28-GUT;           // .card.plain 左右各 14 内边距
+  function bandW(cellpx,from){                        // 一行(6 个月块)的总宽
+    var w2=0;
+    for(var i=from;i<from+6;i++){
+      w2+=blocks[i].cols*(cellpx+2)-2;
+      if(i<from+5) w2+=GAPM-(blocks[i+1].fd>0?(cellpx+2):0);
+    }
+    return w2;
+  }
+  // 格子从 16px 往下试到能放进容器为止(下限 6px,极窄时由外层滚动兜底)。全是整数像素。
+  var cell=16;
+  while(cell>6 && Math.max(bandW(cell,0),bandW(cell,6))>avail) cell--;
+  var pitch=cell+2, bandH=7*pitch-2;                  // 7 行格子;月份名在上方标签行(LBLH)
+  var cssW=GUT+Math.max(bandW(cell,0),bandW(cell,6));
+  var cssH=(LBLH+bandH)*2+BANDGAP;
+  HEAT={byDay:byDay,goal:goal,y:y,host:host,blocks:blocks,cell:cell,gapM:GAPM,gut:GUT,
+        bandH:bandH,bandGap:BANDGAP,lblH:LBLH,wd:t("wk"),todayMid:todayMid,cssW:cssW,cssH:cssH};
+  return '<div class="hm"><div class="hmScroll"><canvas class="hmC" style="width:'+cssW+
+        'px;height:'+cssH+'px"></canvas></div></div>';
+}
+/* canvas 需要元素在 DOM 里才能画,paintYear 落完 innerHTML 后调这里。
+   ⚠️ 位图尺寸乘 devicePixelRatio 再 ctx.scale,否则 Retina 上发虚。
+   ⚠️ 空格底色现读 CSS 变量(--tile2,与月历空格同色),明暗切换重渲时自然跟上。 */
+function drawHeat(){
+  var cv=HEAT&&HEAT.host?HEAT.host.querySelector(".hmC"):null;
+  if(!cv||!HEAT) return;
+  var dpr=window.devicePixelRatio||1, cell=HEAT.cell, pitch=cell+2;
+  cv.width=Math.round(HEAT.cssW*dpr); cv.height=Math.round(HEAT.cssH*dpr);
+  var ctx=cv.getContext("2d"); ctx.scale(dpr,dpr);
+  var cs=getComputedStyle(document.documentElement);
+  var tile=(cs.getPropertyValue("--tile2")||"").trim()||"#EEF0F4";
+  var sub=(cs.getPropertyValue("--sub")||"").trim()||"#6B7280";
+  var fg=(cs.getPropertyValue("--fg")||"").trim()||"#0E1116";
+  var fSmall="8.5px -apple-system,system-ui,'Segoe UI',Roboto,sans-serif";
+  var fMark="600 10px -apple-system,system-ui,'Segoe UI',Roboto,sans-serif";
+  var band, k, r;
+  for(band=0;band<2;band++){                          // 两行:上 1-6 月,下 7-12 月
+    var top=band*(HEAT.lblH+HEAT.bandH+HEAT.bandGap)+HEAT.lblH, x0=HEAT.gut;
+    ctx.font=fSmall; ctx.fillStyle=sub;
+    for(r=0;r<7;r+=2)                                 // 每行左侧:一/三/五/日
+      ctx.fillText(wkAt(HEAT.wd,r), 0, top+r*pitch+cell/2+3);
+    for(k=band*6;k<band*6+6;k++){
+      var b=HEAT.blocks[k];
+      var blockW=b.cols*pitch-2, label=monName(b.m);
+      for(var day=1;day<=b.dim;day++){
+        var fut=new Date(HEAT.y,b.m,day).getTime()>HEAT.todayMid;  // 未来的天:降透明度的底格
+        var lc=b.fd+day-1, x=x0+Math.floor(lc/7)*pitch, y=top+(lc%7)*pitch;
+        var n=fut?0:(HEAT.byDay[HEAT.y+"-"+p2(b.m+1)+"-"+p2(day)]||0);
+        // 色阶与月历同一套:levelColor 的三档混合 + 0 次 tile2 底
+        ctx.globalAlpha = fut?0.45:1;
+        ctx.fillStyle = n>0 ? levelColor(n,HEAT.goal,IT.pal) : tile;
+        if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(x,y,cell,cell,2); ctx.fill(); }
+        else ctx.fillRect(x,y,cell,cell);             // 老 WebView 没有 roundRect,方角即可
+        ctx.globalAlpha=1;
+      }
+      // 月份名画在这一行格子**上方**的标签行里、居中在自己的月块上(2026-10-08 评审:原先作水印压在格子中间,
+      // 盖住色块)。对应关系仍由「居中在自己的块上」表达,不再与格子争同一块像素。
+      ctx.font=fMark; ctx.fillStyle=sub;
+      ctx.fillText(label, x0+Math.max(0,(blockW-ctx.measureText(label).width)/2), top-4);
+      ctx.font=fSmall;
+      // 与 bandW 同式:下月与本月共享一个日历周(fd>0)→ 横向收回一个格距
+      var nxt=(k+1)%6!==0?HEAT.blocks[k+1]:null;
+      x0+=blockW+HEAT.gapM-((nxt&&nxt.fd>0)?pitch:0);
+    }
+  }
+}
+
+/* 含 `ms` 那一段**连续达标日**(升序)。用它判「这一下有没有把两段接起来」。 */
+function chainOf(ms){
+  var out=[ms], p=ms-864e5, n=ms+864e5;
+  while(countOn(IT,p)>=goalOf(IT)){ out.unshift(p); p-=864e5; }
+  while(countOn(IT,n)>=goalOf(IT)){ out.push(n); n+=864e5; }
+  return out;
+}
+function cellOf(ms){ return document.querySelector('.dy[data-d="'+ms+'"]'); }
+function pulseCell(ms){
+  var el=cellOf(ms); if(!el) return;
+  el.classList.add("pulse");
+  setTimeout(function(){ el.classList.remove("pulse"); }, 260);
+}
+/* —— 串联:从补的那格**向两侧同时扩散**点亮,扩散跑完连续数字才翻牌 ——
+   ⚠️ 扩散原点是用户刚点的那一格(不是从月初扫到月末)—— 这样它读起来是「你这一下的后果」,
+   而不是一次列表刷新。
+   ⚠️ 封顶 600ms:串起 30 天时 26ms×30 会到 780ms,太久;超了就压缩步长,长串反而扫得更快。
+   ⚠️ 先扩散、后翻牌是**因果顺序**;同时发生就成了两件无关的事在闪。 */
+function runChain(ms, chain){
+  pulseCell(ms);
+  var i=chain.indexOf(ms);
+  var left=chain.slice(0,i).reverse(), right=chain.slice(i+1);
+  var steps=Math.max(left.length,right.length);
+  var per=Math.min(26, Math.round(600/Math.max(steps,1)));
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduce) per=0;
+  for(var k=0;k<steps;k++){
+    (function(k){ setTimeout(function(){
+      [left[k],right[k]].forEach(function(d){ if(d!=null) pulseCell(d); });
+    }, 120+k*per); })(k);
+  }
+  setTimeout(function(){
+    HOLD=null;
+    flipStreak(streakNow(computeStat(effLog(IT),goalOf(IT))));
+  }, 120+steps*per+60);
+}
+/* 数字翻牌:旧的上移淡出,新的从下移入。 */
+function flipStreak(v){
+  var host=document.getElementById("fStreak"), old=document.getElementById("vStreak");
+  if(!host||!old){ return; }
+  if(String(old.textContent)===String(v)){ return; }
+  var nw=document.createElement("b"); nw.id="vStreak"; nw.textContent=v;
+  nw.style.cssText="transform:translateY(100%);transition:transform .2s cubic-bezier(.32,.72,0,1)";
+  old.removeAttribute("id");
+  old.style.transform="translateY(-100%)";
+  host.appendChild(nw);
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ nw.style.transform="translateY(0)"; }); });
+  setTimeout(function(){ if(old.parentNode) old.remove(); }, 700);
+}
+
+/* —— 某一天的 sheet:逐条改时间 / 删 / 加一次 ——
+   这里同时兼了「补录」:点过去的某天 →「＋ 加一次」= 补一条那天的记录，于是不再需要单独一页。
+   ⚠️ 改时间会打乱 lastTs、达标日与全部间隔 → saveLog 里 computeStat 全量重算，绝不增量。 */
+async function openDay(ms){
+  if(ms>dayMid(Date.now())){ toast(t("dFut")); return; }
+  // ⚠️ check 型点日历某天 = **直接 toggle 那天**,不开 sheet。
+  // 二值型没有「那天的第几条」这个概念,为它开一张「逐条改时间」的 sheet 是把 count 型的
+  // 复杂度摊派给了不需要它的人。补录与撤销在这里是同一个动作。
+  if(kindOf(IT)==="check"){
+    var d=fmtDay(ms), filling=countOn(IT,ms)===0;
+    var before=streakNow(computeStat(effLog(IT),goalOf(IT)));
+    if(!filling){ IT.log=IT.log.filter(function(x){ return fmtDay(x)!==d; }); }
+    else{
+      // 今天补在此刻,过去的日子补在中午 —— 过去那天的「此刻」没有意义,中午是个不会跨日的锚。
+      var now=new Date(), isToday=ms===dayMid(Date.now()), dd=new Date(ms);
+      IT.log.push(new Date(dd.getFullYear(),dd.getMonth(),dd.getDate(),
+                           isToday?now.getHours():12, isToday?now.getMinutes():0,0,0).getTime());
+      IT.log.sort(function(a,b){return b-a;});
+    }
+    await saveLog();
+    var chain = filling ? chainOf(ms) : [];
+    // ⚠️ **只在连续段真的变长时才演**。补一个孤立的日子(两边都没记)就只有那一格弹一下,
+    // 没有扩散 —— 动效必须对应一件真发生的事,否则它就贬值成转场噪音。
+    if(chain.length>1){ HOLD=before; paint(); runChain(ms,chain); }
+    else { paint(); pulseCell(ms); }
+    return;
+  }
+  DAY=ms; paintDay();
+  // ⚠️ `.btn` 没有默认底色（只有 color:#fff）—— 主按钮的底一律由 JS 按事项主题色刷。
+  // 漏刷的表现是「白字铺在 UA 默认灰上」，浅色下几乎看不见字。
+  document.getElementById("dAdd").style.background=accent(IT.pal);
+  document.getElementById("dAdd").style.color=accentOn();
+  document.getElementById("dSheet").classList.add("on");
+  document.body.classList.add("open");
+}
+function paintDay(){
+  // ⚠️ 这张 sheet 只服务 count 型(check 型在 openDay 里已经 toggle 掉并 return 了),
+  // 所以逐条列的是**原始 log**,不是 effLog —— 用户要改的就是那一条条真实记录。
+  var d=fmtDay(DAY), list=[], i;
+  for(i=0;i<IT.log.length;i++) if(fmtDay(IT.log[i])===d) list.push(IT.log[i]);
+  list.sort(function(a,b){return a-b;});
+  document.getElementById("dTitle").textContent=fmtDate(DAY);
+  document.getElementById("dHint").textContent =
+    list.length ? tn("dHint",list.length).replace("{n}",list.length) : t("dHint0");
+  var h="";
+  for(i=0;i<list.length;i++){
+    var x=new Date(list[i]);
+    h+='<div class="lgrow"><input type="time" data-ts="'+list[i]+'" value="'+
+       p2(x.getHours())+":"+p2(x.getMinutes())+'">'+
+       '<button class="del" data-del="'+list[i]+'">✕</button></div>';
+  }
+  var box=document.getElementById("dList");
+  box.innerHTML=h;
+  Array.prototype.forEach.call(box.querySelectorAll("[data-ts]"),function(inp){
+    inp.addEventListener("change",async function(){
+      var old=Number(inp.dataset.ts), hm=(inp.value||"12:00").split(":");
+      var dd=new Date(DAY);
+      // 用 new Date(y,m,d,h,mi) 而不是 Date.parse("yyyy-MM-ddTHH:mm")：
+      // 后者在部分 WebView 上按 UTC 解释，改完会整体偏一个时区。
+      var ts=new Date(dd.getFullYear(),dd.getMonth(),dd.getDate(),
+                      Number(hm[0]),Number(hm[1]),0,0).getTime();
+      // ⚠️ 删旧条用 indexOf+splice 而不是 filter —— filter 会把重复值全删光。
+      var k=IT.log.indexOf(old); if(k>=0) IT.log.splice(k,1);
+      IT.log.push(ts); IT.log.sort(function(a,b){return b-a;});
+      await saveLog(); paint(); paintDay();
+    });
+  });
+  Array.prototype.forEach.call(box.querySelectorAll("[data-del]"),function(b){
+    b.addEventListener("click",async function(){
+      var k=IT.log.indexOf(Number(b.dataset.del)); if(k>=0) IT.log.splice(k,1);
+      await saveLog(); paint(); paintDay();
+    });
+  });
+}
+function closeSheets(){
+  document.body.classList.remove("open");
+  document.getElementById("dSheet").classList.remove("on");
+  document.getElementById("eSheet").classList.remove("on");
+  DAY=null;
+}
+/* ⚠️ 键盘弹起时 `bottom:0` 的 sheet 会被盖住 —— iOS WebView 不缩 layout viewport，
+   只缩 visualViewport。按它算出键盘高顶上去；没有该 API 的老 WebView 退化成不顶。 */
+function liftSheet(){
+  var vv=window.visualViewport;
+  var kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  // ⚠️ 同 home:只顶到键盘上方不够,可用高要扣掉键盘,否则内容一多顶部被推出屏幕。
+  // CSS 的 86vh 救不了 —— vh 算的是 layout viewport,iOS 上不随键盘收缩。
+  var avail = ((vv ? vv.height : window.innerHeight) - 24) + "px";
+  ["dSheet","eSheet"].forEach(function(k){
+    var el=document.getElementById(k);
+    el.style.bottom = kb ? kb+"px" : "";
+    el.style.maxHeight = avail; });
+}
+
+/* —— 编辑事项:图标 / 名字 / 主题色 / 每日目标 / 删除 —— */
+function paintEdit(){
+  var ib=document.getElementById("eIcons"), h="", i;
+  for(i=0;i<ICONS.length;i++)
+    h+='<button data-ic="'+esc(ICONS[i])+'" aria-pressed="'+(ICONS[i]===ED.icon)+'">'+IC[ICONS[i]]+"</button>";
+  ib.innerHTML=h;
+  Array.prototype.forEach.call(ib.querySelectorAll("[data-ic]"),function(b){
+    b.addEventListener("click",function(){ ED.icon=b.dataset.ic; paintEdit(); }); });
+  var cb=document.getElementById("eCols"); h="";
+  for(var p=1;p<=6;p++)
+    h+='<button class="swx" data-pal="'+p+'" aria-pressed="'+(p===ED.pal)+
+       '" style="background:'+PAL[p][DARK?1:0]+'"></button>';
+  cb.innerHTML=h;
+  Array.prototype.forEach.call(cb.querySelectorAll("[data-pal]"),function(b){
+    b.addEventListener("click",function(){ ED.pal=Number(b.dataset.pal); paintEdit(); }); });
+  document.getElementById("gVal").textContent=ED.goal;
+  document.getElementById("eSave").style.background=accent(ED.pal);
+  document.getElementById("eSave").style.color=accentOn();
+  ["kCheck","kCount"].forEach(function(k){
+    var b=document.getElementById(k), on=(b.dataset.kind===ED.kind);
+    b.setAttribute("aria-pressed",on?"true":"false");
+    b.querySelector("em").style.background = on ? accent(ED.pal) : "";
+  });
+  document.getElementById("goalStep").hidden = ED.kind!=="count";
+  // ⚠️ 改类型不会动任何历史记录,但**统计口径会变**,得先说清楚再让人改。
+  // count→check:一天多条的历史按天折成一条(只在读的时候折,数据还在);
+  // check→count:那些折起来的记录又都回来了。
+  var w=document.getElementById("kindWarn");
+  w.hidden = (ED.kind===kindOf(IT));
+  if(!w.hidden) w.textContent = ED.kind==="check" ? t("kToCheck") : t("kToCount");
+}
+function openEdit(){
+  ED={icon:icName(IT.icon),pal:IT.pal||1,kind:kindOf(IT),
+      goal:kindOf(IT)==="count"?goalOf(IT):2};
+  document.getElementById("eName").value=IT.name;
+  paintEdit();
+  document.getElementById("eSheet").classList.add("on");
+  document.body.classList.add("open");
+}
+
+function paintWidgets(){
+  /* 加卡入口 = **一个按钮**(doc/infosource-standard.md §8.1a):打开系统「添加到仪表盘」面板。
+     此前这里逐行渲 WIDGETS 表 —— 在包内手抄一份 .xwidget 目录(与真目录两份真源,
+     新增组件忘了改表就永远加不到),而面板已经做得更好(真 RCN 预览、轮播 ⇄ 网格、多选)。
+     ⚠️ 四张卡**绑当前事项**(itemId)、`today` 不绑 —— 所以候选**逐项**带各自的参数,
+     不能用一份共享 override(那只喂给面板当前那一张,§8.1a 纪律 1)。
+     ⚠️ 参数在**点击那一刻**现取:IT / MASK 随时会变。
+     ⚠️ 不提示「已添加」:落盘只发生在面板里的原生按钮上,用户可能翻两下就关掉。 */
+  /* 标题带上**这件事的名字**(§8.1a 详情页那一档:「添加「<对象>」的组件」)——
+     首页那个按钮说「添加组件」,这里必须说清是给谁加,否则两个入口长得一模一样、
+     用户分不出点哪个会加出什么。名字过长由基准版式的 nowrap+ellipsis 收口。 */
+  var _nm = (IT && IT.name) || "";
+  document.getElementById("addBox").innerHTML=
+    '<button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg">'
+    +'<b>'+esc(t("pickTPre")+_nm+t("pickTSuf"))+'</b>'
+    +'<span class="d">'+esc(t("pickS"))+'</span></span></button>';
+  document.getElementById("pickw").addEventListener("click",function(){
+    if(!IT || !(window.xbridge && xbridge.pickWidgets)) return;
+    xbridge.pickWidgets(WIDGETS.map(function(w){
+      var p={mask:MASK?"1":"0",alias:""};
+      /* alias 留空 —— 卡上的名字与图标从 stat 里读(iname/icon),事项改名换图标卡片自动跟上。 */
+      if(w[4]) p.itemId=IT.id;
+      return { id:w[0], params:p };
+    }));
+  });
+}
+
+async function reload(){
+  try{
+    var r=await xbridge.runDataFlow("read",{});
+    var dd=(r&&r.data)||{};
+    var list=Array.isArray(dd.items)?dd.items:[];
+    ITEMS=[]; IT=null;
+    for(var i=0;i<list.length&&i<MAX;i++){
+      var lg=dd["l"+i]; lg=Array.isArray(lg)?lg.slice():[];
+      lg.sort(function(a,b){return b-a;});
+      var o={id:list[i].id,name:list[i].name,icon:icName(list[i].icon||"target"),
+             pal:Number(list[i].pal)||1,kind:list[i].kind,
+             goal:Number(list[i].goal)||1,
+             createdAt:list[i].createdAt,log:lg};
+      ITEMS.push(o);
+      if(o.id===ID) IT=o;
+    }
+    // 拿不到 id / id 已失效 → 回落第一件，而不是渲一片空白
+    if(!IT&&ITEMS.length) IT=ITEMS[0];
+  }catch(e){}
+  paint();
+  /* ⚠️ 加卡按钮的标题里有**这件事的名字**,而 boot 里那次 paintWidgets() 跑在 reload 之前 ——
+     那一刻 IT 还是 null,渲出来是「添加「」的组件」。名字要在 IT 就绪后重渲一次。
+     重复调用无副作用:整段是 innerHTML 重建,旧节点连同它的监听一起被换掉,不会叠加。 */
+  paintWidgets();
+}
+
+/* 启动顺序照 market boot()(doc/overseas-first.md §1–§2):先读宿主写好的 <html data-lang>,
+   再等 appInfo(nbInfo 处理信封);**缺省英文**。周首 FW = appInfo.firstWeekday,缺 → nbCnDefault ? 周一 : 周日。 */
+(async function boot(){
+  var de=document.documentElement;
+  if(de.getAttribute("data-lang")) LANG=nbLang(de.getAttribute("data-lang"));
+  var d=await nbInfo();
+  LANG=nbLang(d.language||d.locale);
+  var fw=parseInt(d.firstWeekday,10);
+  FW=(fw>=1&&fw<=7)?fw:(nbCnDefault(d)?1:7);
+  if(!window.xbridge){ applyTheme(de.getAttribute("data-theme")||undefined);
+    document.body.insertAdjacentHTML("afterbegin",'<div class="state">'+esc(t("notX"))+"</div>"); return; }
+  applyTheme(d.theme||de.getAttribute("data-theme")||undefined);
+  var m=/[?&]id=([^&]*)/.exec(location.search||"");
+  ID=m?decodeURIComponent(m[1]):"";
+  if(ID.indexOf("${")===0) ID="";   // 卡片 onClick 里的 ${itemId} 若没被求值，按「没给」处理
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-i]"),function(el){
+    el.textContent=t(el.dataset.i);});
+  document.getElementById("dClose").textContent=t("dClose");
+  document.getElementById("dAdd").textContent=t("dAdd");
+  document.getElementById("eSave").textContent=t("eSave");
+  document.getElementById("eCancel").textContent=t("eCancel");
+  document.getElementById("gHint").textContent=t("gHint");
+  document.getElementById("rm").textContent=t("rm");
+  paintWidgets();
+
+  document.getElementById("rec").addEventListener("click",async function(){
+    if(!IT) return;
+    var btn=this; btn.disabled=true;
+    try{
+      var today=fmtDay(Date.now());
+      if(kindOf(IT)==="check" && countOn(IT,Date.now())>0){
+        // check 型撤销 = 删掉今天**全部**记录(二值型的「今天」要么有要么无)。
+        IT.log=IT.log.filter(function(x){ return fmtDay(x)!==today; });
+        await saveLog(); paint(); toast(t("cUndone"));
+      }else{
+        IT.log.unshift(Date.now()); IT.log.sort(function(a,b){return b-a;});
+        await saveLog(); paint(); toast(t("checked"));
+      }
+    } finally { btn.disabled=false; }
+  });
+  document.getElementById("prev").addEventListener("click",function(){
+    if(CALV==="y"){ YR--; paintCal(); return; }
+    var c=new Date(CUR); CUR=new Date(c.getFullYear(),c.getMonth()-1,1).getTime(); paintCal(); });
+  document.getElementById("next").addEventListener("click",function(){
+    if(CALV==="y"){ YR++; paintCal(); return; }
+    var c=new Date(CUR); CUR=new Date(c.getFullYear(),c.getMonth()+1,1).getTime(); paintCal(); });
+  // 月 / 年 切换:进年视图时年份跟着月历当前那页走(看着 2025-03 切「年」→ 2025)。
+  document.getElementById("segM").addEventListener("click",function(){
+    if(CALV==="m") return; CALV="m"; syncSeg(); paintCal(); });
+  document.getElementById("segY").addEventListener("click",function(){
+    if(CALV==="y") return; CALV="y";
+    YR = CUR ? new Date(CUR).getFullYear() : new Date().getFullYear();
+    syncSeg(); paintCal(); });
+
+  document.getElementById("dClose").addEventListener("click",closeSheets);
+  document.getElementById("backdrop").addEventListener("click",closeSheets);
+  document.getElementById("dAdd").addEventListener("click",async function(){
+    if(!IT||DAY==null) return;
+    // 今天补在此刻，过去的日子补在中午 —— 过去那天的「此刻」没有意义，中午是个不会跨日的锚。
+    var now=new Date(), isToday=DAY===dayMid(Date.now()), dd=new Date(DAY);
+    var ts=new Date(dd.getFullYear(),dd.getMonth(),dd.getDate(),
+                    isToday?now.getHours():12, isToday?now.getMinutes():0,0,0).getTime();
+    IT.log.push(ts); IT.log.sort(function(a,b){return b-a;});
+    await saveLog(); paint(); paintDay();
+  });
+
+  ["kCheck","kCount"].forEach(function(k){
+    document.getElementById(k).addEventListener("click",function(){
+      ED.kind=this.dataset.kind; paintEdit(); });
+  });
+  document.getElementById("toEdit").addEventListener("click",function(){ if(IT) openEdit(); });
+  document.getElementById("eCancel").addEventListener("click",closeSheets);
+  // 下限 2:计次型 goal=1 与「做了就算」是同一件事,留着只会让人选出一个没有意义的组合。
+  document.getElementById("gDec").addEventListener("click",function(){
+    if(ED.goal>2){ ED.goal--; paintEdit(); } });
+  document.getElementById("gInc").addEventListener("click",function(){
+    if(ED.goal<20){ ED.goal++; paintEdit(); } });
+  document.getElementById("eSave").addEventListener("click",async function(){
+    if(!IT) return;
+    var name=document.getElementById("eName").value.trim();
+    if(!name){ toast(t("needName")); return; }
+    for(var i=0;i<ITEMS.length;i++) if(ITEMS[i].id!==IT.id&&ITEMS[i].name===name){ toast(t("dup")); return; }
+    var b=this; b.disabled=true;
+    try{
+      IT.name=name; IT.icon=ED.icon; IT.pal=ED.pal;
+      IT.kind=ED.kind; IT.goal=ED.kind==="count"?ED.goal:1;
+      await saveItems();
+      // ⚠️ 目标/颜色/图标/名字都进 stat（卡片从 stat 读），所以改完必须**再写一次 stat** ——
+      // 只写 items 的话卡片会一直用旧目标算达标，而页面已按新目标显示，两边对不上。
+      await saveLog();
+      closeSheets(); paint(); toast(t("saved"));
+    } finally { b.disabled=false; }
+  });
+  document.getElementById("rm").addEventListener("click",async function(){
+    if(!IT) return;
+    // 二次确认走容器原语（四端统一 XBDialog），不用 window.confirm —— 后者会逃出容器边界，
+    // 且四端行为不一致。桥上没有这条时退化为直接删（真机四端都有）。
+    var ok=true;
+    if(xbridge.confirm){
+      // 参数是 (标题, 正文, 选项) 三个位置参数;传对象会被当成标题(G49)
+      var r=await xbridge.confirm(t("rmT"), t("rmM"), {okText:t("rmOk"), cancelText:t("rmCancel"), destructive:true});
+      ok = (r===true)||(r&&(r.ok===true||r.data===true||r.confirmed===true));
+    }
+    if(!ok) return;
+    // 先清空它自己的 log/stat（复用 save，不必为删单开一条流），再写回新清单。
+    // 顺序不能反：先摘出清单再清数据的话，中途失败会留下一份读不到的孤儿数据。
+    IT.log=[];
+    await saveLog();
+    ITEMS=ITEMS.filter(function(x){return x.id!==IT.id;});
+    await saveItems();
+    toast(t("removed"));
+    if(xbridge.closePage) xbridge.closePage();
+  });
+
+  var sw=document.getElementById("mask");
+  sw.addEventListener("click",function(){ MASK=!MASK;
+    sw.setAttribute("aria-checked",MASK?"true":"false");
+    sw.style.background = MASK ? accent(IT?IT.pal:1) : ""; });
+  if(window.visualViewport){
+    window.visualViewport.addEventListener("resize",liftSheet);
+    window.visualViewport.addEventListener("scroll",liftSheet);
+  }
+
+  window.addEventListener("pageshow",function(){ if(BOOTED) reload(); });
+  document.addEventListener("visibilitychange",function(){ if(BOOTED&&!document.hidden) reload(); });
+
+  await reload();
+  BOOTED=true;
+})();
+</script>
+</body></html>

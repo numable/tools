@@ -1,0 +1,58 @@
+{
+ "_note": "v55 经营组(appstore-infosources-v2 §5)。bundleId 空 = 账号合计(与发布 / 声音组件「空 = 账号第一个 App」不同)。一小时刷一次:日报一天一张、按天落盘,平时每次刷新 0–1 个请求。",
+ "version": 2,
+ "title": "经营日报",
+ "sub": "下载、更新、内购、收益和 14 天走势",
+ "i18n": {
+  "en-US": {
+   "title": "Daily sales",
+   "sub": "Downloads, updates, in-app, proceeds and a 14-day trend"
+  }
+ },
+ "layout": 42,
+ "params": {
+  "appId": ""
+ },
+ "events": {
+  "onClick": {
+   "flow": "@[file://flow/open-sales.af]",
+   "params": {
+    "bid": "${appId}"
+   }
+  },
+  "onEdit": "/edit?w=biz&appId=${appId}",
+  "_noteClick": "经营组件:没填供应商编号 → /settings;填了 → /sales?b=(同一个对象)。`/edit?w=biz` 让编辑页第一项写「账号合计」而不是「跟随账号」(两组空 appId 语义不同)。"
+ },
+ "jobs": [
+  {
+   "id": "daily-brief",
+   "params": {}
+  }
+ ],
+ "canvas": {
+  "source": "@[file://rc/daily.rcn]",
+  "depends": [
+   {
+    "flow": "@[file://flow/daily.df]",
+    "params": {
+     "appId": "${appId}",
+     "_preview": "${_preview}"
+    }
+   }
+  ],
+  "refresh": {
+   "interval": [
+    "3600"
+   ]
+  }
+ },
+ "ai": {
+  "shows": "某天的下载、更新、内购、预估收益与近 14 天下载柱;需接入 App Store Connect",
+  "params": {
+   "appId": {
+    "kind": "account",
+    "hint": "用户 App Store Connect 账号里某个 App 的 Apple ID;留空 = 账号里所有 App 合计"
+   }
+  }
+ }
+}

@@ -1,0 +1,837 @@
+{
+  "_note": "首页:关注的服务各自的总体状态 + 进行中事故,原样交给页面 JS 归一(状态档 / 事故挑选 / 时长全在 JS 里算,与组件的 follow.df 同一套判据:状态档 = max(总体指示灯, 进行中事故影响),取不到 = 未知)。\n首屏缓存做在页面 JS 层(flowCached:存的是归一后的精简模型,不是这份原始响应 —— incident.io 那几家的 incidents.json 30–40KB,整份落盘不划算),所以本流豁免 data 层缓存。",
+  "_lintCache": "exempt",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "idsIn",
+        "value": "$[findNotEmpty::(${ids},)]"
+      },
+      "_note": "入参落地(勿删):页面把关注列表按 ~ 拼好传进来。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flk",
+        "value": "~${idsIn}~"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~github~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_github",
+          "action": "request",
+          "params": {
+            "url": "https://www.githubstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_github",
+          "action": "request",
+          "params": {
+            "url": "https://www.githubstatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~claude~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_claude",
+          "action": "request",
+          "params": {
+            "url": "https://status.claude.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_claude",
+          "action": "request",
+          "params": {
+            "url": "https://status.claude.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~openai~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_openai",
+          "action": "request",
+          "params": {
+            "url": "https://status.openai.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ih_openai",
+          "action": "request",
+          "params": {
+            "url": "https://status.openai.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~vercel~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_vercel",
+          "action": "request",
+          "params": {
+            "url": "https://www.vercel-status.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_vercel",
+          "action": "request",
+          "params": {
+            "url": "https://www.vercel-status.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~cursor~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_cursor",
+          "action": "request",
+          "params": {
+            "url": "https://status.cursor.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_cursor",
+          "action": "request",
+          "params": {
+            "url": "https://status.cursor.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~npm~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_npm",
+          "action": "request",
+          "params": {
+            "url": "https://status.npmjs.org/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_npm",
+          "action": "request",
+          "params": {
+            "url": "https://status.npmjs.org/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~docker~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_docker",
+          "action": "request",
+          "params": {
+            "url": "https://www.dockerstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ih_docker",
+          "action": "request",
+          "params": {
+            "url": "https://www.dockerstatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~bitbucket~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_bitbucket",
+          "action": "request",
+          "params": {
+            "url": "https://bitbucket.status.atlassian.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_bitbucket",
+          "action": "request",
+          "params": {
+            "url": "https://bitbucket.status.atlassian.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~circleci~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_circleci",
+          "action": "request",
+          "params": {
+            "url": "https://status.circleci.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_circleci",
+          "action": "request",
+          "params": {
+            "url": "https://status.circleci.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~netlify~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_netlify",
+          "action": "request",
+          "params": {
+            "url": "https://www.netlifystatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_netlify",
+          "action": "request",
+          "params": {
+            "url": "https://www.netlifystatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~supabase~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_supabase",
+          "action": "request",
+          "params": {
+            "url": "https://status.supabase.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_supabase",
+          "action": "request",
+          "params": {
+            "url": "https://status.supabase.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~render~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_render",
+          "action": "request",
+          "params": {
+            "url": "https://status.render.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_render",
+          "action": "request",
+          "params": {
+            "url": "https://status.render.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~digitalocean~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_digitalocean",
+          "action": "request",
+          "params": {
+            "url": "https://status.digitalocean.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_digitalocean",
+          "action": "request",
+          "params": {
+            "url": "https://status.digitalocean.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~mongodb~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_mongodb",
+          "action": "request",
+          "params": {
+            "url": "https://status.mongodb.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_mongodb",
+          "action": "request",
+          "params": {
+            "url": "https://status.mongodb.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~sentry~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_sentry",
+          "action": "request",
+          "params": {
+            "url": "https://status.sentry.io/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_sentry",
+          "action": "request",
+          "params": {
+            "url": "https://status.sentry.io/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~datadog~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_datadog",
+          "action": "request",
+          "params": {
+            "url": "https://status.datadoghq.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_datadog",
+          "action": "request",
+          "params": {
+            "url": "https://status.datadoghq.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~linear~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_linear",
+          "action": "request",
+          "params": {
+            "url": "https://linearstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ih_linear",
+          "action": "request",
+          "params": {
+            "url": "https://linearstatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~notion~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_notion",
+          "action": "request",
+          "params": {
+            "url": "https://www.notion-status.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ih_notion",
+          "action": "request",
+          "params": {
+            "url": "https://www.notion-status.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~figma~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_figma",
+          "action": "request",
+          "params": {
+            "url": "https://status.figma.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_figma",
+          "action": "request",
+          "params": {
+            "url": "https://status.figma.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~postman~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_postman",
+          "action": "request",
+          "params": {
+            "url": "https://status.postman.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_postman",
+          "action": "request",
+          "params": {
+            "url": "https://status.postman.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~discord~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_discord",
+          "action": "request",
+          "params": {
+            "url": "https://discordstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_discord",
+          "action": "request",
+          "params": {
+            "url": "https://discordstatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~reddit~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_reddit",
+          "action": "request",
+          "params": {
+            "url": "https://www.redditstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_reddit",
+          "action": "request",
+          "params": {
+            "url": "https://www.redditstatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "请求屏障(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "nowMs",
+          "st_github",
+          "ur_github",
+          "st_claude",
+          "ur_claude",
+          "st_openai",
+          "ih_openai",
+          "st_vercel",
+          "ur_vercel",
+          "st_cursor",
+          "ur_cursor",
+          "st_npm",
+          "ur_npm",
+          "st_docker",
+          "ih_docker",
+          "st_bitbucket",
+          "ur_bitbucket",
+          "st_circleci",
+          "ur_circleci",
+          "st_netlify",
+          "ur_netlify",
+          "st_supabase",
+          "ur_supabase",
+          "st_render",
+          "ur_render",
+          "st_digitalocean",
+          "ur_digitalocean",
+          "st_mongodb",
+          "ur_mongodb",
+          "st_sentry",
+          "ur_sentry",
+          "st_datadog",
+          "ur_datadog",
+          "st_linear",
+          "ih_linear",
+          "st_notion",
+          "ih_notion",
+          "st_figma",
+          "ur_figma",
+          "st_postman",
+          "ur_postman",
+          "st_discord",
+          "ur_discord",
+          "st_reddit",
+          "ur_reddit"
+        ]
+      }
+    }
+  ]
+}

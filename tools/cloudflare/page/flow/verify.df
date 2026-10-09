@@ -1,0 +1,76 @@
+{
+  "_note": "令牌自检。`/user/tokens/verify` 是 Cloudflare 官方给令牌本身用的校验端点。\n⚠️ **令牌住 App 凭证中心**(2026-09-09 迁入):本流读不到令牌本体。三态判据:\n  · `bound` = **直接查绑定表**(`credential.state`,纯本地零网络);\n  · `ok`    = 绑了 **且** 信封 success **且** status 恰为 active。\n⚠️ 2026-09-09 同日二次修正:`bound` 原本是**从响应本身推**(resp 空 = 没绑)—— 那把「没绑」\n  与「网络挂了」压成同一个观测量,断网的用户会被告知「去绑定令牌」而他令牌明明配着。\n  平台补上 `credential.state` 之后改成直接查。\n⚠️ `success` 只说明「请求被受理了」,不说明令牌有效 —— 过期令牌打这个端点回的是\n  **HTTP 200 + `success:true`**(`status:\"expired\"` 藏在 result 里,2026-09-09 实测;\n  同一把令牌打 /zones 则是 403)。少判 status 就会把死钥匙报成「已生效」。\n⚠️ **绝不回令牌本体** —— 迁进凭证中心后这一条从「纪律」变成了「结构性做不到」。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "cred",
+      "action": "credential.state",
+      "params": {
+        "id": "cf"
+      },
+      "_note": "凭证绑定状态(纯本地查表,零网络)。取代原来的「从响应本身推」——\n  事后判把「没绑」与「网络挂了」压成同一个观测量(两者都让 resp 为空)。"
+    },
+    {
+      "id": "resp",
+      "action": "request",
+      "params": {
+        "url": "https://api.cloudflare.com/client/v4/user/tokens/verify",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "Accept": "application/json",
+          "User-Agent": "Numable"
+        },
+        "credential": "cf"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bound",
+        "value": "$[if::(eq::(${cred.state},bound),1,0)]"
+      },
+      "_note": "绑没绑 —— **直接查绑定表**(credential-vault · credential.state),纯本地零网络。\n  ⚠️ 2026-09-09 由事后判 `eq::(${resp},)` 迁来。旧写法「响应回来了 = 绑了」把\n  **没绑**与**网络挂了**压成同一个观测量:两者都让 resp 为空,于是断网的用户\n  被告知「去绑定令牌」,而他令牌明明配着。\n  现在两件事分开:`bound` 是本地事实,`ok` 才看服务端答案。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "stS",
+        "value": "$[connect::(s_,${resp.result.status})]"
+      },
+      "_note": "前缀哨兵,两边钉成非数字串再比。实测朴素写法在 TS 引擎里也安全(`eq::(空,active)`=false),但 `eq` 遇空值在四端 VParser 移植里有分叉记录,而 L1 只跑得到 TS 那一份 —— 一行的代价买掉跨端不确定性。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(eq::(${bound},1),if::(eq::(${resp.success},true),if::(eq::(${stS},s_active),1,0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tokenStatus",
+        "value": "${resp.result.status}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "bound",
+          "ok",
+          "tokenStatus",
+          "at"
+        ]
+      }
+    }
+  ]
+}

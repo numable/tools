@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "_note": "提醒取数段(price / move 共用):一次 ticker,输出现价 cur、24h 涨跌 chg 与绝对值 chgA、符号 sym。\n⚠️ 刻意不复用组件的 coin.df:那条流输出的是**排好版的串**(`84,012.` + `40`),判定要的是裸数字。",
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "kr",
+        "value": "$[findNotEmpty::(${pair},btcusd)]"
+      },
+      "_note": "⚠️ 入参先落地:方法参数里看不见 flow 入参(§9.5 #3)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "$[if::(contains::(${kr},-),toUpperCase::(${kr}),connect::(toUpperCase::(if::(endsWith::(${kr},usdt),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usdc),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usd),subString::(${kr},0,calc::(length::(${kr})-3)),${kr})))),-,if::(endsWith::(${kr},usdc),USDC,USDT)))]"
+      },
+      "_note": "币对归一:从老组件长按进来的实例可能带 Bitstamp 形状 `btcusd`,新的是 OKX instId。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sym",
+        "value": "$[index::(split::(${k},-),0)]"
+      }
+    },
+    {
+      "action": "request",
+      "id": "t",
+      "params": {
+        "url": "https://www.okx.com/api/v5/market/ticker?instId=${k}",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_bad",
+        "value": "$[if::(gt::(length::(${t.data}),0),0,1)]"
+      },
+      "_fb": 1,
+      "_note": "OKX 没取到(被地区政策拦 / 超时 / 空)→ 走备用源 Coinbase(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_s0",
+        "value": "$[if::(endsWith::(${k},-SWAP),subString::(${k},0,calc::(length::(${k})-5)),${k})]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_p",
+        "value": "$[if::(endsWith::(${t_s0},-USDT),connect::(subString::(${t_s0},0,calc::(length::(${t_s0})-5)),-USD),if::(endsWith::(${t_s0},-USDC),connect::(subString::(${t_s0},0,calc::(length::(${t_s0})-5)),-USD),${t_s0}))]"
+      },
+      "_fb": 1,
+      "_note": "备用源 Coinbase 的产品名(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_go",
+        "value": "${t_bad}"
+      },
+      "_fb": 1
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "op": "if",
+          "props": {
+            "val": "${t_go}"
+          },
+          "items": [
+            {
+              "action": "request",
+              "id": "t_c",
+              "params": {
+                "url": "https://api.exchange.coinbase.com/products/${t_p}/stats",
+                "method": "GET",
+                "formatType": "json",
+                "timeout": "5000"
+              }
+            }
+          ]
+        }
+      ],
+      "_fb": 1,
+      "_note": "备用请求(只在 OKX 没取到时发;每个都在 op:if 里)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfb",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 请求屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_ok",
+        "value": "$[if::(eq::(findNotEmpty::(${t_c.last},__none__),__none__),0,1)]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_q",
+        "value": "${t.data}"
+      },
+      "_fb": 1,
+      "_note": "下游统一读 t_q:OKX 的 data,或下面按 OKX 形状重排的备用数据。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${t_ok}"
+      },
+      "_fb": 1,
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "t_q",
+            "value": [
+              {
+                "last": "$[connect::(${t_c.last},)]",
+                "open24h": "$[connect::(${t_c.open},)]",
+                "high24h": "$[connect::(${t_c.high},)]",
+                "low24h": "$[connect::(${t_c.low},)]",
+                "vol24h": "$[connect::(${t_c.volume},)]",
+                "volCcy24h": "$[if::(endsWith::(${k},-SWAP),connect::(${t_c.volume},),parseNumber::(calc::(${t_c.volume}*${t_c.last}),0))]"
+              }
+            ]
+          },
+          "_fb": 1
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfc",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 屏障(勿删):op:if 复合节点之后紧邻的节点同样读不到它的结果 ——实测紧跟一个 remove 会让后面的节点全部取空(2026-10-01 CLI)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "t_c"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cur",
+        "value": "$[get::(index::(${t_q},0),last)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "op",
+        "value": "$[get::(index::(${t_q},0),open24h)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${cur}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "${@i18n.fail}"
+          }
+        }
+      ],
+      "_note": "取不到价就让流失败 —— 平台把「流失败」判成「不知道」,不响、不动计时。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chg",
+        "value": "$[parseNumber::(calc::((${cur}-${op})/${op}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgA",
+        "value": "$[if::(ge::(${chg},0),${chg},calc::(0-${chg}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgS",
+        "value": "$[connect::(if::(ge::(${chg},0),+,−),parseNumber::(${chgA},0.00),%)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "cur",
+          "chg",
+          "chgA",
+          "chgS",
+          "sym"
+        ]
+      }
+    }
+  ],
+  "i18n": {
+    "zh-CN": {
+      "fail": "取不到行情"
+    },
+    "en-US": {
+      "fail": "Quote unavailable"
+    }
+  }
+}

@@ -1,0 +1,1210 @@
+{
+ "rc": {
+  "i18n": {
+   "zh-CN": {
+    "title": "今日打卡",
+    "days": "天",
+    "addItem": "点开添加事项",
+    "empty": "添加第一件要坚持的事",
+    "masked": "已隐藏",
+    "moreA": "还有 ",
+    "moreB": " 件 · 点开看全部"
+   },
+   "en-US": {
+    "title": "Today's check-ins",
+    "days": "d",
+    "addItem": "Tap to add a habit",
+    "empty": "Add the first habit to keep",
+    "masked": "Hidden",
+    "moreA": "",
+    "moreB": " more · tap to see all"
+   }
+  },
+  "cells": [
+   {
+    "id": "bg",
+    "type": "layer",
+    "x": "0pt",
+    "y": "0pt",
+    "w": "{parent.w}",
+    "h": "{parent.h}",
+    "bgColor": "linear(#FFFFFF\\,#F9FCFB\\,#EEF7F3)@90|linear(#15171A\\,#161B1D\\,#182221)@90"
+   },
+   {
+    "_note": "源色点(card-design-system §2):5pt 圆点 / 卡名左侧 / 间距 9pt / 每张卡恰好一次。⚠️ 色值恒 #2E9E6B|#45C793,**不跟事项的调色板走** —— 这颗点答的是「这是 checkin 的卡」,不是「这件事是紫色的」;跟着 pal 变会让同一个包在盘上看着像六个源。",
+    "id": "dot",
+    "type": "layer",
+    "x": "14pt",
+    "y": "{name.y}+({name.h}-5pt)/2",
+    "w": "5pt",
+    "h": "5pt",
+    "bgColor": "#2E9E6B|#45C793",
+    "cornerRadius": {
+     "leftT": "2.5pt",
+     "leftB": "2.5pt",
+     "rightT": "2.5pt",
+     "rightB": "2.5pt"
+    }
+   },
+   {
+    "id": "name",
+    "type": "txt",
+    "x": "23pt",
+    "y": "12pt",
+    "w": "{parent.w}-37pt-88pt",
+    "h": "-1",
+    "text": "${@i18n.title}",
+    "fontSize": "13pt",
+    "textColor": "#0E1116|#F3F4F6",
+    "maxLines": "1",
+    "typeface": "System-Bold"
+   },
+   {
+    "_note": "卡名行最右那一格恒有内容(card-design-system §3 + §5):常态渲 MM-DD 日期锚(零网络包,锚答的是「这一屏说的是哪天」);打码态改渲状态标记 —— 打码 ≠ 空态,空态是 `--`/空槽加事实陈述,打码是主动语态的一句状态,而那一刻这张卡上没有任何随时间变的可见量、锚零信息量。⚠️ 与网格下方那对坐标轴刻度**刻意重复右端那个日期**:轴读作刻度、右上角读作时间戳,两者在读者那里不是同一件事,而少了右上角这一格,这张卡在一屏 20 张卡里就是唯一空着右上角的那张。",
+    "id": "mk",
+    "type": "txt",
+    "x": "{parent.w}-94pt",
+    "y": "15pt",
+    "w": "80pt",
+    "h": "-1",
+    "alignmentH": "2",
+    "maxLines": "1",
+    "text": "$[if::(eq::(${mask},1),${@i18n.masked},findNotEmpty::(${dateLbl},--))]",
+    "fontSize": "9pt",
+    "textColor": "#6B7280|#8E939B"
+   },
+   {
+    "id": "sub",
+    "type": "txt",
+    "x": "14pt",
+    "y": "34pt",
+    "w": "{parent.w}-28pt",
+    "h": "-1",
+    "text": "$[findNotEmpty::(${doneCnt},0)]/$[findNotEmpty::(${allCnt},0)]",
+    "fontSize": "11pt",
+    "textColor": "#6B7280|#8E939B",
+    "maxLines": "1",
+    "_note": "日期已挪到右上角那一格(§3),这里只留今天的完成数 —— 同一张卡上不放两个日期。"
+   },
+   {
+    "_note": "6 行固定槽位(2026-10-08 改):有事项 = 列表底板;一件事都没有(新用户 / 取不到)= 第 1 行无底只写提示、下面 5 行画幽灵底板保住版式;已有事项时后面的空槽隐形,第一个空槽只写一行素文提示(infosource-standard §4.4a:入口不给按钮外观)。",
+    "id": "r0",
+    "type": "layer",
+    "x": "14pt",
+    "y": "58pt",
+    "w": "{parent.w}-28pt",
+    "h": "44pt",
+    "bgColor": "$[if::(eq::(${h0},1),#E7E9EE|#20232A,if::(eq::(findNotEmpty::(${allCnt},0),0),#00000000|#00000000,#00000000|#00000000))]",
+    "cornerRadius": {
+     "leftT": "12pt",
+     "leftB": "12pt",
+     "rightT": "12pt",
+     "rightB": "12pt"
+    }
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${h0},1),1,0)]"
+    },
+    "react": [
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i0},_),_),0,1)]"
+      },
+      "react": [
+       {
+        "id": "ri0",
+        "type": "img",
+        "x": "{r0.x}+10pt",
+        "y": "{r0.y}+15pt",
+        "w": "14pt",
+        "h": "14pt",
+        "url": "@[file://xWidget/assets/ic/${i0}.$[if::(eq::(${theme},dark),d,l)].uri]"
+       },
+       {
+        "id": "rn0",
+        "type": "txt",
+        "x": "{ri0.r}+6pt",
+        "y": "{r0.y}",
+        "w": "{r0.w}-124pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n0},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i0},_),_),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rm0",
+        "type": "txt",
+        "x": "{r0.x}+10pt",
+        "y": "{r0.y}",
+        "w": "{r0.w}-108pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n0},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "id": "rs0",
+      "type": "txt",
+      "x": "{r0.r}-94pt",
+      "y": "{r0.y}",
+      "w": "52pt",
+      "h": "44pt",
+      "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${t0},0))] ${@i18n.days}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "2"
+     },
+     {
+      "id": "rd0",
+      "type": "layer",
+      "x": "{r0.r}-34pt",
+      "y": "{r0.y}+10pt",
+      "w": "24pt",
+      "h": "24pt",
+      "bgColor": "$[if::(eq::(${mask},1),#D3D7DE|#33353B,if::(eq::(${d0},1),${m0},#D3D7DE|#3A3D45))]",
+      "cornerRadius": {
+       "leftT": "12pt",
+       "leftB": "12pt",
+       "rightT": "12pt",
+       "rightB": "12pt"
+      },
+      "events": {
+       "onClick": "numable://self/page/quick?id=${w0}"
+      }
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d0},1),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rk0",
+        "type": "txt",
+        "x": "{rd0.x}",
+        "y": "{rd0.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "✓",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#0E1A14",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d0},0),if::(gt::(${v0},0),1,0),0)]"
+      },
+      "react": [
+       {
+        "id": "rc0",
+        "type": "txt",
+        "x": "{rd0.x}",
+        "y": "{rd0.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "$[findNotEmpty::(${v0},0)]/$[findNotEmpty::(${g0},1)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(findNotEmpty::(${h0},0),1),0,1)]"
+    },
+    "react": [
+     {
+      "id": "rp0",
+      "type": "txt",
+      "x": "{r0.x}",
+      "y": "{r0.y}",
+      "w": "{r0.w}",
+      "h": "44pt",
+      "text": "${@i18n.empty}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "1"
+     }
+    ]
+   },
+   {
+    "id": "r1",
+    "type": "layer",
+    "x": "14pt",
+    "y": "58pt+48pt",
+    "w": "{parent.w}-28pt",
+    "h": "44pt",
+    "bgColor": "$[if::(eq::(${h1},1),#E7E9EE|#20232A,if::(eq::(findNotEmpty::(${allCnt},0),0),#EEF0F4|#252930,#00000000|#00000000))]",
+    "cornerRadius": {
+     "leftT": "12pt",
+     "leftB": "12pt",
+     "rightT": "12pt",
+     "rightB": "12pt"
+    },
+    "_note": "6 行固定槽位(2026-10-08 改):有事项 = 列表底板;一件事都没有(新用户 / 取不到)= 第 1 行无底只写提示、下面 5 行画幽灵底板保住版式;已有事项时后面的空槽隐形,第一个空槽只写一行素文提示(infosource-standard §4.4a:入口不给按钮外观)。"
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${h1},1),1,0)]"
+    },
+    "react": [
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i1},_),_),0,1)]"
+      },
+      "react": [
+       {
+        "id": "ri1",
+        "type": "img",
+        "x": "{r1.x}+10pt",
+        "y": "{r1.y}+15pt",
+        "w": "14pt",
+        "h": "14pt",
+        "url": "@[file://xWidget/assets/ic/${i1}.$[if::(eq::(${theme},dark),d,l)].uri]"
+       },
+       {
+        "id": "rn1",
+        "type": "txt",
+        "x": "{ri1.r}+6pt",
+        "y": "{r1.y}",
+        "w": "{r1.w}-124pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n1},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i1},_),_),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rm1",
+        "type": "txt",
+        "x": "{r1.x}+10pt",
+        "y": "{r1.y}",
+        "w": "{r1.w}-108pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n1},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "id": "rs1",
+      "type": "txt",
+      "x": "{r1.r}-94pt",
+      "y": "{r1.y}",
+      "w": "52pt",
+      "h": "44pt",
+      "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${t1},0))] ${@i18n.days}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "2"
+     },
+     {
+      "id": "rd1",
+      "type": "layer",
+      "x": "{r1.r}-34pt",
+      "y": "{r1.y}+10pt",
+      "w": "24pt",
+      "h": "24pt",
+      "bgColor": "$[if::(eq::(${mask},1),#D3D7DE|#33353B,if::(eq::(${d1},1),${m1},#D3D7DE|#3A3D45))]",
+      "cornerRadius": {
+       "leftT": "12pt",
+       "leftB": "12pt",
+       "rightT": "12pt",
+       "rightB": "12pt"
+      },
+      "events": {
+       "onClick": "numable://self/page/quick?id=${w1}"
+      }
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d1},1),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rk1",
+        "type": "txt",
+        "x": "{rd1.x}",
+        "y": "{rd1.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "✓",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#0E1A14",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d1},0),if::(gt::(${v1},0),1,0),0)]"
+      },
+      "react": [
+       {
+        "id": "rc1",
+        "type": "txt",
+        "x": "{rd1.x}",
+        "y": "{rd1.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "$[findNotEmpty::(${v1},0)]/$[findNotEmpty::(${g1},1)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${p1},1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "rp1",
+      "type": "txt",
+      "x": "{r1.x}",
+      "y": "{r1.y}",
+      "w": "{r1.w}",
+      "h": "44pt",
+      "text": "${@i18n.addItem}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "1"
+     }
+    ]
+   },
+   {
+    "id": "r2",
+    "type": "layer",
+    "x": "14pt",
+    "y": "58pt+96pt",
+    "w": "{parent.w}-28pt",
+    "h": "44pt",
+    "bgColor": "$[if::(eq::(${h2},1),#E7E9EE|#20232A,if::(eq::(findNotEmpty::(${allCnt},0),0),#EEF0F4|#252930,#00000000|#00000000))]",
+    "cornerRadius": {
+     "leftT": "12pt",
+     "leftB": "12pt",
+     "rightT": "12pt",
+     "rightB": "12pt"
+    },
+    "_note": "6 行固定槽位(2026-10-08 改):有事项 = 列表底板;一件事都没有(新用户 / 取不到)= 第 1 行无底只写提示、下面 5 行画幽灵底板保住版式;已有事项时后面的空槽隐形,第一个空槽只写一行素文提示(infosource-standard §4.4a:入口不给按钮外观)。"
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${h2},1),1,0)]"
+    },
+    "react": [
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i2},_),_),0,1)]"
+      },
+      "react": [
+       {
+        "id": "ri2",
+        "type": "img",
+        "x": "{r2.x}+10pt",
+        "y": "{r2.y}+15pt",
+        "w": "14pt",
+        "h": "14pt",
+        "url": "@[file://xWidget/assets/ic/${i2}.$[if::(eq::(${theme},dark),d,l)].uri]"
+       },
+       {
+        "id": "rn2",
+        "type": "txt",
+        "x": "{ri2.r}+6pt",
+        "y": "{r2.y}",
+        "w": "{r2.w}-124pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n2},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i2},_),_),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rm2",
+        "type": "txt",
+        "x": "{r2.x}+10pt",
+        "y": "{r2.y}",
+        "w": "{r2.w}-108pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n2},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "id": "rs2",
+      "type": "txt",
+      "x": "{r2.r}-94pt",
+      "y": "{r2.y}",
+      "w": "52pt",
+      "h": "44pt",
+      "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${t2},0))] ${@i18n.days}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "2"
+     },
+     {
+      "id": "rd2",
+      "type": "layer",
+      "x": "{r2.r}-34pt",
+      "y": "{r2.y}+10pt",
+      "w": "24pt",
+      "h": "24pt",
+      "bgColor": "$[if::(eq::(${mask},1),#D3D7DE|#33353B,if::(eq::(${d2},1),${m2},#D3D7DE|#3A3D45))]",
+      "cornerRadius": {
+       "leftT": "12pt",
+       "leftB": "12pt",
+       "rightT": "12pt",
+       "rightB": "12pt"
+      },
+      "events": {
+       "onClick": "numable://self/page/quick?id=${w2}"
+      }
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d2},1),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rk2",
+        "type": "txt",
+        "x": "{rd2.x}",
+        "y": "{rd2.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "✓",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#0E1A14",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d2},0),if::(gt::(${v2},0),1,0),0)]"
+      },
+      "react": [
+       {
+        "id": "rc2",
+        "type": "txt",
+        "x": "{rd2.x}",
+        "y": "{rd2.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "$[findNotEmpty::(${v2},0)]/$[findNotEmpty::(${g2},1)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${p2},1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "rp2",
+      "type": "txt",
+      "x": "{r2.x}",
+      "y": "{r2.y}",
+      "w": "{r2.w}",
+      "h": "44pt",
+      "text": "${@i18n.addItem}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "1"
+     }
+    ]
+   },
+   {
+    "id": "r3",
+    "type": "layer",
+    "x": "14pt",
+    "y": "58pt+144pt",
+    "w": "{parent.w}-28pt",
+    "h": "44pt",
+    "bgColor": "$[if::(eq::(${h3},1),#E7E9EE|#20232A,if::(eq::(findNotEmpty::(${allCnt},0),0),#EEF0F4|#252930,#00000000|#00000000))]",
+    "cornerRadius": {
+     "leftT": "12pt",
+     "leftB": "12pt",
+     "rightT": "12pt",
+     "rightB": "12pt"
+    },
+    "_note": "6 行固定槽位(2026-10-08 改):有事项 = 列表底板;一件事都没有(新用户 / 取不到)= 第 1 行无底只写提示、下面 5 行画幽灵底板保住版式;已有事项时后面的空槽隐形,第一个空槽只写一行素文提示(infosource-standard §4.4a:入口不给按钮外观)。"
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${h3},1),1,0)]"
+    },
+    "react": [
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i3},_),_),0,1)]"
+      },
+      "react": [
+       {
+        "id": "ri3",
+        "type": "img",
+        "x": "{r3.x}+10pt",
+        "y": "{r3.y}+15pt",
+        "w": "14pt",
+        "h": "14pt",
+        "url": "@[file://xWidget/assets/ic/${i3}.$[if::(eq::(${theme},dark),d,l)].uri]"
+       },
+       {
+        "id": "rn3",
+        "type": "txt",
+        "x": "{ri3.r}+6pt",
+        "y": "{r3.y}",
+        "w": "{r3.w}-124pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n3},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i3},_),_),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rm3",
+        "type": "txt",
+        "x": "{r3.x}+10pt",
+        "y": "{r3.y}",
+        "w": "{r3.w}-108pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n3},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "id": "rs3",
+      "type": "txt",
+      "x": "{r3.r}-94pt",
+      "y": "{r3.y}",
+      "w": "52pt",
+      "h": "44pt",
+      "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${t3},0))] ${@i18n.days}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "2"
+     },
+     {
+      "id": "rd3",
+      "type": "layer",
+      "x": "{r3.r}-34pt",
+      "y": "{r3.y}+10pt",
+      "w": "24pt",
+      "h": "24pt",
+      "bgColor": "$[if::(eq::(${mask},1),#D3D7DE|#33353B,if::(eq::(${d3},1),${m3},#D3D7DE|#3A3D45))]",
+      "cornerRadius": {
+       "leftT": "12pt",
+       "leftB": "12pt",
+       "rightT": "12pt",
+       "rightB": "12pt"
+      },
+      "events": {
+       "onClick": "numable://self/page/quick?id=${w3}"
+      }
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d3},1),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rk3",
+        "type": "txt",
+        "x": "{rd3.x}",
+        "y": "{rd3.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "✓",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#0E1A14",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d3},0),if::(gt::(${v3},0),1,0),0)]"
+      },
+      "react": [
+       {
+        "id": "rc3",
+        "type": "txt",
+        "x": "{rd3.x}",
+        "y": "{rd3.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "$[findNotEmpty::(${v3},0)]/$[findNotEmpty::(${g3},1)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${p3},1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "rp3",
+      "type": "txt",
+      "x": "{r3.x}",
+      "y": "{r3.y}",
+      "w": "{r3.w}",
+      "h": "44pt",
+      "text": "${@i18n.addItem}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "1"
+     }
+    ]
+   },
+   {
+    "id": "r4",
+    "type": "layer",
+    "x": "14pt",
+    "y": "58pt+192pt",
+    "w": "{parent.w}-28pt",
+    "h": "44pt",
+    "bgColor": "$[if::(eq::(${h4},1),#E7E9EE|#20232A,if::(eq::(findNotEmpty::(${allCnt},0),0),#EEF0F4|#252930,#00000000|#00000000))]",
+    "cornerRadius": {
+     "leftT": "12pt",
+     "leftB": "12pt",
+     "rightT": "12pt",
+     "rightB": "12pt"
+    },
+    "_note": "6 行固定槽位(2026-10-08 改):有事项 = 列表底板;一件事都没有(新用户 / 取不到)= 第 1 行无底只写提示、下面 5 行画幽灵底板保住版式;已有事项时后面的空槽隐形,第一个空槽只写一行素文提示(infosource-standard §4.4a:入口不给按钮外观)。"
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${h4},1),1,0)]"
+    },
+    "react": [
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i4},_),_),0,1)]"
+      },
+      "react": [
+       {
+        "id": "ri4",
+        "type": "img",
+        "x": "{r4.x}+10pt",
+        "y": "{r4.y}+15pt",
+        "w": "14pt",
+        "h": "14pt",
+        "url": "@[file://xWidget/assets/ic/${i4}.$[if::(eq::(${theme},dark),d,l)].uri]"
+       },
+       {
+        "id": "rn4",
+        "type": "txt",
+        "x": "{ri4.r}+6pt",
+        "y": "{r4.y}",
+        "w": "{r4.w}-124pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n4},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i4},_),_),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rm4",
+        "type": "txt",
+        "x": "{r4.x}+10pt",
+        "y": "{r4.y}",
+        "w": "{r4.w}-108pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n4},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "id": "rs4",
+      "type": "txt",
+      "x": "{r4.r}-94pt",
+      "y": "{r4.y}",
+      "w": "52pt",
+      "h": "44pt",
+      "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${t4},0))] ${@i18n.days}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "2"
+     },
+     {
+      "id": "rd4",
+      "type": "layer",
+      "x": "{r4.r}-34pt",
+      "y": "{r4.y}+10pt",
+      "w": "24pt",
+      "h": "24pt",
+      "bgColor": "$[if::(eq::(${mask},1),#D3D7DE|#33353B,if::(eq::(${d4},1),${m4},#D3D7DE|#3A3D45))]",
+      "cornerRadius": {
+       "leftT": "12pt",
+       "leftB": "12pt",
+       "rightT": "12pt",
+       "rightB": "12pt"
+      },
+      "events": {
+       "onClick": "numable://self/page/quick?id=${w4}"
+      }
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d4},1),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rk4",
+        "type": "txt",
+        "x": "{rd4.x}",
+        "y": "{rd4.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "✓",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#0E1A14",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d4},0),if::(gt::(${v4},0),1,0),0)]"
+      },
+      "react": [
+       {
+        "id": "rc4",
+        "type": "txt",
+        "x": "{rd4.x}",
+        "y": "{rd4.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "$[findNotEmpty::(${v4},0)]/$[findNotEmpty::(${g4},1)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${p4},1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "rp4",
+      "type": "txt",
+      "x": "{r4.x}",
+      "y": "{r4.y}",
+      "w": "{r4.w}",
+      "h": "44pt",
+      "text": "${@i18n.addItem}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "1"
+     }
+    ]
+   },
+   {
+    "id": "r5",
+    "type": "layer",
+    "x": "14pt",
+    "y": "58pt+240pt",
+    "w": "{parent.w}-28pt",
+    "h": "44pt",
+    "bgColor": "$[if::(eq::(findNotEmpty::(${ov},0),1),#00000000|#00000000,if::(eq::(${h5},1),#E7E9EE|#20232A,if::(eq::(findNotEmpty::(${allCnt},0),0),#EEF0F4|#252930,#00000000|#00000000)))]",
+    "cornerRadius": {
+     "leftT": "12pt",
+     "leftB": "12pt",
+     "rightT": "12pt",
+     "rightB": "12pt"
+    },
+    "_note": "6 行固定槽位(2026-10-08 改):有事项 = 列表底板;一件事都没有(新用户 / 取不到)= 第 1 行无底只写提示、下面 5 行画幽灵底板保住版式;已有事项时后面的空槽隐形,第一个空槽只写一行素文提示(infosource-standard §4.4a:入口不给按钮外观)。"
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${h5},1),if::(eq::(findNotEmpty::(${ov},0),1),0,1),0)]"
+    },
+    "react": [
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i5},_),_),0,1)]"
+      },
+      "react": [
+       {
+        "id": "ri5",
+        "type": "img",
+        "x": "{r5.x}+10pt",
+        "y": "{r5.y}+15pt",
+        "w": "14pt",
+        "h": "14pt",
+        "url": "@[file://xWidget/assets/ic/${i5}.$[if::(eq::(${theme},dark),d,l)].uri]"
+       },
+       {
+        "id": "rn5",
+        "type": "txt",
+        "x": "{ri5.r}+6pt",
+        "y": "{r5.y}",
+        "w": "{r5.w}-124pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n5},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(findNotEmpty::(${i5},_),_),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rm5",
+        "type": "txt",
+        "x": "{r5.x}+10pt",
+        "y": "{r5.y}",
+        "w": "{r5.w}-108pt",
+        "h": "44pt",
+        "text": "$[if::(eq::(${mask},1),••••,findNotEmpty::(${n5},--))]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "id": "rs5",
+      "type": "txt",
+      "x": "{r5.r}-94pt",
+      "y": "{r5.y}",
+      "w": "52pt",
+      "h": "44pt",
+      "text": "$[if::(eq::(${mask},1),••,findNotEmpty::(${t5},0))] ${@i18n.days}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "2"
+     },
+     {
+      "id": "rd5",
+      "type": "layer",
+      "x": "{r5.r}-34pt",
+      "y": "{r5.y}+10pt",
+      "w": "24pt",
+      "h": "24pt",
+      "bgColor": "$[if::(eq::(${mask},1),#D3D7DE|#33353B,if::(eq::(${d5},1),${m5},#D3D7DE|#3A3D45))]",
+      "cornerRadius": {
+       "leftT": "12pt",
+       "leftB": "12pt",
+       "rightT": "12pt",
+       "rightB": "12pt"
+      },
+      "events": {
+       "onClick": "numable://self/page/quick?id=${w5}"
+      }
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d5},1),1,0)]"
+      },
+      "react": [
+       {
+        "id": "rk5",
+        "type": "txt",
+        "x": "{rd5.x}",
+        "y": "{rd5.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "✓",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#0E1A14",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     },
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[if::(eq::(${d5},0),if::(gt::(${v5},0),1,0),0)]"
+      },
+      "react": [
+       {
+        "id": "rc5",
+        "type": "txt",
+        "x": "{rd5.x}",
+        "y": "{rd5.y}",
+        "w": "24pt",
+        "h": "24pt",
+        "text": "$[findNotEmpty::(${v5},0)]/$[findNotEmpty::(${g5},1)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "1",
+        "alignmentV": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "_note": "超过 6 件:第 6 行写「还有 N 件」(2026-10-08)。整卡点开就是首页,所以说「点开看全部」。",
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(findNotEmpty::(${ov},0),1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "rv5",
+      "type": "txt",
+      "x": "{r5.x}",
+      "y": "{r5.y}",
+      "w": "{r5.w}",
+      "h": "44pt",
+      "text": "${@i18n.moreA}${more}${@i18n.moreB}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "1"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[if::(eq::(${p5},1),1,0)]"
+    },
+    "react": [
+     {
+      "id": "rp5",
+      "type": "txt",
+      "x": "{r5.x}",
+      "y": "{r5.y}",
+      "w": "{r5.w}",
+      "h": "44pt",
+      "text": "${@i18n.addItem}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentV": "1",
+      "alignmentH": "1"
+     }
+    ]
+   }
+  ],
+  "i18nEmptyOk": [
+   "moreA"
+  ]
+ }
+}

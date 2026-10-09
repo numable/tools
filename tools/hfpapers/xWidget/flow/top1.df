@@ -1,0 +1,508 @@
+{
+  "_note": "生成器 tools/infosource/gen_headlines.py(hfpapers · 1 槽)。组件 .df **不缓存**(G23 契约 5)。只取标题 / 数字 / 标签 / 时间,正文字段一律不进输出(§3.13)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "tzNow",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzLf",
+        "value": "$[formatDate::(${tzNow},yyyy-MM-dd HH:mm)]"
+      },
+      "_note": "此刻的**本机**年月日时分。pattern 只用纯 token + `-` `:` 空格(跨端安全子集,G4c)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzY",
+        "value": "$[subString::(${tzLf},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMo",
+        "value": "$[subString::(${tzLf},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzD",
+        "value": "$[subString::(${tzLf},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzH",
+        "value": "$[subString::(${tzLf},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMi",
+        "value": "$[subString::(${tzLf},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzAdj",
+        "value": "$[if::(le::(${tzMo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzYoe",
+        "value": "$[calc::(${tzY}-2000-${tzAdj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMp",
+        "value": "$[calc::(${tzMo}-3+12*${tzAdj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzDb",
+        "value": "$[floor::(calc::((153*${tzMp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzQ4",
+        "value": "$[floor::(calc::(${tzYoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzDays",
+        "value": "$[calc::(11017+${tzYoe}*365+${tzQ4}+${tzDb}+${tzD}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzE",
+        "value": "$[calc::(${tzDays}*86400000+${tzH}*3600000+${tzMi}*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMin",
+        "value": "$[calc::(floor::(calc::(${tzNow}/60000))*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzO",
+        "value": "$[round::(calc::(${tzE}-${tzMin}))]"
+      },
+      "_note": "本机时区偏移(毫秒):东八区 = 28800000。round 是为了 Android 上 calc 返回 double 时不带 .0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hfD0",
+        "value": "$[formatDate::(calc::(${tzNow}-${tzO}-0),yyyy-MM-dd)]"
+      },
+      "_note": "UTC 日期:本机时刻减去时区偏移再按本机格式化 = UTC 的年月日。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hfD1",
+        "value": "$[formatDate::(calc::(${tzNow}-${tzO}-86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hfD2",
+        "value": "$[formatDate::(calc::(${tzNow}-${tzO}-172800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hfD3",
+        "value": "$[formatDate::(calc::(${tzNow}-${tzO}-259200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hfDay",
+        "value": "${hfD0}"
+      }
+    },
+    {
+      "action": "request",
+      "id": "resp",
+      "params": {
+        "url": "https://huggingface.co/api/daily_papers?date=${hfD0}&limit=5",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp[0].title}),0),0,1)]"
+      },
+      "_note": "上一天的列表是空的(周末 / UTC 零点刚过)或 400(本机日期跑在 UTC 前头)→ 退一天再取。",
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "hfDay",
+            "value": "${hfD1}"
+          }
+        },
+        {
+          "action": "request",
+          "id": "resp",
+          "params": {
+            "url": "https://huggingface.co/api/daily_papers?date=${hfD1}&limit=5",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp[0].title}),0),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "hfDay",
+            "value": "${hfD2}"
+          }
+        },
+        {
+          "action": "request",
+          "id": "resp",
+          "params": {
+            "url": "https://huggingface.co/api/daily_papers?date=${hfD2}&limit=5",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp[0].title}),0),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "hfDay",
+            "value": "${hfD3}"
+          }
+        },
+        {
+          "action": "request",
+          "id": "resp",
+          "params": {
+            "url": "https://huggingface.co/api/daily_papers?date=${hfD3}&limit=5",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp[0].title}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "hfpapers_unreachable"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[subString::(${hfDay},5,10)]"
+      },
+      "_note": "时效锚 = **列表日期**,不是取数时刻:周末显示的是周五那份,写「此刻」就是在撒谎。只有日期粒度 → `MM-dd`(card-design-system §3;时效锚是 overseas-first §5「不出现纯数字月日」明文列出的例外,2026-10-03 由「10月1日 / Oct 1」收口)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reNL",
+        "value": "([^\r\n])[ \t]*[\r\n]+[ \t]*([^\r\n])"
+      },
+      "_note": "标题清洗用的正则(见生成器 NL_RE 注释)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rpNL",
+        "value": "$1 $2"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reTl",
+        "value": "[ ]+[^ ]*$"
+      },
+      "_note": "截断后退到上一个词边界(英文)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reTp",
+        "value": "[-,;:.–—/ ]+$"
+      },
+      "_note": "截断处的句尾标点 / 空格剥掉再补省略号。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reAs",
+        "value": "[ -~]"
+      },
+      "_note": "可打印 ASCII —— 剥掉它们剩下的就是宽字符(中日韩)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_vs",
+        "value": [
+          "$[findNotEmpty::(${resp[0].paper.upvotes},0)]",
+          "$[findNotEmpty::(${resp[1].paper.upvotes},0)]",
+          "$[findNotEmpty::(${resp[2].paper.upvotes},0)]",
+          "$[findNotEmpty::(${resp[3].paper.upvotes},0)]",
+          "$[findNotEmpty::(${resp[4].paper.upvotes},0)]"
+        ]
+      },
+      "_note": "热度候选池(前 5 条)的分数。⚠️ 必须是真数组字面量(sum/max 拿到串会静默求空)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vmax",
+        "value": "$[max::(calc::(max::(${_vs})),1)]"
+      },
+      "_note": "归一分母 = 候选池峰值,下限 1(全 0 时除零 → 条宽非数 → 整个组件渲不出)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r0",
+        "value": "$[replaceAll::(replaceAll::(${resp[0].title},${reNL},${rpNL}),${reNL},${rpNL})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0L",
+        "value": "$[length::(${r0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0N",
+        "value": "$[length::(replaceAll::(${r0},${reAs},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0W",
+        "value": "$[round::(calc::(${t0L}+${t0N}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0K",
+        "value": "$[round::(min::(floor::(calc::(${t0L}*50/max::(${t0W},1))),${t0L}))]"
+      },
+      "_note": "截到第几个字:按本条的平均字宽把预算折成字数。round 是为了 Android 上 floor 返回 double。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[if::(gt::(${t0W},50),connect::(replaceAll::(replaceAll::(subString::(${r0},0,${t0K}),${reTl},),${reTp},),…),${r0})]"
+      },
+      "_note": "超出 50 个宽度单位才截:按词退一格、剥句尾标点、补「…」(线上宿主的文本节点出不了省略号)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0L",
+        "value": "$[length::(${r0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0N",
+        "value": "$[length::(replaceAll::(${r0},${reAs},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0W",
+        "value": "$[round::(calc::(${tm0L}+${tm0N}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0K",
+        "value": "$[round::(min::(floor::(calc::(${tm0L}*38/max::(${tm0W},1))),${tm0L}))]"
+      },
+      "_note": "截到第几个字:按本条的平均字宽把预算折成字数。round 是为了 Android 上 floor 返回 double。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0",
+        "value": "$[if::(gt::(${tm0W},38),connect::(replaceAll::(replaceAll::(subString::(${r0},0,${tm0K}),${reTl},),${reTp},),…),${r0})]"
+      },
+      "_note": "21 迷你的标题(两行)单独一份更短的截断:同一条流,两个版式。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "${resp[0].paper.upvotes}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gr0",
+        "value": "$[findNotEmpty::(${resp[0].organization.fullname},${resp[0].paper.authors[0].name})]"
+      },
+      "_note": "标签:V2EX 节点中文界面用中文名、其余用接口自带的英文名(title_alternative,doc/overseas-first.md §2);HF 是机构,缺了退第一作者。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0L",
+        "value": "$[length::(${gr0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0N",
+        "value": "$[length::(replaceAll::(${gr0},${reAs},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0W",
+        "value": "$[round::(calc::(${g0L}+${g0N}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0K",
+        "value": "$[round::(min::(floor::(calc::(${g0L}*24/max::(${g0W},1))),${g0L}))]"
+      },
+      "_note": "截到第几个字:按本条的平均字宽把预算折成字数。round 是为了 Android 上 floor 返回 double。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0",
+        "value": "$[if::(gt::(${g0W},24),connect::(replaceAll::(replaceAll::(subString::(${gr0},0,${g0K}),${reTl},),${reTp},),…),${gr0})]"
+      },
+      "_note": "标签压到一行放得下(「Zhejiang University」→「Zhejiang…」)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp0",
+        "value": "$[round::(calc::(findNotEmpty::(${s0},0)*100/max::(sum::(${_vs}),1)))]"
+      },
+      "_note": "榜首点赞占当天前 5 篇合计的百分比 —— 22 底行「占前 5 篇点赞的 23%」。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "t0",
+          "tm0",
+          "s0",
+          "g0",
+          "hp0"
+        ]
+      }
+    }
+  ]
+}

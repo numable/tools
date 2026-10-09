@@ -1,0 +1,1163 @@
+{
+  "_note": "一个服务的事故历史(首页「近 7 天」、详情页「近 30 天 / 近期事故」共用),原样交给页面 JS 解析,JS 层按服务缓存 1 小时(存的是近 35 天的精简列表)。\n近期事故数据源(2026-09-25 实测后选定,v2):\n· Statuspage 原生(sp):`/history.json` —— 本季度逐月的全部事故,**带 impact 与开始时刻**,7–114KB(未压缩;线上走 gzip 约 3–27KB)。没有更轻的端点:`incidents.json` 全量 140–290KB、`?limit=` / `?per_page=` 均被忽略;`history.rss` 30–77KB 且**没有 impact**(按当日最重影响着色做不到)。\n  ⚠️ 它只覆盖**当前季度**(start_time = 季初):窗口跨进上一季度时另取 `?page=2`。\n  ⚠️ timestamp 是展示串「Sep <var…>24</var>, <var…>16:51</var> - … UTC」,时区按页面(EDT / PDT 也有),偏移从 start_time 取;**月份取 timestamp 开头的缩写**(跨月事故挂在结束月的块下),年取月块。\n· incident.io 兼容层(io):`incidents.json` 最新 25 条(29–41KB),created_at 是 ISO 串,impact 同名。\n· 计划维护(impact = maintenance)不算事故;impact = none 的公告按「轻微异常」计(与页面同一判据)。",
+  "_lintCache": "exempt",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "idIn",
+        "value": "$[findNotEmpty::(${id},)]"
+      },
+      "_note": "入参落地(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p2In",
+        "value": "$[findNotEmpty::(${p2},0)]"
+      },
+      "_note": "页面按日期算好:近 30 天的窗口跨进上一季度时传 1(history.json 只覆盖当前季度)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},github),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://www.githubstatus.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://www.githubstatus.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},github),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://www.githubstatus.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},claude),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.claude.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.claude.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},claude),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.claude.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},openai),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.openai.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},vercel),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://www.vercel-status.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://www.vercel-status.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},vercel),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://www.vercel-status.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},cursor),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.cursor.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.cursor.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},cursor),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.cursor.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},npm),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.npmjs.org/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.npmjs.org/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},npm),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.npmjs.org/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},docker),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://www.dockerstatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},bitbucket),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://bitbucket.status.atlassian.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://bitbucket.status.atlassian.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},bitbucket),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://bitbucket.status.atlassian.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},circleci),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.circleci.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.circleci.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},circleci),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.circleci.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},netlify),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://www.netlifystatus.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://www.netlifystatus.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},netlify),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://www.netlifystatus.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},supabase),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.supabase.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.supabase.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},supabase),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.supabase.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},render),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.render.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.render.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},render),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.render.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},digitalocean),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.digitalocean.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.digitalocean.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},digitalocean),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.digitalocean.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},mongodb),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.mongodb.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.mongodb.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},mongodb),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.mongodb.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},sentry),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.sentry.io/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.sentry.io/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},sentry),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.sentry.io/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},datadog),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.datadoghq.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.datadoghq.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},datadog),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.datadoghq.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},linear),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://linearstatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},notion),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://www.notion-status.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},figma),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.figma.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.figma.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},figma),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.figma.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},postman),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://status.postman.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://status.postman.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},postman),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://status.postman.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},discord),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://discordstatus.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://discordstatus.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},discord),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://discordstatus.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},reddit),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h",
+          "action": "request",
+          "params": {
+            "url": "https://www.redditstatus.com/history.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "u",
+          "action": "request",
+          "params": {
+            "url": "https://www.redditstatus.com/api/v2/scheduled-maintenances/upcoming.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "即将进行的计划维护(平时 ~170B)。incident.io 那几家没有这个端点(404)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(eq::(${idIn},reddit),eq::(${p2In},1)),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g",
+          "action": "request",
+          "params": {
+            "url": "https://www.redditstatus.com/history.json?page=2",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "请求屏障(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(or::(gt::(length::(${h.months}),0),gt::(length::(${h.incidents}),0)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${ok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "history unavailable"
+          }
+        }
+      ],
+      "_note": "主干 = 事故历史。取不到就让流失败,页面保留缓存里的上一份(或不画这一行的统计)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "nowMs",
+          "h",
+          "g",
+          "u"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "_note": "详情页下拉刷新:删掉**本页这一个**城市的缓存键 → reloadPage 真取数。\nv54 前的 refresh.af 是从 `data.cities[cityIdx]` 找城市的,在详情页上会去删别人的缓存、而本页的旧货原封不动 —— 下拉转一圈数字不变,还没有任何报错。\n⚠️ onRefresh 接管了下拉,不显式写 reloadPage 就**永远刷不动**。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。",
+      "op": "set",
+      "props": {
+        "key": "lat",
+        "value": "${lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lon",
+        "value": "${lon}"
+      }
+    },
+    {
+      "_note": "⚠️ 键必须与 detail.df / home.df 逐字同式(`c.wx.<lat>_<lon>`)—— 算错一个字符就是「删了个不存在的键」:不报错、下拉照转、数据照旧。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.wx.,${lat},_,${lon})]"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "${ckey}"
+      }
+    },
+    {
+      "_note": "详情页另两块的缓存也要一起删(键式与 sky24.df / air.df 的 cached_fetch 逐字同式),否则下拉只刷新了天气,24 小时与空气照旧。",
+      "action": "data.remove",
+      "params": {
+        "key": "$[connect::(c.s24.,${lat},_,${lon})]"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "$[connect::(c.aq.,${lat},_,${lon})]"
+      }
+    },
+    {
+      "_note": "onRefresh 接管后必须显式重载。",
+      "action": "xpage.reloadPage"
+    }
+  ]
+}

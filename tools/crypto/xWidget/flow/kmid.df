@@ -1,0 +1,2757 @@
+{
+  "version": 1,
+  "i18n": {
+    "zh-CN": {
+      "noData": "取不到行情"
+    },
+    "en-US": {
+      "noData": "Quote unavailable"
+    }
+  },
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "kr",
+        "value": "$[findNotEmpty::(${pair},btcusd)]"
+      },
+      "_note": "币对归一(v54 OKX):老实例存的是 Bitstamp 形状 `btcusd`,新实例是 OKX instId `BTC-USDT`,两种都认。⚠️ 先落地 kr 再算 —— 方法参数里看不见 flow 入参(§9.5 #3)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "$[if::(contains::(${kr},-),toUpperCase::(${kr}),connect::(toUpperCase::(if::(endsWith::(${kr},usdt),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usdc),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usd),subString::(${kr},0,calc::(length::(${kr})-3)),${kr})))),-,if::(endsWith::(${kr},usdc),USDC,USDT)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "stpIn",
+        "value": "${step}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "stp",
+        "value": "$[if::(startsWith::(${stpIn},$),86400,findNotEmpty::(${stpIn},86400))]"
+      },
+      "_note": "K 线周期(秒)入参:详情页 90D 档传 259200(Bitstamp 原生 3 日线),小组件与 30D 档不传 → 双兜 86400(未传时 `${step}` 可能原样透传字面串)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bar",
+        "value": "$[if::(eq::(${stp},3600),1H,if::(eq::(${stp},14400),4H,if::(eq::(${stp},604800),1Wutc,if::(eq::(${stp},259200),3Dutc,1Dutc))))]"
+      },
+      "_note": "Bitstamp step 秒数 → OKX bar。日线以上用 *utc 档:OKX 默认 `1D` 按 UTC+8 切日,卡上写的是 UTC 日界。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pk",
+        "value": "$[if::(eq::(${stp},3600),0,if::(eq::(${stp},14400),1,if::(eq::(${stp},604800),3,2)))]"
+      },
+      "_note": "周期码(卡上文案按它切):0 = 1 小时 · 1 = 4 小时 · 2 = 日(默认,含详情页的 3 日档)· 3 = 周。组件参数 `step` 存秒数,由 /pick 的周期分段写回。"
+    },
+    {
+      "action": "request",
+      "id": "r",
+      "params": {
+        "url": "https://www.okx.com/api/v5/market/candles?instId=${k}&bar=${bar}&limit=30",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_bad",
+        "value": "$[if::(gt::(length::(${r.data}),0),0,1)]"
+      },
+      "_fb": 1,
+      "_note": "OKX 没取到(被地区政策拦 / 超时 / 空)→ 走备用源 Coinbase(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_s0",
+        "value": "$[if::(endsWith::(${k},-SWAP),subString::(${k},0,calc::(length::(${k})-5)),${k})]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_p",
+        "value": "$[if::(endsWith::(${r_s0},-USDT),connect::(subString::(${r_s0},0,calc::(length::(${r_s0})-5)),-USD),if::(endsWith::(${r_s0},-USDC),connect::(subString::(${r_s0},0,calc::(length::(${r_s0})-5)),-USD),${r_s0}))]"
+      },
+      "_fb": 1,
+      "_note": "备用源 Coinbase 的产品名(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_g",
+        "value": "$[if::(eq::(connect::(k,${bar}),k1H),3600,if::(eq::(connect::(k,${bar}),k1Dutc),86400,if::(eq::(connect::(k,${bar}),k1D),86400,0)))]"
+      },
+      "_fb": 1,
+      "_note": "Coinbase 只有 1h / 1d 两档对得上;4H / 3D / 1W 没有备用(_g = 0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_go",
+        "value": "$[if::(eq::(${r_bad},1),if::(gt::(${r_g},0),1,0),0)]"
+      },
+      "_fb": 1
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "op": "if",
+          "props": {
+            "val": "${r_go}"
+          },
+          "items": [
+            {
+              "action": "request",
+              "id": "r_c",
+              "params": {
+                "url": "https://api.exchange.coinbase.com/products/${r_p}/candles?granularity=${r_g}",
+                "method": "GET",
+                "formatType": "json",
+                "timeout": "5000"
+              }
+            }
+          ]
+        }
+      ],
+      "_fb": 1,
+      "_note": "备用请求(只在 OKX 没取到时发;每个都在 op:if 里)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfb",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 请求屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_ok",
+        "value": "$[if::(eq::(findNotEmpty::(index::(index::(${r_c},0),4),__none__),__none__),0,1)]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_q",
+        "value": "${r.data}"
+      },
+      "_fb": 1,
+      "_note": "下游统一读 r_q:OKX 的 data,或下面按 OKX 形状重排的备用数据。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${r_ok}"
+      },
+      "_fb": 1,
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "r_q",
+            "value": [
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},0),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},0),3),)]",
+                "$[connect::(index::(index::(${r_c},0),2),)]",
+                "$[connect::(index::(index::(${r_c},0),1),)]",
+                "$[connect::(index::(index::(${r_c},0),4),)]",
+                "$[connect::(index::(index::(${r_c},0),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},1),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},1),3),)]",
+                "$[connect::(index::(index::(${r_c},1),2),)]",
+                "$[connect::(index::(index::(${r_c},1),1),)]",
+                "$[connect::(index::(index::(${r_c},1),4),)]",
+                "$[connect::(index::(index::(${r_c},1),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},2),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},2),3),)]",
+                "$[connect::(index::(index::(${r_c},2),2),)]",
+                "$[connect::(index::(index::(${r_c},2),1),)]",
+                "$[connect::(index::(index::(${r_c},2),4),)]",
+                "$[connect::(index::(index::(${r_c},2),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},3),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},3),3),)]",
+                "$[connect::(index::(index::(${r_c},3),2),)]",
+                "$[connect::(index::(index::(${r_c},3),1),)]",
+                "$[connect::(index::(index::(${r_c},3),4),)]",
+                "$[connect::(index::(index::(${r_c},3),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},4),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},4),3),)]",
+                "$[connect::(index::(index::(${r_c},4),2),)]",
+                "$[connect::(index::(index::(${r_c},4),1),)]",
+                "$[connect::(index::(index::(${r_c},4),4),)]",
+                "$[connect::(index::(index::(${r_c},4),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},5),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},5),3),)]",
+                "$[connect::(index::(index::(${r_c},5),2),)]",
+                "$[connect::(index::(index::(${r_c},5),1),)]",
+                "$[connect::(index::(index::(${r_c},5),4),)]",
+                "$[connect::(index::(index::(${r_c},5),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},6),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},6),3),)]",
+                "$[connect::(index::(index::(${r_c},6),2),)]",
+                "$[connect::(index::(index::(${r_c},6),1),)]",
+                "$[connect::(index::(index::(${r_c},6),4),)]",
+                "$[connect::(index::(index::(${r_c},6),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},7),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},7),3),)]",
+                "$[connect::(index::(index::(${r_c},7),2),)]",
+                "$[connect::(index::(index::(${r_c},7),1),)]",
+                "$[connect::(index::(index::(${r_c},7),4),)]",
+                "$[connect::(index::(index::(${r_c},7),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},8),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},8),3),)]",
+                "$[connect::(index::(index::(${r_c},8),2),)]",
+                "$[connect::(index::(index::(${r_c},8),1),)]",
+                "$[connect::(index::(index::(${r_c},8),4),)]",
+                "$[connect::(index::(index::(${r_c},8),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},9),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},9),3),)]",
+                "$[connect::(index::(index::(${r_c},9),2),)]",
+                "$[connect::(index::(index::(${r_c},9),1),)]",
+                "$[connect::(index::(index::(${r_c},9),4),)]",
+                "$[connect::(index::(index::(${r_c},9),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},10),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},10),3),)]",
+                "$[connect::(index::(index::(${r_c},10),2),)]",
+                "$[connect::(index::(index::(${r_c},10),1),)]",
+                "$[connect::(index::(index::(${r_c},10),4),)]",
+                "$[connect::(index::(index::(${r_c},10),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},11),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},11),3),)]",
+                "$[connect::(index::(index::(${r_c},11),2),)]",
+                "$[connect::(index::(index::(${r_c},11),1),)]",
+                "$[connect::(index::(index::(${r_c},11),4),)]",
+                "$[connect::(index::(index::(${r_c},11),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},12),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},12),3),)]",
+                "$[connect::(index::(index::(${r_c},12),2),)]",
+                "$[connect::(index::(index::(${r_c},12),1),)]",
+                "$[connect::(index::(index::(${r_c},12),4),)]",
+                "$[connect::(index::(index::(${r_c},12),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},13),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},13),3),)]",
+                "$[connect::(index::(index::(${r_c},13),2),)]",
+                "$[connect::(index::(index::(${r_c},13),1),)]",
+                "$[connect::(index::(index::(${r_c},13),4),)]",
+                "$[connect::(index::(index::(${r_c},13),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},14),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},14),3),)]",
+                "$[connect::(index::(index::(${r_c},14),2),)]",
+                "$[connect::(index::(index::(${r_c},14),1),)]",
+                "$[connect::(index::(index::(${r_c},14),4),)]",
+                "$[connect::(index::(index::(${r_c},14),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},15),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},15),3),)]",
+                "$[connect::(index::(index::(${r_c},15),2),)]",
+                "$[connect::(index::(index::(${r_c},15),1),)]",
+                "$[connect::(index::(index::(${r_c},15),4),)]",
+                "$[connect::(index::(index::(${r_c},15),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},16),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},16),3),)]",
+                "$[connect::(index::(index::(${r_c},16),2),)]",
+                "$[connect::(index::(index::(${r_c},16),1),)]",
+                "$[connect::(index::(index::(${r_c},16),4),)]",
+                "$[connect::(index::(index::(${r_c},16),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},17),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},17),3),)]",
+                "$[connect::(index::(index::(${r_c},17),2),)]",
+                "$[connect::(index::(index::(${r_c},17),1),)]",
+                "$[connect::(index::(index::(${r_c},17),4),)]",
+                "$[connect::(index::(index::(${r_c},17),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},18),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},18),3),)]",
+                "$[connect::(index::(index::(${r_c},18),2),)]",
+                "$[connect::(index::(index::(${r_c},18),1),)]",
+                "$[connect::(index::(index::(${r_c},18),4),)]",
+                "$[connect::(index::(index::(${r_c},18),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},19),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},19),3),)]",
+                "$[connect::(index::(index::(${r_c},19),2),)]",
+                "$[connect::(index::(index::(${r_c},19),1),)]",
+                "$[connect::(index::(index::(${r_c},19),4),)]",
+                "$[connect::(index::(index::(${r_c},19),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},20),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},20),3),)]",
+                "$[connect::(index::(index::(${r_c},20),2),)]",
+                "$[connect::(index::(index::(${r_c},20),1),)]",
+                "$[connect::(index::(index::(${r_c},20),4),)]",
+                "$[connect::(index::(index::(${r_c},20),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},21),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},21),3),)]",
+                "$[connect::(index::(index::(${r_c},21),2),)]",
+                "$[connect::(index::(index::(${r_c},21),1),)]",
+                "$[connect::(index::(index::(${r_c},21),4),)]",
+                "$[connect::(index::(index::(${r_c},21),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},22),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},22),3),)]",
+                "$[connect::(index::(index::(${r_c},22),2),)]",
+                "$[connect::(index::(index::(${r_c},22),1),)]",
+                "$[connect::(index::(index::(${r_c},22),4),)]",
+                "$[connect::(index::(index::(${r_c},22),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},23),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},23),3),)]",
+                "$[connect::(index::(index::(${r_c},23),2),)]",
+                "$[connect::(index::(index::(${r_c},23),1),)]",
+                "$[connect::(index::(index::(${r_c},23),4),)]",
+                "$[connect::(index::(index::(${r_c},23),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},24),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},24),3),)]",
+                "$[connect::(index::(index::(${r_c},24),2),)]",
+                "$[connect::(index::(index::(${r_c},24),1),)]",
+                "$[connect::(index::(index::(${r_c},24),4),)]",
+                "$[connect::(index::(index::(${r_c},24),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},25),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},25),3),)]",
+                "$[connect::(index::(index::(${r_c},25),2),)]",
+                "$[connect::(index::(index::(${r_c},25),1),)]",
+                "$[connect::(index::(index::(${r_c},25),4),)]",
+                "$[connect::(index::(index::(${r_c},25),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},26),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},26),3),)]",
+                "$[connect::(index::(index::(${r_c},26),2),)]",
+                "$[connect::(index::(index::(${r_c},26),1),)]",
+                "$[connect::(index::(index::(${r_c},26),4),)]",
+                "$[connect::(index::(index::(${r_c},26),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},27),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},27),3),)]",
+                "$[connect::(index::(index::(${r_c},27),2),)]",
+                "$[connect::(index::(index::(${r_c},27),1),)]",
+                "$[connect::(index::(index::(${r_c},27),4),)]",
+                "$[connect::(index::(index::(${r_c},27),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},28),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},28),3),)]",
+                "$[connect::(index::(index::(${r_c},28),2),)]",
+                "$[connect::(index::(index::(${r_c},28),1),)]",
+                "$[connect::(index::(index::(${r_c},28),4),)]",
+                "$[connect::(index::(index::(${r_c},28),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${r_c},29),0)*1000),0),)]",
+                "$[connect::(index::(index::(${r_c},29),3),)]",
+                "$[connect::(index::(index::(${r_c},29),2),)]",
+                "$[connect::(index::(index::(${r_c},29),1),)]",
+                "$[connect::(index::(index::(${r_c},29),4),)]",
+                "$[connect::(index::(index::(${r_c},29),5),)]"
+              ]
+            ]
+          },
+          "_fb": 1
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfc",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 屏障(勿删):op:if 复合节点之后紧邻的节点同样读不到它的结果 ——实测紧跟一个 remove 会让后面的节点全部取空(2026-10-01 CLI)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "r_c"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnt",
+        "value": "$[length::(${r_q})]"
+      },
+      "_note": "逐日 30 根 ≈ 5KB。末根 = 今日(UTC 日界,进行中的那根)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lastO",
+        "value": "$[index::(index::(${r_q},0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "px",
+        "value": "$[index::(index::(${r_q},0),4)]"
+      },
+      "_note": "现价 = 今日这根的最新收盘。7×24 的市场没有「今天没数据」这一态,px 空只可能是取数失败 → 抛错(G26/§7.2)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${px}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "${@i18n.noData}"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lastH",
+        "value": "$[index::(index::(${r_q},0),2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lastL",
+        "value": "$[index::(index::(${r_q},0),3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oS",
+        "value": "$[if::(ge::(${lastO},100),parseNumber::(${lastO},#\\,##0.00),parseNumber::(${lastO},0.0000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hS",
+        "value": "$[if::(ge::(${lastH},100),parseNumber::(${lastH},#\\,##0.00),parseNumber::(${lastH},0.0000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lS",
+        "value": "$[if::(ge::(${lastL},100),parseNumber::(${lastL},#\\,##0.00),parseNumber::(${lastL},0.0000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chg",
+        "value": "$[parseNumber::(calc::((${px}-${lastO})/${lastO}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "up",
+        "value": "$[if::(gt::(length::(${chg}),0),if::(ge::(${chg},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flat",
+        "value": "$[if::(gt::(length::(${chg}),0),if::(lt::(calc::(${chg}*${chg}),0.0004),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgA",
+        "value": "$[if::(ge::(${chg},0),${chg},calc::(0-${chg}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dTs",
+        "value": "$[calc::(index::(index::(${r_q},0),0)+43200000)]"
+      },
+      "_note": "日 / 周档的末根 ts 是 UTC 零点;+12 小时再按本机时区格式化 = UTC 那一天(UTC−12…+11 都对),西半球不再标成前一天。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMo",
+        "value": "$[round::(parseNumber::(formatDate::(${dTs},MM),0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dDd",
+        "value": "$[round::(parseNumber::(formatDate::(${dTs},dd),0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dMn",
+        "value": "$[index::(split::(Jan~Feb~Mar~Apr~May~Jun~Jul~Aug~Sep~Oct~Nov~Dec,~),calc::(${dMo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dZh",
+        "value": "${dMo}月${dDd}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dEn",
+        "value": "${dMn} ${dDd}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dt",
+        "value": "$[if::(lt::(${stp},86400),formatDate::(index::(index::(${r_q},0),0),HH:mm),if::(startsWith::(${@app.language},zh),${dZh},${dEn}))]"
+      },
+      "_note": "末根蜡烛的开盘时刻:小时档写本机 HH:mm;日 / 周档写 UTC 那一天,中文「10月1日」、英文「Oct 1」(overseas-first §5:不再出纯数字 10-01)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      },
+      "_note": "⚠️ builtin 先落地成键再进方法参数 —— 方法参数里的 ${} 有取不到的先例(本文件开头 `k`/`stpIn` 同款),`page/flow/home.df` 也是先落地再算 age。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(startsWith::(${nowMs},$),,formatDate::(${nowMs},HH:mm))]"
+      },
+      "_note": "时效锚(§4.4)= **取数时刻**(本机时区),刻意**不是**末根蜡烛的 timestamp。照 coin.df 那样拿末根 timestamp 出 HH:mm 在日K上会退化成一个**永不变化的常数**:日K 末根的 timestamp 恒是当日 00:00 UTC,而 formatDate 只有本机时区一档(vparser 只吃 (ts, pattern) 两参,没有 UTC 口子)—— UTC+8 恒渲 `08:00`,看着像时间、其实是日界,比不显示更骗人。而这张卡上的 px/chgA/oS/hS/lS 全部取自**进行中**的那根蜡烛(随每次取数变),它们的数据时刻就是取数时刻,两者本就一致。⚠️ `startsWith::(…,$)` 是本文件既有的 builtin 求不出来兜底(`stpIn`/`wRaw` 同款):求不出时留空,由 .rcn 的 findNotEmpty 兜 `--`,绝不让 formatDate 吃空串 —— 那会渲成 epoch 的假时间(memory [[actionflow-df-pitfalls]])。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sym",
+        "value": "$[index::(split::(${k},-),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lead_s",
+        "value": "$[if::(ge::(${px},1000),parseNumber::(${px},#\\,##0.00),if::(ge::(${px},100),parseNumber::(${px},0.00),if::(ge::(${px},10),parseNumber::(${px},0.000),if::(ge::(${px},1),parseNumber::(${px},0.0000),parseNumber::(${px},0.00000)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lead_c",
+        "value": "$[calc::(length::(${lead_s})-2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lead",
+        "value": "$[subString::(${lead_s},0,${lead_c})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "leadT",
+        "value": "$[subString::(${lead_s},${lead_c},99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "os",
+        "value": [
+          "$[index::(index::(${r_q},29),1)]",
+          "$[index::(index::(${r_q},28),1)]",
+          "$[index::(index::(${r_q},27),1)]",
+          "$[index::(index::(${r_q},26),1)]",
+          "$[index::(index::(${r_q},25),1)]",
+          "$[index::(index::(${r_q},24),1)]",
+          "$[index::(index::(${r_q},23),1)]",
+          "$[index::(index::(${r_q},22),1)]",
+          "$[index::(index::(${r_q},21),1)]",
+          "$[index::(index::(${r_q},20),1)]",
+          "$[index::(index::(${r_q},19),1)]",
+          "$[index::(index::(${r_q},18),1)]",
+          "$[index::(index::(${r_q},17),1)]",
+          "$[index::(index::(${r_q},16),1)]",
+          "$[index::(index::(${r_q},15),1)]",
+          "$[index::(index::(${r_q},14),1)]",
+          "$[index::(index::(${r_q},13),1)]",
+          "$[index::(index::(${r_q},12),1)]",
+          "$[index::(index::(${r_q},11),1)]",
+          "$[index::(index::(${r_q},10),1)]",
+          "$[index::(index::(${r_q},9),1)]",
+          "$[index::(index::(${r_q},8),1)]",
+          "$[index::(index::(${r_q},7),1)]",
+          "$[index::(index::(${r_q},6),1)]",
+          "$[index::(index::(${r_q},5),1)]",
+          "$[index::(index::(${r_q},4),1)]",
+          "$[index::(index::(${r_q},3),1)]",
+          "$[index::(index::(${r_q},2),1)]",
+          "$[index::(index::(${r_q},1),1)]",
+          "$[index::(index::(${r_q},0),1)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cs",
+        "value": [
+          "$[index::(index::(${r_q},29),4)]",
+          "$[index::(index::(${r_q},28),4)]",
+          "$[index::(index::(${r_q},27),4)]",
+          "$[index::(index::(${r_q},26),4)]",
+          "$[index::(index::(${r_q},25),4)]",
+          "$[index::(index::(${r_q},24),4)]",
+          "$[index::(index::(${r_q},23),4)]",
+          "$[index::(index::(${r_q},22),4)]",
+          "$[index::(index::(${r_q},21),4)]",
+          "$[index::(index::(${r_q},20),4)]",
+          "$[index::(index::(${r_q},19),4)]",
+          "$[index::(index::(${r_q},18),4)]",
+          "$[index::(index::(${r_q},17),4)]",
+          "$[index::(index::(${r_q},16),4)]",
+          "$[index::(index::(${r_q},15),4)]",
+          "$[index::(index::(${r_q},14),4)]",
+          "$[index::(index::(${r_q},13),4)]",
+          "$[index::(index::(${r_q},12),4)]",
+          "$[index::(index::(${r_q},11),4)]",
+          "$[index::(index::(${r_q},10),4)]",
+          "$[index::(index::(${r_q},9),4)]",
+          "$[index::(index::(${r_q},8),4)]",
+          "$[index::(index::(${r_q},7),4)]",
+          "$[index::(index::(${r_q},6),4)]",
+          "$[index::(index::(${r_q},5),4)]",
+          "$[index::(index::(${r_q},4),4)]",
+          "$[index::(index::(${r_q},3),4)]",
+          "$[index::(index::(${r_q},2),4)]",
+          "$[index::(index::(${r_q},1),4)]",
+          "$[index::(index::(${r_q},0),4)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hs",
+        "value": [
+          "$[index::(index::(${r_q},29),2)]",
+          "$[index::(index::(${r_q},28),2)]",
+          "$[index::(index::(${r_q},27),2)]",
+          "$[index::(index::(${r_q},26),2)]",
+          "$[index::(index::(${r_q},25),2)]",
+          "$[index::(index::(${r_q},24),2)]",
+          "$[index::(index::(${r_q},23),2)]",
+          "$[index::(index::(${r_q},22),2)]",
+          "$[index::(index::(${r_q},21),2)]",
+          "$[index::(index::(${r_q},20),2)]",
+          "$[index::(index::(${r_q},19),2)]",
+          "$[index::(index::(${r_q},18),2)]",
+          "$[index::(index::(${r_q},17),2)]",
+          "$[index::(index::(${r_q},16),2)]",
+          "$[index::(index::(${r_q},15),2)]",
+          "$[index::(index::(${r_q},14),2)]",
+          "$[index::(index::(${r_q},13),2)]",
+          "$[index::(index::(${r_q},12),2)]",
+          "$[index::(index::(${r_q},11),2)]",
+          "$[index::(index::(${r_q},10),2)]",
+          "$[index::(index::(${r_q},9),2)]",
+          "$[index::(index::(${r_q},8),2)]",
+          "$[index::(index::(${r_q},7),2)]",
+          "$[index::(index::(${r_q},6),2)]",
+          "$[index::(index::(${r_q},5),2)]",
+          "$[index::(index::(${r_q},4),2)]",
+          "$[index::(index::(${r_q},3),2)]",
+          "$[index::(index::(${r_q},2),2)]",
+          "$[index::(index::(${r_q},1),2)]",
+          "$[index::(index::(${r_q},0),2)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ls",
+        "value": [
+          "$[index::(index::(${r_q},29),3)]",
+          "$[index::(index::(${r_q},28),3)]",
+          "$[index::(index::(${r_q},27),3)]",
+          "$[index::(index::(${r_q},26),3)]",
+          "$[index::(index::(${r_q},25),3)]",
+          "$[index::(index::(${r_q},24),3)]",
+          "$[index::(index::(${r_q},23),3)]",
+          "$[index::(index::(${r_q},22),3)]",
+          "$[index::(index::(${r_q},21),3)]",
+          "$[index::(index::(${r_q},20),3)]",
+          "$[index::(index::(${r_q},19),3)]",
+          "$[index::(index::(${r_q},18),3)]",
+          "$[index::(index::(${r_q},17),3)]",
+          "$[index::(index::(${r_q},16),3)]",
+          "$[index::(index::(${r_q},15),3)]",
+          "$[index::(index::(${r_q},14),3)]",
+          "$[index::(index::(${r_q},13),3)]",
+          "$[index::(index::(${r_q},12),3)]",
+          "$[index::(index::(${r_q},11),3)]",
+          "$[index::(index::(${r_q},10),3)]",
+          "$[index::(index::(${r_q},9),3)]",
+          "$[index::(index::(${r_q},8),3)]",
+          "$[index::(index::(${r_q},7),3)]",
+          "$[index::(index::(${r_q},6),3)]",
+          "$[index::(index::(${r_q},5),3)]",
+          "$[index::(index::(${r_q},4),3)]",
+          "$[index::(index::(${r_q},3),3)]",
+          "$[index::(index::(${r_q},2),3)]",
+          "$[index::(index::(${r_q},1),3)]",
+          "$[index::(index::(${r_q},0),3)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo",
+        "value": "$[min::(${ls})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi",
+        "value": "$[max::(${hs})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kloS",
+        "value": "$[if::(ge::(${lo},100),parseNumber::(${lo},#\\,##0.00),parseNumber::(${lo},0.0000))]"
+      },
+      "_note": "窗口低/中/高 —— 详情页区块水位线标注用;卡片不渲,白带无害。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "khiS",
+        "value": "$[if::(ge::(${hi},100),parseNumber::(${hi},#\\,##0.00),parseNumber::(${hi},0.0000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kmd",
+        "value": "$[calc::((${lo}+${hi})/2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kmdS",
+        "value": "$[if::(ge::(${kmd},100),parseNumber::(${kmd},#\\,##0.00),parseNumber::(${kmd},0.0000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh0",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},0)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl0",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},0)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo0",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},0)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc0",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},0)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt0",
+        "value": "$[if::(lt::(${yo0},${yc0}),${yo0},${yc0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb0",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo0},${yc0}),${yc0},${yo0})-if::(lt::(${yo0},${yc0}),${yo0},${yc0})),1),calc::(if::(lt::(${yo0},${yc0}),${yo0},${yc0})+1),if::(lt::(${yo0},${yc0}),${yc0},${yo0}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u0",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},0),0.0000),parseNumber::(index::(${os},0),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh1",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},1)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl1",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},1)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo1",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},1)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc1",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},1)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt1",
+        "value": "$[if::(lt::(${yo1},${yc1}),${yo1},${yc1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb1",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo1},${yc1}),${yc1},${yo1})-if::(lt::(${yo1},${yc1}),${yo1},${yc1})),1),calc::(if::(lt::(${yo1},${yc1}),${yo1},${yc1})+1),if::(lt::(${yo1},${yc1}),${yc1},${yo1}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u1",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},1),0.0000),parseNumber::(index::(${os},1),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh2",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},2)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl2",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},2)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo2",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},2)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc2",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},2)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt2",
+        "value": "$[if::(lt::(${yo2},${yc2}),${yo2},${yc2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb2",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo2},${yc2}),${yc2},${yo2})-if::(lt::(${yo2},${yc2}),${yo2},${yc2})),1),calc::(if::(lt::(${yo2},${yc2}),${yo2},${yc2})+1),if::(lt::(${yo2},${yc2}),${yc2},${yo2}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u2",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},2),0.0000),parseNumber::(index::(${os},2),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh3",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},3)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl3",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},3)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo3",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},3)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc3",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},3)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt3",
+        "value": "$[if::(lt::(${yo3},${yc3}),${yo3},${yc3})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb3",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo3},${yc3}),${yc3},${yo3})-if::(lt::(${yo3},${yc3}),${yo3},${yc3})),1),calc::(if::(lt::(${yo3},${yc3}),${yo3},${yc3})+1),if::(lt::(${yo3},${yc3}),${yc3},${yo3}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u3",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},3),0.0000),parseNumber::(index::(${os},3),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh4",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},4)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl4",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},4)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo4",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},4)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc4",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},4)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt4",
+        "value": "$[if::(lt::(${yo4},${yc4}),${yo4},${yc4})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb4",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo4},${yc4}),${yc4},${yo4})-if::(lt::(${yo4},${yc4}),${yo4},${yc4})),1),calc::(if::(lt::(${yo4},${yc4}),${yo4},${yc4})+1),if::(lt::(${yo4},${yc4}),${yc4},${yo4}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u4",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},4),0.0000),parseNumber::(index::(${os},4),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh5",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},5)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl5",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},5)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo5",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},5)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc5",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},5)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt5",
+        "value": "$[if::(lt::(${yo5},${yc5}),${yo5},${yc5})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb5",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo5},${yc5}),${yc5},${yo5})-if::(lt::(${yo5},${yc5}),${yo5},${yc5})),1),calc::(if::(lt::(${yo5},${yc5}),${yo5},${yc5})+1),if::(lt::(${yo5},${yc5}),${yc5},${yo5}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u5",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},5),0.0000),parseNumber::(index::(${os},5),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh6",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},6)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl6",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},6)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo6",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},6)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc6",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},6)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt6",
+        "value": "$[if::(lt::(${yo6},${yc6}),${yo6},${yc6})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb6",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo6},${yc6}),${yc6},${yo6})-if::(lt::(${yo6},${yc6}),${yo6},${yc6})),1),calc::(if::(lt::(${yo6},${yc6}),${yo6},${yc6})+1),if::(lt::(${yo6},${yc6}),${yc6},${yo6}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u6",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},6),0.0000),parseNumber::(index::(${os},6),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh7",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},7)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl7",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},7)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo7",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},7)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc7",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},7)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt7",
+        "value": "$[if::(lt::(${yo7},${yc7}),${yo7},${yc7})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb7",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo7},${yc7}),${yc7},${yo7})-if::(lt::(${yo7},${yc7}),${yo7},${yc7})),1),calc::(if::(lt::(${yo7},${yc7}),${yo7},${yc7})+1),if::(lt::(${yo7},${yc7}),${yc7},${yo7}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u7",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},7),0.0000),parseNumber::(index::(${os},7),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh8",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},8)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl8",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},8)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo8",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},8)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc8",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},8)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt8",
+        "value": "$[if::(lt::(${yo8},${yc8}),${yo8},${yc8})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb8",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo8},${yc8}),${yc8},${yo8})-if::(lt::(${yo8},${yc8}),${yo8},${yc8})),1),calc::(if::(lt::(${yo8},${yc8}),${yo8},${yc8})+1),if::(lt::(${yo8},${yc8}),${yc8},${yo8}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u8",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},8),0.0000),parseNumber::(index::(${os},8),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh9",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},9)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl9",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},9)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo9",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},9)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc9",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},9)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt9",
+        "value": "$[if::(lt::(${yo9},${yc9}),${yo9},${yc9})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb9",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo9},${yc9}),${yc9},${yo9})-if::(lt::(${yo9},${yc9}),${yo9},${yc9})),1),calc::(if::(lt::(${yo9},${yc9}),${yo9},${yc9})+1),if::(lt::(${yo9},${yc9}),${yc9},${yo9}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u9",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},9),0.0000),parseNumber::(index::(${os},9),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh10",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},10)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl10",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},10)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo10",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},10)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc10",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},10)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt10",
+        "value": "$[if::(lt::(${yo10},${yc10}),${yo10},${yc10})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb10",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo10},${yc10}),${yc10},${yo10})-if::(lt::(${yo10},${yc10}),${yo10},${yc10})),1),calc::(if::(lt::(${yo10},${yc10}),${yo10},${yc10})+1),if::(lt::(${yo10},${yc10}),${yc10},${yo10}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u10",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},10),0.0000),parseNumber::(index::(${os},10),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh11",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},11)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl11",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},11)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo11",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},11)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc11",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},11)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt11",
+        "value": "$[if::(lt::(${yo11},${yc11}),${yo11},${yc11})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb11",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo11},${yc11}),${yc11},${yo11})-if::(lt::(${yo11},${yc11}),${yo11},${yc11})),1),calc::(if::(lt::(${yo11},${yc11}),${yo11},${yc11})+1),if::(lt::(${yo11},${yc11}),${yc11},${yo11}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u11",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},11),0.0000),parseNumber::(index::(${os},11),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh12",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},12)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl12",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},12)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo12",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},12)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc12",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},12)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt12",
+        "value": "$[if::(lt::(${yo12},${yc12}),${yo12},${yc12})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb12",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo12},${yc12}),${yc12},${yo12})-if::(lt::(${yo12},${yc12}),${yo12},${yc12})),1),calc::(if::(lt::(${yo12},${yc12}),${yo12},${yc12})+1),if::(lt::(${yo12},${yc12}),${yc12},${yo12}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u12",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},12),0.0000),parseNumber::(index::(${os},12),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh13",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},13)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl13",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},13)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo13",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},13)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc13",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},13)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt13",
+        "value": "$[if::(lt::(${yo13},${yc13}),${yo13},${yc13})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb13",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo13},${yc13}),${yc13},${yo13})-if::(lt::(${yo13},${yc13}),${yo13},${yc13})),1),calc::(if::(lt::(${yo13},${yc13}),${yo13},${yc13})+1),if::(lt::(${yo13},${yc13}),${yc13},${yo13}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u13",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},13),0.0000),parseNumber::(index::(${os},13),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh14",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},14)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl14",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},14)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo14",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},14)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc14",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},14)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt14",
+        "value": "$[if::(lt::(${yo14},${yc14}),${yo14},${yc14})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb14",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo14},${yc14}),${yc14},${yo14})-if::(lt::(${yo14},${yc14}),${yo14},${yc14})),1),calc::(if::(lt::(${yo14},${yc14}),${yo14},${yc14})+1),if::(lt::(${yo14},${yc14}),${yc14},${yo14}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u14",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},14),0.0000),parseNumber::(index::(${os},14),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh15",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},15)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl15",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},15)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo15",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},15)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc15",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},15)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt15",
+        "value": "$[if::(lt::(${yo15},${yc15}),${yo15},${yc15})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb15",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo15},${yc15}),${yc15},${yo15})-if::(lt::(${yo15},${yc15}),${yo15},${yc15})),1),calc::(if::(lt::(${yo15},${yc15}),${yo15},${yc15})+1),if::(lt::(${yo15},${yc15}),${yc15},${yo15}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u15",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},15),0.0000),parseNumber::(index::(${os},15),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh16",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},16)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl16",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},16)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo16",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},16)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc16",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},16)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt16",
+        "value": "$[if::(lt::(${yo16},${yc16}),${yo16},${yc16})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb16",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo16},${yc16}),${yc16},${yo16})-if::(lt::(${yo16},${yc16}),${yo16},${yc16})),1),calc::(if::(lt::(${yo16},${yc16}),${yo16},${yc16})+1),if::(lt::(${yo16},${yc16}),${yc16},${yo16}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u16",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},16),0.0000),parseNumber::(index::(${os},16),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh17",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},17)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl17",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},17)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo17",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},17)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc17",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},17)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt17",
+        "value": "$[if::(lt::(${yo17},${yc17}),${yo17},${yc17})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb17",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo17},${yc17}),${yc17},${yo17})-if::(lt::(${yo17},${yc17}),${yo17},${yc17})),1),calc::(if::(lt::(${yo17},${yc17}),${yo17},${yc17})+1),if::(lt::(${yo17},${yc17}),${yc17},${yo17}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u17",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},17),0.0000),parseNumber::(index::(${os},17),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh18",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},18)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl18",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},18)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo18",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},18)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc18",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},18)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt18",
+        "value": "$[if::(lt::(${yo18},${yc18}),${yo18},${yc18})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb18",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo18},${yc18}),${yc18},${yo18})-if::(lt::(${yo18},${yc18}),${yo18},${yc18})),1),calc::(if::(lt::(${yo18},${yc18}),${yo18},${yc18})+1),if::(lt::(${yo18},${yc18}),${yc18},${yo18}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u18",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},18),0.0000),parseNumber::(index::(${os},18),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh19",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},19)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl19",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},19)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo19",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},19)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc19",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},19)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt19",
+        "value": "$[if::(lt::(${yo19},${yc19}),${yo19},${yc19})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb19",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo19},${yc19}),${yc19},${yo19})-if::(lt::(${yo19},${yc19}),${yo19},${yc19})),1),calc::(if::(lt::(${yo19},${yc19}),${yo19},${yc19})+1),if::(lt::(${yo19},${yc19}),${yc19},${yo19}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u19",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},19),0.0000),parseNumber::(index::(${os},19),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh20",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},20)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl20",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},20)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo20",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},20)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc20",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},20)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt20",
+        "value": "$[if::(lt::(${yo20},${yc20}),${yo20},${yc20})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb20",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo20},${yc20}),${yc20},${yo20})-if::(lt::(${yo20},${yc20}),${yo20},${yc20})),1),calc::(if::(lt::(${yo20},${yc20}),${yo20},${yc20})+1),if::(lt::(${yo20},${yc20}),${yc20},${yo20}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u20",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},20),0.0000),parseNumber::(index::(${os},20),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh21",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},21)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl21",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},21)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo21",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},21)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc21",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},21)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt21",
+        "value": "$[if::(lt::(${yo21},${yc21}),${yo21},${yc21})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb21",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo21},${yc21}),${yc21},${yo21})-if::(lt::(${yo21},${yc21}),${yo21},${yc21})),1),calc::(if::(lt::(${yo21},${yc21}),${yo21},${yc21})+1),if::(lt::(${yo21},${yc21}),${yc21},${yo21}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u21",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},21),0.0000),parseNumber::(index::(${os},21),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh22",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},22)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl22",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},22)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo22",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},22)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc22",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},22)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt22",
+        "value": "$[if::(lt::(${yo22},${yc22}),${yo22},${yc22})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb22",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo22},${yc22}),${yc22},${yo22})-if::(lt::(${yo22},${yc22}),${yo22},${yc22})),1),calc::(if::(lt::(${yo22},${yc22}),${yo22},${yc22})+1),if::(lt::(${yo22},${yc22}),${yc22},${yo22}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u22",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},22),0.0000),parseNumber::(index::(${os},22),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh23",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},23)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl23",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},23)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo23",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},23)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc23",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},23)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt23",
+        "value": "$[if::(lt::(${yo23},${yc23}),${yo23},${yc23})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb23",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo23},${yc23}),${yc23},${yo23})-if::(lt::(${yo23},${yc23}),${yo23},${yc23})),1),calc::(if::(lt::(${yo23},${yc23}),${yo23},${yc23})+1),if::(lt::(${yo23},${yc23}),${yc23},${yo23}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u23",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},23),0.0000),parseNumber::(index::(${os},23),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh24",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},24)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl24",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},24)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo24",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},24)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc24",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},24)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt24",
+        "value": "$[if::(lt::(${yo24},${yc24}),${yo24},${yc24})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb24",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo24},${yc24}),${yc24},${yo24})-if::(lt::(${yo24},${yc24}),${yo24},${yc24})),1),calc::(if::(lt::(${yo24},${yc24}),${yo24},${yc24})+1),if::(lt::(${yo24},${yc24}),${yc24},${yo24}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u24",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},24),0.0000),parseNumber::(index::(${os},24),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh25",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},25)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl25",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},25)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo25",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},25)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc25",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},25)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt25",
+        "value": "$[if::(lt::(${yo25},${yc25}),${yo25},${yc25})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb25",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo25},${yc25}),${yc25},${yo25})-if::(lt::(${yo25},${yc25}),${yo25},${yc25})),1),calc::(if::(lt::(${yo25},${yc25}),${yo25},${yc25})+1),if::(lt::(${yo25},${yc25}),${yc25},${yo25}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u25",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},25),0.0000),parseNumber::(index::(${os},25),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh26",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},26)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl26",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},26)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo26",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},26)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc26",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},26)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt26",
+        "value": "$[if::(lt::(${yo26},${yc26}),${yo26},${yc26})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb26",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo26},${yc26}),${yc26},${yo26})-if::(lt::(${yo26},${yc26}),${yo26},${yc26})),1),calc::(if::(lt::(${yo26},${yc26}),${yo26},${yc26})+1),if::(lt::(${yo26},${yc26}),${yc26},${yo26}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u26",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},26),0.0000),parseNumber::(index::(${os},26),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh27",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},27)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl27",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},27)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo27",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},27)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc27",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},27)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt27",
+        "value": "$[if::(lt::(${yo27},${yc27}),${yo27},${yc27})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb27",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo27},${yc27}),${yc27},${yo27})-if::(lt::(${yo27},${yc27}),${yo27},${yc27})),1),calc::(if::(lt::(${yo27},${yc27}),${yo27},${yc27})+1),if::(lt::(${yo27},${yc27}),${yc27},${yo27}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u27",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},27),0.0000),parseNumber::(index::(${os},27),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh28",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},28)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl28",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},28)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo28",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},28)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc28",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},28)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt28",
+        "value": "$[if::(lt::(${yo28},${yc28}),${yo28},${yc28})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb28",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo28},${yc28}),${yc28},${yo28})-if::(lt::(${yo28},${yc28}),${yo28},${yc28})),1),calc::(if::(lt::(${yo28},${yc28}),${yo28},${yc28})+1),if::(lt::(${yo28},${yc28}),${yc28},${yo28}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u28",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},28),0.0000),parseNumber::(index::(${os},28),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yh29",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${hs},29)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yl29",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ls},29)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo29",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${os},29)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc29",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${cs},29)-${lo})/(${hi}-${lo})))*84.0+5.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bt29",
+        "value": "$[if::(lt::(${yo29},${yc29}),${yo29},${yc29})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bb29",
+        "value": "$[if::(lt::(calc::(if::(lt::(${yo29},${yc29}),${yc29},${yo29})-if::(lt::(${yo29},${yc29}),${yo29},${yc29})),1),calc::(if::(lt::(${yo29},${yc29}),${yo29},${yc29})+1),if::(lt::(${yo29},${yc29}),${yc29},${yo29}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u29",
+        "value": "$[if::(ge::(parseNumber::(index::(${cs},29),0.0000),parseNumber::(index::(${os},29),0.0000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wRaw",
+        "value": "${w}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wIn",
+        "value": "$[if::(startsWith::(${wRaw},$),380,findNotEmpty::(${wRaw},380))]"
+      },
+      "_note": "builtin 求不出来时原样透传字面串(`$` 开头)、卡片压根不传 —— 双兜 380。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kcw",
+        "value": "$[parseNumber::(max::(min::(calc::(${wIn}-64),380),224),0.1)]"
+      },
+      "_note": "可画宽 = 容器宽 − 页 padding 32 − 卡内边距 32(与 gen_crypto_page 的 cw 同式)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kEnd",
+        "value": "$[parseNumber::(calc::(${kcw}-1),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx0",
+        "value": "$[parseNumber::(calc::(${kcw}*0.0167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx1",
+        "value": "$[parseNumber::(calc::(${kcw}*0.05),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx2",
+        "value": "$[parseNumber::(calc::(${kcw}*0.0833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx3",
+        "value": "$[parseNumber::(calc::(${kcw}*0.1167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx4",
+        "value": "$[parseNumber::(calc::(${kcw}*0.15),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx5",
+        "value": "$[parseNumber::(calc::(${kcw}*0.1833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx6",
+        "value": "$[parseNumber::(calc::(${kcw}*0.2167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx7",
+        "value": "$[parseNumber::(calc::(${kcw}*0.25),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx8",
+        "value": "$[parseNumber::(calc::(${kcw}*0.2833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx9",
+        "value": "$[parseNumber::(calc::(${kcw}*0.3167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx10",
+        "value": "$[parseNumber::(calc::(${kcw}*0.35),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx11",
+        "value": "$[parseNumber::(calc::(${kcw}*0.3833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx12",
+        "value": "$[parseNumber::(calc::(${kcw}*0.4167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx13",
+        "value": "$[parseNumber::(calc::(${kcw}*0.45),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx14",
+        "value": "$[parseNumber::(calc::(${kcw}*0.4833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx15",
+        "value": "$[parseNumber::(calc::(${kcw}*0.5167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx16",
+        "value": "$[parseNumber::(calc::(${kcw}*0.55),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx17",
+        "value": "$[parseNumber::(calc::(${kcw}*0.5833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx18",
+        "value": "$[parseNumber::(calc::(${kcw}*0.6167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx19",
+        "value": "$[parseNumber::(calc::(${kcw}*0.65),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx20",
+        "value": "$[parseNumber::(calc::(${kcw}*0.6833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx21",
+        "value": "$[parseNumber::(calc::(${kcw}*0.7167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx22",
+        "value": "$[parseNumber::(calc::(${kcw}*0.75),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx23",
+        "value": "$[parseNumber::(calc::(${kcw}*0.7833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx24",
+        "value": "$[parseNumber::(calc::(${kcw}*0.8167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx25",
+        "value": "$[parseNumber::(calc::(${kcw}*0.85),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx26",
+        "value": "$[parseNumber::(calc::(${kcw}*0.8833),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx27",
+        "value": "$[parseNumber::(calc::(${kcw}*0.9167),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx28",
+        "value": "$[parseNumber::(calc::(${kcw}*0.95),0.1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kx29",
+        "value": "$[parseNumber::(calc::(${kcw}*0.9833),0.1)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "pk",
+          "sym",
+          "px",
+          "lead",
+          "leadT",
+          "chgA",
+          "up",
+          "flat",
+          "dt",
+          "at",
+          "oS",
+          "hS",
+          "lS",
+          "kloS",
+          "khiS",
+          "kmdS",
+          "yh0",
+          "yl0",
+          "bt0",
+          "bb0",
+          "u0",
+          "yh1",
+          "yl1",
+          "bt1",
+          "bb1",
+          "u1",
+          "yh2",
+          "yl2",
+          "bt2",
+          "bb2",
+          "u2",
+          "yh3",
+          "yl3",
+          "bt3",
+          "bb3",
+          "u3",
+          "yh4",
+          "yl4",
+          "bt4",
+          "bb4",
+          "u4",
+          "yh5",
+          "yl5",
+          "bt5",
+          "bb5",
+          "u5",
+          "yh6",
+          "yl6",
+          "bt6",
+          "bb6",
+          "u6",
+          "yh7",
+          "yl7",
+          "bt7",
+          "bb7",
+          "u7",
+          "yh8",
+          "yl8",
+          "bt8",
+          "bb8",
+          "u8",
+          "yh9",
+          "yl9",
+          "bt9",
+          "bb9",
+          "u9",
+          "yh10",
+          "yl10",
+          "bt10",
+          "bb10",
+          "u10",
+          "yh11",
+          "yl11",
+          "bt11",
+          "bb11",
+          "u11",
+          "yh12",
+          "yl12",
+          "bt12",
+          "bb12",
+          "u12",
+          "yh13",
+          "yl13",
+          "bt13",
+          "bb13",
+          "u13",
+          "yh14",
+          "yl14",
+          "bt14",
+          "bb14",
+          "u14",
+          "yh15",
+          "yl15",
+          "bt15",
+          "bb15",
+          "u15",
+          "yh16",
+          "yl16",
+          "bt16",
+          "bb16",
+          "u16",
+          "yh17",
+          "yl17",
+          "bt17",
+          "bb17",
+          "u17",
+          "yh18",
+          "yl18",
+          "bt18",
+          "bb18",
+          "u18",
+          "yh19",
+          "yl19",
+          "bt19",
+          "bb19",
+          "u19",
+          "yh20",
+          "yl20",
+          "bt20",
+          "bb20",
+          "u20",
+          "yh21",
+          "yl21",
+          "bt21",
+          "bb21",
+          "u21",
+          "yh22",
+          "yl22",
+          "bt22",
+          "bb22",
+          "u22",
+          "yh23",
+          "yl23",
+          "bt23",
+          "bb23",
+          "u23",
+          "yh24",
+          "yl24",
+          "bt24",
+          "bb24",
+          "u24",
+          "yh25",
+          "yl25",
+          "bt25",
+          "bb25",
+          "u25",
+          "yh26",
+          "yl26",
+          "bt26",
+          "bb26",
+          "u26",
+          "yh27",
+          "yl27",
+          "bt27",
+          "bb27",
+          "u27",
+          "yh28",
+          "yl28",
+          "bt28",
+          "bb28",
+          "u28",
+          "yh29",
+          "yl29",
+          "bt29",
+          "bb29",
+          "u29",
+          "kcw",
+          "kEnd",
+          "kx0",
+          "kx1",
+          "kx2",
+          "kx3",
+          "kx4",
+          "kx5",
+          "kx6",
+          "kx7",
+          "kx8",
+          "kx9",
+          "kx10",
+          "kx11",
+          "kx12",
+          "kx13",
+          "kx14",
+          "kx15",
+          "kx16",
+          "kx17",
+          "kx18",
+          "kx19",
+          "kx20",
+          "kx21",
+          "kx22",
+          "kx23",
+          "kx24",
+          "kx25",
+          "kx26",
+          "kx27",
+          "kx28",
+          "kx29"
+        ]
+      }
+    }
+  ]
+}

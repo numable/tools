@@ -1,0 +1,33 @@
+{
+ "_note": "写事项清单。入参 {items}。删除一件事时，JS 先用 save 把它的 log/stat 清空，再用本流写回新清单。\n⚠️ 入参多一个 `agg`(整份跨事项日聚合,页面算好送来);缺它会把 agg 写成空,三张聚合卡一起变空。",
+ "version": 1,
+ "actions": [
+  {
+   "_note": "⚠️ **写盘流的第一步恒是触觉反馈**(doc/feedback-primitives-spec.md §8 / infosource lint G22)。\n与 save.af 同一条纪律:写盘动作的触觉由 flow 首位发,H5 侧只管**不写盘**的交互(见 home/index.html 的 hap())。\n两边都发会撞在一起 —— 原语层只有 80ms 节流,而「跨桥 + AF 启动」经常超过它,一次动作听见两下含糊的响。\n档位 tap 不用 success:这条流也承载改名与删除,「达标」的语义不属于它。",
+   "action": "ui.haptic",
+   "params": {
+    "type": "tap"
+   }
+  },
+  {
+   "_note": "事项清单整份写回（新增/改名/删除都走这条）。",
+   "action": "data.set",
+   "params": {
+    "key": "items",
+    "value": "${items}"
+   }
+  },
+  {
+   "_note": "跨事项日聚合,三张聚合卡(progress/week/month)读它。由页面 JS 的 computeAgg() 算好整份送来 —— flow 没有 map/filter,而这需要遍历所有事项的 byDay。⚠️ 必须在 widget.refresh **之前**写:反过来的话卡片刷新时读到的还是上一份。",
+   "action": "data.set",
+   "params": {
+    "key": "agg",
+    "value": "${agg}"
+   }
+  },
+  {
+   "_note": "清单变了 = 卡片上的名字/槽位都可能变，同样要真取数重渲。",
+   "action": "widget.refresh"
+  }
+ ]
+}

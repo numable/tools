@@ -1,0 +1,1011 @@
+{
+  "_note": "近 24 小时请求(22)。大数 + 比前 24 小时 + 24 根逐小时柱(最右 = 最新的小时桶)。柱按「与最新桶的时差」定位,零流量的小时空着而不是把后面的柱子往前挤。未连接 / 取不到:骨架照画 + 一行状态。生成器 gen_cloudflare.py。",
+  "rc": {
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FFFBF8\\,#FEF3EB)@90|linear(#15171A\\,#191A1B\\,#211F1C)@90"
+      },
+      {
+        "id": "srcdot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{brand.y}+({brand.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#F38020|#FBAD41"
+      },
+      {
+        "id": "brand",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-66pt",
+        "h": "-1",
+        "text": "${@i18n.t24}",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-48pt",
+        "y": "14pt",
+        "w": "36pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},--)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "2"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "big",
+            "type": "richText",
+            "x": "12pt",
+            "y": "32pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "maxLines": "1",
+            "spans": [
+              {
+                "text": "$[findNotEmpty::(${curS},--)]",
+                "fontSize": "28pt",
+                "typeface": "System-Bold",
+                "textColor": "#0E1116|#F3F4F6"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),0,1)]"
+        },
+        "react": [
+          {
+            "id": "bigE",
+            "type": "txt",
+            "x": "12pt",
+            "y": "40.5pt",
+            "w": "100pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "28pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),if::(eq::(findNotEmpty::(${chg},__none__),__none__),0,1),0)]"
+        },
+        "react": [
+          {
+            "id": "tri",
+            "type": "path",
+            "x": "12pt",
+            "y": "70pt",
+            "w": "8pt",
+            "h": "5.28pt",
+            "d": "$[if::(eq::(${up},1),M128 64 L240 192 L16 192 Z,M128 192 L16 64 L240 64 Z)]",
+            "viewBox": "0 0 256 256",
+            "fillColor": "#6B7280|#8E939B"
+          },
+          {
+            "id": "chg",
+            "type": "txt",
+            "x": "23pt",
+            "y": "69pt",
+            "w": "{parent.w}-35pt",
+            "h": "-1",
+            "text": "${chgA}% ${@i18n.vsPrev}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),if::(eq::(findNotEmpty::(${chg},__none__),__none__),1,0),0)]"
+        },
+        "react": [
+          {
+            "id": "chg0",
+            "type": "txt",
+            "x": "12pt",
+            "y": "69pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.reqU}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${ready},__none__),__none__),1,0)]"
+        },
+        "react": [
+          {
+            "id": "stN",
+            "type": "txt",
+            "x": "12pt",
+            "y": "69pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.unbound}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${ready},__none__),__none__),0,if::(eq::(${ready},1),0,1))]"
+        },
+        "react": [
+          {
+            "id": "stF",
+            "type": "txt",
+            "x": "12pt",
+            "y": "69pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.failed}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "id": "base",
+        "type": "layer",
+        "x": "12.0pt",
+        "y": "126.0pt",
+        "w": "134.0pt",
+        "h": "1pt",
+        "bgColor": "#E4E7EC|#262A31"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "b0",
+            "type": "layer",
+            "x": "12.0pt+${s0}*5.5833pt",
+            "y": "${y0}pt",
+            "w": "4.18pt",
+            "h": "${h0}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w0},0),1),0,1)]"
+          },
+          {
+            "id": "b1",
+            "type": "layer",
+            "x": "12.0pt+${s1}*5.5833pt",
+            "y": "${y1}pt",
+            "w": "4.18pt",
+            "h": "${h1}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w1},0),1),0,1)]"
+          },
+          {
+            "id": "b2",
+            "type": "layer",
+            "x": "12.0pt+${s2}*5.5833pt",
+            "y": "${y2}pt",
+            "w": "4.18pt",
+            "h": "${h2}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w2},0),1),0,1)]"
+          },
+          {
+            "id": "b3",
+            "type": "layer",
+            "x": "12.0pt+${s3}*5.5833pt",
+            "y": "${y3}pt",
+            "w": "4.18pt",
+            "h": "${h3}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w3},0),1),0,1)]"
+          },
+          {
+            "id": "b4",
+            "type": "layer",
+            "x": "12.0pt+${s4}*5.5833pt",
+            "y": "${y4}pt",
+            "w": "4.18pt",
+            "h": "${h4}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w4},0),1),0,1)]"
+          },
+          {
+            "id": "b5",
+            "type": "layer",
+            "x": "12.0pt+${s5}*5.5833pt",
+            "y": "${y5}pt",
+            "w": "4.18pt",
+            "h": "${h5}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w5},0),1),0,1)]"
+          },
+          {
+            "id": "b6",
+            "type": "layer",
+            "x": "12.0pt+${s6}*5.5833pt",
+            "y": "${y6}pt",
+            "w": "4.18pt",
+            "h": "${h6}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w6},0),1),0,1)]"
+          },
+          {
+            "id": "b7",
+            "type": "layer",
+            "x": "12.0pt+${s7}*5.5833pt",
+            "y": "${y7}pt",
+            "w": "4.18pt",
+            "h": "${h7}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w7},0),1),0,1)]"
+          },
+          {
+            "id": "b8",
+            "type": "layer",
+            "x": "12.0pt+${s8}*5.5833pt",
+            "y": "${y8}pt",
+            "w": "4.18pt",
+            "h": "${h8}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w8},0),1),0,1)]"
+          },
+          {
+            "id": "b9",
+            "type": "layer",
+            "x": "12.0pt+${s9}*5.5833pt",
+            "y": "${y9}pt",
+            "w": "4.18pt",
+            "h": "${h9}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w9},0),1),0,1)]"
+          },
+          {
+            "id": "b10",
+            "type": "layer",
+            "x": "12.0pt+${s10}*5.5833pt",
+            "y": "${y10}pt",
+            "w": "4.18pt",
+            "h": "${h10}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w10},0),1),0,1)]"
+          },
+          {
+            "id": "b11",
+            "type": "layer",
+            "x": "12.0pt+${s11}*5.5833pt",
+            "y": "${y11}pt",
+            "w": "4.18pt",
+            "h": "${h11}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w11},0),1),0,1)]"
+          },
+          {
+            "id": "b12",
+            "type": "layer",
+            "x": "12.0pt+${s12}*5.5833pt",
+            "y": "${y12}pt",
+            "w": "4.18pt",
+            "h": "${h12}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w12},0),1),0,1)]"
+          },
+          {
+            "id": "b13",
+            "type": "layer",
+            "x": "12.0pt+${s13}*5.5833pt",
+            "y": "${y13}pt",
+            "w": "4.18pt",
+            "h": "${h13}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w13},0),1),0,1)]"
+          },
+          {
+            "id": "b14",
+            "type": "layer",
+            "x": "12.0pt+${s14}*5.5833pt",
+            "y": "${y14}pt",
+            "w": "4.18pt",
+            "h": "${h14}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w14},0),1),0,1)]"
+          },
+          {
+            "id": "b15",
+            "type": "layer",
+            "x": "12.0pt+${s15}*5.5833pt",
+            "y": "${y15}pt",
+            "w": "4.18pt",
+            "h": "${h15}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w15},0),1),0,1)]"
+          },
+          {
+            "id": "b16",
+            "type": "layer",
+            "x": "12.0pt+${s16}*5.5833pt",
+            "y": "${y16}pt",
+            "w": "4.18pt",
+            "h": "${h16}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w16},0),1),0,1)]"
+          },
+          {
+            "id": "b17",
+            "type": "layer",
+            "x": "12.0pt+${s17}*5.5833pt",
+            "y": "${y17}pt",
+            "w": "4.18pt",
+            "h": "${h17}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w17},0),1),0,1)]"
+          },
+          {
+            "id": "b18",
+            "type": "layer",
+            "x": "12.0pt+${s18}*5.5833pt",
+            "y": "${y18}pt",
+            "w": "4.18pt",
+            "h": "${h18}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w18},0),1),0,1)]"
+          },
+          {
+            "id": "b19",
+            "type": "layer",
+            "x": "12.0pt+${s19}*5.5833pt",
+            "y": "${y19}pt",
+            "w": "4.18pt",
+            "h": "${h19}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w19},0),1),0,1)]"
+          },
+          {
+            "id": "b20",
+            "type": "layer",
+            "x": "12.0pt+${s20}*5.5833pt",
+            "y": "${y20}pt",
+            "w": "4.18pt",
+            "h": "${h20}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w20},0),1),0,1)]"
+          },
+          {
+            "id": "b21",
+            "type": "layer",
+            "x": "12.0pt+${s21}*5.5833pt",
+            "y": "${y21}pt",
+            "w": "4.18pt",
+            "h": "${h21}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w21},0),1),0,1)]"
+          },
+          {
+            "id": "b22",
+            "type": "layer",
+            "x": "12.0pt+${s22}*5.5833pt",
+            "y": "${y22}pt",
+            "w": "4.18pt",
+            "h": "${h22}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w22},0),1),0,1)]"
+          },
+          {
+            "id": "b23",
+            "type": "layer",
+            "x": "12.0pt+${s23}*5.5833pt",
+            "y": "${y23}pt",
+            "w": "4.18pt",
+            "h": "${h23}pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#F38020|#FBAD41",
+            "hide": "$[if::(eq::(findNotEmpty::(${w23},0),1),0,1)]"
+          }
+        ],
+        "_note": "有数据才画柱。"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),0,1)]"
+        },
+        "react": [
+          {
+            "id": "k0",
+            "type": "layer",
+            "x": "12.00pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k1",
+            "type": "layer",
+            "x": "17.58pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k2",
+            "type": "layer",
+            "x": "23.17pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k3",
+            "type": "layer",
+            "x": "28.75pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k4",
+            "type": "layer",
+            "x": "34.33pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k5",
+            "type": "layer",
+            "x": "39.92pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k6",
+            "type": "layer",
+            "x": "45.50pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k7",
+            "type": "layer",
+            "x": "51.08pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k8",
+            "type": "layer",
+            "x": "56.67pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k9",
+            "type": "layer",
+            "x": "62.25pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k10",
+            "type": "layer",
+            "x": "67.83pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k11",
+            "type": "layer",
+            "x": "73.42pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k12",
+            "type": "layer",
+            "x": "79.00pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k13",
+            "type": "layer",
+            "x": "84.58pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k14",
+            "type": "layer",
+            "x": "90.17pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k15",
+            "type": "layer",
+            "x": "95.75pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k16",
+            "type": "layer",
+            "x": "101.33pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k17",
+            "type": "layer",
+            "x": "106.92pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k18",
+            "type": "layer",
+            "x": "112.50pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k19",
+            "type": "layer",
+            "x": "118.08pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k20",
+            "type": "layer",
+            "x": "123.67pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k21",
+            "type": "layer",
+            "x": "129.25pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k22",
+            "type": "layer",
+            "x": "134.83pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          },
+          {
+            "id": "k23",
+            "type": "layer",
+            "x": "140.42pt",
+            "y": "123.0pt",
+            "w": "4.18pt",
+            "h": "3pt",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            },
+            "bgColor": "#D6DAE1|#2C313A"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "foot",
+            "type": "txt",
+            "x": "12pt",
+            "y": "132.0pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${zname},--)] · ${@i18n.thr}$[findNotEmpty::(${thrS},--)]",
+            "fontSize": "9.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "t24": "近 24 小时",
+        "reqU": "次请求",
+        "vsPrev": "比前 24 小时",
+        "thr": "拦截 ",
+        "unbound": "还没连接 Cloudflare 账号",
+        "failed": "暂时取不到数据"
+      },
+      "en-US": {
+        "t24": "Last 24 hours",
+        "reqU": "requests",
+        "vsPrev": "vs prior 24 h",
+        "thr": "Blocked ",
+        "unbound": "Cloudflare account not connected",
+        "failed": "Couldn't get data right now"
+      }
+    }
+  }
+}

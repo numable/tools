@@ -1,0 +1,19 @@
+{
+  "_note": "翻盒:`to` 由点阵卡标题行的 cell events 带进来(渲染时已烤成字面数字)。\n只改「在看第几盒」这个**视图状态**,不碰任何记录 —— 翻页是只读动作。\n\n⚠️⚠️ v2 起写的是 **pageState 而不是 `data.*`**。理由:点阵从二级页搬回了首页,\n而 data 域是持久的 —— 翻到第 1 盒、退出、明天再打开,上面的圆说「今天」、下面的点阵\n停在上个月,用户完全不记得自己翻过。页面状态随页面消失,这正是这个量该有的寿命。\n⚠️ `patchState` 之后必须 `reloadPage`(不是 redrawPage):格子的三态要重跑 depends 才算得出来。\n⚠️ 越界不在这里挡:不可翻的方向根本不挂 events(见 p-pack.rcn 的灰字分支),\n   「点了没反应」不如「看起来就不可点」,与 weather 那个满员的「+」同一条纪律。\n   home.df 里另有一道上界夹取,防的是 state 里躺着脏值。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "翻盒是原地重渲,点到画面变化之间没有任何转场 —— G22:这一下必须震。",
+      "action": "ui.haptic"
+    },
+    {
+      "action": "xpage.patchState",
+      "params": {
+        "packSel": "${to}"
+      }
+    },
+    {
+      "action": "xpage.reloadPage"
+    }
+  ]
+}

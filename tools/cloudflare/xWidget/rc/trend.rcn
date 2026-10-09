@@ -1,0 +1,488 @@
+{
+  "_note": "请求趋势(44 · 338×354)。两块 tile(合计 / 日均)+ 结论行(上一整天比日均)+ 30 根逐日柱;最高那根柱顶标数值,一条 1pt 淡线标日均(核里没有虚线)。x 轴不是等距日历(零流量的日子不返回),只标首尾日期。未连接 / 取不到:tile 写 --、结论行位置写一行状态、底线照画。生成器 gen_cloudflare.py。",
+  "rc": {
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FFFBF8\\,#FEF3EB)@90|linear(#15171A\\,#191A1B\\,#211F1C)@90"
+      },
+      {
+        "id": "srcdot",
+        "type": "layer",
+        "x": "14pt",
+        "y": "{brand.y}+({brand.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#F38020|#FBAD41"
+      },
+      {
+        "id": "brand",
+        "type": "txt",
+        "x": "23pt",
+        "y": "12pt",
+        "w": "{parent.w}-97pt",
+        "h": "-1",
+        "text": "$[if::(eq::(findNotEmpty::(${zname},__none__),__none__),${@i18n.trendT},${zname} · ${@i18n.trendT})]",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1"
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-60pt",
+        "y": "15pt",
+        "w": "46pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},--)]",
+        "fontSize": "9pt",
+        "alignmentH": "2",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "id": "t0",
+        "type": "layer",
+        "x": "14pt",
+        "y": "42pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "52pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "l0",
+        "type": "txt",
+        "x": "24pt",
+        "y": "53pt",
+        "w": "({parent.w}-36pt)/2-20pt",
+        "h": "-1",
+        "text": "${@i18n.total}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${totalS},--),--),0,1)]"
+        },
+        "react": [
+          {
+            "id": "v0",
+            "type": "txt",
+            "x": "24pt",
+            "y": "68pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "${totalS}",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${totalS},--),--),1,0)]"
+        },
+        "react": [
+          {
+            "id": "v0E",
+            "type": "txt",
+            "x": "24pt",
+            "y": "74pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "id": "t1",
+        "type": "layer",
+        "x": "22pt+({parent.w}-36pt)/2",
+        "y": "42pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "52pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "l1",
+        "type": "txt",
+        "x": "32pt+({parent.w}-36pt)/2",
+        "y": "53pt",
+        "w": "({parent.w}-36pt)/2-20pt",
+        "h": "-1",
+        "text": "${@i18n.avg}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${avgS},--),--),0,1)]"
+        },
+        "react": [
+          {
+            "id": "v1",
+            "type": "txt",
+            "x": "32pt+({parent.w}-36pt)/2",
+            "y": "68pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "${avgS}",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${avgS},--),--),1,0)]"
+        },
+        "react": [
+          {
+            "id": "v1E",
+            "type": "txt",
+            "x": "32pt+({parent.w}-36pt)/2",
+            "y": "74pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),if::(eq::(${cmpOk},1),if::(eq::(${cmpDir},1),1,0),0),0)]"
+        },
+        "react": [
+          {
+            "id": "cmpHi",
+            "type": "txt",
+            "x": "14pt",
+            "y": "106pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.cmpHiA}${cmpAbs}${@i18n.cmpHiB}",
+            "fontSize": "11pt",
+            "textColor": "#F38020|#FBAD41",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),if::(eq::(${cmpOk},1),if::(eq::(${cmpDir},0),1,0),0),0)]"
+        },
+        "react": [
+          {
+            "id": "cmpLo",
+            "type": "txt",
+            "x": "14pt",
+            "y": "106pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.cmpLoA}${cmpAbs}${@i18n.cmpLoB}",
+            "fontSize": "11pt",
+            "textColor": "#F38020|#FBAD41",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),if::(eq::(${cmpOk},1),if::(eq::(${cmpDir},2),1,0),0),0)]"
+        },
+        "react": [
+          {
+            "id": "cmpSame",
+            "type": "txt",
+            "x": "14pt",
+            "y": "106pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.cmpSame}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${ready},__none__),__none__),1,0)]"
+        },
+        "react": [
+          {
+            "id": "stN",
+            "type": "txt",
+            "x": "14pt",
+            "y": "106pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.unbound}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${ready},__none__),__none__),0,if::(eq::(${ready},1),0,1))]"
+        },
+        "react": [
+          {
+            "id": "stF",
+            "type": "txt",
+            "x": "14pt",
+            "y": "106pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.failed}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "id": "base",
+        "type": "layer",
+        "x": "14pt",
+        "y": "310.0pt",
+        "w": "{parent.w}-28pt",
+        "h": "1pt",
+        "bgColor": "#E4E7EC|#262A31"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${ready},1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "op",
+            "action": "forEach",
+            "props": {
+              "items": "${g}",
+              "key": "_it",
+              "index": "_i"
+            },
+            "react": [
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_h",
+                  "value": "$[max::(round::(findNotEmpty::(calc::(${_it.sum.requests}*160.0/${mx}),0)),1)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_by",
+                  "value": "$[findNotEmpty::(calc::(310.0-${_h}),310.0)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_ly",
+                  "value": "$[findNotEmpty::(calc::(${_by}-14),0)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_lx",
+                  "value": "$[min::(max::(calc::(14+${_i}*10.3333+5.17-30),14),264)]"
+                }
+              },
+              {
+                "type": "layer",
+                "x": "14pt+${_i}*({parent.w}-28pt)/30",
+                "y": "${_by}pt",
+                "w": "({parent.w}-28pt)/30-1.6pt",
+                "h": "${_h}pt",
+                "bgColor": "#F38020|#FBAD41",
+                "cornerRadius": {
+                  "leftT": "1pt",
+                  "leftB": "1pt",
+                  "rightT": "1pt",
+                  "rightB": "1pt"
+                }
+              },
+              {
+                "type": "op",
+                "action": "if",
+                "props": {
+                  "val": "$[if::(eq::(${_it.sum.requests},${mx}),1,0)]"
+                },
+                "react": [
+                  {
+                    "id": "pk",
+                    "type": "txt",
+                    "x": "${_lx}pt",
+                    "y": "${_ly}pt",
+                    "w": "60pt",
+                    "h": "-1",
+                    "text": "${mxS}",
+                    "fontSize": "9pt",
+                    "textColor": "#0E1116|#F3F4F6",
+                    "maxLines": "1",
+                    "typeface": "System-Bold",
+                    "alignmentH": "1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "avgLn",
+            "type": "layer",
+            "x": "14pt",
+            "y": "${avgY}pt",
+            "w": "{parent.w}-28pt",
+            "h": "1pt",
+            "bgColor": "#660E1116|#66F3F4F6"
+          },
+          {
+            "id": "avgLb",
+            "type": "txt",
+            "x": "16pt",
+            "y": "${avgLY}pt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${@i18n.avgL} ${avgS}",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1",
+            "bgColor": "#E6FFFFFF|#E615171A",
+            "cornerRadius": {
+              "leftT": "4pt",
+              "leftB": "4pt",
+              "rightT": "4pt",
+              "rightB": "4pt"
+            },
+            "paddingLeft": "4pt",
+            "paddingRight": "4pt",
+            "paddingTop": "2pt",
+            "paddingBottom": "2pt"
+          },
+          {
+            "id": "d0",
+            "type": "txt",
+            "x": "14pt",
+            "y": "318.0pt",
+            "w": "100pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${d0},--)]",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "id": "d1",
+            "type": "txt",
+            "x": "{parent.w}-114pt",
+            "y": "318.0pt",
+            "w": "100pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${d1},--)]",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1",
+            "alignmentH": "2"
+          }
+        ],
+        "_note": "有数据才画柱、日均线、峰值与首尾日期(数据驱动几何在空数据下整卡布局失败)。"
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "unbound": "还没连接 Cloudflare 账号",
+        "failed": "暂时取不到数据",
+        "trendT": "近 30 天请求",
+        "total": "合计",
+        "avg": "日均",
+        "cmpHiA": "上一整天比日均高 ",
+        "cmpHiB": "%",
+        "cmpLoA": "上一整天比日均低 ",
+        "cmpLoB": "%",
+        "cmpSame": "上一整天和平常差不多",
+        "avgL": "日均"
+      },
+      "en-US": {
+        "unbound": "Cloudflare account not connected",
+        "failed": "Couldn't get data right now",
+        "trendT": "Requests · 30 days",
+        "total": "Total",
+        "avg": "Daily avg",
+        "cmpHiA": "Last full day: ",
+        "cmpHiB": "% above average",
+        "cmpLoA": "Last full day: ",
+        "cmpLoB": "% below average",
+        "cmpSame": "Last full day: about average",
+        "avgL": "Avg"
+      }
+    }
+  }
+}

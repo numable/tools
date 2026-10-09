@@ -1,0 +1,350 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d0",
+        "value": "${date}"
+      },
+      "_note": "入参必须先落地成 data 域的键,方法参数里才引用得到。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isDef",
+        "value": "$[if::(eq::(findNotEmpty::(${d0},auto),auto),1,0)]"
+      },
+      "_note": "params.date 为空或哨兵 `auto` = 没选日子(doc/overseas-first.md §3:默认参数不写地区性日期)。缺省倒数到**下一个 1 月 1 日** —— 国内默认与海外默认在这一项上恰好同一天,故不必按 cnd 分支。卡名同时由 RCN 用词表兜成「元旦 / New Year」(见 countdown.rcn 的 ttl;英文不写 New Year's Day —— 22 卡名字那一格约 79pt,13pt 粗体放不下,会被截成 New Year's)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d",
+        "value": "$[if::(eq::(${isDef},1),connect::(round::(calc::(${y}+1),0),-01-01),${d0})]"
+      },
+      "_note": "⚠️ `round` 不能省:calc 在 Android 上恒返 double,拼出「2027.0-01-01」parseDate 直接失败。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "targetMs",
+        "value": "$[parseDate::(${d},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(formatDate::(${nowMs},yyyy-MM-dd),yyyy-MM-dd)]"
+      },
+      "_note": "按「自然日」算差而不是按 24h 整除:先各自归到当天 0 点再相减,否则同一天的上午/下午会算出不同天数。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "days",
+        "value": "$[round::(calc::((${targetMs}-${todayMs})/86400000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "past",
+        "value": "$[if::(lt::(${days},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "abs",
+        "value": "$[if::(lt::(${days},0),calc::(0-${days}),${days})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uK",
+        "value": "$[if::(le::(${abs},28),1,if::(le::(${abs},196),2,3))]"
+      },
+      "_note": "1=天(≤28 天,一个月内按天数)  2=周(≤196 天)  3=月。\n⚠️ 档位切换会让格数**跳一下**(29 天=5 个周格 → 28 天=28 个日格),这是刻意的:倒数进入最后一个月时点阵会突然铺满,那正是这张卡该发出的信号。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uD",
+        "value": "$[if::(eq::(${uK},1),1,if::(eq::(${uK},2),7,30))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "litRaw",
+        "value": "$[ceil::(calc::(${abs}/${uD}))]"
+      },
+      "_note": "⚠️ 必须 `ceil` 不能 `round`:剩 113 天在周档下是 16.1 周,round 会给 16 格 = 112 天,把一天四舍五入没了;倒数日上「还剩几个格」是承诺,宁可多画一格。`ceil` 在 lint 的方法白名单里、四端都有。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lit",
+        "value": "$[min::(${litRaw},28)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "over",
+        "value": "$[if::(gt::(${litRaw},28),1,0)]"
+      },
+      "_note": "封顶标记。判的是**格数**不是天数 —— 升了档之后 28 格 = 28 个月 ≈ 2.3 年,真到这一档才画 `+`。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dateS",
+        "value": "${d}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ly",
+        "value": "$[subString::(${d},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lm",
+        "value": "$[parseNumber::(subString::(${d},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ld",
+        "value": "$[parseNumber::(subString::(${d},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_MON",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lmE",
+        "value": "$[index::(${_MON},calc::(${_lm}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dateS",
+        "value": "${_ly} 年 ${_lm} 月 ${_ld} 日"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "dateS",
+            "value": "${_lmE} ${_ld}, ${_ly}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ttl",
+        "value": "${title}"
+      },
+      "_note": "卡上的名字。⚠️ 它必须**从这条流透出去** —— RCN 里写的是 `$[findNotEmpty::(${title},--)]`,而 canvas 的作用域里只有 flow 的输出;`.xwidget` 的 depends.params 漏传 title 时,名字就安静地兜成 `--`,而日期是好的,所以看着像「这张卡只是没写名字」(2026-08-26 iOS 加卡面板预览里抓到)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yStart",
+        "value": "$[parseDate::(connect::(${y},-01-01),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yEnd",
+        "value": "$[parseDate::(connect::(calc::(${y}+1),-01-01),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yPct",
+        "value": "$[round::(calc::((${nowMs}-${yStart})/(${yEnd}-${yStart})*100),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yRest",
+        "value": "$[round::(calc::(100-${yPct}),0)]"
+      },
+      "_note": "⚠️ 外面这层 `round::` 是为了**取整数类型**:calc 在 Android 上恒返 double,不套就渲成「还剩 31.0%」(pill/w.df 的 todayNo 同坑)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "today",
+        "value": "$[formatDate::(${nowMs},MM-dd)]"
+      },
+      "_note": "时效锚(card-design-system §3),与 progress.df 同式。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dateC",
+        "value": "${_ly}/${_lm}/${_ld}"
+      },
+      "_note": "21 档右栏的目标日期:中文用 2030/12/31 —— 「2030年12月31日」9pt 要 ~70pt,迷你档右栏只有 64(rcnrender 实测截断)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "dateC",
+            "value": "${dateS}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vf21",
+        "value": "$[if::(ge::(findNotEmpty::(${abs},0),1000),17,20)]"
+      },
+      "_note": "21 档主值字号:四位数天数(≥ 1000)收到 17pt,否则英文「1348 days」在 74pt 左栏里被截成「1348…」。恒有值(abs 缺失按 0 → 20),RCN 里写 ${vf21}pt 不会落成裸 pt。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wo",
+        "value": "$[round::(calc::((${targetMs}-parseDate::(2026-09-21,yyyy-MM-dd))/86400000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wi",
+        "value": "$[round::(calc::(${_wo}-floor::(calc::(${_wo}/7))*7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_WK",
+        "value": [
+          "周一",
+          "周二",
+          "周三",
+          "周四",
+          "周五",
+          "周六",
+          "周日"
+        ]
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_WK",
+            "value": [
+              "Mon",
+              "Tue",
+              "Wed",
+              "Thu",
+              "Fri",
+              "Sat",
+              "Sun"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dateW",
+        "value": "${dateS} · $[index::(${_WK},${_wi})]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "days",
+          "past",
+          "abs",
+          "lit",
+          "over",
+          "uK",
+          "dateS",
+          "ttl",
+          "isDef",
+          "yRest",
+          "today",
+          "dateC",
+          "vf21",
+          "dateW"
+        ]
+      }
+    }
+  ]
+}

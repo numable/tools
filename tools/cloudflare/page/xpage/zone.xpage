@@ -1,0 +1,161 @@
+{
+  "_note": "域名详情页(路由 /zone,入参 zoneId + zoneName 走 query)。\n\n为什么账号卡挂在这里而不是首页:标准 §8.1 的判据是「加这张卡需不需要先指定一个对象」—— 需要就挂对象自己的详情页,那里点「添加」才说得清加的是谁。全挂首页就得引入一个隐形的「当前选中域名」,用户看不见它、加卡时说不清加的是谁,而这个状态还要在两个页面之间同步。本包那四张公开卡正好相反(无参数、全挂首页)。\n\n⚠️ **根节点不写 `params`** —— 按 xpage-design.md §6.1,节点显式 params **覆盖**继承作用域,而路由 query 走的是最低优先级的 ambient scope。在这里写一个同名 `zoneId` 当「首帧兜底」= 点哪个域进来都渲兜底那一个,而且**不报错**(标准 §8.2 的警告,memory xpage-route-params-shadowed)。\n\n⚠️ 三张卡的 onClick 必须把 `zoneId` + `zoneName` 都带上:zoneId 是取数键,zoneName 是卡上显示的名字(卡片 flow 只收 zoneId,拿不到名字,再打一次 /zones 只为一个字符串不值)。",
+  "type": "page",
+  "id": "cloudflare-zone",
+  "root": {
+    "type": "container",
+    "id": "root",
+    "title": "${zoneName}",
+    "layout": "list",
+    "direction": "vertical",
+    "gap": "10pt",
+    "padding": "14pt",
+    "paddingTop": "${@contentInset.top}pt",
+    "paddingBottom": "24pt",
+    "depends": [
+      {
+        "flow": "@[file://page/flow/zone.df]",
+        "params": {
+          "zoneId": "${zoneId}",
+          "_cache": 1
+        }
+      }
+    ],
+    "items": [
+      {
+        "_note": "空参兜底(2026-08-27 深链评审第二批):组件卡未绑定对象时点进来路由参数为空 —— 此前整页对着空参取数,是一页空骨架的死页。判据直接吃路由 query(展开期可用,不依赖 depends 时序,无闪现;web 引擎 depends 未回时子树本就不渲):为空渲 p-unbound 提示(结构照 G9,整卡可点回首页),非空走原内容。⚠️ 判空用 gt::(length::(x),0) —— 路由 query 恒是字符串,length:: 对字符串四端一致(对数字才分叉,memory [[vparser-engine-pitfalls]]);卡片深链恒带空值键(如 ?cid=),不会落进「键整个缺席 → ${} 原样透传」那个形态。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(gt::(length::(${zoneId}),0),0,1)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "unbound",
+            "h": "132pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-unbound.rcn]"
+            },
+            "events": {
+              "onClick": "numable://self"
+            }
+          }
+        ]
+      },
+      {
+        "op": "if",
+        "props": {
+          "cond": "$[if::(gt::(length::(${zoneId}),0),1,0)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "hero",
+            "h": "112pt",
+            "canvas": {
+              "source": "@[file://page/rc/z-hero.rcn]"
+            }
+          },
+          {
+            "_note": "近 24 小时请求块(v39),复用 traffic 卡的数据流。",
+            "type": "Canvas",
+            "id": "z24",
+            "h": "158pt",
+            "canvas": {
+              "source": "@[file://page/rc/z-traffic.rcn]",
+              "depends": [
+                {
+                  "flow": "@[file://xWidget/flow/traffic.df]",
+                  "params": {
+                    "zoneId": "${zoneId}",
+                    "zoneName": "${zoneName}",
+                    "cache": "1"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "_note": "流量构成块(v39),复用 mix 卡的数据流。",
+            "type": "Canvas",
+            "id": "zmix",
+            "h": "354pt",
+            "canvas": {
+              "source": "@[file://page/rc/z-mix.rcn]",
+              "depends": [
+                {
+                  "flow": "@[file://xWidget/flow/mix.df]",
+                  "params": {
+                    "zoneId": "${zoneId}",
+                    "zoneName": "${zoneName}",
+                    "cache": "1"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "_note": "缓存块(v39),复用 cache 卡的数据流。",
+            "type": "Canvas",
+            "id": "zcache",
+            "h": "158pt",
+            "canvas": {
+              "source": "@[file://page/rc/z-cache.rcn]",
+              "depends": [
+                {
+                  "flow": "@[file://xWidget/flow/cache.df]",
+                  "params": {
+                    "zoneId": "${zoneId}",
+                    "zoneName": "${zoneName}",
+                    "cache": "1"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "_note": "加卡入口 = **一个按钮**(§8.1a)。三张卡都吃这个 zone 的 id/name,故候选逐项带参数 ——一份共享 override 只喂给面板当前那一张(§8.1a 纪律 1)。",
+            "type": "Canvas",
+            "id": "addBtn",
+            "h": "56pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-addbtn.rcn]"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/pick-zone.af]",
+                "params": {
+                  "zoneId": "${zoneId}",
+                  "zoneName": "${zoneName}"
+                }
+              }
+            }
+          },
+          {
+            "type": "Canvas",
+            "id": "foot",
+            "h": "92pt",
+            "canvas": {
+              "source": "@[file://page/rc/z-foot.rcn]"
+            }
+          }
+        ]
+      }
+    ],
+    "events": {
+      "_note": "`onLoad`:三态的中间那一行 —— 首屏若有哪块渲的是旧货就后台校新一次(zone-revalidate.af,根流 + 三块 Canvas 各按 ttl 判)。gate 全生命周期恰好一次、软重载不重置,不会自激;⚠️ 别改挂 onVisible。\n`onRefresh`:声明后容器不再自动 reloadPage,下拉由 zone-refresh.af 负责(四个键同删)。",
+      "onLoad": [
+        {
+          "flow": "@[file://page/flow/zone-revalidate.af]",
+          "params": {
+            "stale": "${_stale}",
+            "ckey": "${ckey}"
+          }
+        }
+      ],
+      "onRefresh": "@[file://page/flow/zone-refresh.af]"
+    },
+    "_noteRefresh": "G23 契约2:onRefresh 一旦声明就完全接管下拉,af 里必须自己 reloadPage;流程 = 删掉 c.cf.zone._cur 指的键(穿透)再重载。",
+    "_notePad": "§5:页面左右内边距恒 14pt(page-design-system.md)。"
+  }
+}

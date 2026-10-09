@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<!--
+  组件参数编辑页(路由 /edit,.xwidget events.onEdit 指到这里):长按组件 →「编辑参数」→
+  本页以 sheet 呈现,?brickId=<实例> 定位要改的那个组件。三种模式由 ?w= 决定,当前参数随 query 带进来用于预选:
+    w=app      评分 / 线上版本:选 App + 地区 → updateParams({appId}) / ({country})
+    w=regions  分区评分:选 App + 四个地区 r1..r4 → updateParams({appId}) / ({rN})
+    w=chart    免费榜 / 付费榜:选分类 → updateParams({genre})(空 = 全部)
+    w=asc      私有组件(审核 / 构建 / 评论 / 性能,2026-09-26 并入 App Store Connect):只能选账号里的 App → updateParams({appId})
+    w=biz      经营组件(下载 / 收益 / 订阅):同上,首行多一个「账号合计」(appId 空)
+    私有两种模式的 App 列表来自 page/flow/m-apps-list.df(需要已接入;没接入就提示去接入,见 doc/appstore-merged.md §6)。
+  updateParams 是逐键合并(doc/widget-update-params.md §1.1),只写改了的那个键。改即生效,壳上的「完成」负责关闭。
+  ⚠️ STORES / GENRES 两张表与 tools/infosource/gen_appwatch.py 的同名常量同序同集,改一处要同改。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Choose an app</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --accent:#128F66;--accentStrong:#128F66}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--accentStrong:#6FE8BE}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 20px)) 16px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:20px;margin:0 0 4px;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:16px}
+.sec{display:flex;align-items:center;font-size:12px;color:var(--sub);font-weight:600;margin:18px 2px 10px;letter-spacing:.3px}
+.sec .grow{flex:1 1 auto}
+select.cc{border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:8px;padding:4px 8px;font-size:16px;outline:none}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.mine{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.mine:last-child{border-bottom:0}
+.mine .grow{flex:1 1 auto;min-width:0}
+.mine b{display:block;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mine small{color:var(--sub);font-size:12px}
+.dot{flex:0 0 auto;width:8px;height:8px;border-radius:4px;background:var(--accentStrong)}
+.dot.off{background:transparent}
+input.q{width:100%;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:12px;padding:11px 14px;font-size:16px;outline:none}
+input.q:focus{border-color:var(--accent)}
+.hit{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.hit:last-child{border-bottom:0}
+.hit .grow{flex:1 1 auto;min-width:0}
+.hit b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hit small{color:var(--sub)}
+.use{flex:0 0 auto;border:0;background:var(--accentStrong);color:#fff;font-size:13px;font-weight:600;
+  border-radius:16px;padding:7px 16px;cursor:pointer}
+.state{color:var(--sub);font-size:13px;padding:14px;text-align:center}
+.foot{color:var(--sub);font-size:11px;margin-top:20px;line-height:1.6}
+
+/* —— 视觉统一(与本包 RCN 卡片同源)——
+   「源色」是包自己的 accent(GitHub 贡献绿 / App Store 蓝),不再借 App 的品牌薄荷绿;
+   卡片去 1px 描边改「无边 + 极浅投影」,分节标题改大写小字距,长文脚注收进一块浅底面板。
+   本段刻意放在样式表末尾作**覆盖层** —— 各页原有规则一条不动,改动集中在这里一处。
+   ⚠️ 暗色档必须把 --accentStrong 一起改:原表里 html[data-theme=dark] 的特异性高于 :root,
+   只在 :root 里改会被它盖回薄荷绿(改完看着没变的典型)。 */
+:root{--src:#0A7AFF;--srcSoft:rgba(10,122,255,.10);--chip:#E7E9EE;--chip2:#EEF0F4;
+  --shadow:0 1px 2px rgba(22,23,27,.04),0 10px 24px -16px rgba(22,23,27,.18);
+  --accent:var(--src);--accentStrong:var(--src)}
+html[data-theme="dark"]{--src:#4DA0FF;--srcSoft:rgba(77,160,255,.14);--chip:#20232A;--chip2:#252930;
+  --shadow:none;--accent:var(--src);--accentStrong:var(--src)}
+h1{font-weight:700;letter-spacing:-.5px}
+.sec{font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;margin-top:22px}
+.card,.box{border:0;border-radius:16px;box-shadow:var(--shadow)}
+input.q,input.tk,select.cc{border:1.5px solid transparent;box-shadow:var(--shadow);border-radius:14px}
+input.q:focus,input.tk:focus{border-color:var(--src)}
+.mine,.hit,.row{border-bottom:0}
+.mine+.mine,.hit+.hit{border-top:1px solid var(--line)}
+.foot{background:var(--chip2);border-radius:14px;padding:12px 14px;line-height:1.7;margin-top:20px}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.mine,.hit,.xb-tap{position:relative}
+.mine::after,.hit::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.mine:active::after,.hit:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.use,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.use:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style></head>
+<body>
+  <h1 data-i="title"></h1>
+  <div class="sub" data-i="sub"></div>
+
+  <div id="appSec">
+  <div class="sec"><span data-i="mineSec"></span><span class="grow"></span>
+    <select id="cc" class="cc"></select></div>
+  <div id="mine" class="card"></div>
+
+  <div class="sec" data-i="searchSec"></div>
+  <input id="q" class="q" type="search" autocomplete="off">
+  <div id="hits" class="card" style="display:none;margin-top:10px"></div>
+  </div>
+
+  <div id="rgSec" style="display:none">
+  <div class="sec" data-i="rgSec"></div>
+  <div id="rg" class="card"></div>
+  </div>
+
+  <div id="ascSec" style="display:none">
+  <div class="sec" data-i="ascSec"></div>
+  <div id="acct" class="card"></div>
+  </div>
+
+  <div id="gSec" style="display:none">
+  <div class="sec" data-i="gSec"></div>
+  <div id="genres" class="card"></div>
+  </div>
+
+  <div class="foot" data-i="foot"></div>
+<script>
+(function(){
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 地区选择器顺序与缺省按国内默认判据(doc/overseas-first.md §1):海外 US 打头,国内 CN 打头。 */
+var STORES_OVERSEAS = ["US","GB","JP","DE","FR","CA","AU","KR","BR","CN"], STORES_CN = ["CN","US","JP","GB","DE","FR","KR","CA","AU","BR"];
+var STORES = STORES_OVERSEAS;
+var STORE_ZH = {US:"美国",CN:"中国",JP:"日本",GB:"英国",DE:"德国",FR:"法国",KR:"韩国",CA:"加拿大",AU:"澳洲",BR:"巴西"};
+var GENRES = [["6014","游戏","Games"],["6007","效率","Productivity"],["6005","社交","Social"],["6016","娱乐","Entertainment"],
+  ["6008","摄影与录像","Photo & Video"],["6015","财务","Finance"],["6017","教育","Education"],["6013","健康健美","Health & Fitness"],
+  ["6012","生活","Lifestyle"],["6024","购物","Shopping"],["6002","工具","Utilities"],["6011","音乐","Music"]];
+var I18N = {
+  "zh": {"title":"这个组件盯哪个 App？","sub":"点一行立即生效，右上角可切地区",
+         "mineSec":"我的 App","searchSec":"搜索其他 App","ph":"搜索 App，如 微信 / Instagram",
+         "use":"用这个","done":"已设置","searching":"搜索中…","noHit":"没有找到匹配的 App",
+         "emptyMine":"关注列表是空的，也可以直接在下方搜索",
+         "foot":"更改立即写入这个组件；关注列表在首页 →「管理关注」里增删。","notX":"当前不在 XBundle 环境中",
+         "rgTitle":"这个组件比较哪个 App？","rgSub":"选一个 App，再挑四个要对比的地区","rgSec":"对比的地区",
+         "rgN":"地区 {n}","gTitle":"看哪个分类的榜单？","gSub":"点一行立即生效","gSec":"分类","gAll":"全部分类",
+         "gFoot":"榜单来自 App Store 官方排行，中文界面看中国区，其他语言看美国区。",
+         "aTitle":"这个组件看哪个 App？","aSub":"只能选你 App Store Connect 账号里的 App，点一行立即生效",
+         "ascSec":"账号里的 App","acctAll":"账号合计","acctAllS":"所有 App 加起来",
+         "noAcct":"还没接入 App Store Connect。接入后这里会列出你账号里的 App。","acctEmpty":"这个账号下还没有 App",
+         "aFoot":"更改立即写入这个组件。"},
+  "en": {"title":"Which app for this widget?","sub":"Tap a row to apply. Storefront at top right.",
+         "mineSec":"My apps","searchSec":"Search other apps","ph":"Search apps, e.g. Instagram",
+         "use":"Use","done":"Set","searching":"Searching…","noHit":"No matching app",
+         "emptyMine":"Watchlist is empty — search below instead",
+         "foot":"Changes apply to this widget immediately. Edit the watchlist from Home → Manage.","notX":"Not running inside XBundle",
+         "rgTitle":"Which app to compare?","rgSub":"Pick an app, then the four storefronts to compare","rgSec":"Storefronts",
+         "rgN":"Storefront {n}","gTitle":"Which category?","gSub":"Tap a row to apply","gSec":"Category","gAll":"All categories",
+         "gFoot":"Charts come from the official App Store rankings: China when the app is in Chinese, US otherwise.",
+         "aTitle":"Which app for this widget?","aSub":"Only apps in your App Store Connect account. Tap a row to apply.",
+         "ascSec":"Apps in your account","acctAll":"All apps","acctAllS":"Everything added up",
+         "noAcct":"App Store Connect isn't connected yet. Once it is, your apps show up here.",
+         "acctEmpty":"No apps in this account yet","aFoot":"Changes apply to this widget immediately."}
+};
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。 */
+var LANG=nbLang(document.documentElement.getAttribute('data-lang')), CND=false, list=[], country='US', brickId='', selId='', MODE='app', regions=['US','GB','JP','DE'], genre='';
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键回落;缺键回落英文 */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function applyTheme(th){
+  var dark = th==='dark' || (th!=='light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+}
+function paint(){
+  Array.prototype.forEach.call(document.querySelectorAll('[data-i]'),function(el){
+    el.textContent = t(el.dataset.i); });
+  var h=document.querySelector('h1'), sb=document.querySelector('.sub'), ft=document.querySelector('.foot');
+  if(MODE==='regions'){ h.textContent=t('rgTitle'); sb.textContent=t('rgSub'); }
+  if(MODE==='chart'){ h.textContent=t('gTitle'); sb.textContent=t('gSub'); ft.textContent=t('gFoot'); }
+  if(MODE==='asc'||MODE==='biz'){ h.textContent=t('aTitle'); sb.textContent=t('aSub'); ft.textContent=t('aFoot'); }
+  document.getElementById('q').placeholder = t('ph');
+}
+async function ready(){ for(var i=0;i<24&&!window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+  return !!window.xbridge; }
+async function appInfo(){
+  try{ if(xbridge.appInfo) return await xbridge.appInfo(); }catch(e){}
+  return null;
+}
+function write(p){
+  if(!(window.xbridge&&xbridge.updateParams&&brickId)) return;
+  xbridge.updateParams(brickId, p);   // 逐键合并,只写改了的键
+}
+function apply(id){
+  selId = String(id);
+  // 改即生效:回写该实例 params(壳上的「完成」只负责关面板)。app 模式把 country 一并带上,
+  // 让「切地区」也随下一次点选立即落到组件上;regions 模式没有 country 参数。
+  write(MODE==='regions' ? {appId:selId} : {appId:selId, country:country});
+  renderMine();
+}
+var acct=null;   // w=asc / w=biz:账号里的 App(m-apps-list.df);null = 还没拿到
+function renderAcct(){
+  var box=document.getElementById('acct');
+  if(acct===null){ box.innerHTML='<div class="state">'+t('searching')+'</div>'; return; }
+  if(acct.ok!=='1' && acct.ok!==1){ box.innerHTML='<div class="state">'+t('noAcct')+'</div>'; return; }
+  var rows=(acct.list||[]).filter(function(a){return a&&a.id;});
+  if(MODE==='biz') rows=[{id:'',n:t('acctAll'),b:t('acctAllS')}].concat(rows);
+  if(!rows.length){ box.innerHTML='<div class="state">'+t('acctEmpty')+'</div>'; return; }
+  box.innerHTML=rows.map(function(a,i){
+    return '<div class="mine" data-i="'+i+'">'+
+      '<span class="dot'+(String(a.id)===selId?'':' off')+'"></span>'+
+      '<div class="grow"><b>'+esc(a.n)+'</b><small>'+esc(a.b||'')+'</small></div></div>';
+  }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('.mine'),function(el){
+    el.addEventListener('click',function(){ selId=String(rows[+el.dataset.i].id); write({appId:selId}); renderAcct(); });
+  });
+}
+function stName(c){ return LANG==='zh' && STORE_ZH[c] ? STORE_ZH[c]+' '+c : c; }
+function renderRegions(){
+  var box=document.getElementById('rg');
+  box.innerHTML=regions.map(function(v,i){
+    return '<div class="hit"><div class="grow"><b>'+esc(t('rgN').replace('{n}',i+1))+'</b></div>'+
+      '<select class="cc" data-r="'+i+'">'+STORES.map(function(c){
+        return '<option value="'+c+'"'+(c===v?' selected':'')+'>'+esc(stName(c))+'</option>';}).join('')+
+      '</select></div>';
+  }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('select'),function(el){
+    el.addEventListener('change',function(){
+      var i=+el.dataset.r; regions[i]=el.value; var p={}; p['r'+(i+1)]=el.value; write(p);
+    });
+  });
+}
+function renderGenres(){
+  var box=document.getElementById('genres');
+  var rows=[['',t('gAll'),t('gAll')]].concat(GENRES);
+  box.innerHTML=rows.map(function(g,i){
+    return '<div class="mine" data-g="'+i+'"><span class="dot'+(g[0]===genre?'':' off')+'"></span>'+
+      '<div class="grow"><b>'+esc(LANG==='zh'?g[1]:g[2])+'</b></div></div>';
+  }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('.mine'),function(el){
+    el.addEventListener('click',function(){ genre=rows[+el.dataset.g][0]; write({genre:genre}); renderGenres(); });
+  });
+}
+function renderMine(){
+  var box = document.getElementById('mine');
+  if(!list.length){ box.innerHTML='<div class="state">'+t('emptyMine')+'</div>'; return; }
+  box.innerHTML = list.map(function(a,i){
+    return '<div class="mine" data-i="'+i+'">'+
+      '<span class="dot'+(String(a.id)===selId?'':' off')+'"></span>'+
+      '<div class="grow"><b>'+esc(a.name)+'</b><small>'+esc(a.dev||'')+'</small></div></div>';
+  }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('.mine'),function(el){
+    el.addEventListener('click',function(){ apply(list[+el.dataset.i].id); });
+  });
+}
+function renderCC(){
+  var s=document.getElementById('cc');
+  s.innerHTML=STORES.map(function(c){
+    return '<option value="'+c+'"'+(c===country?' selected':'')+'>'+c+'</option>'; }).join('');
+}
+document.getElementById('cc').addEventListener('change',function(){
+  country=this.value;
+  if(MODE==='app') write({country:country});   // 地区变更立即回写(regions 模式下这个下拉只影响搜索用哪个区)
+});
+
+// ---- 搜索(不进关注列表,只用于这张卡) ----
+var timer=null;
+document.getElementById('q').addEventListener('input',function(e){
+  var kw=e.target.value.trim(); clearTimeout(timer);
+  var box=document.getElementById('hits');
+  if(!kw){box.style.display='none';return;}
+  timer=setTimeout(function(){
+    box.style.display='block'; box.innerHTML='<div class="state">'+t('searching')+'</div>';
+    xbridge.runDataFlow('search',{kw:encodeURIComponent(kw),country:country},10000).then(function(r){
+      var d=(r&&r.code===0&&r.data)||{};
+      var hits=(d.list||[]).filter(function(x){return x&&x.id;});
+      if(!hits.length){box.innerHTML='<div class="state">'+t('noHit')+'</div>';return;}
+      box.innerHTML=hits.map(function(a,i){
+        var sub=[a.dev,a.g,(a.r?'★'+a.r:'')].filter(Boolean).join(' · ');
+        return '<div class="hit" data-k="'+i+'">'+
+          '<div class="grow"><b>'+esc(a.n)+'</b><small>'+esc(sub)+'</small></div>'+
+          '<button class="use">'+t('use')+'</button></div>';}).join('');
+      Array.prototype.forEach.call(box.querySelectorAll('.hit'),function(h){
+        h.addEventListener('click',function(){
+          var a=hits[+h.dataset.k];
+          apply(a.id);
+          h.querySelector('.use').textContent=t('done');
+        });});
+    }).catch(function(){box.innerHTML='<div class="state">'+t('noHit')+'</div>';});
+  },300);
+});
+
+// ---- 启动 ----
+(async function boot(){
+  var qs = new URLSearchParams(location.search);
+  brickId = qs.get('brickId')||'';
+  MODE = qs.get('w')||'app';
+  selId = qs.get('appId')||'';
+  genre = qs.get('genre')||'';
+  var info0 = await nbInfo();
+  LANG = nbLang(info0.language||info0.locale); CND = nbCnDefault(info0);
+  STORES = CND ? STORES_CN : STORES_OVERSEAS;
+  regions = CND ? ['CN','US','JP','GB'] : ['US','GB','JP','DE'];
+  country = CND ? 'CN' : 'US';
+  [1,2,3,4].forEach(function(n){ var v=qs.get('r'+n); if(v) regions[n-1]=v.toUpperCase(); });
+  var PRIV = MODE==='asc' || MODE==='biz';
+  document.getElementById('appSec').style.display = (MODE==='chart'||PRIV) ? 'none' : '';
+  document.getElementById('ascSec').style.display = PRIV ? '' : 'none';
+  document.getElementById('rgSec').style.display = MODE==='regions' ? '' : 'none';
+  document.getElementById('gSec').style.display = MODE==='chart' ? '' : 'none';
+  document.getElementById('cc').style.display = MODE==='regions' ? 'none' : '';   // regions 模式没有 country 参数
+  if(!(await ready())){
+    document.getElementById('mine').innerHTML='<div class="state">'+t('notX')+'</div>';
+    paint(); renderCC();
+    if(MODE==='regions') renderRegions();
+    if(MODE==='chart') renderGenres();
+    return;
+  }
+  applyTheme(info0.theme);
+  paint(); renderCC();
+  if(MODE==='regions') renderRegions();
+  if(MODE==='chart'){ renderGenres(); return; }
+  if(PRIV){
+    renderAcct();
+    xbridge.runDataFlow('m-apps-list',{},15000).then(function(r){
+      acct=(r&&r.code===0&&r.data)||{ok:0}; renderAcct();
+    }).catch(function(){ acct={ok:0}; renderAcct(); });
+    return;
+  }
+  xbridge.runDataFlow('apps-read',{},8000).then(function(r){
+    var d=(r&&r.code===0&&r.data)||{};
+    list = Array.isArray(d.list)? d.list : [];
+    country = qs.get('country') || d.country || (CND ? 'CN' : 'US');
+    renderCC(); renderMine();
+  }).catch(function(){ renderMine(); });
+})();
+
+})();
+</script>
+</body></html>

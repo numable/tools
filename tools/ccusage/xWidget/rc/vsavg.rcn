@@ -1,0 +1,277 @@
+{
+  "rc": {
+    "_note": "今天与日均(2026-09-24):大数 = 今天的费用;条的刻度 = 0 ~ max(今天, 日均),竖线标日均 —— 超过日均时条是满的、竖线落在中间(与首页主卡同一画法)。\n日均 = 近 30 天里有用量的日子(不含今天,还没过完)。",
+    "i18n": {
+      "zh-CN": {
+        "title": "今天与日均",
+        "empty": "等待首次同步",
+        "sub": "今天 · 已到日均的 ",
+        "subB": "",
+        "subNo": "今天 · 按 API 标价",
+        "avg": "近 30 天日均 ",
+        "noAvg": "用几天之后就有日均了"
+      },
+      "en-US": {
+        "title": "Vs avg",
+        "empty": "Not synced yet",
+        "sub": "Today · ",
+        "subB": " of average",
+        "subNo": "Today · API list prices",
+        "avg": "30-day average ",
+        "noAvg": "Average shows after a few days"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FDFBFA\\,#FBF3F1)@90|linear(#15171A\\,#1A1A1C\\,#221E1F)@90",
+        "_note": "今天与日均(2026-09-24):大数 = 今天的费用;条的刻度 = 0 ~ max(今天, 日均),竖线标日均 —— 超过日均时条是满的、竖线落在中间(与首页主卡同一画法)。"
+      },
+      {
+        "_note": "源色身份点:本包统一用 Claude 暖橙两档。",
+        "id": "dot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#C15F3C|#E8916B"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-92pt",
+        "h": "-1",
+        "text": "${@i18n.title}",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${w.vsAvg.today}),k),0,1)]"
+        },
+        "react": [
+          {
+            "id": "big",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${w.vsAvg.today}",
+            "fontSize": "28pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.vsAvg.today}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+8.4pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "28pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.vsAvg.pct}),k),0,1),1),if::(ge::(${w.vsAvg.pct},0),1,0),0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+32pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.sub}${w.vsAvg.pct}%${@i18n.subB}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(if::(eq::(connect::(k,${w.vsAvg.pct}),k),0,1),1),if::(ge::(${w.vsAvg.pct},0),1,0),0),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+32pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.subNo}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "12pt",
+        "y": "{parent.h}-42pt",
+        "w": "{parent.w}-24pt",
+        "h": "8pt",
+        "bgColor": "#EEE4E0|#2A2522",
+        "cornerRadius": {
+          "leftT": "4pt",
+          "leftB": "4pt",
+          "rightT": "4pt",
+          "rightB": "4pt"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.vsAvg.fill}),k),0,1),1),if::(gt::(${w.vsAvg.fill},0),1,0),0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "12pt",
+            "y": "{parent.h}-42pt",
+            "w": "({parent.w}-24pt)*${w.vsAvg.fill}",
+            "h": "8pt",
+            "bgColor": "#C15F3C|#E8916B",
+            "cornerRadius": {
+              "leftT": "4pt",
+              "leftB": "4pt",
+              "rightT": "4pt",
+              "rightB": "4pt"
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.vsAvg.has}),k),0,1),1),if::(eq::(${w.vsAvg.has},1),1,0),0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "12pt+({parent.w}-26pt)*${w.vsAvg.mk}",
+            "y": "{parent.h}-46pt",
+            "w": "2pt",
+            "h": "16pt",
+            "bgColor": "#0E1116|#F3F4F6",
+            "cornerRadius": {
+              "leftT": "1pt",
+              "leftB": "1pt",
+              "rightT": "1pt",
+              "rightB": "1pt"
+            }
+          },
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-26pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.avg}${w.vsAvg.avg}",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.vsAvg.has}),k),0,1),1),if::(eq::(${w.vsAvg.has},0),1,0),0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-26pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.noAvg}",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.vsAvg.has}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-26pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.avg}--",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "时效锚:右上角、与卡名同一基线、9pt、右对齐(卡片设计系统 §3)。",
+        "id": "at",
+        "type": "txt",
+        "x": "12pt",
+        "y": "14pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},${@i18n.empty})]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "2"
+      }
+    ],
+    "i18nEmptyOk": [
+      "subB"
+    ]
+  }
+}

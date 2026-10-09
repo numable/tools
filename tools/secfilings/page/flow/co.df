@@ -1,0 +1,500 @@
+{
+  "_note": "首页:一家公司 × 一个类型分段的最近 10–20 份(生成器 tools/infosource/gen_secfilings.py)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "tRaw",
+        "value": "${t}"
+      },
+      "_note": "入参落地(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tIn",
+        "value": "$[toUpperCase::(findNotEmpty::(${tRaw},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reAmp",
+        "value": "&amp;"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rpAmp",
+        "value": "&"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kRaw",
+        "value": "${kind}"
+      },
+      "_note": "入参落地(勿删):方法参数里的 ${} 看不见 flow 入参。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kIn",
+        "value": "$[findNotEmpty::(${kRaw},all)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qty",
+        "value": "$[if::(eq::(${kIn},cur),8-K,if::(eq::(${kIn},fin),10-,))]"
+      },
+      "_note": "type 是**前缀**:8-K 含 8-K/A,10- 含 10-Q / 10-K 及更正。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qow",
+        "value": "$[if::(eq::(${kIn},ins),only,exclude)]"
+      },
+      "_note": "内部人走 owner=only(Form 3/4/5 与 144)。⚠️ 不能用 type=4:前缀会把 424B2 一并带出。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kd",
+        "value": "$[if::(eq::(${kIn},cur),2,if::(eq::(${kIn},fin),3,if::(eq::(${kIn},ins),4,1)))]"
+      },
+      "_note": "类型码(1 全部 / 2 8-K / 3 财报 / 4 内部人),给 RCN 选卡名用。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qcn",
+        "value": "$[if::(eq::(${kIn},all),20,10)]"
+      },
+      "_note": "「全部」多取一些(20 份):大公司的 13G / S-8 / N-PX 不少,10 份常常只覆盖几周。其余类型 10 份(SEC 下限)。"
+    },
+    {
+      "_note": "入参必须先 op:set 落地成 data 域的键,方法参数里才看得见(§9.5 #3)。`.xwidget` 不传 → 空串 → 归 0 → 全程不碰缓存。",
+      "op": "set",
+      "props": {
+        "key": "cacheIn",
+        "value": "${_cache}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "useCache",
+        "value": "$[parseNumber::(${cacheIn},0)]"
+      }
+    },
+    {
+      "_note": "**结构版本号**:pack 的字段集变了就 +1。它管的不是「数据新不新」而是「这份数据的**形状**还认不认」——缓存键只含对象维度、不含包代际,不盖这个戳,升级后首屏就会拿上一版的 pack 去渲新模板:少的字段取空,尺寸串里的 calc 一算 null,**整卡白块且不报错**。\n⚠️ 从 1 起、绝不能用 0(`eq::(空,0)` 恒为 true,旧缓存会被判成匹配)。⚠️ 刻意不用 `manifest.version`:flow 拿不到,且那会过度失效(只改配色也丢全部缓存)。",
+      "op": "set",
+      "props": {
+        "key": "SCHEMA",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缓存键。⚠️ 凡是影响结果的入参都要进键,且**绝不能用下标**(下标随增删漂移,漂移后会把 A 的数据渲成 B 的,还不报错)。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.sec.,${tIn},.,${kIn})]"
+      }
+    },
+    {
+      "_note": "读缓存。`default:{}` 让下面的 ${hit.ts} 在无缓存时安全取空,而不是整条流断掉。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitSchema",
+        "value": "${hit.schema}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "两道闸:**结构比对**(pack 形状对不上就当没有缓存 —— 旧形状渲新模板是白块,比等一次网络糟得多)+ hardTTL = 172800s(太旧的数先渲出来再改口,不如老实等一次)。嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里。",
+      "op": "set",
+      "props": {
+        "key": "hasHit",
+        "value": "$[if::(eq::(${hitSchema},${SCHEMA}),if::(gt::(${hitTs},0),if::(lt::(${age},172800000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "ttl = 300s(§5.5.3)。纯新鲜度,不掺 useCache —— 掺进去 `_stale` 就算不对了。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},300000),1,0),0)]"
+      }
+    },
+    {
+      "_note": "「这次先出的是旧货,请后台校新」。**必须进 resultFilter** —— 校新那条路靠它,漏了就是永不校新。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),if::(eq::(${fresh},1),0,1),0),0)]"
+      }
+    },
+    {
+      "_note": "只有「开了缓存 且 有没超 hardTTL 的货」才跳过网络 —— 连接都不建立。⚠️ **stale 也走这条跳过**(首屏零等待是三态的全部价值);写成「不 fresh 就打」= 退回两态,首屏照样白等。卡片(useCache=0)与冷启一律落进 items 真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),0,1),1)]"
+      },
+      "items": [
+        {
+          "action": "request",
+          "id": "raw",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${tIn}&type=${qty}&dateb=&owner=${qow}&count=${qcn}&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "SP",
+            "value": "$[split::(${raw},<entry>)]"
+          },
+          "_note": "按 <entry> 切一次成数组(第 0 段是 feed 头)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm",
+            "value": "$[replaceAll::(index::(split::(index::(split::(${raw},<conformed-name>),1),<),0),${reAmp},${rpAmp})]"
+          },
+          "_note": "SEC 登记的公司名(AT&amp;T → AT&T)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "rows",
+            "value": [
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},1),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},1),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},1),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},1),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},1),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},1),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},2),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},2),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},2),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},2),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},2),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},2),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},3),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},3),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},3),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},3),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},3),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},3),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},4),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},4),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},4),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},4),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},4),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},4),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},5),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},5),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},5),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},5),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},5),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},5),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},6),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},6),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},6),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},6),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},6),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},6),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},7),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},7),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},7),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},7),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},7),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},7),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},8),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},8),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},8),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},8),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},8),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},8),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},9),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},9),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},9),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},9),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},9),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},9),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},10),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},10),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},10),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},10),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},10),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},10),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},11),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},11),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},11),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},11),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},11),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},11),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},11),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},12),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},12),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},12),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},12),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},12),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},12),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},12),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},13),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},13),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},13),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},13),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},13),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},13),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},13),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},14),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},14),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},14),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},14),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},14),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},14),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},14),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},15),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},15),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},15),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},15),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},15),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},15),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},15),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},16),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},16),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},16),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},16),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},16),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},16),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},16),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},17),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},17),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},17),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},17),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},17),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},17),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},17),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},18),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},18),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},18),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},18),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},18),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},18),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},18),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},19),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},19),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},19),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},19),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},19),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},19),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},19),<form-name>),1),<),0)]"
+              },
+              {
+                "f": "$[replaceAll::(index::(split::(index::(split::(index::(${SP},20),<filing-type>),1),<),0),SCHEDULE,SC)]",
+                "d": "$[index::(split::(index::(split::(index::(${SP},20),<filing-date>),1),<),0)]",
+                "u": "$[index::(split::(index::(split::(index::(${SP},20),<updated>),1),<),0)]",
+                "h": "$[index::(split::(index::(split::(index::(${SP},20),<filing-href>),1),<),0)]",
+                "a": "$[index::(split::(index::(split::(index::(${SP},20),<accession-number>),1),<),0)]",
+                "i": "$[index::(split::(index::(split::(index::(${SP},20),<items-desc>),1),<),0)]",
+                "n": "$[index::(split::(index::(split::(index::(${SP},20),<form-name>),1),<),0)]"
+              }
+            ]
+          },
+          "_note": "f 类型 · d 归属日 · u 受理时刻(ISO,页面 JS 换本机时间)· h SEC 文件索引页 · a 编号 · i 8-K 事项编号 · n SEC 的表格名称(只作未知类型的兜底标签)。**没有 <summary> / 正文**(§3.13)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "fetchedMs",
+            "value": "${@time.nowMs}"
+          },
+          "_note": "取数时刻(页面时效锚)。"
+        },
+        {
+          "_note": "写回哨兵:**直接取响应字段,不加任何兜底** —— 取数失败/响应变形时它必空。别拿加工后的显示字段当判据,那些几乎都带兜底,拦不住任何东西。",
+          "op": "set",
+          "props": {
+            "key": "_guard",
+            "value": "$[index::(split::(index::(split::(${raw},<conformed-name>),1),<),0)]"
+          }
+        },
+        {
+          "_note": "整份渲染输入打包落盘。⚠️ 键集必须与 resultFilter 完全一致 —— 少一个,命中缓存那趟就少一个字段(而且不报错)。",
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "nm": "${nm}",
+              "rows": "${rows}",
+              "fetchedMs": "${fetchedMs}",
+              "ts": "${nowMs}",
+              "schema": "${SCHEMA}"
+            }
+          }
+        },
+        {
+          "_note": "契约 4(§5.5.2):关键字段非空才写回。`_guard` 在取数失败/响应变形时必空 —— 此时什么都不写,盘上的旧货留着继续渲。一次超时把 pack 写成空,就把这页永久钉死在空态上直到下次恰好成功。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${_guard}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中那条少算一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm",
+        "value": "${box.nm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rows",
+        "value": "${box.rows}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fetchedMs",
+        "value": "${box.fetchedMs}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "_stale",
+          "ckey",
+          "nm",
+          "rows",
+          "fetchedMs"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。⚠️ `_stale`/`ckey` 是校新那条路的入参,别删。"
+    }
+  ]
+}

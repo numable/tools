@@ -1,0 +1,233 @@
+{
+  "rc": {
+    "_note": "缓存省了多少(2026-10-08 新增,零新增请求):大数 = 近 30 天读缓存比按普通输入计价省下的钱(composition.cost.savedS,与页面 /tokens 同一个数);条 = 实付占「不用缓存的原价」多少(满条 = 原价,填充 = 实付)。\n条宽 < 1% 时不画填充(零宽圆角矩形会让整张组件渲不出来)。",
+    "i18n": {
+      "zh-CN": {
+        "title": "缓存省了",
+        "empty": "等待首次同步",
+        "sub": "近 30 天 · 按 API 标价",
+        "hitA": "缓存命中 ",
+        "hitB": "%",
+        "paidA": "实付只占原价的 ",
+        "paidB": "%",
+        "paidE": "实付占原价 --"
+      },
+      "en-US": {
+        "title": "Savings",
+        "empty": "Not synced yet",
+        "sub": "Last 30 days · API prices",
+        "hitA": "Cache hit rate ",
+        "hitB": "%",
+        "paidA": "You paid ",
+        "paidB": "% of full price",
+        "paidE": "Paid vs full price --"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FDFBFA\\,#FBF3F1)@90|linear(#15171A\\,#1A1A1C\\,#221E1F)@90",
+        "_note": "缓存省了多少(2026-10-08 新增,零新增请求):大数 = 近 30 天读缓存比按普通输入计价省下的钱(composition.cost.savedS,与页面 /tokens 同一个数);条 = 实付占「不用缓存的原价」多少(满条 = 原价,填充 = 实付)。"
+      },
+      {
+        "_note": "源色身份点:本包统一用 Claude 暖橙两档。",
+        "id": "dot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#C15F3C|#E8916B"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-92pt",
+        "h": "-1",
+        "text": "${@i18n.title}",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${cvS}),k),0,1)]"
+        },
+        "react": [
+          {
+            "id": "big",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${cvS}",
+            "fontSize": "26pt",
+            "textColor": "#C15F3C|#E8916B",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${cvS}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+7.8pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "26pt",
+            "textColor": "#C15F3C|#E8916B",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "txt",
+        "x": "12pt",
+        "y": "{parent.h}*0.26+30pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "${@i18n.sub}",
+        "fontSize": "10pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${cvHit}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+45pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.hitA}${cvHit}${@i18n.hitB}",
+            "fontSize": "10pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "12pt",
+        "y": "{parent.h}-40pt",
+        "w": "{parent.w}-24pt",
+        "h": "6pt",
+        "bgColor": "#EEE4E0|#2A2522",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(gt::(findNotEmpty::(${cvW},0),0.01),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "12pt",
+            "y": "{parent.h}-40pt",
+            "w": "({parent.w}-24pt)*${cvW}",
+            "h": "6pt",
+            "bgColor": "#C15F3C|#E8916B",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${cvPaid}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-27pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.paidA}${cvPaid}${@i18n.paidB}",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${cvPaid}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-27pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.paidE}",
+            "fontSize": "9pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "时效锚:右上角、与卡名同一基线、9pt、右对齐(卡片设计系统 §3)。",
+        "id": "at",
+        "type": "txt",
+        "x": "12pt",
+        "y": "14pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},${@i18n.empty})]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "2"
+      }
+    ]
+  }
+}

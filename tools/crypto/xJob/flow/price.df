@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "_note": "判定段:depends 取完数之后跑这一条,入参 cur / price / dir 由 .xjob 的 then.params 显式传进来。状态只写在这里 —— 取数流可能和组件共用,组件每渲一次就会把上次的值顶掉,那样永远看不到「越过」那一下。",
+  "actions": [
+    {
+      "id": "prevRaw",
+      "action": "data.get",
+      "params": {
+        "key": "cx.px.last.${pair}.${dir}.${price}",
+        "default": ""
+      },
+      "_note": "⚠️ 状态键必须把这条规则的全部参数都拼进去(这里是 pair、dir 与 price —— 少拼 pair 就是拿别的币的价当基线)。同一条规则可以有好几份(盯 5000 的和盯 4500 的),它们挨个跑;共用一个键的话,第一份写完,第二份读到的上次值就是刚写进去的这次值,谁也看不到越线,而且一条错都不报。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "prev",
+        "value": "${prevRaw}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasPrev",
+        "value": "$[if::(eq::(findNotEmpty::(${prev},__none__),__none__),0,1)]"
+      },
+      "_note": "判空**别用** `length::`:`$[if::(gt::(length::(${prev}),0),1,0)]` 是手最顺的写法,但 `length::` 只对字符串、数组、对象有意义,喂给**数字**一律返回 0 —— 值是数字的那一档旗标恒为 0,下面的守卫恒不通过,`data.set` 一次都不执行,而流照样报成功、日志干净、界面上什么也看不出来。上面这个哨兵写法对字符串、数字、空串、缺键四种都成立;数字 `0` 判成「有值」,这是对的。 上次值读回来的类型跟着上一次写进去的那个值走,所以它同样不能用 `length::` 判。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasCur",
+        "value": "$[if::(eq::(findNotEmpty::(${cur},__none__),__none__),0,1)]"
+      },
+      "_note": "⚠️ 取数失败的那一次 cur 是空的。不守这一位,比较结果不可控,现象是断网那一刻弹一条假提醒 —— 这是最伤信任的一种错。\n⚠️ 判空**别用** `length::`:`$[if::(gt::(length::(${cur}),0),1,0)]` 是手最顺的写法,但 `length::` 只对字符串、数组、对象有意义,喂给**数字**一律返回 0 —— 值是数字的那一档旗标恒为 0,下面的守卫恒不通过,`data.set` 一次都不执行,而流照样报成功、日志干净、界面上什么也看不出来。上面这个哨兵写法对字符串、数字、空串、缺键四种都成立;数字 `0` 判成「有值」,这是对的。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "down",
+        "value": "$[if::(and::(lt::(${cur},${price}),ge::(${prev},${price})),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "up",
+        "value": "$[if::(and::(gt::(${cur},${price}),le::(${prev},${price})),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit",
+        "value": "$[if::(and::(eq::(${hasPrev},1),eq::(${hasCur},1)),if::(eq::(${dir},below),${down},${up}),0)]"
+      },
+      "_note": "第一次跑(上次值为空)只建基线、不响 —— 新建、换设备、重装之后不会把当下已经满足条件的提醒一次全响出来。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${hasCur},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "cx.px.last.${pair}.${dir}.${price}",
+            "value": "${cur}"
+          }
+        }
+      ],
+      "_note": "⚠️ 只在这一次真取到值时才写。写空了,下一次会被当成「第一次」,基线就丢了。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "hit"
+        ]
+      },
+      "_note": "只有列在 keys 里的键会并进 scope。hit = 1 才发;alert 里不写 activeCondition 时,默认读的就是这个键。"
+    }
+  ]
+}

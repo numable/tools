@@ -1,0 +1,407 @@
+{
+  "_note": "域名详情页取数(params: zoneId)。**一发 GraphQL 拿全**:30 天日粒度 + 缓存字段,页面上的三块 tile(今日/30 天合计/30 天命中率)全从这一份derive —— 三块各打一次是白拉三遍。\n⚠️ 命中率这里标的是 **30 天**,而 cache 卡标的是 **7 天**:两个窗口不同,数字对不上是正常的,所以两处文案都把窗口写在标签里,不写「命中率」三个字了事。数字旁边不写清窗口 = 两个都对但看起来像 bug。\n⚠️ GraphQL 体内错误不走 HTTP 状态码(见 xWidget/flow/cache.df),故聚合值全部闸在 n>=1 之内:没行就一个键都不发,页面渲 `--`。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "have",
+        "value": "$[if::(eq::(${zoneId},),0,1)]"
+      },
+      "_note": "事前只判「有没有域名」;「取到数了吗」是事后判(见下面的 ready)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dTo",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dFrom",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-29*86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "_note": "入参必须先 op:set 落地成 data 域的键,方法参数里才看得见(§9.5 #3)。`.xwidget` 不传 → 空串 → 归 0 → 全程不碰缓存。",
+      "op": "set",
+      "props": {
+        "key": "cacheIn",
+        "value": "${_cache}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "useCache",
+        "value": "$[parseNumber::(${cacheIn},0)]"
+      }
+    },
+    {
+      "_note": "**结构版本号**:pack 的字段集变了就 +1。它管的不是「数据新不新」而是「这份数据的**形状**还认不认」——缓存键只含对象维度、不含包代际,不盖这个戳,升级后首屏就会拿上一版的 pack 去渲新模板:少的字段取空,尺寸串里的 calc 一算 null,**整卡白块且不报错**。\n⚠️ 从 1 起、绝不能用 0(`eq::(空,0)` 恒为 true,旧缓存会被判成匹配)。⚠️ 刻意不用 `manifest.version`:flow 拿不到,且那会过度失效(只改配色也丢全部缓存)。 2026-10-08 升 2:pack 加了 todayS/totalS(千分位 / k)、rate 改一位小数。",
+      "op": "set",
+      "props": {
+        "key": "SCHEMA",
+        "value": "2"
+      }
+    },
+    {
+      "_note": "键里**去掉了账号代 `gen`**(旧值 `c.cf.zone.{gen}_{zoneId}`)。`gen` 由 `token-save.af` 在存令牌时推,而绑定现在发生在宿主凭证面板、包拿不到回调,那个钩子结构上没了。\n去掉是安全的,因为**它与 zoneId 冗余**:换一个 Cloudflare 账号必然换一批 zone id,键天然不会撞;旧账号那些 zone 也不会再出现在列表里。键仍是「对象自己的稳定标识」(§5.5.4)。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.cf.zone.,${zoneId})]"
+      }
+    },
+    {
+      "_note": "读缓存。`default:{}` 让下面的 ${hit.ts} 在无缓存时安全取空,而不是整条流断掉。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitSchema",
+        "value": "${hit.schema}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "两道闸:**结构比对**(pack 形状对不上就当没有缓存 —— 旧形状渲新模板是白块,比等一次网络糟得多)+ hardTTL = 21600s(太旧的数先渲出来再改口,不如老实等一次)。嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里。",
+      "op": "set",
+      "props": {
+        "key": "hasHit",
+        "value": "$[if::(eq::(${hitSchema},${SCHEMA}),if::(gt::(${hitTs},0),if::(lt::(${age},21600000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "ttl = 120s(§5.5.3)。纯新鲜度,不掺 useCache —— 掺进去 `_stale` 就算不对了。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},120000),1,0),0)]"
+      }
+    },
+    {
+      "_note": "「这次先出的是旧货,请后台校新」。**必须进 resultFilter** —— 校新那条路靠它,漏了就是永不校新。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),if::(eq::(${fresh},1),0,1),0),0)]"
+      }
+    },
+    {
+      "_note": "只有「开了缓存 且 有没超 hardTTL 的货」才跳过网络 —— 连接都不建立。⚠️ **stale 也走这条跳过**(首屏零等待是三态的全部价值);写成「不 fresh 就打」= 退回两态,首屏照样白等。卡片(useCache=0)与冷启一律落进 items 真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),0,1),1)]"
+      },
+      "items": [
+        {
+          "op": "if",
+          "props": {
+            "val": "${have}"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "body",
+                "value": "{\"query\":\"{viewer{zones(filter:{zoneTag:\\\"${zoneId}\\\"}){httpRequests1dGroups(limit:31,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\"},orderBy:[date_ASC]){dimensions{date} sum{requests cachedRequests} uniq{uniques}}}}}\"}"
+              }
+            },
+            {
+              "id": "resp",
+              "action": "request",
+              "params": {
+                "url": "https://api.cloudflare.com/client/v4/graphql",
+                "method": "POST",
+                "formatType": "json",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${body}",
+                "credential": "cf"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "got",
+                "value": "$[if::(eq::(${resp},),0,1)]"
+              },
+              "_note": "响应回来了吗 —— 未绑/被拒时请求不发,resp 为空。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "g",
+                "value": "${resp.data.viewer.zones[0].httpRequests1dGroups}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n",
+                "value": "$[length::(${g})]"
+              }
+            },
+            {
+              "_note": "有行才算(GraphQL 200-带错 / 空区间都会让 g 为空)。",
+              "op": "if",
+              "props": {
+                "val": "$[if::(ge::(findNotEmpty::(${n},0),1),1,0)]"
+              },
+              "items": [
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "today",
+                    "value": "${g[@last].sum.requests}"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "todayUniq",
+                    "value": "${g[@last].uniq.uniques}"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "total",
+                    "value": "$[sum::(pluck::(${g},sum.requests))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "cac",
+                    "value": "$[sum::(pluck::(${g},sum.cachedRequests))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "rate",
+                    "value": "$[parseNumber::(calc::(${cac}*100/max::(${total},1)),0.#)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "todayS",
+                    "value": "$[if::(ge::(${today},1000000),connect::(parseNumber::(calc::(${today}/1000000),0.0),M),if::(ge::(${today},10000),connect::(parseNumber::(calc::(${today}/1000),0.0),k),parseNumber::(${today},#\\,##0)))]"
+                  },
+                  "_note": "大数统一口径(与 mix / trend 同):≥1 万写 k,以下千分位。"
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "totalS",
+                    "value": "$[if::(ge::(${total},1000000),connect::(parseNumber::(calc::(${total}/1000000),0.0),M),if::(ge::(${total},10000),connect::(parseNumber::(calc::(${total}/1000),0.0),k),parseNumber::(${total},#\\,##0)))]"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ready",
+            "value": "$[if::(eq::(${have},0),0,findNotEmpty::(${got},0))]"
+          },
+          "_note": "事后判:有域名 **且** 真收到响应。未绑凭证时 got=0 → ready=0 → 页面渲未接入态,而不是「有域名但全是 --」。这一档旧版靠 `hasTk` 事前判,现在读不到令牌本体了。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "at",
+            "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+          }
+        },
+        {
+          "_note": "写回哨兵:**直接取响应字段,不加任何兜底** —— 取数失败/响应变形时它必空。别拿加工后的显示字段当判据,那些几乎都带兜底,拦不住任何东西。",
+          "op": "set",
+          "props": {
+            "key": "_guard",
+            "value": "${g[@last].dimensions.date}"
+          }
+        },
+        {
+          "_note": "整份渲染输入打包落盘。⚠️ 键集必须与 resultFilter 完全一致 —— 少一个,命中缓存那趟就少一个字段(而且不报错)。",
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "ready": "${ready}",
+              "n": "${n}",
+              "today": "${today}",
+              "todayUniq": "${todayUniq}",
+              "total": "${total}",
+              "rate": "${rate}",
+              "at": "${at}",
+              "ts": "${nowMs}",
+              "schema": "${SCHEMA}",
+              "todayS": "${todayS}",
+              "totalS": "${totalS}"
+            }
+          }
+        },
+        {
+          "_note": "契约 4(§5.5.2):关键字段非空才写回。`_guard` 在取数失败/响应变形时必空 —— 此时什么都不写,盘上的旧货留着继续渲。一次超时把 pack 写成空,就把这页永久钉死在空态上直到下次恰好成功。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${_guard}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中那条少算一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ready",
+        "value": "${box.ready}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "${box.n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "today",
+        "value": "${box.today}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayUniq",
+        "value": "${box.todayUniq}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "total",
+        "value": "${box.total}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayS",
+        "value": "${box.todayS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "totalS",
+        "value": "${box.totalS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rate",
+        "value": "${box.rate}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "${box.at}"
+      }
+    },
+    {
+      "_note": "外传①:这次渲染用的缓存键。跑在 reloadPage **之后**的流(下拉穿透、切对象校新)拿不到 depends 输出,只能读盘;让它们读结果而不是重算判据 —— AF 没有子流程调用,判据抄几份就会有一天「删的键 ≠ 渲的键」,那时下拉安静地刷不动、日志还全绿。",
+      "action": "data.set",
+      "params": {
+        "key": "c.cf.zone._cur",
+        "value": "${ckey}"
+      }
+    },
+    {
+      "_note": "外传②:这次出的是不是旧货。",
+      "action": "data.set",
+      "params": {
+        "key": "c.cf.zone._stale",
+        "value": "${_stale}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "_stale",
+          "ckey",
+          "ready",
+          "n",
+          "today",
+          "todayUniq",
+          "total",
+          "rate",
+          "at",
+          "todayS",
+          "totalS"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。⚠️ `_stale`/`ckey` 是校新那条路的入参,别删。"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "_note": "OKX 公开行情的通用取数:入参 `p` = `/api/v5/` 之后的那一段(如 `market/ticker?instId=BTC-USDT`),原样返回响应文本,解析与派生全在 H5 页里用 JS 做。\n为什么是一条通用流而不是一接口一条:专业盯盘页要的接口有十几个(行情/K线/盘口/逐笔/资金费率/持仓/多空比/主动买卖/爆仓…),每条都只是「取回来交给 JS」,写十几份一模一样的流只会让它们各自漂移。\n⚠️ host 写死在 URL 字面量里(G3 能静态认出 www.okx.com),入参只拼 path —— 页面拿它打不到别的域。",
+  "_lintCache": "exempt",
+  "_noteCache": "首屏缓存在 H5 页里做(G23 三态:页面把**解析后的精简模型**写进 data.*,不是这份原始响应 —— SPOT 全量行情 450KB,整份落盘每 10 秒一次是纯浪费)。本流只负责「原样取回」,所以豁免 C1。",
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "pIn",
+        "value": "${p}"
+      },
+      "_note": "⚠️ 入参落地(勿删):URL 与方法参数里的 ${} 看不见 flow 入参(§9.5 #3)。"
+    },
+    {
+      "action": "request",
+      "id": "r",
+      "params": {
+        "url": "https://www.okx.com/api/v5/${pIn}",
+        "method": "GET",
+        "formatType": "string",
+        "header": {
+          "accept": "application/json"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求屏障(勿删):request 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "raw",
+        "value": "${r}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "raw"
+        ]
+      }
+    }
+  ]
+}

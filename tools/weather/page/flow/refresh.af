@@ -1,0 +1,189 @@
+{
+  "_note": "首页下拉刷新:把**列表里每一座城市**的天气缓存桶都删掉 → reloadPage,\n于是 8 行的 depends 全部 miss、全部真取数。\n⚠️ 删的是各城市自己的桶(`c.wx.<lat>_<lon>`),与详情页/卡片共用同一批键 ——\n这正是要的:用户在首页下拉,期待的是「整屏都是新的」。\n由 tools/infosource/gen_weather_home.py 生成。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "data.get",
+      "id": "saved",
+      "params": {
+        "key": "cities",
+        "default": []
+      }
+    },
+    {
+      "_note": "读取屏障顺带位:data.get 之后紧邻的节点读不到结果。",
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[length::(${saved})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[index::(${saved},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[index::(${saved},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "$[index::(${saved},2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "$[index::(${saved},3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c4",
+        "value": "$[index::(${saved},4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c5",
+        "value": "$[index::(${saved},5)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c6",
+        "value": "$[index::(${saved},6)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c7",
+        "value": "$[index::(${saved},7)]"
+      }
+    },
+    {
+      "_note": "⚠️ 键必须与 detail.df 里那条**逐字同式**(`c.wx.<lat>_<lon>`)—— 算错一个字符就是\n「删了个不存在的键」:不报错、下拉照转一圈、数字纹丝不动。",
+      "op": "set",
+      "props": {
+        "key": "k0",
+        "value": "$[connect::(c.wx.,${c0.lat},_,${c0.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1",
+        "value": "$[connect::(c.wx.,${c1.lat},_,${c1.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2",
+        "value": "$[connect::(c.wx.,${c2.lat},_,${c2.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3",
+        "value": "$[connect::(c.wx.,${c3.lat},_,${c3.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4",
+        "value": "$[connect::(c.wx.,${c4.lat},_,${c4.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5",
+        "value": "$[connect::(c.wx.,${c5.lat},_,${c5.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k6",
+        "value": "$[connect::(c.wx.,${c6.lat},_,${c6.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k7",
+        "value": "$[connect::(c.wx.,${c7.lat},_,${c7.lon})]"
+      }
+    },
+    {
+      "_note": "空槽算出来的键是 `c.wx._`,删它无害(那个键从来没被写过)——\n所以这里不套 `op:if`:少 8 个分支,换一次无意义的删除。",
+      "action": "data.remove",
+      "params": {
+        "key": "${k0}"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "${k1}"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "${k2}"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "${k3}"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "${k4}"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "${k5}"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "${k6}"
+      }
+    },
+    {
+      "action": "data.remove",
+      "params": {
+        "key": "${k7}"
+      }
+    },
+    {
+      "_note": "onRefresh 接管了下拉,不显式写这一步就**永远刷不动**。",
+      "action": "xpage.reloadPage",
+      "params": {}
+    }
+  ]
+}

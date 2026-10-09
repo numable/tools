@@ -1,0 +1,8 @@
+{
+  "_note": "开「管理关注」页,并在返回后刷新首页。\n\n⚠️ **为什么不是一句 `numable://self/page/manage` 的导航串**:那样是常规路由压栈,返回时首页拿的是栈里的旧实例 —— 用户刚加完频道回来,首页还是「0 个频道 · 还没有关注任何频道」(2026-08-22 iPhone 13 Pro 模拟器实测,与 appwatch 2026-08-08 那次一模一样)。\n\n⚠️ **也不要挂 `root.events.onVisible`**:协议(xpage-design.md §17)确实定义了它,但**四端都还没实现** —— 容器与 iOS 源码里搜不到这个符号。照协议写完全无效且不报错,这是「编辑器/文档有表、运行时不读」那一族的静默失效。\n\n正解是已经落地的 **for-result**:子页关掉 → 这条流继续往下走 → `xpage.reloadPage` 软重载(保留旧内容后台刷新,不闪骨架)。用户按 ‹ 返回也会兑现续体(html 子页四端全通),所以不存在「取消了就不刷新」的漏网。",
+  "version": 1,
+  "actions": [
+    { "action": "startPageForResult", "params": { "page": "/manage", "container": "page" } },
+    { "action": "xpage.reloadPage" }
+  ]
+}

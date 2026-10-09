@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<!--
+  加密货币 · 单币专业盯盘(路由 /coin?pair=<OKX instId>&name=<符号>)。
+  由 tools/infosource/gen_crypto_h5.py 从 tools/infosource/crypto_h5/coin.html 生成 —— 改产物无效。
+
+  入口:首页任一行 / 各单币组件的 onClick(老组件带 Bitstamp 形状 `btcusd`,kit 的 normInst 归一)。
+
+  一页六块,自上而下按「看一眼 → 细看」排:
+    ① 价格头:大字最新价(逐跳闪色)+ 24h 涨跌 + 标记价 / 指数价 / 基差;现货 ⇄ 永续一键切换(有永续才出现)。
+    ② 八格统计:24h 高低额振幅 + 资金费率 / 结算倒计时 / 持仓量 / 基差(无永续时换成今日 UTC 涨跌与买一卖一)。
+    ③ K 线:1m…1W 七档 · 主图 MA / EMA / BOLL · 副图 VOL / MACD / RSI / KDJ;
+       长按出十字光标、左右拖动翻历史(到头自动再取 300 根)、双指 / 滚轮缩放。周期与指标选择记在 data.*。
+    ④ 盘口:买卖各 15 档并排 + 累计深度条 + 买卖力量比 + 价差;可切深度图。
+    ⑤ 逐笔:最近 100 笔里的主动买卖占比,列 20 笔,大单(≥ 本轮 90 分位且 ≥ $10K)加粗标点。
+    ⑥ 合约(有永续才有):资金费率 30 期柱状 · 持仓量 24h 走势 · 多空人数比 48h · 主动买卖 24h;另有近 1 小时爆仓。
+  下面是三条提醒入口(价格 / 异动 / 资金费率 → alertAdd)与加组件按钮。
+
+  节律(页面可见时):行情 + 盘口 + 逐笔 1 秒;K 线末根 5 秒;永续指标 5 秒;爆仓 15 秒;
+  费率历史与 rubik 统计 5 分钟。压栈离开后降到 60 秒一轮。
+  G23:首屏先渲上次的行情与 K 线(c.cx.coin.<instId>.<周期>),再后台校新。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Coin</title>
+<style>
+/* ── cx kit(crypto 四页共用,由 tools/infosource/gen_crypto_h5.py 注入,别在产物里手改) ── */
+/* hidden 属性必须压过一切 display —— 否则 `.subseg{display:flex}` 这类规则让 `el.hidden=true` 失效(首页「最高 / 最低」曾因此漏到别的 tab 上点不动)。 */
+[hidden]{display:none!important}
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--faint:#9AA0A6;--line:#E4E7EC;
+  --tile:#EEF0F3;--rail:#D6DAE1;--ident:#3A3F47;--src:#F0972A;--srcSoft:rgba(240,151,42,.14);
+  --up:#FF5C4D;--dn:#1FC77D;--grey:#9AA0A6;
+  --upBg:rgba(255,92,77,.13);--dnBg:rgba(31,199,125,.13);
+  --accent:#128F66;--accentSoft:rgba(18,143,102,.12);
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--faint:#5E636B;
+  --line:#262A31;--tile:#20232A;--rail:#2C313A;--ident:#9BA3AF;--src:#FFB454;--srcSoft:rgba(255,180,84,.16);
+  --upBg:rgba(255,92,77,.17);--dnBg:rgba(31,199,125,.17);--accent:#6FE8BE;--accentSoft:rgba(111,232,190,.14);
+  --shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* clip 不建滚动容器:hidden 会让 body 成为滚动容器、页内 sticky 全部失效(§0.2d);hidden 留给不认 clip 的老 WebView 兜底 */
+html,body{overflow-x:hidden;overflow-x:clip}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;
+  padding:calc(var(--xb-content-top) + 14px) 14px calc(var(--xb-content-bottom) + 28px)}
+input,select,textarea{font-size:16px}
+button{font:inherit;color:inherit}
+.hd{display:flex;align-items:center;gap:8px;min-height:32px}
+.hd h1{font-size:22px;margin:0;letter-spacing:-.3px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 时效锚(home / coin 页头右上角的 `.xb-at` 胶囊):样式 / 实时绿点 / 转圈全在 xb:anchor 块
+   (tools/infosource/mk_anchor.py,gen_crypto_h5 只给有锚的页注入),本包只管给它时间。 */
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px}
+.sec{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);font-weight:700;margin:22px 2px 9px;letter-spacing:.2px}
+.sec .grow{flex:1 1 auto;min-width:0}
+.sec small{font-weight:500;font-size:11px}
+.seg{display:inline-flex;background:var(--tile);border-radius:9px;padding:2px;gap:2px;flex:0 0 auto}
+.seg button{font-size:11.5px;font-weight:600;border:0;background:none;color:var(--sub);cursor:pointer;padding:4px 9px;border-radius:7px;white-space:nowrap}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(15,20,30,.12)}
+html[data-theme="dark"] .seg button.on{background:var(--rail);box-shadow:none}
+.pill{display:inline-block;font-size:12.5px;font-weight:700;padding:3px 8px;border-radius:8px;min-width:64px;text-align:center}
+.av{position:relative;flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--srcSoft);color:var(--src);
+  font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:var(--card)}
+.state{color:var(--sub);font-size:13px;padding:20px 12px;text-align:center}
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.7}
+.sk{display:block;border-radius:6px;background:var(--tile)}
+@keyframes skv{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.skv{animation:skv 1.4s linear infinite}
+@media (prefers-reduced-motion:reduce){.skv{animation:none}}
+.up{color:var(--cu)}.dn{color:var(--cd)}
+/* 2026-09-30 删掉了「价格一跳就铺一层涨跌底色」的 flashU/flashD:2 秒轮询下 BTC 几乎每轮都在跳,
+   详情页的大价格与首页每一行就每 2 秒闪一次底色 —— 用户看到的是「页面在闪」,不是「价格在动」。
+   方向已经由价格字色 + 涨跌胶囊表达,不需要第三遍(同 v55「实时轮询页不许整块闪」一条纪律)。 */
+.toast{position:fixed;left:50%;bottom:calc(var(--xb-content-bottom) + 24px);transform:translateX(-50%);background:rgba(20,22,26,.9);
+  color:#fff;font-size:13px;padding:8px 14px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:90;max-width:80%}
+.toast.on{opacity:1}
+.hd .av{width:28px;height:28px}
+.hd h1{font-size:21px}
+.hd h1 small{font-size:12.5px;color:var(--sub);font-weight:600;margin-left:3px}
+.star{flex:0 0 auto;width:30px;height:30px;border:0;background:none;padding:0;cursor:pointer;color:var(--faint);display:flex;align-items:center;justify-content:center}
+.star.on{color:var(--src)}
+.mode{margin:10px 0 0}
+.pxw{display:flex;align-items:flex-end;gap:10px;margin:10px 0 2px;flex-wrap:wrap}
+.pxw b{font-size:34px;font-weight:750;letter-spacing:-1px;line-height:1.05;padding:0 4px;margin-left:-4px;border-radius:6px}
+.pxw .chg{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding-bottom:3px}
+.pxw .chg em{font-style:normal;font-size:13px;font-weight:700}
+.subpx{color:var(--sub);font-size:12px;min-height:17px}
+.subpx i{font-style:normal;color:var(--fg);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.grid div{background:var(--card);box-shadow:var(--shadow);border-radius:11px;padding:8px 8px;min-width:0}
+html[data-theme="dark"] .grid div{background:var(--tile)}
+.grid small{display:block;color:var(--sub);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grid b{display:block;font-size:12.5px;font-weight:700;margin-top:2px;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* K 线 */
+#kcard{padding:10px 0 8px}
+.ktool{display:flex;align-items:center;gap:6px;padding:0 10px;overflow-x:auto;scrollbar-width:none}
+.ktool::-webkit-scrollbar{display:none}
+.ktool .seg button{padding:4px 8px}
+.ktool2 .seg button{padding:4px 6px;font-size:11px}
+.ktool2{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px 0}
+.leg{padding:6px 10px 0;font-size:10.5px;color:var(--sub);line-height:1.5;min-height:48px}
+.leg b{color:var(--fg);font-weight:650}
+.leg span{margin-right:7px;display:inline-block}
+.kwrap{position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.kwrap canvas{display:block;width:100%}
+.slg{padding:2px 10px 0;font-size:10.5px;color:var(--sub);white-space:nowrap;overflow:hidden;min-height:16px}
+.slg span{margin-right:7px}
+.kstate{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:13px;pointer-events:none}
+/* 盘口 */
+.bhead{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);font-weight:600}
+.ratio{display:flex;height:5px;border-radius:3px;overflow:hidden;gap:2px;margin:6px 0 9px}
+.ratio span{display:block}
+.book{display:grid;grid-template-columns:1fr 1fr;gap:0 8px;font-size:11.5px}
+.book .col>div{position:relative;display:flex;justify-content:space-between;padding:2.5px 4px;line-height:1.35}
+.book .col>div i{position:absolute;top:1px;bottom:1px;border-radius:2px;opacity:.16;pointer-events:none}
+.book .bid i{right:0}.book .ask i{left:0}
+.book .bid span:last-child,.book .ask span:first-child{font-weight:650}
+.bth{display:grid;grid-template-columns:1fr 1fr;gap:0 8px;font-size:10.5px;color:var(--sub);margin-bottom:3px}
+.bth>div{display:flex;justify-content:space-between;padding:0 4px}
+.spread{text-align:center;font-size:11px;color:var(--sub);margin-top:8px}
+#depth{display:block;width:100%;height:170px}
+/* 逐笔 */
+.tr{display:grid;grid-template-columns:58px 1fr 1fr 64px;gap:6px;font-size:11.5px;padding:3px 2px;line-height:1.35}
+.tr span:nth-child(n+2){text-align:right}
+.tr.th{color:var(--sub);font-size:10.5px}
+.tr.big{font-weight:750}
+.tr.big span:first-child::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--src);margin-right:4px;vertical-align:middle}
+/* 合约 */
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dcard{background:var(--card);box-shadow:var(--shadow);border-radius:14px;padding:10px 11px 8px;min-width:0}
+.dcard small{display:block;color:var(--sub);font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dcard b{display:block;font-size:17px;font-weight:750;letter-spacing:-.3px;margin-top:1px;white-space:nowrap}
+.dcard em{display:block;font-style:normal;font-size:11px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dcard canvas{display:block;width:100%;height:46px;margin-top:6px}
+.liq .lrow{display:grid;grid-template-columns:52px 1fr 1fr 70px;gap:6px;font-size:11.5px;padding:3px 0}
+.liq .lrow span:nth-child(n+3){text-align:right}
+.liqsum{display:flex;gap:8px;margin-bottom:8px}
+.liqsum div{flex:1;background:var(--tile);border-radius:10px;padding:7px 9px}
+.liqsum small{display:block;font-size:10.5px;color:var(--sub)}
+.liqsum b{font-size:14px;font-weight:750}
+.alerts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.abtn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:11px 6px;border:0;border-radius:13px;background:var(--card);
+  box-shadow:var(--shadow);cursor:pointer;font-size:12px;font-weight:650;color:var(--fg)}
+.abtn svg{color:var(--src)}
+.abtn small{font-size:10.5px;color:var(--sub);font-weight:500}
+.hidden{display:none!important}
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.tr,.bk,.xb-tap{position:relative}
+.tr::after,.bk::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.tr:active::after,.bk:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.seg button:not(.on),.chip,.abtn,.star,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.seg button:not(.on):active,.chip:active,.abtn:active,.star:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+  <div class="hd"><span id="avw"></span><h1 id="nm">--</h1>
+    <button class="star" id="star" type="button"></button>
+    <button class="xb-at" id="anchor" type="button"></button></div>
+  <div class="mode" id="modew"><span class="seg" id="mode"></span></div>
+  <div class="pxw"><b id="px">--</b><span class="chg"><span class="pill" id="pct">--</span><em id="abs"></em></span></div>
+  <div class="subpx" id="subpx"></div>
+  <div class="grid" id="stats"></div>
+
+  <div class="sec"><span class="grow" data-i="secK"></span><small id="kinfo"></small></div>
+  <div class="card" id="kcard">
+    <div class="ktool"><span class="seg" id="bars"></span></div>
+    <div class="ktool2"><span class="seg" id="ovs"></span><span class="seg" id="subs"></span></div>
+    <div class="leg" id="leg"></div>
+    <div class="kwrap" id="kwrap"><canvas id="kc"></canvas><div class="kstate" id="kstate"></div></div>
+  </div>
+
+  <div class="sec"><span class="grow" data-i="secBook"></span><span class="seg" id="bmode"></span></div>
+  <div class="card" id="book"></div>
+
+  <div class="sec"><span class="grow" data-i="secTrades"></span><small id="trInfo"></small></div>
+  <div class="card" id="trades"></div>
+
+  <div id="derivw" class="hidden">
+    <div class="sec"><span class="grow" data-i="secDeriv"></span><small id="dInfo"></small></div>
+    <div class="dgrid" id="deriv"></div>
+    <div class="sec"><span class="grow" data-i="secLiq"></span><small data-i="liqSpan"></small></div>
+    <div class="card liq" id="liq"></div>
+  </div>
+
+  <div class="sec"><span class="grow" data-i="secAlert"></span></div>
+  <div class="alerts" id="alerts"></div>
+
+  <button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg"><b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button>
+  <div class="foot" id="foot"></div>
+  <div class="toast" id="toast"></div>
+
+<script>
+/* ── cx kit(crypto 四页共用,由 tools/infosource/gen_crypto_h5.py 注入,别在产物里手改) ──
+   数据全部来自 OKX 公开接口,经 page/flow/okx.df 原样取回(CSP connect-src 'none',页面不能直连)。 */
+var LANG="en", RED=false, KIT_I18N={
+ zh:{notX:"当前不在 Numable 中打开，无法取数",fail:"更新失败，显示的是上次的数据",failCold:"取不到行情。行情服务在你所在的地区可能不可用，点右上角重试",
+  wan:"万",yi:"亿",wanyi:"万亿",now:"刚刚",secAgo:"%s 秒前",minAgo:"%s 分钟前"},
+ en:{notX:"Open this inside Numable to load data",fail:"Update failed — showing the last data",failCold:"Can't load quotes. Market data may not be available in your region. Tap the time to retry",
+  now:"just now",secAgo:"%ss ago",minAgo:"%sm ago"}};
+var I18N={zh:{},en:{}};
+function i18n(o){ for(var l in o){ I18N[l]=I18N[l]||{}; for(var k in o[l]) I18N[l][k]=o[l][k]; } }
+i18n(KIT_I18N);
+function t(k,a){ var s=I18N[LANG]&&I18N[LANG][k]; if(s==null) s=I18N.en[k]; if(s==null) s=k;
+  if(a!=null) s=String(s).replace("%s",a); return s; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function $(id){ return document.getElementById(id); }
+/* 内容没变就不重写:轮询页每轮都会重画一遍按钮 / tab,按下与抬起之间元素被换掉,这一下点击就丢了。 */
+function setHTML(el,h){ if(el&&el.__h!==h){ el.innerHTML=h; el.__h=h; } }
+
+async function ready(){ for(var i=0;i<30&&!window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+  return !!window.xbridge; }
+/* G49:call 型方法回的是信封 {code,msg,data},一律经它拆。 */
+async function call(p){ var r=await p; if(!r||r.code!==0) throw new Error((r&&r.msg)||"bridge"); return r.data; }
+async function sGet(k){ try{ var v=await call(xbridge.getData(k)); return (v==null||v==="")?null:String(v); }catch(e){ return null; } }
+async function sGetJ(k){ var v=await sGet(k); if(v==null) return null; try{ return JSON.parse(v); }catch(e){ return null; } }
+function sSet(k,v){ try{ xbridge.setData(k, typeof v==="string"?v:JSON.stringify(v)); }catch(e){} }
+var _tm; function toast(m){ var el=$("toast"); if(!el){ try{ xbridge.toast(m); }catch(e){} return; }
+  el.textContent=m; el.classList.add("on"); clearTimeout(_tm); _tm=setTimeout(function(){ el.classList.remove("on"); },1700); }
+function haptic(k){ try{ xbridge.haptic(k||"selection"); }catch(e){} }
+function go(path){ try{ xbridge.route("numable://self/page"+path); }catch(e){} }
+
+/* 语言 / 主题:容器在 <html> 上打 data-lang / data-theme,切换时派发事件、不重载页面。
+   appInfo 只作老宿主兜底(⚠️ 必须 await,同步读拿到的是 Promise)。 */
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 涨跌色(overseas-first §4):宿主给了 upColor(App 设置「涨跌颜色」)就照它,没给(老宿主)再回落语言。 */
+var ENV={};
+function redUp(){ return ENV.upColor ? ENV.upColor==="red" : LANG==="zh"; }
+function applyPolarity(){ var s=document.documentElement.style, zh=RED=redUp();
+  s.setProperty("--cu", zh?"var(--up)":"var(--dn)"); s.setProperty("--cd", zh?"var(--dn)":"var(--up)");
+  s.setProperty("--cuBg", zh?"var(--upBg)":"var(--dnBg)"); s.setProperty("--cdBg", zh?"var(--dnBg)":"var(--upBg)"); }
+async function bootEnv(onChange){
+  var de=document.documentElement, d={};
+  if(window.xbridge){ try{ d=(await call(xbridge.appInfo()))||{}; }catch(e){} }
+  ENV=d||{};
+  if(!de.getAttribute("data-theme") && d.theme) de.setAttribute("data-theme", d.theme==="dark"?"dark":"light");
+  /* 先认宿主 documentStart 写好的 data-lang,再 appInfo;都没有 = 英文(只有 zh* 是中文,overseas-first §2)。 */
+  LANG=nbLang(de.getAttribute("data-lang")||d.language||d.locale);
+  de.lang=LANG==="zh"?"zh-CN":"en"; applyPolarity();
+  addEventListener("languagechange",function(e){ LANG=nbLang((e&&e.detail&&e.detail.language)||de.getAttribute("data-lang"));
+    de.lang=LANG==="zh"?"zh-CN":"en"; applyPolarity(); onChange&&onChange("lang"); });
+  addEventListener("themechange",function(){ onChange&&onChange("theme"); });
+}
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function upC(){ return cssVar(RED?"--up":"--dn"); }
+function dnC(){ return cssVar(RED?"--dn":"--up"); }
+
+/* ── 取数 ── */
+async function okxOnly(path, to){
+  var d=await call(xbridge.runDataFlow("okx",{p:path},to||15000));
+  var j=null; try{ j=JSON.parse(String(d&&d.raw||"")); }catch(e){}
+  if(!j||String(j.code)!=="0") throw new Error("okx "+(j?j.code+" "+j.msg:"parse")+" · "+path.split("?")[0]);
+  return j.data||[];
+}
+/* OKX 取不到(美国等地区受其政策限制 / 超时)→ 备用源 Coinbase Exchange(doc/overseas-first.md §10)。
+   只兜现货 ticker、全市场 SPOT 行情与 K 线(1m/5m/15m/1H/1D 原生,4H 由 1H、1W 由 1D 按 UTC 聚合);
+   合约数据(资金费率 / 持仓 / 多空比 / 盘口 / 逐笔)没有可比的备用源,照旧失败。返回值换成 OKX 的形状,页面无感。 */
+async function okx(path, to){
+  try{ return await okxOnly(path, to); }
+  catch(e){ var fb=null; try{ fb=await cbFallback(path, to); }catch(e2){} if(fb) return fb; throw e; }
+}
+function cbProd(inst){ return String(inst||"").replace(/-SWAP$/,"").replace(/-(USDT|USDC)$/,"-USD"); }
+async function cbRaw(p, to){ var d=await call(xbridge.runDataFlow("cb",{p:p},to||15000)); return JSON.parse(String(d&&d.raw||"null")); }
+function qsOf(path){ var o={}; (String(path).split("?")[1]||"").split("&").forEach(function(kv){ var i=kv.indexOf("=");
+  if(i>0) o[kv.slice(0,i)]=decodeURIComponent(kv.slice(i+1)); }); return o; }
+function cbTicker(inst, s){ var l=num(s.last), v=num(s.volume);
+  return {instId:inst, last:s.last, open24h:s.open, high24h:s.high, low24h:s.low, vol24h:s.volume,
+    volCcy24h:isSwap(inst)?s.volume:String((v||0)*(l||0)), ts:String(Date.now())}; }
+var CB_G={"1m":60,"5m":300,"15m":900,"1H":3600,"4H":3600,"1D":86400,"1Dutc":86400,"1Wutc":86400};
+async function cbFallback(path, to){
+  var api=String(path).split("?")[0], q=qsOf(path);
+  if(api==="market/ticker"&&q.instId){
+    var s=await cbRaw(cbProd(q.instId)+"/stats",to); if(!s||s.last==null) return null; return [cbTicker(q.instId,s)]; }
+  if(api==="market/tickers"&&q.instType==="SPOT"){
+    var all=await cbRaw("stats",to), out=[]; if(!all||typeof all!=="object") return null;
+    Object.keys(all).forEach(function(k){ var m=/^(.+)-USD$/.exec(k), st=all[k]&&all[k].stats_24hour;
+      if(m&&st&&st.last!=null) out.push(cbTicker(m[1]+"-USDT",st)); });
+    return out.length?out:null; }
+  if(api==="market/candles"&&q.instId){
+    if(q.after) return [];                    /* 往前翻页:备用源不翻,显示到哪是哪 */
+    var bar=q.bar||"1H", g=CB_G[bar]; if(!g) return null;
+    var rows=await cbRaw(cbProd(q.instId)+"/candles?granularity="+g,to); if(!Array.isArray(rows)||!rows.length) return null;
+    /* Coinbase 行 = [秒, 低, 高, 开, 收, 量],新的在前 → OKX 行 = [毫秒, 开, 高, 低, 收, 量, 额, 额, confirm] */
+    var b=rows.map(function(r){ return {t:r[0]*1000,o:+r[3],h:+r[2],l:+r[1],c:+r[4],v:+r[5]}; });
+    var span=bar==="4H"?144e5:(bar==="1Wutc"?6048e5:0);
+    if(span){ var agg=[], cur=null;
+      b.slice().reverse().forEach(function(x){
+        var k=bar==="4H" ? x.t-x.t%span : x.t-(((Math.floor(x.t/864e5)+3)%7)*864e5);   /* 周 = UTC 周一 */
+        if(!cur||cur.t!==k){ cur={t:k,o:x.o,h:x.h,l:x.l,c:x.c,v:x.v}; agg.push(cur); }
+        else { cur.h=Math.max(cur.h,x.h); cur.l=Math.min(cur.l,x.l); cur.c=x.c; cur.v+=x.v; } });
+      b=agg.reverse(); }
+    var lim=parseInt(q.limit,10)||300;
+    return b.slice(0,lim).map(function(x,i){ var a=String(x.v*x.c);
+      return [String(x.t),String(x.o),String(x.h),String(x.l),String(x.c),String(x.v),a,a,i?"1":"0"]; }); }
+  return null;
+}
+async function rawFlow(flow, to){
+  var d=await call(xbridge.runDataFlow(flow,{},to||15000));
+  return JSON.parse(String(d&&d.raw||"null"));
+}
+/* G23 首屏缓存:存的是**解析后的精简模型**(不是原始响应),s = 结构版本,对不上当没有。 */
+var SCHEMA=2;
+async function cacheGet(k){ var o=await sGetJ(k); return (o&&o.s===SCHEMA&&o.t&&o.d)?o:null; }
+function cachePut(k,d){ sSet(k,{s:SCHEMA,t:Date.now(),d:d}); }
+
+/* 可见才轮询:隐藏时不打网络;离开本页(压栈进详情)后降频到 60 秒,
+   回来时靠 visibilitychange / focus / pageshow / 任何一次触摸恢复原速 ——
+   有的宿主在栈底页上不派发可见性事件,那就退到「慢慢刷」,而不是一直全速或永远停住。 */
+function Poller(fn, ms){
+  var timer=null, busy=false, away=false, base=ms;
+  async function tick(force){ if(busy) return; if(!force&&document.visibilityState==="hidden") return;
+    busy=true; try{ await fn(force); }catch(e){} busy=false; }
+  function arm(){ if(timer) clearInterval(timer); timer=setInterval(tick, away?Math.max(60000,base):base); }
+  function back(){ if(away){ away=false; arm(); tick(); } }
+  document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible"){ back(); tick(); } });
+  addEventListener("focus",back); addEventListener("pageshow",back);
+  document.addEventListener("pointerdown",back,true);
+  return {start:function(){ arm(); }, tick:tick, leave:function(){ away=true; arm(); },
+          setMs:function(m){ base=m; arm(); }};
+}
+
+/* ── 格式化 ── */
+function num(v){ var n=parseFloat(v); return isFinite(n)?n:null; }
+function pxDp(p){ var a=Math.abs(p); if(a>=1000) return 1; if(a>=100) return 2; if(a>=1) return 3;
+  if(a>=0.1) return 4; if(a>=0.01) return 5; if(a>=0.001) return 6; if(a>=0.0001) return 7; return 9; }
+function grp(n,dp){ return n.toLocaleString("en-US",{minimumFractionDigits:dp,maximumFractionDigits:dp}); }
+/* 价格按量级给小数位:BTC 84,012.4、SOL 142.37、DOGE 0.15321、PEPE 0.0000091 —— 一个固定 2 位会把山寨币全抹成 0.00。 */
+function fpx(v,dp){ var n=num(v); if(n===null) return "--"; return grp(n, dp==null?pxDp(n):dp); }
+function signed(v,dp,unit){ var n=num(v); if(n===null) return "--";
+  return (n>0?"+":n<0?"−":"")+Math.abs(n).toFixed(dp)+(unit||""); }
+function pct(v,dp){ return signed(v,dp==null?2:dp,"%"); }
+/* 大数:中文收成「万 / 亿 / 万亿」,英文按千进制 K/M/B/T(⚠️ 不能直译:1 亿 = 100M)。 */
+function big(v,cur){ var n=num(v); if(n===null) return "--"; var a=Math.abs(n), s=n<0?"−":"", c=cur||"";
+  if(LANG!=="zh"){ if(a>=1e12) return s+c+(a/1e12).toFixed(2)+"T"; if(a>=1e9) return s+c+(a/1e9).toFixed(2)+"B";
+    if(a>=1e6) return s+c+(a/1e6).toFixed(2)+"M"; if(a>=1e3) return s+c+(a/1e3).toFixed(1)+"K"; return s+c+a.toFixed(a<10?2:0); }
+  if(a>=1e12) return s+c+(a/1e12).toFixed(2)+t("wanyi"); if(a>=1e8) return s+c+(a/1e8).toFixed(2)+t("yi");
+  if(a>=1e4) return s+c+(a/1e4).toFixed(a>=1e6?0:1)+t("wan"); return s+c+a.toFixed(a<10?2:0); }
+function cls(v){ var n=num(v); if(n===null||Math.abs(n)<0.005) return ""; return n>0?"up":"dn"; }
+function pillStyle(v){ var n=num(v); if(n===null||Math.abs(n)<0.005) return "background:var(--tile);color:var(--sub)";
+  return n>0?"background:var(--cuBg);color:var(--cu)":"background:var(--cdBg);color:var(--cd)"; }
+function hhmm(ms){ var d=new Date(+ms); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
+function hhmmss(ms){ var d=new Date(+ms); return hhmm(ms)+":"+("0"+d.getSeconds()).slice(-2); }
+var MON_EN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+/* 月日(overseas-first §5):中文「10月1日」、英文「Oct 1」。utc=true 按 UTC 日历日(日 / 周 K 的 ts 是 UTC 零点)。 */
+function mdOf(mo,dd){ return LANG==="zh" ? (mo+1)+"月"+dd+"日" : MON_EN[mo]+" "+dd; }
+function mmdd(ms,utc){ var d=new Date(+ms); return utc ? mdOf(d.getUTCMonth(),d.getUTCDate()) : mdOf(d.getMonth(),d.getDate()); }
+function ymd(ms,utc){ var d=new Date(+ms), y=utc?d.getUTCFullYear():d.getFullYear();
+  return LANG==="zh" ? y+"年"+mmdd(ms,utc) : mmdd(ms,utc)+", "+y; }
+function ago(ms){ var s=Math.max(0,Math.round((Date.now()-ms)/1000)); if(s<5) return t("now");
+  if(s<60) return t("secAgo",s); return t("minAgo",Math.round(s/60)); }
+
+/* ── 币对 ── */
+/* 老版本(Bitstamp)写下的是 `btcusd` 这种形状;OKX 是 `BTC-USDT`。两种都认,USD 一律落到 USDT。 */
+function normInst(p){ p=String(p||"").trim(); if(!p) return ""; if(p.indexOf("-")>=0) return p.toUpperCase();
+  var s=p.toLowerCase(), q="USDT", b=s, m;
+  if((m=/^(.+?)(usdt|usdc)$/.exec(s))){ b=m[1]; q=m[2].toUpperCase(); }
+  else if((m=/^(.+?)usd$/.exec(s))){ b=m[1]; }
+  else if((m=/^(.+?)(eur|btc|eth)$/.exec(s))){ b=m[1]; q=m[2].toUpperCase(); }
+  return b.toUpperCase()+"-"+q; }
+/* 稳定币不进涨跌 / 成交额榜与「热门」:USDC 永远 ±0.01%,却能排进成交额第二,占掉一个真正在动的币的位置。 */
+var STABLE=/^(USDC|USDT|DAI|FDUSD|TUSD|USDG|PYUSD|USDE|RLUSD|EURC|USD1|USDS|FRAX|BUSD|USDP|USDD|USTC|GUSD|LUSD|SUSD|CRVUSD|USDX|USDB)$/;
+function isStable(id){ return STABLE.test(baseOf(id)); }
+function baseOf(id){ return String(id||"").split("-")[0]; }
+function quoteOf(id){ return String(id||"").split("-")[1]||"USDT"; }
+function isSwap(id){ return /-SWAP$/.test(id); }
+function spotOf(id){ return isSwap(id)?id.replace(/-SWAP$/,""):id; }
+function swapOf(id){ return isSwap(id)?id:(baseOf(id)+"-"+(quoteOf(id)==="USDC"?"USDC":"USDT")+"-SWAP"); }
+/* 头像 = 字母兜底 + OKX 币种图标叠加(取不到 onerror 自摘、字母仍在)。图标域 = www.okx.com,已在 manifest.network(img-src 由它拼出)。 */
+function avEl(id,sz){ var b=baseOf(id), st=sz?' style="width:'+sz+'px;height:'+sz+'px"':"";
+  return '<span class="av"'+st+'>'+esc(b.charAt(0))+'<img loading="lazy" alt="" src="https://www.okx.com/cdn/oksupport/asset/currency/icon/'+
+    esc(b.toLowerCase())+'.png" onerror="this.remove()"></span>'; }
+
+/* ── 自选 ── */
+/* 真源 = data.wl(JSON 数组,OKX instId,≤30)。另镜像到老槽位 w.p1…w.p8 / w.n* / w.total / w.ids ——
+   `top`、`heat` 两个组件的取数流按槽位读(.df 没有数组迭代),不镜像它们就停在旧自选上。 */
+var WL_MAX=30, WL_DEF=["BTC-USDT","ETH-USDT","SOL-USDT","XRP-USDT","DOGE-USDT","ADA-USDT"];
+async function wlLoad(){
+  var a=await sGetJ("wl"), out=[];
+  if(!(Array.isArray(a)&&a.length)){
+    a=[]; var n=parseInt(await sGet("w.total"),10)||0;
+    for(var i=1;i<=Math.min(6,n||6);i++){ var p=await sGet("w.p"+i); if(p) a.push(p); }
+    if(!a.length) a=WL_DEF.slice();
+  }
+  a.forEach(function(x){ x=normInst(x); if(x&&out.indexOf(x)<0) out.push(x); });
+  return out.slice(0,WL_MAX);
+}
+function wlSave(a){
+  sSet("wl",JSON.stringify(a));
+  var n=a.length||1;
+  for(var i=0;i<8;i++){ var id=a[i]||a[i%n]||"BTC-USDT"; sSet("w.p"+(i+1),id); sSet("w.n"+(i+1),baseOf(id)); }
+  sSet("w.total",String(a.length)); sSet("w.ids",a.join(","));
+  try{ xbridge.refreshWidget(); }catch(e){}
+}
+
+/* ── 可选币对全集(管理页 / 换币页的搜索用)── 现货 USDT 优先,只有永续的币补进来;按 24h 成交额排序。
+   存 c.cx.uni(精简成 [id, 成交额, 最新价, 24h%]),6 小时内直接用 —— 搜索框不该每开一次就拉 170KB。 */
+async function loadUniverse(force){
+  var c=await cacheGet("c.cx.uni");
+  if(c&&!force&&Date.now()-c.t<6*3600e3) return c.d;
+  try{
+    var r=await Promise.all([okx("market/tickers?instType=SPOT",20000), okx("market/tickers?instType=SWAP",20000).catch(function(){ return []; })]);
+    var seen={}, out=[];
+    r[0].forEach(function(x){ if(!/-USDT$/.test(x.instId)) return; var l=num(x.last), o=num(x.open24h);
+      seen[baseOf(x.instId)]=1; out.push([x.instId, Math.round(num(x.volCcy24h)||0), l, (l!=null&&o)?+((l-o)/o*100).toFixed(2):null]); });
+    r[1].forEach(function(x){ if(!/-USDT-SWAP$/.test(x.instId)||seen[baseOf(x.instId)]) return; var l=num(x.last), o=num(x.open24h);
+      out.push([x.instId, Math.round((num(x.volCcy24h)||0)*(l||0)), l, (l!=null&&o)?+((l-o)/o*100).toFixed(2):null]); });
+    out.sort(function(a,b){ return b[1]-a[1]; });
+    cachePut("c.cx.uni",out); return out;
+  }catch(e){ return c?c.d:[]; }
+}
+/* 搜索:符号前缀命中排最前,其次包含;空关键词 = 成交额前 40(「热门」)。 */
+function searchUni(uni,kw){
+  kw=String(kw||"").trim().toUpperCase().replace(/[\s\/]/g,"").replace(/-?USDT?$/,"");
+  if(!kw) return uni.filter(function(u){ return !isStable(u[0]); }).slice(0,40);
+  var a=[],b=[]; uni.forEach(function(u){ var s=baseOf(u[0]); if(s.indexOf(kw)===0) a.push(u); else if(s.indexOf(kw)>0) b.push(u); });
+  return a.concat(b).slice(0,60);
+}
+(function(){
+i18n({
+ zh:{spot:"现货",swap:"永续",hi:"24h 最高",lo:"24h 最低",amt:"24h 成交额",amp:"24h 振幅",fund:"资金费率",settle:"结算倒计时",
+  oi:"持仓量",basis:"基差",today:"今日(UTC)",open:"24h 开盘",bid1:"买一",ask1:"卖一",mark:"标记",index:"指数",
+  secK:"K 线",secBook:"盘口",secTrades:"逐笔成交",secDeriv:"合约数据",secLiq:"爆仓",liqSpan:"近 1 小时 · 本永续",secAlert:"提醒",
+  bars:{"1m":"1分","5m":"5分","15m":"15分","1H":"1时","4H":"4时","1Dutc":"日","1Wutc":"周"},
+  none:"无",book:"盘口",depth:"深度",bidR:"买 %s",askR:"卖 %s",bidP:"买价",askP:"卖价",qty:"数量",spread:"价差 %s",
+  tTime:"时间",tPx:"价格",tQty:"数量",tAmt:"金额",trSum:"近 %s 笔 · 主动买 %s",
+  fHist:"资金费率 · 近 30 期",oiC:"持仓量 · 24h",lsr:"多空人数比 · 48h",taker:"主动买 / 卖 · 24h",
+  every:"每 %s 小时",annualL:"年化",fundSub:"费率",fundBtn:"费率",noPerp:"没有永续合约",annual:"年化 %s",lsrSub:"多 %s · 空 %s",takerSub:"净买入 %s",takerSubS:"净卖出 %s",allC:"OKX 全部合约",
+  longL:"多单爆仓",shortL:"空单爆仓",noLiq:"近 1 小时没有爆仓",noData:"暂无数据",
+  aPrice:"价格提醒",aPriceS:"越过价位时",aMove:"异动提醒",aMoveS:"24h 涨跌超幅",aFund:"费率提醒",aFundS:"费率超阈值",
+  aOk:"提醒已设好",aQuota:"这个工具的提醒已满，去「我的 → 提醒」整理",
+  added:"已加入自选",removed:"已移出自选",full:"自选最多 30 个",
+  pickT:"添加这个币的组件",pickS:"大盘 · 迷你 · 多周期 · 买卖力量 · 日K · 合约脉搏",
+  kLoading:"K 线加载中…",kFail:"K 线暂时取不到",noSpot:"这个币在 OKX 只有永续合约",
+  foot:"行情来自 OKX 公开接口，OKX 取不到时现货价格与 K 线改用 Coinbase；合约统计（持仓、多空比、主动买卖）为 OKX 全部合约口径。价格有秒级延迟，仅供参考，不构成投资建议。"},
+ en:{spot:"Spot",swap:"Perp",hi:"24h high",lo:"24h low",amt:"24h volume",amp:"24h range",fund:"Funding",settle:"Next funding",
+  oi:"Open interest",basis:"Basis",today:"Today (UTC)",open:"24h open",bid1:"Bid",ask1:"Ask",mark:"Mark",index:"Index",
+  secK:"Chart",secBook:"Order book",secTrades:"Trades",secDeriv:"Derivatives",secLiq:"Liquidations",liqSpan:"last hour · this perp",secAlert:"Alerts",
+  bars:{"1m":"1m","5m":"5m","15m":"15m","1H":"1H","4H":"4H","1Dutc":"1D","1Wutc":"1W"},
+  none:"None",book:"Book",depth:"Depth",bidR:"Bids %s",askR:"Asks %s",bidP:"Bid",askP:"Ask",qty:"Size",spread:"Spread %s",
+  tTime:"Time",tPx:"Price",tQty:"Size",tAmt:"Value",trSum:"Last %s trades · %s taker buys",
+  fHist:"Funding · last 30",oiC:"Open interest · 24h",lsr:"Long/short accounts · 48h",taker:"Taker buy / sell · 24h",
+  every:"every %sh",annualL:"Annualized",fundSub:"Funding",fundBtn:"Fund",noPerp:"No perpetual",annual:"%s / yr",lsrSub:"long %s · short %s",takerSub:"net buy %s",takerSubS:"net sell %s",allC:"all OKX contracts",
+  longL:"Longs liquidated",shortL:"Shorts liquidated",noLiq:"No liquidations in the last hour",noData:"No data",
+  aPrice:"Price alert",aPriceS:"crosses a level",aMove:"Move alert",aMoveS:"big 24h move",aFund:"Funding alert",aFundS:"extreme funding",
+  aOk:"Alert added",aQuota:"This tool's alerts are full — tidy up in Me → Alerts",
+  added:"Added to watchlist",removed:"Removed from watchlist",full:"Watchlist holds up to 30",
+  pickT:"Add widgets for this coin",pickS:"Terminal, mini, performance, order flow, candles, derivatives",
+  kLoading:"Loading chart…",kFail:"Chart unavailable right now",noSpot:"Only a perpetual swap is listed on OKX",
+  foot:"Quotes from OKX public API, with Coinbase as a backup for spot prices and candles; contract stats (open interest, long/short, taker volume) cover all OKX contracts. Prices lag by seconds. For reference only, not investment advice."}
+});
+
+var Q=new URLSearchParams(location.search);
+var INST=normInst(Q.get("pair")||"BTC-USDT"), BASE=baseOf(INST);
+var SPOT=isSwap(INST)?null:INST, SWAP=swapOf(INST);
+var S={wl:[],mode:SPOT?"spot":"swap", hasSwap:null, tk:{}, book:null, trades:[], fund:null, fhist:null, fh:null, fhPages:0, oi:null, mark:null, idx:null,
+  rOi:null, rLsr:null, rTk:null, liq:null, ctVal:null, lastOk:0, fail:false, bmode:"book",
+  at:{sw:0,fh:0,rb:0,liq:0,kl:0}};
+function cur(){ return S.mode==="swap"?SWAP:SPOT; }
+
+/* ─────────────── K 线引擎 ─────────────── */
+var BARS=["1m","5m","15m","1H","4H","1Dutc","1Wutc"], OVS=["MA","EMA","BOLL","none"], SUBS=["VOL","MACD","RSI","KDJ","FUND"];
+var BAR_MS={"1m":6e4,"5m":3e5,"15m":9e5,"1H":36e5,"4H":144e5,"1Dutc":864e5,"1Wutc":6048e5};
+var CH={bar:"1H",ov:"MA",sub:"VOL",data:[],ind:null,count:64,end:-1,follow:true,cross:null,loading:false,noMore:false,err:false};
+var MAIN_H=224, SUB_H=74, AX_H=18, GUT=54;
+function sma(a,n){ var o=new Array(a.length), s=0; for(var i=0;i<a.length;i++){ s+=a[i]; if(i>=n) s-=a[i-n]; o[i]=i>=n-1?s/n:null; } return o; }
+function ema(a,n){ var o=new Array(a.length), k=2/(n+1), p=null; for(var i=0;i<a.length;i++){ var v=a[i]; if(v==null){ o[i]=null; continue; }
+  p=p==null?v:v*k+p*(1-k); o[i]=i>=n-1?p:null; } return o; }
+function calcInd(){
+  var d=CH.data, c=d.map(function(x){return x.c;}), I={};
+  I.ma=[sma(c,7),sma(c,25),sma(c,99)]; I.ema=[ema(c,7),ema(c,25),ema(c,99)];
+  var mid=sma(c,20), up=[], dn=[];
+  for(var i=0;i<c.length;i++){ if(mid[i]==null){ up[i]=dn[i]=null; continue; } var s=0; for(var j=i-19;j<=i;j++) s+=(c[j]-mid[i])*(c[j]-mid[i]);
+    var sd=Math.sqrt(s/20); up[i]=mid[i]+2*sd; dn[i]=mid[i]-2*sd; }
+  I.boll=[mid,up,dn];
+  var e12=ema(c,12), e26=ema(c,26), dif=c.map(function(_,i){ return e12[i]!=null&&e26[i]!=null?e12[i]-e26[i]:null; });
+  var dea=ema(dif.map(function(v){return v;}),9); var hist=dif.map(function(v,i){ return v!=null&&dea[i]!=null?2*(v-dea[i]):null; });
+  I.macd=[dif,dea,hist];
+  var rsi=[], ag=0, al=0; for(var r=0;r<c.length;r++){ if(r===0){ rsi[r]=null; continue; } var ch=c[r]-c[r-1], g=Math.max(0,ch), l=Math.max(0,-ch);
+    if(r<=14){ ag+=g/14; al+=l/14; rsi[r]=r===14?(al===0?100:100-100/(1+ag/al)):null; } else { ag=(ag*13+g)/14; al=(al*13+l)/14; rsi[r]=al===0?100:100-100/(1+ag/al); } }
+  I.rsi=[rsi];
+  var K=[],D=[],J=[],kp=50,dp=50; for(var q=0;q<d.length;q++){ if(q<8){ K[q]=D[q]=J[q]=null; continue; } var hh=-1e99,ll=1e99;
+    for(var w=q-8;w<=q;w++){ hh=Math.max(hh,d[w].h); ll=Math.min(ll,d[w].l); } var rsv=hh===ll?50:(d[q].c-ll)/(hh-ll)*100;
+    kp=kp*2/3+rsv/3; dp=dp*2/3+kp/3; K[q]=kp; D[q]=dp; J[q]=3*kp-2*dp; }
+  I.kdj=[K,D,J]; I.vma=sma(d.map(function(x){return x.v;}),5);
+  CH.ind=I; fundSeries();
+}
+/* 资金费率对到每根 K 线(% 口径):
+   · 这根 K 线的时间段里有结算(日线 / 周线一根里有好几次)→ 取这些结算的平均;
+   · 没有(小时线以下)→ 取「覆盖它的那一期」= 它之后第一次结算的费率(隔得比一个结算周期还远就是没数据,不硬填);
+   · 最后一次结算之后的 K 线 = 当期还没结算,用实时费率。 */
+function fundSeries(){
+  var fh=S.fh||[], cur=S.fund?num(S.fund.fundingRate):null, bm=BAR_MS[CH.bar]||36e5, ivMs=fundIv()*36e5, out=[], j=0, d=CH.data;
+  for(var i=0;i<d.length;i++){ var t0=d[i].t, t1=t0+bm, sum=0, n=0, v=null;
+    while(j<fh.length&&fh[j][0]<=t0) j++;
+    for(var k=j;k<fh.length&&fh[k][0]<=t1;k++){ if(fh[k][1]!=null){ sum+=fh[k][1]; n++; } }
+    if(n) v=sum/n;
+    else if(j<fh.length){ if(fh[j][0]-t1<=ivMs) v=fh[j][1]; }
+    else if(cur!=null&&(!fh.length||t0>=fh[fh.length-1][0]-bm)) v=cur;
+    out.push(v==null?null:v*100); }
+  CH.fund=out;
+}
+/* 日线 / 周线切到「费率」时,100 期(≈33 天)盖不住画面,往前翻最多 3 页。 */
+async function ensureFundCover(){
+  if(!S.hasSwap||CH.sub!=="FUND"||!S.fh||!S.fh.length||!CH.data.length) return;
+  var rg=range(), want=CH.data[rg[0]].t;
+  while(S.fhPages<3&&S.fh[0][0]>want){
+    S.fhPages++;
+    var d=await okx("public/funding-rate-history?instId="+SWAP+"&limit=100&after="+S.fh[0][0]).catch(function(){ return []; });
+    if(!d.length) break;
+    S.fh=d.map(function(x){ return [+x.fundingTime,num(x.realizedRate||x.fundingRate)]; }).reverse().concat(S.fh);
+  }
+  fundSeries(); draw();
+}
+var LINE_C=["#E8A33D","#8B5CF6","#3B82F6"];
+function range(){ var n=CH.data.length, end=CH.follow?n-1:Math.max(0,Math.min(n-1,CH.end)), cnt=Math.min(CH.count,n);
+  return [Math.max(0,end-cnt+1),end]; }
+var cv=$("kc"), ctx=cv.getContext("2d"), rafP=false;
+function sizeCanvas(){ var w=$("kwrap").clientWidth||340, h=MAIN_H+SUB_H+AX_H, dpr=window.devicePixelRatio||1;
+  cv.style.height=h+"px"; cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); return [w,h]; }
+function draw(){ if(rafP) return; rafP=true; requestAnimationFrame(function(){ rafP=false; drawNow(); }); }
+function fmtAx(v,ref){ return fpx(v,pxDp(ref)); }
+/* 日 / 周 K 的 ts 是 UTC 零点 —— 按 UTC 日历日显示(按本机日期在西半球会标成前一天)。月日按语言(overseas-first §5)。 */
+function barTime(ms){ var d=new Date(+ms);
+  if(CH.bar==="1Wutc") return LANG==="zh" ? String(d.getUTCFullYear()).slice(2)+"/"+(d.getUTCMonth()+1)+"/"+d.getUTCDate()
+                                          : mmdd(ms,true)+" '"+String(d.getUTCFullYear()).slice(2);
+  if(CH.bar==="1Dutc") return mmdd(ms,true);
+  if(CH.bar==="1H"||CH.bar==="4H") return mmdd(ms)+" "+hhmm(ms);
+  if(d.getHours()===0&&d.getMinutes()===0) return mmdd(ms); return hhmm(ms); }
+function fullTime(ms){ if(CH.bar==="1Wutc") return ymd(ms,true); if(CH.bar==="1Dutc") return mmdd(ms,true);
+  return mmdd(ms)+" "+hhmm(ms); }
+function drawNow(){
+  var wh=sizeCanvas(), W=wh[0], PW=W-GUT, d=CH.data;
+  var bg=cssVar("--card"), line=cssVar("--line"), sub=cssVar("--sub"), fg=cssVar("--fg"), U=upC(), D=dnC();
+  ctx.clearRect(0,0,W,wh[1]);
+  $("kstate").textContent=d.length?"":(CH.err?t("kFail"):t("kLoading"));
+  if(!d.length) return;
+  var rg=range(), st=rg[0], en=rg[1], cnt=en-st+1, step=PW/Math.max(CH.count,cnt), bw=Math.max(1,Math.min(step*0.72,14));
+  var ov=CH.ov==="MA"?CH.ind.ma:CH.ov==="EMA"?CH.ind.ema:CH.ov==="BOLL"?CH.ind.boll:[];
+  /* 标注用的是**蜡烛自己**的最高 / 最低;纵轴范围再把指标线算进去 —— 两者混成一个量,
+     指标线一压过蜡烛,标注就钉到了第一根上(均线在最底下时「最低」标在了最左边的高位)。 */
+  var hi=-1e99, lo=1e99, hiI=st, loI=st, cH=-1e99, cL=1e99;
+  for(var i=st;i<=en;i++){ var x=d[i]; if(x.h>cH){ cH=x.h; hiI=i; } if(x.l<cL){ cL=x.l; loI=i; } }
+  hi=cH; lo=cL;
+  for(var i2=st;i2<=en;i2++) ov.forEach(function(s){ var v=s[i2]; if(v!=null){ if(v>hi) hi=v; if(v<lo) lo=v; } });
+  var pad=(hi-lo)*0.08||hi*0.01; var yMax=hi+pad, yMin=lo-pad, top=8, mh=MAIN_H-8;
+  function Y(v){ return top+(yMax-v)/(yMax-yMin)*(mh-top); }
+  function X(i){ return (i-st)*step+step/2; }
+  ctx.font="10px -apple-system,system-ui,sans-serif"; ctx.textBaseline="middle";
+  /* 网格 + 右轴 */
+  ctx.strokeStyle=line; ctx.lineWidth=1; ctx.fillStyle=sub; ctx.textAlign="left";
+  for(var g=0;g<=4;g++){ var gy=top+(mh-top)*g/4, gv=yMax-(yMax-yMin)*g/4; ctx.beginPath(); ctx.moveTo(0,Math.round(gy)+.5); ctx.lineTo(PW,Math.round(gy)+.5); ctx.stroke();
+    ctx.fillText(fmtAx(gv,hi),PW+5,gy); }
+  ctx.beginPath(); ctx.moveTo(0,MAIN_H+.5); ctx.lineTo(W,MAIN_H+.5); ctx.stroke();
+  /* 蜡烛 */
+  for(var k=st;k<=en;k++){ var c=d[k], up=c.c>=c.o, cx=X(k); ctx.strokeStyle=ctx.fillStyle=up?U:D;
+    ctx.beginPath(); ctx.moveTo(Math.round(cx)+.5,Y(c.h)); ctx.lineTo(Math.round(cx)+.5,Y(c.l)); ctx.stroke();
+    var y1=Y(Math.max(c.o,c.c)), y2=Y(Math.min(c.o,c.c)); ctx.fillRect(cx-bw/2,y1,bw,Math.max(1,y2-y1)); }
+  /* 主图指标 */
+  ov.forEach(function(s,si){ ctx.strokeStyle=CH.ov==="BOLL"?(si===0?LINE_C[0]:LINE_C[1]):LINE_C[si]; ctx.lineWidth=1.1; ctx.beginPath(); var on=false;
+    for(var i=st;i<=en;i++){ var v=s[i]; if(v==null){ on=false; continue; } var px=X(i), py=Y(v); if(on) ctx.lineTo(px,py); else { ctx.moveTo(px,py); on=true; } } ctx.stroke(); });
+  /* 区间最高 / 最低标注 */
+  ctx.fillStyle=fg; ctx.strokeStyle=sub; ctx.lineWidth=1;
+  [[hiI,d[hiI].h],[loI,d[loI].l]].forEach(function(m){ var mx=X(m[0]), my=Y(m[1]), left=mx>PW*0.6, tx=left?mx-22:mx+22;
+    ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(left?mx-18:mx+18,my); ctx.stroke(); ctx.textAlign=left?"right":"left"; ctx.fillText(fpx(m[1]),tx,my); });
+  /* 最新价线 */
+  var last=d[d.length-1], ly=Y(last.c), lc=last.c>=last.o?U:D;
+  if(ly>top-2&&ly<mh+2){ ctx.setLineDash([3,3]); ctx.strokeStyle=lc; ctx.beginPath(); ctx.moveTo(0,Math.round(ly)+.5); ctx.lineTo(PW,Math.round(ly)+.5); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=lc; ctx.fillRect(PW+1,ly-8,GUT-1,16); ctx.fillStyle="#fff"; ctx.textAlign="left"; ctx.fillText(fmtAx(last.c,hi),PW+4,ly); }
+  /* 副图 */
+  var sy0=MAIN_H+6, sh=SUB_H-8, sd=CH.sub, series=[], sMax=-1e99, sMin=1e99;
+  if(sd==="VOL"){ for(var v=st;v<=en;v++){ sMax=Math.max(sMax,d[v].v); } sMin=0; }
+  else if(sd==="FUND"){ var fm=0.001; for(var f2=st;f2<=en;f2++){ var fv2=CH.fund&&CH.fund[f2]; if(fv2!=null) fm=Math.max(fm,Math.abs(fv2)); } sMax=fm; sMin=-fm; }
+  else { series=sd==="MACD"?CH.ind.macd:sd==="RSI"?CH.ind.rsi:CH.ind.kdj;
+    for(var s2=st;s2<=en;s2++) series.forEach(function(sr){ var q=sr[s2]; if(q!=null){ sMax=Math.max(sMax,q); sMin=Math.min(sMin,q); } });
+    if(sd==="RSI"){ sMax=100; sMin=0; } if(sMax<=sMin){ sMax=sMin+1; } }
+  function SY(v){ return sy0+(sMax-v)/(sMax-sMin)*sh; }
+  if(sd==="VOL"){ for(var b=st;b<=en;b++){ var cb=d[b]; ctx.fillStyle=cb.c>=cb.o?U:D; ctx.globalAlpha=.75; var yy=SY(cb.v); ctx.fillRect(X(b)-bw/2,yy,bw,sy0+sh-yy); } ctx.globalAlpha=1;
+    ctx.fillStyle=sub; ctx.textAlign="left"; ctx.fillText(big(sMax),PW+5,sy0+6); }
+  else if(sd==="FUND"){ var fz=SY(0); ctx.strokeStyle=line; ctx.beginPath(); ctx.moveTo(0,Math.round(fz)+.5); ctx.lineTo(PW,Math.round(fz)+.5); ctx.stroke();
+    for(var f3=st;f3<=en;f3++){ var fv3=CH.fund&&CH.fund[f3]; if(fv3==null) continue; ctx.fillStyle=fv3>=0?U:D; var fy=SY(fv3);
+      ctx.fillRect(X(f3)-bw/2,Math.min(fz,fy),bw,Math.max(1,Math.abs(fy-fz))); }
+    ctx.fillStyle=sub; ctx.textAlign="left"; ctx.fillText("+"+sMax.toFixed(4)+"%",PW+3,sy0+6); ctx.fillText("−"+sMax.toFixed(4)+"%",PW+3,sy0+sh-4);
+    if(!(CH.fund||[]).some(function(x){ return x!=null; })){ ctx.textAlign="center"; ctx.fillText(t(S.hasSwap?"kLoading":"noPerp"),PW/2,sy0+sh/2); } }
+  else {
+    if(sd==="MACD"){ var z=SY(0); for(var m2=st;m2<=en;m2++){ var hv=series[2][m2]; if(hv==null) continue; ctx.fillStyle=hv>=0?U:D; var hy=SY(hv); ctx.fillRect(X(m2)-bw/2,Math.min(z,hy),bw,Math.max(1,Math.abs(hy-z))); } }
+    if(sd==="RSI"){ ctx.strokeStyle=line; ctx.setLineDash([2,3]); [70,30].forEach(function(l){ ctx.beginPath(); ctx.moveTo(0,SY(l)); ctx.lineTo(PW,SY(l)); ctx.stroke(); }); ctx.setLineDash([]); }
+    series.forEach(function(sr,si){ if(sd==="MACD"&&si===2) return; ctx.strokeStyle=LINE_C[si]; ctx.lineWidth=1.1; ctx.beginPath(); var on=false;
+      for(var i=st;i<=en;i++){ var q=sr[i]; if(q==null){ on=false; continue; } if(on) ctx.lineTo(X(i),SY(q)); else { ctx.moveTo(X(i),SY(q)); on=true; } } ctx.stroke(); });
+    ctx.fillStyle=sub; ctx.textAlign="left"; ctx.fillText(sd==="RSI"?"70":sMax.toFixed(Math.abs(sMax)<1?4:1),PW+5,sd==="RSI"?SY(70):sy0+6);
+    if(sd==="RSI") ctx.fillText("30",PW+5,SY(30)); }
+  /* 时间轴 */
+  ctx.fillStyle=sub; var ty=MAIN_H+SUB_H+AX_H/2;
+  [0.12,0.5,0.88].forEach(function(f){ var ii=st+Math.round((cnt-1)*f); if(d[ii]){ ctx.textAlign="center"; ctx.fillText(barTime(d[ii].t),Math.min(PW-24,Math.max(24,X(ii))),ty); } });
+  /* 十字光标 */
+  var hv2=CH.cross;
+  if(hv2){ var ci=Math.max(st,Math.min(en,st+Math.floor(hv2.x/step))), cx2=X(ci); ctx.strokeStyle=fg; ctx.globalAlpha=.55; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(cx2+.5,0); ctx.lineTo(cx2+.5,MAIN_H+SUB_H); ctx.stroke();
+    if(hv2.y<MAIN_H){ ctx.beginPath(); ctx.moveTo(0,hv2.y+.5); ctx.lineTo(PW,hv2.y+.5); ctx.stroke(); }
+    ctx.setLineDash([]); ctx.globalAlpha=1;
+    if(hv2.y<MAIN_H){ var pv=yMax-(hv2.y-top)/(mh-top)*(yMax-yMin); ctx.fillStyle=fg; ctx.fillRect(PW+1,hv2.y-8,GUT-1,16); ctx.fillStyle=bg; ctx.textAlign="left"; ctx.fillText(fmtAx(pv,hi),PW+4,hv2.y); }
+    var tl=fullTime(d[ci].t); ctx.font="10px -apple-system,system-ui,sans-serif"; var tw=ctx.measureText(tl).width+10, tx2=Math.min(PW-tw/2,Math.max(tw/2,cx2));
+    ctx.fillStyle=fg; ctx.fillRect(tx2-tw/2,MAIN_H+SUB_H+1,tw,AX_H-2); ctx.fillStyle=bg; ctx.textAlign="center"; ctx.fillText(tl,tx2,ty);
+    paintLegend(ci); }
+  else paintLegend(en);
+}
+function paintLegend(i){
+  var d=CH.data[i]; if(!d){ $("leg").innerHTML=""; return; } var p=CH.data[i-1], ch=p?(d.c-p.c)/p.c*100:null, I=CH.ind, h;
+  var cl=d.c>=d.o?"up":"dn";
+  h='<span>'+esc(fullTime(d.t))+'</span><span>O <b class="'+cl+'">'+fpx(d.o)+'</b></span><span>H <b class="'+cl+'">'+fpx(d.h)+'</b></span>'+
+    '<span>L <b class="'+cl+'">'+fpx(d.l)+'</b></span><span>C <b class="'+cl+'">'+fpx(d.c)+'</b></span><span class="'+cls(ch)+'">'+pct(ch)+'</span><br>';
+  var nm=CH.ov==="MA"?["MA7","MA25","MA99"]:CH.ov==="EMA"?["EMA7","EMA25","EMA99"]:CH.ov==="BOLL"?["MID","UP","DN"]:[];
+  var ss=CH.ov==="MA"?I.ma:CH.ov==="EMA"?I.ema:CH.ov==="BOLL"?I.boll:[];
+  nm.forEach(function(n,k){ var v=ss[k][i]; h+='<span style="color:'+(CH.ov==="BOLL"?LINE_C[k===0?0:1]:LINE_C[k])+'">'+n+' '+(v==null?"--":fpx(v))+'</span>'; });
+  if(!nm.length) h+='<span>'+esc(t("amp"))+' '+(d.l?((d.h-d.l)/d.l*100).toFixed(2)+"%":"--")+'</span>';
+  h+='<span>VOL '+big(d.v)+'</span>';
+  $("leg").innerHTML=h;
+  var sd=CH.sub, sh="";
+  if(sd==="MACD") sh=["DIF","DEA","MACD"].map(function(n,k){ var v=I.macd[k][i]; return '<span style="color:'+(k<2?LINE_C[k]:"var(--sub)")+'">'+n+' '+(v==null?"--":v.toFixed(Math.abs(v)<1?5:2))+'</span>'; }).join("");
+  else if(sd==="RSI") sh='<span style="color:'+LINE_C[0]+'">RSI14 '+(I.rsi[0][i]==null?"--":I.rsi[0][i].toFixed(2))+'</span>';
+  else if(sd==="FUND"){ var fv=CH.fund&&CH.fund[i]; sh='<span>'+esc(t("fundSub"))+' <b class="'+cls(fv==null?null:fv*100)+'">'+(fv==null?"--":signed(fv,4,"%"))+'</b></span>'+
+      '<span>'+esc(t("annualL"))+' '+(fv==null?"--":signed(fv*24/fundIv()*365,1,"%"))+'</span><span>'+esc(t("every",fundIv()))+'</span>'; }
+  else if(sd==="KDJ") sh=["K","D","J"].map(function(n,k){ var v=I.kdj[k][i]; return '<span style="color:'+LINE_C[k]+'">'+n+' '+(v==null?"--":v.toFixed(2))+'</span>'; }).join("");
+  else sh='<span>VOL '+big(d.v)+'</span><span>MA5 '+(I.vma[i]==null?"--":big(I.vma[i]))+'</span><span>'+esc(t("tAmt"))+' '+big(d.vq,"$")+'</span>';
+  if(!$("slg")){ var e=document.createElement("div"); e.className="slg"; e.id="slg"; $("kcard").appendChild(e); }
+  $("slg").innerHTML=sh;
+}
+function parseK(rows){ return rows.map(function(r){ return {t:+r[0],o:+r[1],h:+r[2],l:+r[3],c:+r[4],v:+r[5],vq:+(r[7]||r[6])}; }).reverse(); }
+function mergeK(arr){ /* 新到的几根(升序)并进来:同 ts 覆盖,新 ts 追加 */
+  var d=CH.data, grew=false; arr.forEach(function(x){ var L=d[d.length-1]; if(L&&x.t===L.t) d[d.length-1]=x; else if(!L||x.t>L.t){ d.push(x); grew=true; } });
+  if(grew&&!CH.follow) CH.end++; return grew; }
+async function loadK(full){
+  var inst=cur(), bar=CH.bar;
+  if(full){ CH.loading=true; CH.err=false;
+    var c=await cacheGet("c.cx.coin."+inst+"."+bar);
+    if(c&&!CH.data.length){ CH.data=c.d; calcInd(); draw(); }
+    try{ var rows=await okx("market/candles?instId="+inst+"&bar="+bar+"&limit=300");
+      if(inst!==cur()||bar!==CH.bar) return; CH.data=parseK(rows); CH.noMore=false; calcInd(); S.at.kl=Date.now();
+      cachePut("c.cx.coin."+inst+"."+bar,CH.data.slice(-200));
+    }catch(e){ if(!CH.data.length) CH.err=true; }
+    CH.loading=false; draw(); return; }
+  if(!CH.data.length) return loadK(true);
+  var r2=await okx("market/candles?instId="+inst+"&bar="+bar+"&limit=3");
+  if(inst!==cur()||bar!==CH.bar) return; mergeK(parseK(r2)); calcInd(); S.at.kl=Date.now(); draw();
+}
+async function loadMore(){
+  if(CH.loading||CH.noMore||CH.data.length>=1500||!CH.data.length) return; CH.loading=true;
+  var inst=cur(), bar=CH.bar, oldest=CH.data[0].t;
+  try{ var rows=await okx("market/candles?instId="+inst+"&bar="+bar+"&after="+oldest+"&limit=300");
+    if(!rows.length) rows=await okx("market/history-candles?instId="+inst+"&bar="+bar+"&after="+oldest+"&limit=100");
+    if(inst===cur()&&bar===CH.bar){ var more=parseK(rows).filter(function(x){ return x.t<oldest; });
+      if(!more.length) CH.noMore=true; else { CH.data=more.concat(CH.data); if(!CH.follow) CH.end+=more.length; calcInd(); draw(); } }
+  }catch(e){}
+  CH.loading=false;
+}
+/* 用最新成交价实时推末根(不等 10 秒一轮的 K 线请求),蜡烛跟着价格跳。 */
+function tickK(px){ var L=CH.data[CH.data.length-1]; if(!L||px==null) return; L.c=px; if(px>L.h) L.h=px; if(px<L.l) L.l=px; }
+/* 交互:长按 = 十字光标,横拖 = 翻历史,双指 / 滚轮 = 缩放。 */
+(function(){
+  var w=$("kwrap"), t0=null, mode=null, holdT=null, pinch0=null, lastX=0;
+  function rel(e){ var r=w.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+  function pan(dx){ var PW=(w.clientWidth||340)-GUT, step=PW/CH.count, n=CH.data.length; if(!n) return;
+    var end=CH.follow?n-1:CH.end, k=Math.round(dx/step); if(!k) return false;
+    end=Math.max(Math.min(CH.count,n)-1,Math.min(n-1,end-k)); CH.end=end; CH.follow=end>=n-1; if(end-CH.count<5) loadMore(); draw(); return true; }
+  function zoom(f){ CH.count=Math.max(20,Math.min(240,Math.round(CH.count*f))); draw(); }
+  w.addEventListener("touchstart",function(e){
+    if(e.touches.length===2){ clearTimeout(holdT); mode="pinch"; pinch0={d:dist(e.touches),c:CH.count}; return; }
+    var p=rel(e.touches[0]); t0=p; lastX=p.x; mode=null; clearTimeout(holdT);
+    holdT=setTimeout(function(){ if(!mode){ mode="cross"; CH.cross=p; haptic(); draw(); } },260);
+  },{passive:true});
+  w.addEventListener("touchmove",function(e){
+    if(mode==="pinch"&&e.touches.length===2){ e.preventDefault(); CH.count=Math.max(20,Math.min(240,Math.round(pinch0.c*pinch0.d/dist(e.touches)))); draw(); return; }
+    var p=rel(e.touches[0]);
+    if(mode==="cross"){ e.preventDefault(); CH.cross=p; draw(); return; }
+    if(!mode){ var dx=p.x-t0.x, dy=p.y-t0.y; if(Math.abs(dx)>8&&Math.abs(dx)>Math.abs(dy)){ mode="pan"; clearTimeout(holdT); } else if(Math.abs(dy)>8){ mode="scroll"; clearTimeout(holdT); } }
+    if(mode==="pan"){ e.preventDefault(); if(pan(p.x-lastX)!==false) lastX=p.x; }
+  },{passive:false});
+  function end(){ clearTimeout(holdT); if(mode==="cross"){ setTimeout(function(){ CH.cross=null; draw(); },1600); } mode=null; }
+  w.addEventListener("touchend",end); w.addEventListener("touchcancel",end);
+  function dist(ts){ var a=ts[0],b=ts[1]; return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)||1; }
+  var drag=null;
+  w.addEventListener("mousedown",function(e){ drag={x:e.clientX}; });
+  addEventListener("mouseup",function(){ drag=null; });
+  w.addEventListener("mousemove",function(e){ if(drag){ if(pan(e.clientX-drag.x)!==false) drag.x=e.clientX; CH.cross=null; return; } CH.cross=rel(e); draw(); });
+  w.addEventListener("mouseleave",function(){ CH.cross=null; draw(); });
+  w.addEventListener("wheel",function(e){ e.preventDefault(); zoom(e.deltaY>0?1.12:0.89); },{passive:false});
+})();
+
+/* ─────────────── 取数 ─────────────── */
+async function loadLive(){
+  var inst=cur(), jobs=[okx("market/ticker?instId="+inst), okx("market/books?instId="+inst+"&sz=15"), okx("market/trades?instId="+inst+"&limit=100")];
+  var other=S.mode==="spot"?(S.hasSwap?SWAP:null):SPOT; if(other) jobs.push(okx("market/ticker?instId="+other).catch(function(){ return null; }));
+  var r=await Promise.all(jobs); if(inst!==cur()) return;
+  if(r[0]&&r[0][0]) S.tk[inst]=r[0][0]; if(r[3]&&r[3][0]) S.tk[other]=r[3][0];
+  S.book=r[1]&&r[1][0]; S.trades=r[2]||[];
+  var px=num(S.tk[inst]&&S.tk[inst].last); tickK(px);
+}
+async function loadSwapInfo(){
+  if(S.hasSwap===false) return; if(Date.now()-S.at.sw<5000) return;
+  var r=await Promise.all([okx("public/funding-rate?instId="+SWAP), okx("public/open-interest?instType=SWAP&instId="+SWAP),
+    okx("public/mark-price?instType=SWAP&instId="+SWAP), okx("market/index-tickers?instId="+BASE+"-USDT").catch(function(){return null;}),
+    S.ctVal?Promise.resolve(null):okx("public/instruments?instType=SWAP&instId="+SWAP).catch(function(){return null;})]);
+  S.hasSwap=true; S.fund=r[0][0]; S.oi=r[1][0]; S.mark=r[2][0]&&num(r[2][0].markPx); S.idx=r[3]&&r[3][0]&&num(r[3][0].idxPx);
+  if(r[4]&&r[4][0]) S.ctVal=num(r[4][0].ctVal); S.at.sw=Date.now();
+}
+async function loadSlow(){
+  if(!S.hasSwap) return;
+  var jobs=[];
+  if(Date.now()-S.at.fh>600000) jobs.push(okx("public/funding-rate-history?instId="+SWAP+"&limit=100").then(function(d){
+    var nw=d.map(function(x){ return [+x.fundingTime,num(x.realizedRate||x.fundingRate)]; }).reverse();
+    if(S.fh&&S.fh.length&&nw.length){ var older=S.fh.filter(function(x){ return x[0]<nw[0][0]; }); nw=older.concat(nw); }
+    S.fh=nw; S.fhist=nw.slice(-30); S.at.fh=Date.now(); fundSeries(); draw(); ensureFundCover(); }).catch(function(){}));
+  if(Date.now()-S.at.rb>300000){ S.at.rb=Date.now();
+    jobs.push(okx("rubik/stat/contracts/open-interest-volume?ccy="+BASE+"&period=1H").then(function(d){ S.rOi=d.slice(0,25).map(function(x){ return [+x[0],num(x[1]),num(x[2])]; }).reverse(); }).catch(function(){ S.rOi=[]; }));
+    jobs.push(okx("rubik/stat/contracts/long-short-account-ratio?ccy="+BASE+"&period=1H").then(function(d){ S.rLsr=d.slice(0,48).map(function(x){ return [+x[0],num(x[1])]; }).reverse(); }).catch(function(){ S.rLsr=[]; }));
+    jobs.push(okx("rubik/stat/taker-volume?ccy="+BASE+"&instType=CONTRACTS&period=1H").then(function(d){ S.rTk=d.slice(0,24).map(function(x){ return [+x[0],num(x[1]),num(x[2])]; }).reverse(); }).catch(function(){ S.rTk=[]; })); }
+  if(Date.now()-S.at.liq>15000) jobs.push(okx("public/liquidation-orders?instType=SWAP&uly="+BASE+"-USDT&state=filled").then(function(d){
+    var a=[]; (d||[]).forEach(function(g){ (g.details||[]).forEach(function(x){ a.push(x); }); }); a.sort(function(x,y){ return (+y.ts)-(+x.ts); }); S.liq=a; S.at.liq=Date.now(); }).catch(function(){ S.liq=S.liq||[]; }));
+  await Promise.all(jobs);
+}
+
+/* ─────────────── 画 ─────────────── */
+function tkOf(id){ return id&&S.tk[id]; }
+function paintHead(){
+  /* 头像只画一次:每轮重建 <img> 会让图标重新加载、2 秒闪一下。 */
+  if(!$("avw").firstChild) $("avw").innerHTML=avEl(INST,28);
+  $("nm").innerHTML=esc(BASE)+'<small>/'+esc(quoteOf(SPOT||SWAP))+(S.mode==="swap"?" · "+esc(t("swap")):"")+'</small>';
+  var inW=S.wl.indexOf(INST)>=0||S.wl.indexOf(SPOT)>=0||S.wl.indexOf(SWAP)>=0;
+  $("star").className="star"+(inW?" on":""); setHTML($("star"),'<svg viewBox="0 0 24 24" width="21" height="21" '+(inW?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"')+'><path d="M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.2l-5.8 3.2 1.2-6.5L2.6 9.4l6.5-.8z"/></svg>');
+  var modes=(SPOT?["spot"]:[]).concat(S.hasSwap!==false?["swap"]:[]);
+  $("modew").style.display=modes.length>1?"":"none";
+  setHTML($("mode"),modes.map(function(m){ return '<button data-mode="'+m+'" class="'+(S.mode===m?"on":"")+'">'+esc(t(m))+'</button>'; }).join(""));
+}
+function paintPx(){
+  var k=tkOf(cur()), last=num(k&&k.last), open=num(k&&k.open24h), ch=(last!=null&&open)?(last-open)/open*100:null;
+  var el=$("px"); el.textContent=fpx(last);
+  el.className=el.className.replace(/\b(up|dn)\b/g,"").trim()+" "+cls(ch);
+  $("pct").textContent=ch==null?"--":pct(ch); $("pct").setAttribute("style",pillStyle(ch));
+  $("abs").textContent=(last!=null&&open)?signed(last-open,pxDp(last)):""; $("abs").className=cls(ch);
+  var sp=num(tkOf(SPOT)&&tkOf(SPOT).last), sw=num(tkOf(SWAP)&&tkOf(SWAP).last), bits=[];
+  if(S.hasSwap){ if(S.mark!=null) bits.push(t("mark")+' <i>'+fpx(S.mark)+'</i>'); if(S.idx!=null) bits.push(t("index")+' <i>'+fpx(S.idx)+'</i>');
+    if(sp&&sw) bits.push(t("basis")+' <i class="'+cls((sw-sp)/sp*1e4)+'">'+signed((sw-sp)/sp*100,3,"%")+'</i>'); }
+  else if(!SPOT) bits.push(esc(t("noSpot")));
+  $("subpx").innerHTML=bits.join(" · ");
+  document.title=BASE;   /* 折叠栏标题只放币名(§0.2d);带价格会让栏上的字随行情跳 */
+}
+function cdown(ms){ var s=Math.max(0,Math.round((ms-Date.now())/1000)); return Math.floor(s/3600)+":"+("0"+Math.floor(s%3600/60)).slice(-2)+":"+("0"+s%60).slice(-2); }
+function fundIv(){ var f=S.fund; if(!f) return 8; var iv=((+f.fundingTime)-(+f.prevFundingTime))/3600e3; return iv>0?iv:8; }
+function paintStats(){
+  var k=tkOf(cur()), last=num(k&&k.last), hi=num(k&&k.high24h), lo=num(k&&k.low24h), cells=[];
+  var volq=k?(S.mode==="swap"?num(k.volCcy24h)*last:num(k.volCcy24h)):null;
+  cells.push([t("hi"),fpx(hi)],[t("lo"),fpx(lo)],[t("amt"),big(volq,"$")],[t("amp"),(hi&&lo)?((hi-lo)/lo*100).toFixed(2)+"%":"--"]);
+  if(S.hasSwap&&S.fund){ var fr=num(S.fund.fundingRate), an=fr!=null?fr*(24/fundIv())*365*100:null;
+    cells.push([t("fund"),'<span class="'+(fr!=null&&Math.abs(fr)>=0.00005?(fr>0?"up":"dn"):"")+'">'+(fr==null?"--":signed(fr*100,4,"%"))+'</span>'],
+      [t("settle"),'<span id="cd">'+cdown(+S.fund.fundingTime)+'</span>'],
+      [t("oi"),big(num(S.oi&&S.oi.oiUsd),"$")],
+      [t("annualL"),an==null?"--":'<span class="'+cls(an)+'">'+signed(an,1,"%")+'</span>']);
+  } else { var s0=num(k&&k.sodUtc0), td=(last!=null&&s0)?(last-s0)/s0*100:null;
+    cells.push([t("today"),'<span class="'+cls(td)+'">'+pct(td)+'</span>'],[t("open"),fpx(num(k&&k.open24h))],[t("bid1"),fpx(num(k&&k.bidPx))],[t("ask1"),fpx(num(k&&k.askPx))]); }
+  $("stats").innerHTML=cells.map(function(c){ return '<div><small>'+esc(c[0])+'</small><b>'+c[1]+'</b></div>'; }).join("");
+}
+function qty(v){ var n=num(v); if(n===null) return "--"; var a=Math.abs(n); if(a>=1e6) return (n/1e6).toFixed(2)+"M"; if(a>=1e4) return (n/1e3).toFixed(1)+"K";
+  if(a>=100) return n.toFixed(0); if(a>=1) return n.toFixed(3); return n.toPrecision(3); }
+/* 永续盘口的数量单位是「张」,乘面值换成币数,与现货同一口径。 */
+function szMul(){ return S.mode==="swap"?(S.ctVal||1):1; }
+function paintBook(){
+  var b=S.book, el=$("book");
+  setHTML($("bmode"),["book","depth"].map(function(m){ return '<button data-bm="'+m+'" class="'+(S.bmode===m?"on":"")+'">'+esc(t(m))+'</button>'; }).join(""));
+  if(!b){ el.innerHTML='<div class="state">'+esc(S.fail?t("failCold"):t("kLoading"))+'</div>'; el.__h=null; return; }
+  var m=szMul(), bids=b.bids.slice(0,15).map(function(x){ return [num(x[0]),num(x[1])*m]; }), asks=b.asks.slice(0,15).map(function(x){ return [num(x[0]),num(x[1])*m]; });
+  var cb=0,ca=0; bids.forEach(function(x){ cb+=x[1]; x[2]=cb; }); asks.forEach(function(x){ ca+=x[1]; x[2]=ca; });
+  var nb=bids.reduce(function(s,x){return s+x[0]*x[1];},0), na=asks.reduce(function(s,x){return s+x[0]*x[1];},0), br=nb+na?nb/(nb+na)*100:50, mx=Math.max(cb,ca)||1;
+  var sp=asks[0]&&bids[0]?asks[0][0]-bids[0][0]:null, mid=asks[0]&&bids[0]?(asks[0][0]+bids[0][0])/2:null;
+  var h='<div class="bhead"><span class="up">'+esc(t("bidR",br.toFixed(1)+"%"))+'</span><span class="dn">'+esc(t("askR",(100-br).toFixed(1)+"%"))+'</span></div>'+
+    '<div class="ratio"><span style="flex:'+br+';background:var(--cu)"></span><span style="flex:'+(100-br)+';background:var(--cd)"></span></div>';
+  /* 深度图:画布只建一次、之后原地重画 —— 每轮 innerHTML 重建 <canvas> 会先露出一帧空白,2 秒闪一下(2026-09-30)。 */
+  if(S.bmode==="depth"){ var spT=esc(t("spread",sp==null?"--":fpx(sp)+" · "+(sp/mid*100).toFixed(4)+"%"));
+    if(!$("depth")||!$("dhd")){ el.innerHTML='<div id="dhd"></div><canvas id="depth"></canvas><div class="spread" id="dsp"></div>'; el.__h=null; }
+    setHTML($("dhd"),h); setHTML($("dsp"),spT); drawDepth(bids,asks); return; }
+  h+='<div class="bth"><div><span>'+esc(t("qty"))+'</span><span>'+esc(t("bidP"))+'</span></div><div><span>'+esc(t("askP"))+'</span><span>'+esc(t("qty"))+'</span></div></div><div class="book"><div class="col bid">';
+  bids.forEach(function(x){ h+='<div><i style="width:'+(x[2]/mx*100).toFixed(1)+'%;background:var(--cu)"></i><span>'+qty(x[1])+'</span><span class="up">'+fpx(x[0])+'</span></div>'; });
+  h+='</div><div class="col ask">';
+  asks.forEach(function(x){ h+='<div><i style="width:'+(x[2]/mx*100).toFixed(1)+'%;background:var(--cd)"></i><span class="dn">'+fpx(x[0])+'</span><span>'+qty(x[1])+'</span></div>'; });
+  h+='</div></div><div class="spread">'+esc(t("spread",sp==null?"--":fpx(sp)+" · "+(sp/mid*100).toFixed(4)+"%"))+'</div>';
+  setHTML(el,h);
+}
+function drawDepth(bids,asks){
+  var c=$("depth"); if(!c) return; var w=c.clientWidth||320, h=170, dpr=window.devicePixelRatio||1, g=c.getContext("2d");
+  c.width=w*dpr; c.height=h*dpr; g.setTransform(dpr,0,0,dpr,0,0);
+  if(!bids.length||!asks.length) return;
+  var lo=bids[bids.length-1][0], hi=asks[asks.length-1][0], mx=Math.max(bids[bids.length-1][2],asks[asks.length-1][2]);
+  function X(p){ return (p-lo)/(hi-lo)*w; } function Y(v){ return h-16-(v/mx)*(h-26); }
+  [[bids,upC()],[asks,dnC()]].forEach(function(s){ var a=s[0], col=s[1]; g.beginPath(); g.moveTo(X(a[0][0]),h-16);
+    a.forEach(function(x){ g.lineTo(X(x[0]),Y(x[2])); }); g.lineTo(X(a[a.length-1][0]),h-16); g.closePath();
+    g.fillStyle=col; g.globalAlpha=.18; g.fill(); g.globalAlpha=1; g.strokeStyle=col; g.lineWidth=1.4; g.beginPath();
+    a.forEach(function(x,i){ if(i) g.lineTo(X(x[0]),Y(x[2])); else g.moveTo(X(x[0]),Y(x[2])); }); g.stroke(); });
+  g.fillStyle=cssVar("--sub"); g.font="10px -apple-system,system-ui,sans-serif"; g.textBaseline="bottom";
+  g.textAlign="left"; g.fillText(fpx(lo),2,h-2); g.textAlign="right"; g.fillText(fpx(hi),w-2,h-2);
+  g.textAlign="center"; g.fillText(fpx((bids[0][0]+asks[0][0])/2),w/2,h-2); g.textAlign="left"; g.textBaseline="top"; g.fillText(qty(mx),2,4);
+}
+function paintTrades(){
+  var a=S.trades||[], el=$("trades"), m=szMul();
+  if(!a.length){ el.innerHTML='<div class="state">'+esc(S.fail?t("failCold"):t("kLoading"))+'</div>'; $("trInfo").textContent=""; return; }
+  var rows=a.map(function(x){ var p=num(x.px), s=num(x.sz)*m; return {ts:+x.ts,p:p,s:s,v:p*s,buy:x.side==="buy"}; });
+  var vs=rows.map(function(r){return r.v;}).sort(function(x,y){return x-y;}), th=Math.max(10000,vs[Math.floor(vs.length*0.9)]||0);
+  var bv=rows.filter(function(r){return r.buy;}).reduce(function(s,r){return s+r.v;},0), tv=rows.reduce(function(s,r){return s+r.v;},0);
+  $("trInfo").textContent=t("trSum",rows.length).replace("%s",tv?(bv/tv*100).toFixed(0)+"%":"--");
+  var h='<div class="tr th"><span>'+esc(t("tTime"))+'</span><span>'+esc(t("tPx"))+'</span><span>'+esc(t("tQty"))+'</span><span>'+esc(t("tAmt"))+'</span></div>';
+  rows.slice(0,16).forEach(function(r){ h+='<div class="tr'+(r.v>=th?" big":"")+'"><span>'+hhmmss(r.ts)+'</span><span class="'+(r.buy?"up":"dn")+'">'+fpx(r.p)+'</span><span>'+qty(r.s)+'</span><span>'+big(r.v,"$")+'</span></div>'; });
+  el.innerHTML=h;
+}
+function spark(id,vals,opt){
+  var c=$(id); if(!c) return; var w=c.clientWidth||150, h=46, dpr=window.devicePixelRatio||1, g=c.getContext("2d");
+  c.width=w*dpr; c.height=h*dpr; g.setTransform(dpr,0,0,dpr,0,0);
+  var v=vals.filter(function(x){return x!=null;}); if(v.length<2) return;
+  if(opt&&opt.bars){ var mx=Math.max.apply(null,v.map(Math.abs))||1, bw=w/vals.length; var z=opt.twoSide?h/2:h-1;
+    vals.forEach(function(x,i){ if(x==null) return; var bh=Math.abs(x)/mx*(opt.twoSide?h/2-2:h-3); g.fillStyle=x>=0?upC():dnC();
+      g.fillRect(i*bw+bw*0.15,x>=0?z-bh:z,Math.max(1,bw*0.7),Math.max(1,bh)); }); return; }
+  var lo=Math.min.apply(null,v), hi=Math.max.apply(null,v); if(hi===lo){ hi+=1; lo-=1; }
+  var col=opt&&opt.col||cssVar("--src"); g.strokeStyle=col; g.lineWidth=1.6; g.beginPath();
+  vals.forEach(function(x,i){ var X=i/(vals.length-1)*w, Y=3+(hi-x)/(hi-lo)*(h-6); if(i) g.lineTo(X,Y); else g.moveTo(X,Y); }); g.stroke();
+  if(opt&&opt.ref!=null&&opt.ref>lo&&opt.ref<hi){ var ry=3+(hi-opt.ref)/(hi-lo)*(h-6); g.strokeStyle=cssVar("--line"); g.setLineDash([2,3]); g.beginPath(); g.moveTo(0,ry); g.lineTo(w,ry); g.stroke(); g.setLineDash([]); }
+}
+function paintDeriv(){
+  $("derivw").classList.toggle("hidden",!S.hasSwap); if(!S.hasSwap) return;
+  $("dInfo").textContent=t("allC");
+  var f=S.fund, fr=num(f&&f.fundingRate), iv=fundIv(), h="";
+  h+='<div class="dcard"><small>'+esc(t("fHist"))+'</small><b class="'+(fr!=null&&Math.abs(fr)>=0.00005?(fr>0?"up":"dn"):"")+'">'+(fr==null?"--":signed(fr*100,4,"%"))+'</b><em>'+
+    esc(t("every",iv))+' · '+esc(t("annual",fr==null?"--":signed(fr*(24/iv)*365*100,1,"%")))+'</em><canvas id="spF"></canvas></div>';
+  var o=S.rOi||[], oiL=o.length?o[o.length-1][1]:null, oi0=o.length?o[0][1]:null, oiC=oiL&&oi0?(oiL-oi0)/oi0*100:null;
+  h+='<div class="dcard"><small>'+esc(t("oiC"))+'</small><b>'+big(oiL,"$")+'</b><em><span class="'+cls(oiC)+'">'+pct(oiC)+'</span> · 24h</em><canvas id="spO"></canvas></div>';
+  var l=S.rLsr||[], lv=l.length?l[l.length-1][1]:null, lp=lv!=null?lv/(1+lv)*100:null;
+  h+='<div class="dcard"><small>'+esc(t("lsr"))+'</small><b>'+(lv==null?"--":lv.toFixed(2))+'</b><em>'+esc(lp==null?t("noData"):t("lsrSub",lp.toFixed(1)+"%").replace("%s",(100-lp).toFixed(1)+"%"))+'</em><canvas id="spL"></canvas></div>';
+  var tk=S.rTk||[], net=tk.reduce(function(s,x){ return s+(x[2]||0)-(x[1]||0); },0);
+  /* rubik taker-volume:[ts, sellVol, buyVol](USD)。 */
+  h+='<div class="dcard"><small>'+esc(t("taker"))+'</small><b class="'+cls(net)+'">'+(tk.length?(net>=0?"+":"−")+big(Math.abs(net),"$"):"--")+'</b><em>'+esc(tk.length?t(net>=0?"takerSub":"takerSubS",""):t("noData")).replace(/\s*$/,"")+'</em><canvas id="spT"></canvas></div>';
+  $("deriv").innerHTML=h;
+  spark("spF",(S.fhist||[]).map(function(x){return x[1];}),{bars:true,twoSide:true});
+  spark("spO",o.map(function(x){return x[1];}));
+  spark("spL",l.map(function(x){return x[1];}),{ref:1,col:cssVar("--accent")});
+  spark("spT",tk.map(function(x){ return (x[2]||0)-(x[1]||0); }),{bars:true,twoSide:true});
+  paintLiq();
+}
+function paintLiq(){
+  var a=(S.liq||[]).filter(function(x){ return Date.now()-(+x.ts)<3600e3; }), m=S.ctVal||1, lv=0, sv=0;
+  a.forEach(function(x){ var v=num(x.sz)*m*num(x.bkPx); if(x.posSide==="long") lv+=v; else sv+=v; });
+  var h='<div class="liqsum"><div><small>'+esc(t("longL"))+'</small><b class="dn">'+big(lv,"$")+'</b></div><div><small>'+esc(t("shortL"))+'</small><b class="up">'+big(sv,"$")+'</b></div></div>';
+  if(!a.length) h+='<div class="state" style="padding:6px">'+esc(t("noLiq"))+'</div>';
+  a.slice(0,8).forEach(function(x){ var lg=x.posSide==="long"; h+='<div class="lrow"><span>'+hhmm(+x.ts)+'</span><span class="'+(lg?"dn":"up")+'">'+esc(t(lg?"longL":"shortL"))+'</span><span>'+fpx(x.bkPx)+'</span><span>'+big(num(x.sz)*m*num(x.bkPx),"$")+'</span></div>'; });
+  $("liq").innerHTML=h;
+}
+function paintBars(){
+  var B=I18N[LANG].bars||I18N.zh.bars;
+  setHTML($("bars"),BARS.map(function(b){ return '<button data-bar="'+b+'" class="'+(CH.bar===b?"on":"")+'">'+esc(B[b])+'</button>'; }).join(""));
+  setHTML($("ovs"),OVS.map(function(b){ return '<button data-ov="'+b+'" class="'+(CH.ov===b?"on":"")+'">'+esc(b==="none"?t("none"):b)+'</button>'; }).join(""));
+  setHTML($("subs"),SUBS.filter(function(b){ return b!=="FUND"||S.hasSwap; }).map(function(b){ return '<button data-sub="'+b+'" class="'+(CH.sub===b?"on":"")+'">'+esc(b==="FUND"?t("fundBtn"):b)+'</button>'; }).join(""));
+}
+var ICO={bell:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  zap:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+  pct:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>'};
+function paintAlerts(){
+  var a=[["price",ICO.bell,"aPrice","aPriceS"],["move",ICO.zap,"aMove","aMoveS"]]; if(S.hasSwap) a.push(["funding",ICO.pct,"aFund","aFundS"]);
+  $("alerts").style.gridTemplateColumns="repeat("+a.length+",1fr)";
+  setHTML($("alerts"),a.map(function(x){ return '<button class="abtn" data-alert="'+x[0]+'" type="button">'+x[1]+'<span>'+esc(t(x[2]))+'</span><small>'+esc(t(x[3]))+'</small></button>'; }).join(""));
+}
+/* 实时页:绿点 + HH:mm:ss(xbAt live 档);10 秒没拉成 / 这一轮失败 → 灰点;还没拉成过 → 只剩图标。 */
+function paintAnchor(busy){ var el=$("anchor");
+  if(S.lastOk) xbAt.set(el,S.lastOk,{live:1,off:!(Date.now()-S.lastOk<10000&&!S.fail)}); else xbAt.set(el,null);
+  xbAt.busy(el,busy); }
+function paintAll(){ paintHead(); paintPx(); paintStats(); paintBars(); draw(); paintBook(); paintTrades(); paintDeriv(); paintAlerts(); paintAnchor(false);
+  document.querySelectorAll("[data-i]").forEach(function(e){ e.textContent=t(e.getAttribute("data-i")); });
+  $("foot").textContent=t("foot"); $("kinfo").textContent=CH.data.length?CH.data.length+" · "+(I18N[LANG].bars||I18N.zh.bars)[CH.bar]:""; }
+
+/* ─────────────── 节律 ─────────────── */
+var nT=0;
+async function refresh(force){
+  nT++; if(force) paintAnchor(true);
+  var swapP=loadSwapInfo().catch(function(e){ if(S.hasSwap==null&&/okx 5\d/.test(String(e&&e.message))) S.hasSwap=false; });
+  var jobs=[loadLive(), swapP];
+  if(force||nT%5===0) jobs.push(loadK(false).catch(function(){}));
+  /* 慢数据要等 loadSwapInfo 判出「有没有永续」再取;取完单独重画合约区,不拖住 2 秒那一轮。 */
+  if(force||nT%5===1) swapP.then(loadSlow).then(paintDeriv,paintDeriv);
+  var rs=await Promise.all(jobs.map(function(p){ return p.then(function(){return 1;},function(){return 0;}); }));
+  S.fail=!rs[0]; if(!S.fail){ S.lastOk=Date.now(); if(Date.now()-(S.cachedAt||0)>15000){ S.cachedAt=Date.now(); cachePut("c.cx.coin.tk."+INST,{tk:S.tk,fund:S.fund,oi:S.oi,hasSwap:S.hasSwap,ctVal:S.ctVal}); } }
+  else if(force) toast(t(S.lastOk?"fail":"failCold"));
+  paintHead(); paintPx(); paintStats(); draw(); paintBook(); paintTrades(); paintAnchor(false);
+  paintAlerts(); if(S.hasSwap&&!$("spF")) paintDeriv();
+}
+var poll=Poller(refresh,1000);
+
+document.addEventListener("click",function(e){
+  var b=e.target.closest("[data-bar]"); if(b){ CH.bar=b.getAttribute("data-bar"); CH.data=[]; CH.follow=true; CH.count=64; sSet("c.pref.bar",CH.bar); haptic(); paintBars(); draw(); loadK(true).then(function(){ paintAll(); ensureFundCover(); }); return; }
+  var o=e.target.closest("[data-ov]"); if(o){ CH.ov=o.getAttribute("data-ov"); sSet("c.pref.ov",CH.ov); paintBars(); draw(); return; }
+  var s=e.target.closest("[data-sub]"); if(s){ CH.sub=s.getAttribute("data-sub"); sSet("c.pref.sub",CH.sub); paintBars(); draw(); ensureFundCover(); return; }
+  var bm=e.target.closest("[data-bm]"); if(bm){ S.bmode=bm.getAttribute("data-bm"); paintBook(); return; }
+  var md=e.target.closest("[data-mode]"); if(md){ var m=md.getAttribute("data-mode"); if(m!==S.mode){ S.mode=m; CH.data=[]; CH.follow=true; S.book=null; S.trades=[];
+      haptic(); paintAll(); loadK(true); refresh(true); } return; }
+  var al=e.target.closest("[data-alert]"); if(al){ addAlert(al.getAttribute("data-alert")); return; }
+});
+async function addAlert(id){
+  if(!window.xbridge) return;
+  /* params 只是预填:币种填成这一页的币,价格提醒再把价位预填成现价(改一个数就是自己的线)。 */
+  var k=tkOf(cur()), last=num(k&&k.last), p={pair:SPOT||SWAP};
+  if(id==="price"&&last!=null) p.price=String(+last.toPrecision(4));
+  try{ var r=await call(xbridge.alertAdd({id:id,params:p})); if(r==="ok") toast(t("aOk")); else if(r==="quota") toast(t("aQuota")); }catch(e){}
+}
+$("star").addEventListener("click",function(){
+  var key=SPOT||SWAP, i=-1; [INST,SPOT,SWAP].forEach(function(x){ if(i<0&&x) i=S.wl.indexOf(x); });
+  if(i>=0){ S.wl.splice(i,1); toast(t("removed")); } else { if(S.wl.length>=WL_MAX){ toast(t("full")); return; } S.wl.push(key); toast(t("added")); }
+  haptic("success"); wlSave(S.wl); paintHead();
+});
+$("anchor").addEventListener("click",function(){ haptic(); refresh(true); });
+$("pickw").addEventListener("click",function(){
+  if(!window.xbridge) return; var p={pair:SPOT||SWAP,name:BASE};
+  var items=[{id:"term",params:p},{id:"mini",params:p},{id:"coin",params:p},{id:"detail",params:p},{id:"perf",params:p},{id:"flow",params:p}];
+  if(S.hasSwap) items.push({id:"deriv",params:p});
+  /* K 线两张带上此刻图表的周期(1 分 / 5 分 / 15 分组件不支持,落回日线)。 */
+  var st={"1H":"3600","4H":"14400","1Dutc":"86400","1Wutc":"604800"}[CH.bar]||"86400", pk={pair:p.pair,name:p.name,step:st};
+  items.push({id:"kday",params:pk},{id:"kmid",params:pk}); xbridge.pickWidgets(items);
+});
+addEventListener("resize",function(){ draw(); if(S.bmode==="depth") paintBook(); });
+
+(async function(){
+  var has=await ready();
+  await bootEnv(function(){ paintAll(); });
+  paintAll();
+  if(!has){ $("book").innerHTML='<div class="state">'+esc(t("notX"))+'</div>'; return; }
+  S.wl=await wlLoad();
+  var pb=await sGet("c.pref.bar"), po=await sGet("c.pref.ov"), ps=await sGet("c.pref.sub");
+  if(BARS.indexOf(pb)>=0) CH.bar=pb; if(OVS.indexOf(po)>=0) CH.ov=po; if(SUBS.indexOf(ps)>=0) CH.sub=ps;
+  var c=await cacheGet("c.cx.coin.tk."+INST);
+  if(c){ S.tk=c.d.tk||{}; S.fund=c.d.fund; S.oi=c.d.oi; S.hasSwap=c.d.hasSwap; S.ctVal=c.d.ctVal; S.lastOk=c.t; }
+  paintAll();
+  await Promise.all([loadK(true), refresh(true)]);
+  paintAll();
+  poll.start();
+  setInterval(function(){ if(document.visibilityState==="hidden") return; var el=$("cd"); if(el&&S.fund) el.textContent=cdown(+S.fund.fundingTime);
+    paintAnchor($("anchor").classList.contains("busy")); },1000);
+})();
+})();
+</script>
+</body></html>

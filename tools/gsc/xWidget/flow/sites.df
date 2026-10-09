@@ -1,0 +1,200 @@
+{
+  "_note": "站点列表(Search Console API /webmasters/v3/sites)。整包是 oauth2 注入器(credential-vault §5.3)的第一个真实消费者:凭证 = 用户自己的 Google 授权(PKCE 公有客户端,零平台密钥),注入层附 Bearer access token(过期自动刷新,拒刷才标失效),flow 里零凭证痕迹。required:true——没连接根本不发请求。siteUrl 形态两种:`sc-domain:example.com`(域名资源)/ `https://example.com/`(网址前缀资源),原样透出,渲染层再美化。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "cred",
+      "action": "credential.state",
+      "params": {
+        "id": "google"
+      },
+      "_note": "凭证绑定状态(纯本地查表,零网络)。gsc 走 oauth2,所以它是全库**唯一**能产出 `expired` 的包:\n  refresh 被 Google 拒(撤权 / refresh_token 轮换丢失)时宿主标失效,这里当场看得见。\n  ⚠️ `unbound`(从未连接)与 `expired`(连过、已失效)**要分开画** —— 前者是「去连接」,\n  后者是「重新授权」,把用户指向同一句话会让已连过的人一头雾水。"
+    },
+    {
+      "id": "resp",
+      "action": "request",
+      "params": {
+        "url": "https://searchconsole.googleapis.com/webmasters/v3/sites",
+        "method": "GET",
+        "header": {
+          "Accept": "application/json",
+          "User-Agent": "Numable"
+        },
+        "formatType": "json",
+        "credential": "google"
+      }
+    },
+    {
+      "_note": "请求失败两种形态:① iOS/Android 等 http 栈把非 2xx 当节点失败 → resp 整个为空(AF 节点失败不升级流失败,后续照跑);② 有的端把 JSON 错误体 {error:{code,message,status}} 交回来。两种都得抓 —— 不抓 n 会算成 0,『0 个站点』是假数字,比报错更险(标准 §9.5)。ok=0 时 n 置空,卡上渲 -- + 短句。",
+      "op": "set",
+      "props": {
+        "key": "errMsg",
+        "value": "${resp.error.message}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(eq::(${resp},),0,if::(eq::(${errMsg},),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "credState",
+        "value": "$[connect::(${cred.state},)]"
+      },
+      "_note": "透给 H5 页做三态分诊。⚠️ 包一层 `connect::(…,)`:裸写 `${cred.state}` 时,\n  若 action 没执行该键**根本不会被 set**,而 `resultFilter` 不输出没 set 过的键 ——\n  台子与页面都会把「没执行」看成「没这个字段」,与「真的没绑」分不开。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${resp},),1,0)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "gsc_unreachable"
+          }
+        }
+      ],
+      "_note": "**只在「没拿到答案」时抛**(§7.2.2):账号被拒 / token 过期时 Google 返回 `error.message` —— 那是**明确答案**,ok=0 那一态由 p-setup.rcn 渲「还没有连接」引导重连;\n渲成旧数据等于让用户永远不知道要重新授权。\n⚠️ 「名下一个资源都没有」是 ok=1 + list 空,更不抛。\n取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "list",
+        "value": "${resp.siteEntry}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[if::(eq::(${ok},1),length::(${list}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0r",
+        "value": "${list[0].siteUrl}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0a",
+        "value": "$[replaceAll::(${s0r},^sc-domain.,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0b",
+        "value": "$[replaceAll::(${s0a},^https?.//,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "$[replaceAll::(${s0b},/$,)]"
+      },
+      "_note": "站名去 sc-domain: / https:// 前缀与尾斜杠(v37)—— 卡上显示「numable.app」而不是「sc-domain:numable.app」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s1r",
+        "value": "${list[1].siteUrl}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s1a",
+        "value": "$[replaceAll::(${s1r},^sc-domain.,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s1b",
+        "value": "$[replaceAll::(${s1a},^https?.//,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s1",
+        "value": "$[replaceAll::(${s1b},/$,)]"
+      },
+      "_note": "站名去 sc-domain: / https:// 前缀与尾斜杠(v37)—— 卡上显示「numable.app」而不是「sc-domain:numable.app」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2r",
+        "value": "${list[2].siteUrl}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2a",
+        "value": "$[replaceAll::(${s2r},^sc-domain.,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2b",
+        "value": "$[replaceAll::(${s2a},^https?.//,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2",
+        "value": "$[replaceAll::(${s2b},/$,)]"
+      },
+      "_note": "站名去 sc-domain: / https:// 前缀与尾斜杠(v37)—— 卡上显示「numable.app」而不是「sc-domain:numable.app」。"
+    },
+    {
+      "_note": "卡面名单:前两个站点用『 · 』拼(maxLines 2);展示串在数据层拼好。",
+      "op": "set",
+      "props": {
+        "key": "namesTxt",
+        "value": "$[if::(eq::(${s1},),${s0},${s0} · ${s1})]"
+      }
+    },
+    {
+      "_note": "取数时刻锚点(标准 §4.4):站点清单无自带日期,显示拉取时间。",
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ok",
+          "n",
+          "errMsg",
+          "s0",
+          "s1",
+          "s2",
+          "list",
+          "namesTxt",
+          "at",
+          "credState"
+        ]
+      }
+    }
+  ]
+}

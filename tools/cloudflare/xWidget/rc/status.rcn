@@ -1,0 +1,268 @@
+{
+  "_note": "全局状态卡(22 · 158×158)。本包的视觉语言(四张卡 + 首页共用):\n  ①「源色」= Cloudflare 官方橙 #F38020|#FBAD41,深色档换成官方自己的浅橙 —— **只用在两处**:每张卡左上的品牌行(身份点)、以及「跟你有关」的信号(WARP / 命中你节点的维护行)。状态灯不用源色,它有自己的语义色(绿/橙/红)。\n  ② 卡边距 12pt(22 档)、块内边距 10pt —— 标准 §4.2a-1 钉死的三个数。\n  ③ 底部状态词收进一条 chip,chip 底板画在五个 op:if 分支**之外**:任何数据形态(含取数失败)都留得住这块形状(§4.2a / G9)。\n\n⚠️ 主数值取「进行中事件数」而不是状态词:状态词中英文长度差一倍(「运行正常」4 字 vs 「Operational」11 字),放不进 22 档的主数值字号。数字恒 1~2 位,44pt 稳。\n⚠️ 版式复核(§4.2a-1):品牌行 11pt@y=12 底边 ≈26,主数值 44pt 起于 y=36 —— 不压行。",
+  "rc": {
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FFFBF8\\,#FEF3EB)@90|linear(#15171A\\,#191A1B\\,#211F1C)@90"
+      },
+      {
+        "_note": "源色身份点(卡片设计系统 §2):Cloudflare 官方橙 #F38020|#FBAD41。卡名不再染源色 —— 身份由这颗点承担,卡名恒主文色(§1.2),这样 18 个包并排时「有的卡带身份点、有的不带」的分叉就没了。\n⚠️ y 锚在卡名的实测框上(`{brand.y}+({brand.h}-5pt)/2`),不写常量:换字号/字体/端都自动跟上。",
+        "id": "srcdot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{brand.y}+({brand.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#F38020|#FBAD41"
+      },
+      {
+        "id": "brand",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-79pt",
+        "h": "-1",
+        "text": "${@i18n.brand}",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1"
+      },
+      {
+        "_note": "取数时刻锚点(标准 §4.4:实时数据卡必须能判断新鲜度)。",
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-58pt",
+        "y": "14pt",
+        "w": "46pt",
+        "h": "-1",
+        "text": "${at}",
+        "fontSize": "9pt",
+        "alignmentH": "2",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${nInc},--),--),0,1)]"
+        },
+        "react": [
+          {
+            "id": "n",
+            "type": "txt",
+            "x": "12pt",
+            "y": "36pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${nInc},--)]",
+            "fontSize": "44pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${nInc},--),--),1,0)]"
+        },
+        "react": [
+          {
+            "id": "nE",
+            "type": "txt",
+            "x": "12pt",
+            "y": "49.25pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "44pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "id": "label",
+        "type": "txt",
+        "x": "12pt",
+        "y": "78pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "${@i18n.openIncidents}",
+        "fontSize": "11pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "id": "chip",
+        "type": "layer",
+        "x": "12pt",
+        "y": "122pt",
+        "w": "{parent.w}-24pt",
+        "h": "24pt",
+        "cornerRadius": {
+          "leftT": "8pt",
+          "leftB": "8pt",
+          "rightT": "8pt",
+          "rightB": "8pt"
+        },
+        "bgColor": "#E7E9EE|#20232A"
+      },
+      {
+        "_note": "状态灯:一条嵌套 $[if::] 直接产出颜色字面量(每档都是「浅|深」双分支串),不为每档各摞一个 op:if —— 标准 §4.5 第 2 条的范式。lv<0(取数失败/未知 indicator)落灰点。",
+        "id": "dot",
+        "type": "layer",
+        "x": "22pt",
+        "y": "130pt",
+        "w": "8pt",
+        "h": "8pt",
+        "cornerRadius": {
+          "leftT": "4pt",
+          "leftB": "4pt",
+          "rightT": "4pt",
+          "rightB": "4pt"
+        },
+        "bgColor": "$[if::(eq::(${lv},0),#1FC77D|#1FC77D,if::(eq::(${lv},1),#F38020|#FBAD41,if::(eq::(${lv},2),#F38020|#FBAD41,if::(eq::(${lv},3),#FF5C4D|#FF5C4D,#6B7280|#8E939B))))]"
+      },
+      {
+        "_note": "状态词五个互斥分支。文案必须走 @i18n(G8),而 i18n 的键不能动态拼 —— 所以只能一档一个 op:if,不能像颜色那样压成一条表达式。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${lv},0),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "34pt",
+            "y": "129pt",
+            "w": "{parent.w}-56pt",
+            "h": "-1",
+            "text": "${@i18n.stOk}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${lv},1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "34pt",
+            "y": "129pt",
+            "w": "{parent.w}-56pt",
+            "h": "-1",
+            "text": "${@i18n.stMaint}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${lv},2),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "34pt",
+            "y": "129pt",
+            "w": "{parent.w}-56pt",
+            "h": "-1",
+            "text": "${@i18n.stMinor}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${lv},3),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "34pt",
+            "y": "129pt",
+            "w": "{parent.w}-56pt",
+            "h": "-1",
+            "text": "${@i18n.stMajor}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "兜底档:lv 缺失或 -1。**不落成「运行正常」** —— 取不到状态就说取不到,编一个「一切正常」是骗人(标准 §7.3)。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(ge::(findNotEmpty::(${lv},-1),0),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "34pt",
+            "y": "129pt",
+            "w": "{parent.w}-56pt",
+            "h": "-1",
+            "text": "${@i18n.stUnknown}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "brand": "Cloudflare",
+        "openIncidents": "进行中事件",
+        "stOk": "运行正常",
+        "stMaint": "维护中",
+        "stMinor": "局部异常",
+        "stMajor": "服务故障",
+        "stUnknown": "状态未知"
+      },
+      "en-US": {
+        "brand": "Cloudflare",
+        "openIncidents": "Open incidents",
+        "stOk": "Operational",
+        "stMaint": "Maintenance",
+        "stMinor": "Partial outage",
+        "stMajor": "Major outage",
+        "stUnknown": "Unknown"
+      }
+    }
+  }
+}

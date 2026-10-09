@@ -1,0 +1,476 @@
+{
+  "_note": "日出日落(22)。天空底色随当前天气;抛物线轨迹(浅)+ 已走过的一段(金)+ 当前太阳位置(只在白天画);下方:距日落 / 距日出、白昼时长、今日最大紫外线分档。生成器 gen_weather_more.py。",
+  "rc": {
+    "cells": [
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_sky",
+          "value": "$[findNotEmpty::(${sky},overcast)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},clear)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#2F7FC4\\,#6FB4E0\\,#A9D2EC)@90|linear(#1F5C90\\,#487F9E\\,#6E9AB0)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},overcast)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#6B7E8E\\,#93A5B2\\,#B9C6CF)@90|linear(#4A5763\\,#6A7783\\,#8A96A0)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},rain)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#3E5A73\\,#5C7B93\\,#89A3B5)@90|linear(#2A3F52\\,#42596C\\,#647D8C)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},snow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#7C93A8\\,#A8BCCB\\,#D6E3EC)@90|linear(#586A7A\\,#7B8D9B\\,#9FB0BC)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},night)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#101A2E\\,#1C2A44\\,#33465F)@90|linear(#0A1220\\,#141F33\\,#25344A)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_decor",
+          "value": "$[if::(eq::(${_sky},clear),glow,if::(eq::(${_sky},overcast),fog,none))]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_decor},glow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "radial(#8CFFFFFF\\,#00FFFFFF)@0.8\\,0.16\\,0.6|radial(#66FFFFFF\\,#00FFFFFF)@0.8\\,0.16\\,0.6"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_decor},fog)]"
+        },
+        "react": [
+          {
+            "_note": "⚠️ 雾必须是**一层柔光**,不能是「一条 16pt 高、装着横向渐变的 layer」。\n那种写法横向是渐变(两端透明)、**纵向却是硬边**,于是渲出来是一道齐刷刷的白杠 ——\n用户 2026-08-21 真机反馈的「顶部和小组件有白色横条」就是它,而且因为阴天档最常见,\n页头与四张卡会同时出现。radial 四周都柔,没有任何一条边可以被读成线。\n落点定在偏上(cy=0.34):底部有 DIM 压暗层,雾放下面会被压没。",
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "radial(#2BFFFFFF\\,#00FFFFFF)@0.5\\,0.34\\,0.78|radial(#1EFFFFFF\\,#00FFFFFF)@0.5\\,0.34\\,0.78"
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#00000000\\,#4D000000)@90|linear(#00000000\\,#59000000)@90"
+      },
+      {
+        "id": "srcDot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#7FC4F5|#7FC4F5"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-69pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${city},--)]",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#FFFFFF",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-52pt",
+        "y": "14pt",
+        "w": "40pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},--)]",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1",
+        "alignmentH": "2"
+      },
+      {
+        "id": "hz",
+        "type": "layer",
+        "x": "0pt+10.0pt",
+        "y": "86.0pt",
+        "w": "138.0pt",
+        "h": "1pt",
+        "bgColor": "#59FFFFFF|#4DFFFFFF"
+      },
+      {
+        "id": "pathAll",
+        "type": "line",
+        "points": "[0.0,50.0,4.2,44.7,8.4,39.7,12.6,35.0,16.8,30.8,20.9,26.8,25.1,23.2,29.3,19.9,33.5,17.0,37.7,14.4,41.9,12.2,46.1,10.3,50.2,8.8,54.4,7.5,58.6,6.7,62.8,6.2,67.0,6.0,71.2,6.2,75.4,6.7,79.6,7.5,83.8,8.8,87.9,10.3,92.1,12.2,96.3,14.4,100.5,17.0,104.7,19.9,108.9,23.2,113.1,26.8,117.2,30.8,121.4,35.0,125.6,39.7,129.8,44.7,134.0,50.0]",
+        "lineWidth": "1.5pt",
+        "lineCap": "round",
+        "lineJoin": "round",
+        "strokeColor": "#59FFFFFF|#4DFFFFFF",
+        "x": "0pt+12.0pt",
+        "y": "36.0pt",
+        "w": "134.0pt",
+        "h": "50.0pt"
+      },
+      {
+        "id": "pathDone",
+        "type": "line",
+        "points": "[$[findNotEmpty::(${sp},0\\,-99\\,0\\,-99)]]",
+        "lineWidth": "2.5pt",
+        "lineCap": "round",
+        "lineJoin": "round",
+        "strokeColor": "#FFD166|#FFD166",
+        "coverageColor": "linear(#40FFD166\\,#00FFD166)@90|linear(#40FFD166\\,#00FFD166)@90",
+        "x": "0pt+12.0pt",
+        "y": "36.0pt",
+        "w": "134.0pt",
+        "h": "50.0pt"
+      },
+      {
+        "id": "sunHalo",
+        "type": "line",
+        "points": "[$[findNotEmpty::(calc::(${sunX}+8),-99)],$[findNotEmpty::(calc::(${sunY}+8),-99)],$[findNotEmpty::(calc::(${sunX}+8),-99)],$[findNotEmpty::(calc::(${sunY}+8),-99)]]",
+        "lineWidth": "16pt",
+        "lineCap": "round",
+        "strokeColor": "#4DFFD166|#4DFFD166",
+        "hide": "$[if::(eq::(findNotEmpty::(${sPh},0),1),0,1)]",
+        "x": "0pt+4.0pt",
+        "y": "28.0pt",
+        "w": "150.0pt",
+        "h": "66.0pt"
+      },
+      {
+        "id": "sunDot",
+        "type": "line",
+        "points": "[$[findNotEmpty::(calc::(${sunX}+8),-99)],$[findNotEmpty::(calc::(${sunY}+8),-99)],$[findNotEmpty::(calc::(${sunX}+8),-99)],$[findNotEmpty::(calc::(${sunY}+8),-99)]]",
+        "lineWidth": "9pt",
+        "lineCap": "round",
+        "strokeColor": "#FFD166|#FFD166",
+        "hide": "$[if::(eq::(findNotEmpty::(${sPh},0),1),0,1)]",
+        "x": "0pt+4.0pt",
+        "y": "28.0pt",
+        "w": "150.0pt",
+        "h": "66.0pt"
+      },
+      {
+        "id": "srT",
+        "type": "txt",
+        "x": "0pt+12.0pt",
+        "y": "91.0pt",
+        "w": "60pt",
+        "h": "-1",
+        "text": "${@i18n.w_rise} $[findNotEmpty::(${srS},--)]",
+        "fontSize": "9.5pt",
+        "textColor": "#FFFFFF|#FFFFFF",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "id": "ssT",
+        "type": "txt",
+        "x": "0pt+86.0pt",
+        "y": "91.0pt",
+        "w": "60pt",
+        "h": "-1",
+        "text": "${@i18n.w_set} $[findNotEmpty::(${ssS},--)]",
+        "fontSize": "9.5pt",
+        "textColor": "#FFFFFF|#FFFFFF",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentH": "2"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${sPh},9),1)]"
+        },
+        "react": [
+          {
+            "id": "to1",
+            "type": "txt",
+            "x": "12pt",
+            "y": "110.0pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_toSet}${toH}${@i18n.w_hA}${tom}${@i18n.w_mA}",
+            "fontSize": "10pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${sPh},9),0),1,if::(eq::(findNotEmpty::(${sPh},9),2),1,0))]"
+        },
+        "react": [
+          {
+            "id": "to0",
+            "type": "txt",
+            "x": "12pt",
+            "y": "110.0pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_toRise}${toH}${@i18n.w_hA}${tom}${@i18n.w_mA}",
+            "fontSize": "10pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "id": "dl",
+        "type": "txt",
+        "x": "12pt",
+        "y": "126.0pt",
+        "w": "134pt",
+        "h": "-1",
+        "text": "${@i18n.w_dayA}$[findNotEmpty::(${dlH},--)]${@i18n.w_dayH}$[findNotEmpty::(${dlm},--)]${@i18n.w_dayM}",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${uvLv},0),1)]"
+        },
+        "react": [
+          {
+            "id": "uv0",
+            "type": "txt",
+            "x": "12pt",
+            "y": "140.0pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_uv}${uvMax} · ${@i18n.w_uv1}",
+            "fontSize": "9pt",
+            "textColor": "#B3FFFFFF|#A6FFFFFF",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${uvLv},0),2)]"
+        },
+        "react": [
+          {
+            "id": "uv1",
+            "type": "txt",
+            "x": "12pt",
+            "y": "140.0pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_uv}${uvMax} · ${@i18n.w_uv2}",
+            "fontSize": "9pt",
+            "textColor": "#B3FFFFFF|#A6FFFFFF",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${uvLv},0),3)]"
+        },
+        "react": [
+          {
+            "id": "uv2",
+            "type": "txt",
+            "x": "12pt",
+            "y": "140.0pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_uv}${uvMax} · ${@i18n.w_uv3}",
+            "fontSize": "9pt",
+            "textColor": "#B3FFFFFF|#A6FFFFFF",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${uvLv},0),4)]"
+        },
+        "react": [
+          {
+            "id": "uv3",
+            "type": "txt",
+            "x": "12pt",
+            "y": "140.0pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_uv}${uvMax} · ${@i18n.w_uv4}",
+            "fontSize": "9pt",
+            "textColor": "#B3FFFFFF|#A6FFFFFF",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${uvLv},0),5)]"
+        },
+        "react": [
+          {
+            "id": "uv4",
+            "type": "txt",
+            "x": "12pt",
+            "y": "140.0pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_uv}${uvMax} · ${@i18n.w_uv5}",
+            "fontSize": "9pt",
+            "textColor": "#B3FFFFFF|#A6FFFFFF",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "w_rise": "日出",
+        "w_set": "日落",
+        "w_dayA": "白昼 ",
+        "w_dayH": " 小时 ",
+        "w_dayM": " 分",
+        "w_uv": "紫外线 ",
+        "w_uv1": "弱",
+        "w_uv2": "中等",
+        "w_uv3": "强",
+        "w_uv4": "很强",
+        "w_uv5": "极强",
+        "w_toSet": "距日落 ",
+        "w_toRise": "距日出 ",
+        "w_hA": " 小时 ",
+        "w_mA": " 分"
+      },
+      "en-US": {
+        "w_rise": "Rise",
+        "w_set": "Set",
+        "w_dayA": "Daylight ",
+        "w_dayH": "h ",
+        "w_dayM": "m",
+        "w_uv": "UV ",
+        "w_uv1": "low",
+        "w_uv2": "moderate",
+        "w_uv3": "high",
+        "w_uv4": "very high",
+        "w_uv5": "extreme",
+        "w_toSet": "Sunset in ",
+        "w_toRise": "Sunrise in ",
+        "w_hA": "h ",
+        "w_mA": "m"
+      }
+    }
+  }
+}

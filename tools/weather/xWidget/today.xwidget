@@ -1,0 +1,57 @@
+{
+  "version": 2,
+  "title": "今日详情",
+  "sub": "体感 · 湿度 · 风速 · 降水",
+  "i18n": {
+    "en-US": {
+      "title": "Today's details",
+      "sub": "Feels like, humidity, wind, rain"
+    }
+  },
+  "layout": 42,
+  "params": {
+    "lat": "auto",
+    "lon": "auto",
+    "city": "auto"
+  },
+  "ai": {
+    "shows": "一座城市今天的天况、高低温、体感、湿度、风速、降水概率与一句穿衣带伞提示",
+    "params": {
+      "city": {
+        "kind": "auto",
+        "group": [
+          "city",
+          "lat",
+          "lon"
+        ],
+        "hint": "要换城市就三个一起填：city 写城市名，lat / lon 写这座城市的十进制纬度、经度（如东京 35.68 / 139.69，纽约 40.71 / -74.01）；只填 city 不生效。对坐标没把握就三个都留 auto（国内显示上海、海外显示纽约，装上后用户长按「编辑」换城市）"
+      }
+    }
+  },
+  "_note_onEdit": "⚠️ onEdit 的值是**裸路由 path**(`/pick`),不是 `numable://self/page/pick` —— 它与 onClick 吃的形状不一样:onClick 走 PageRouter.resolve(两种形态都规整),onEdit 走 openParamPage,拿这个串**逐字**匹配 router.json 的 path,写成 numable:// 形态匹配不上 → 起一个空白页且零报错。\nv12 四张卡**一个 onEdit 都没有**:城市烤在 params 里,而首页切城市只动 data.cityIdx —— 用户加了一张「上海」就再也改不了,连入口都没有(也过不了上线闸 G12e)。",
+  "events": {
+    "_note_onClick": "⚠️ onClick 必须**带上这张卡自己的坐标** —— v48 之前四张卡全是光秃秃的 `numable://self`,\n打开的是包首页,而首页渲的是 `data.cityIdx` 那一个城市:于是「点长沙的卡进去看到上海」,\n卡片与它的落地页说的不是同一件事(桌面小组件同病 —— 它的点击 = 开 app + replay 这同一个 onClick)。\n⚠️ **只能引用「外壳 params ⊕ 实例 params」里的键**(这里就是 lat/lon/city)。\n   `xbundle-spec.md` §events 写的是四层 scope(外壳 ⊕ 实例 ⊕ XDataStore ⊕ **depends 结果**),\n   但四端宿主求 onClick 时**只合并了前两层** —— 引用 depends 输出的键会被当成未命中的 `${}` **抹空**。\n   v49 首发时这里写的是 `${cityQ}`(weather.df 里 urlEncode 过的城市名),\n   于是 URL 成了 `city=`、详情页城市名渲 `--` —— 数据都在,只有最显眼的那个标题是空的\n   (2026-09-10 用户报「点东京的小组件详情页读取不到数据」,Win 仪表盘上复现)。\n⚠️ 城市名**不在包里做 urlEncode**:宿主求值时自己会 `encodeURIComponent` 每个值,\n   包里再编一次就是双重编码(详情页拿到 `%25E6%259D%25B1`)。",
+    "onClick": "/detail?lat=${lat}&lon=${lon}&city=${city}",
+    "onEdit": "/pick"
+  },
+  "canvas": {
+    "source": "@[file://rc/today.rcn]",
+    "depends": [
+      {
+        "_note": "§D 纯显式:裸 `@[file://…df]` 字符串绑定**传空入参** —— flow 里的 ${lat}/${lon} 会取到空,请求打成 `latitude=&longitude=`,卡片渲一片 `--` 且**不报错**(流仍 success)。\n⚠️ `city` 也必须列进来:它不参与取数,但卡片要显示它。**没列 = flow 里 ${city} 恒空**,于是仪表盘/桌面/添加面板上的卡城市名恒渲 `--`,而**首页里的同一张卡是好的**(首页走 home.df,城市名是那条 flow 自己从 data.* 读出来的输出键)——看起来像「只有某些宿主坏」,其实是这一行少了一个键(2026-08-21 iOS 真机三次定位才见底:先怀疑 URL query 丢中文、再怀疑 resultFilter 没透出,都不是)。",
+        "flow": "@[file://flow/weather.df]",
+        "params": {
+          "lat": "${lat}",
+          "lon": "${lon}",
+          "city": "${city}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "300"
+      ]
+    }
+  },
+  "_note_params": "默认参数是哨兵 `auto`(doc/overseas-first.md §3):城市不写进 .xwidget,由 weather.df 按 cnd 兜底(国内默认上海,海外默认纽约,kit/wxenv.py)。从包内加卡时 pick.af 会带上「我的城市」第一座的真坐标。"
+}

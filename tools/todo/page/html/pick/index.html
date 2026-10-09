@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<!--
+  组件设置(路由 /edit 与 /pick;.xwidget events.onEdit 指到这里,长按组件 →「编辑参数」)。
+    /edit?brickId=…  列表组件:这张显示哪个范围(今天 / 全部 / 某清单 / 某标签…)→ updateParams {scope}
+    /pick?brickId=…  单件组件:这张盯住哪一件待办 → updateParams {id}
+  桥上没有「读实例当前参数」,所以不预选中:点一项立即写回并提示,关掉这页组件就换了。
+  ⚠️ 本文件由 tools/todo/build.py 生成:源在 tools/todo/pages/edit.html(生成成 html/edit 与 html/pick 两份,只差 mode 一个常量 —— onEdit 只能写裸路由,带不了 ?mode)。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Widget settings</title>
+<style>
+/* ── todo kit.css(单一真源 = tools/todo/src/kit.css,build.py 注入每个页面)──
+   色值承 design-tokens.md;源色 = 本包身份(玫红)。页面规范见 doc/page-design-system.md:
+   左右内边距 14 · 组件圆角 14 · 行 / tile 12 · chip 8 · 段标题 13 粗 sub · 元信息 11。 */
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--faint:#9AA0A6;--line:#E4E7EC;
+  --tile:#EEF0F3;--tile2:#E7E9EE;--rail:#D6DAE1;
+  --src:#D6336C;--srcOn:#FFFFFF;--srcSoft:rgba(214,51,108,.10);--srcSoft2:rgba(214,51,108,.16);
+  --red:#E5484D;--redSoft:rgba(229,72,77,.10);--green:#2E9E6B;--greenSoft:rgba(46,158,107,.12);
+  --shadow:0 1px 2px rgba(15,20,30,.05),0 6px 18px rgba(15,20,30,.05);
+  --sheet:#FFFFFF;--scrim:rgba(0,0,0,.38)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--faint:#5E636B;--line:#262A31;
+  --tile:#1D2025;--tile2:#23272E;--rail:#2C313A;
+  --src:#F06595;--srcOn:#1A0B11;--srcSoft:rgba(240,101,149,.13);--srcSoft2:rgba(240,101,149,.2);
+  --red:#FF6369;--redSoft:rgba(255,99,105,.13);--green:#45C793;--greenSoft:rgba(69,199,147,.14);
+  --shadow:none;--sheet:#1A1C20;--scrim:rgba(0,0,0,.55)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:15px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC","Noto Sans SC",sans-serif;
+  padding:calc(var(--xb-content-top) + 14px) 14px calc(var(--xb-content-bottom) + 34px);
+  -webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit}
+input,select,textarea{font-size:16px;font-family:inherit;color:var(--fg)}
+.g{width:18px;height:18px;display:block;flex:0 0 auto}
+.hide{display:none!important}
+
+/* §1 页头 */
+.hd{display:flex;align-items:flex-start;gap:8px}
+.hd h1{flex:1 1 auto;min-width:0;font-size:24px;margin:0 0 3px;letter-spacing:-.3px;line-height:1.25}
+.hbtn{flex:0 0 auto;width:26px;height:26px;border-radius:13px;border:0;padding:0;cursor:pointer;
+  background:rgba(14,17,22,.055);color:var(--sub);display:flex;align-items:center;justify-content:center}
+html[data-theme="dark"] .hbtn{background:rgba(243,244,246,.08)}
+.hbtn .g{width:14px;height:14px}
+.sub{color:var(--sub);font-size:13px;margin:0 0 14px}
+.sub b{color:var(--fg);font-weight:600}
+.sub .ov{color:var(--red);font-weight:600}
+
+/* §2 段 */
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:20px 4px 8px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.sec .r{font-weight:400;font-variant-numeric:tabular-nums}
+.sec.over{color:var(--red)}
+.sec.today{color:var(--src)}
+.sec .lk{border:0;background:none;padding:0;color:var(--src);font-weight:600;font-size:13px;cursor:pointer}
+.card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.card+.card{margin-top:10px}
+.meta{color:var(--sub);font-size:11px;line-height:1.5;margin:18px 4px 0}
+
+/* 待办行 */
+.tr{display:flex;align-items:center;gap:8px;padding:7px 12px 7px 4px;position:relative;cursor:pointer;
+  transition:opacity .25s,transform .25s}
+.tr+.tr::before{content:"";position:absolute;left:52px;right:0;top:0;height:1px;background:var(--line)}
+.tr:active{background:var(--tile)}
+.tr.gone{opacity:0;transform:translateX(24px)}
+.chk{flex:0 0 auto;width:44px;height:44px;border:0;padding:0;background:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.chk i{width:22px;height:22px;border-radius:11px;border:2px solid var(--pc,var(--rail));display:flex;
+  align-items:center;justify-content:center;transition:background .18s,border-color .18s,transform .18s}
+.chk i .g{width:13px;height:13px;color:transparent}
+.chk.on i{background:var(--pc,var(--src));border-color:var(--pc,var(--src))}
+.chk.on i .g{color:#fff}
+html[data-theme="dark"] .chk.on i .g{color:#101114}
+.chk:active i{transform:scale(.9)}
+.tic{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.tic .g{width:16px;height:16px}
+.tb{flex:1 1 auto;min-width:0}
+.tt{font-size:15.5px;font-weight:500;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tr.dn .tt{color:var(--sub);text-decoration:line-through;text-decoration-color:var(--faint)}
+.tm{display:flex;align-items:center;flex-wrap:wrap;gap:3px 9px;margin-top:2px;color:var(--sub);font-size:12px;line-height:1.35}
+.tm span{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.tm .g{width:12px;height:12px}
+.tm .over{color:var(--red);font-weight:600}
+.tm .today{color:var(--src);font-weight:600}
+.pring{flex:0 0 auto;width:30px;height:30px;position:relative}
+.pring svg{width:30px;height:30px;transform:rotate(-90deg)}
+.pring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;
+  font-variant-numeric:tabular-nums;color:var(--sub)}
+.flag{flex:0 0 auto;width:14px;height:14px}
+
+/* 输入 */
+.qa{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:14px;padding:4px 6px 4px 12px;
+  box-shadow:var(--shadow)}
+.qa input{flex:1 1 auto;min-width:0;border:0;outline:0;background:none;padding:10px 0}
+.qa input::placeholder{color:var(--faint)}
+.qa .go{flex:0 0 auto;width:34px;height:34px;border-radius:17px;border:0;background:var(--src);color:var(--srcOn);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.35;transition:opacity .15s}
+.qa .go.on{opacity:1}
+.qa .go .g{width:16px;height:16px}
+.qa .lead{flex:0 0 auto;color:var(--src)}
+
+/* 筛选条 */
+.fb{display:flex;gap:6px;overflow-x:auto;margin:12px -14px 0;padding:2px 14px 4px;scrollbar-width:none}
+.fb::-webkit-scrollbar{display:none}
+.fc{flex:0 0 auto;display:flex;align-items:center;gap:5px;height:32px;padding:0 12px;border-radius:16px;border:0;
+  background:var(--card);color:var(--fg);font-size:13.5px;font-weight:500;cursor:pointer;box-shadow:var(--shadow);white-space:nowrap}
+.fc .n{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums}
+.fc .g{width:14px;height:14px}
+.fc.on{background:var(--fg);color:var(--bg)}
+.fc.on .n{color:var(--bg);opacity:.7}
+.fsep{flex:0 0 1px;background:var(--line);margin:6px 2px}
+
+/* 概览(今天视图顶部) */
+.ov{display:flex;align-items:center;gap:14px;padding:14px 16px}
+.ov .ring{flex:0 0 auto;width:58px;height:58px;position:relative}
+.ov .ring svg{width:58px;height:58px;transform:rotate(-90deg)}
+.ov .ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;
+  font-variant-numeric:tabular-nums}
+.ov .ot{flex:1 1 auto;min-width:0}
+.ov .o1{font-size:17px;font-weight:700;line-height:1.3}
+.ov .o2{font-size:13px;color:var(--sub);margin-top:2px}
+.ov .o2.bad{color:var(--red);font-weight:600}
+.ov .o2.good{color:var(--green);font-weight:600}
+
+/* 空态 */
+.empty{text-align:center;padding:34px 20px 30px}
+.empty .ei{width:52px;height:52px;border-radius:26px;background:var(--srcSoft);color:var(--src);margin:0 auto 12px;
+  display:flex;align-items:center;justify-content:center}
+.empty .ei .g{width:24px;height:24px}
+.empty b{display:block;font-size:16px;margin-bottom:4px}
+.empty p{margin:0;color:var(--sub);font-size:13px}
+
+/* 设置行 */
+.sr{display:flex;align-items:center;gap:12px;padding:13px 14px;cursor:pointer;position:relative;border:0;background:none;
+  width:100%;text-align:left}
+.sr+.sr::before{content:"";position:absolute;left:54px;right:0;top:0;height:1px;background:var(--line)}
+.sr:active{background:var(--tile)}
+.sr .si{flex:0 0 auto;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  background:var(--srcSoft);color:var(--src)}
+.sr .si .g{width:16px;height:16px}
+.sr .sb{flex:1 1 auto;min-width:0}
+.sr .sb b{display:block;font-size:15px;font-weight:500}
+.sr .sb small{display:block;font-size:12px;color:var(--sub);margin-top:1px}
+.sr .sv{flex:0 0 auto;color:var(--sub);font-size:14px;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  text-align:right}
+.sr .sv.on{color:var(--src);font-weight:600}
+.sr .sv.bad{color:var(--red);font-weight:600}
+.sr .cv{flex:0 0 auto;color:var(--faint)}
+.sr .cv .g{width:14px;height:14px}
+
+/* 撤销条 */
+.snack{position:fixed;left:14px;right:14px;bottom:calc(var(--xb-content-bottom) + 16px);z-index:50;
+  display:flex;align-items:center;gap:10px;padding:10px 10px 10px 16px;border-radius:14px;
+  background:#1C1E22;color:#F3F4F6;box-shadow:0 8px 28px rgba(0,0,0,.25);
+  transform:translateY(20px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:520px;margin:0 auto}
+html[data-theme="dark"] .snack{background:#2A2D33}
+.snack.on{opacity:1;transform:none;pointer-events:auto}
+.snack .sm{flex:1 1 auto;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.snack .sa{flex:0 0 auto;border:0;background:rgba(255,255,255,.12);color:#FF8FB5;font-weight:700;font-size:14px;
+  padding:7px 12px;border-radius:10px;cursor:pointer}
+
+/* 页内底部面板(挂页面 body,天然在容器边界内) */
+.shbg{position:fixed;inset:0;z-index:60;background:var(--scrim);opacity:0;transition:opacity .2s;display:flex;
+  align-items:flex-end;justify-content:center}
+.shbg.on{opacity:1}
+.sh{width:100%;max-width:560px;max-height:82vh;overflow:auto;background:var(--sheet);border-radius:18px 18px 0 0;
+  padding:8px 16px calc(var(--xb-safe-bottom, 0px) + 22px);transform:translateY(40px);transition:transform .22s}
+.shbg.on .sh{transform:none}
+.shh{width:36px;height:5px;border-radius:3px;background:var(--rail);margin:0 auto 12px}
+.sh h3{font-size:17px;margin:2px 2px 12px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:12px 6px;border:0;background:none;text-align:left;cursor:pointer;
+  border-radius:12px;font-size:15.5px}
+.opt:active{background:var(--tile)}
+.opt .ck{margin-left:auto;color:var(--src);opacity:0}
+.opt.on .ck{opacity:1}
+.opt .ck .g{width:18px;height:18px}
+.opt .dot{width:12px;height:12px;border-radius:6px;flex:0 0 auto}
+
+/* 表单件 */
+.field{display:block;width:100%;border:0;outline:0;background:var(--tile);border-radius:12px;padding:12px 14px}
+.field::placeholder{color:var(--faint)}
+.seg{display:flex;background:var(--tile);border-radius:10px;padding:3px;gap:2px}
+.seg button{flex:1 1 0;border:0;background:none;padding:7px 4px;border-radius:8px;font-size:13.5px;font-weight:500;cursor:pointer;
+  color:var(--sub)}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px;border-radius:16px;border:0;cursor:pointer;
+  background:var(--tile);font-size:13.5px;font-weight:500;color:var(--fg)}
+.chip.on{background:var(--srcSoft2);color:var(--src)}
+.chip .g{width:14px;height:14px}
+.sw{position:relative;width:46px;height:28px;flex:0 0 46px;border-radius:14px;background:var(--rail);border:0;cursor:pointer;transition:background .2s}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:11px;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s}
+.sw.on{background:var(--src)}
+.sw.on::after{transform:translateX(18px)}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;height:48px;border:0;border-radius:14px;
+  background:var(--src);color:var(--srcOn);font-size:16px;font-weight:700;cursor:pointer}
+.btn:disabled{opacity:.4}
+.btn.ghost{background:var(--card);color:var(--fg);box-shadow:var(--shadow)}
+.btn.danger{background:var(--card);color:var(--red);box-shadow:var(--shadow);font-weight:600}
+.icg{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px}
+.icg button{aspect-ratio:1;border:0;border-radius:12px;background:var(--tile);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--sub)}
+.icg button .g{width:20px;height:20px}
+.icg button.on{outline:2px solid var(--src);outline-offset:-2px;background:var(--srcSoft)}
+.swg{display:flex;flex-wrap:wrap;gap:10px}
+.swg button{width:34px;height:34px;border-radius:17px;border:0;cursor:pointer;position:relative}
+.swg button.on::after{content:"";position:absolute;inset:-4px;border-radius:21px;border:2px solid var(--fg)}
+
+.lic{flex:0 0 auto;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.lic .g{width:17px;height:17px}
+.sr.on{background:var(--srcSoft)}
+</style>
+</head>
+<body>
+<div class="hd"><h1 id="h1"></h1></div>
+<p class="sub" id="sub"></p>
+<div id="body"></div>
+<script>
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* ── todo model(纯逻辑,不碰 DOM / 桥)────────────────────────────────────────────
+ * 单一真源 = tools/todo/src/model.js,由 tools/todo/build.py 逐字注入每个页面;
+ * 同一份也被 build.py 用 node 跑一遍,产出 render 夹具 —— 页面写盘的形状与组件读到的形状因此是**同一份代码**。
+ *
+ * 为什么组件要读一份「页面算好的视图」`w`:flow 没有 filter / sort / groupBy,而「今天还剩几件」「按清单分组」
+ * 全是这类运算。所以派生量在 JS 里算完整份写回,组件的 .df 只剩「按今天是第几天挑一格」这一步。
+ *
+ * ⚠️ `w` 里凡是**随日子变**的量都按天摊开(H 天,下标 k = 距保存那天的天数):组件在第二天、第三天
+ *    渲染时,不开页面也拿得到那一天正确的「今天」。超出 H 天 → 组件显示「数据未更新」(打开一次页面就回来)。
+ *    随日子变的只有「集合成员」与计数;每条待办相对今天的标签(逾期 N 天 / 明天 / 周五)由 RCN 用 `dm`
+ *    对 `tdm` 现算,所以记录本身不随日子变、不必按天复制。
+ * ⚠️ 文案一律不烤进 `w`:切语言时组件会重取数但页面不会重写 `w` —— 烤进去的中文会在英文界面上留着。
+ *    `w` 里只放代码(dk / wd / mo)与用户自己写的内容,组件的 i18n 表负责成句。
+ */
+var TodoModel = (function () {
+  var DAY = 86400000;
+  var H = 14;          // 按天摊开的视野
+  var PAST = 21;       // 完成历史往前带几天(组件画「近 7 天」+ 连续天数够用)
+  var SCOPE_MAX = 8;   // 每个范围最多带几条进 `w`(最大的列表组件画 7 行)
+  var TODAY_MAX = 24;  // 「今天」按截止日升序的前缀,要够盖住 H 天里任何一天的 7 行
+  var AG_MAX = 9;      // 日程组件的行数(含日期头)
+
+  // ── 色板:清单 / 标签的颜色键 → 浅|深。wash = 该色在卡底上 14% 的淡底,预先算死(RCN 没有颜色运算) ──
+  var CARD_L = "#FFFFFF", CARD_D = "#15171A";
+  var PAL_BASE = {
+    red: ["#E5484D", "#FF6369"], orange: ["#F2701F", "#FF8B3E"], amber: ["#C98A00", "#F5C23B"],
+    green: ["#2E9E6B", "#45C793"], teal: ["#0D9488", "#2DD4BF"], blue: ["#2F7CF6", "#6EA8FE"],
+    indigo: ["#5B5BD6", "#A5A3FF"], pink: ["#D6336C", "#F06595"], grey: ["#6B7280", "#9CA3AF"]
+  };
+  var PAL_KEYS = ["blue", "red", "orange", "amber", "green", "teal", "indigo", "pink", "grey"];
+  function mix(a, b, t) {
+    function h(c, i) { return parseInt(c.substr(i, 2), 16); }
+    var o = "#";
+    for (var i = 1; i < 7; i += 2) {
+      var v = Math.round(h(a, i) + (h(b, i) - h(a, i)) * t);
+      o += (v < 16 ? "0" : "") + v.toString(16).toUpperCase();
+    }
+    return o;
+  }
+  var PAL = {};
+  PAL_KEYS.forEach(function (k) {
+    var c = PAL_BASE[k];
+    PAL[k] = { l: c[0], d: c[1], c: c[0] + "|" + c[1],
+               w: mix(CARD_L, c[0], 0.14) + "|" + mix(CARD_D, c[1], 0.20) };
+  });
+  // 包的源色(身份)。没有清单的待办用它。
+  var SRC = { l: "#D6336C", d: "#F06595" };
+  SRC.c = SRC.l + "|" + SRC.d;
+  SRC.w = mix(CARD_L, SRC.l, 0.12) + "|" + mix(CARD_D, SRC.d, 0.18);
+  // 优先级:0 无 / 1 低 / 2 中 / 3 高。勾选圈的描边色(Todoist 那一套读法:越急越暖)。
+  var PRC = ["#AEB4BE|#565C66", "#2F7CF6|#6EA8FE", "#F2701F|#FF8B3E", "#E5484D|#FF6369"];
+
+  // ── 日期(一律本地时区;页面与组件的 parseDate 都按设备时区,两边对得上) ──
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function ymd(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function parseYmd(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+  function mid(ms) { var d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  function addDays(ms, n) { var d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime(); }
+  function dayDiff(a, b) { return Math.round((mid(b) - mid(a)) / DAY); }
+  function dueMs(t) { var d = parseYmd(t.due); return d ? d.getTime() : 0; }
+  /** 提醒时刻(ms);没有提醒 / 没有日期 = 0。没写时间的待办按 09:00 算。 */
+  function remindAt(t) {
+    if (t.rmo == null || t.rmo < 0) return 0;
+    var d = parseYmd(t.due); if (!d) return 0;
+    var hm = /^(\d{2}):(\d{2})$/.exec(t.tm || "") || [0, "09", "00"];
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), +hm[1], +hm[2]).getTime() - t.rmo * 60000;
+  }
+  /** 重复:算下一次的截止日。wd = 工作日(周一到周五)。 */
+  function nextDue(due, rep, nowMs) {
+    var base = parseYmd(due) || new Date(mid(nowMs));
+    var d = new Date(base.getTime());
+    if (rep === "d") d.setDate(d.getDate() + 1);
+    else if (rep === "wd") { do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6); }
+    else if (rep === "w") d.setDate(d.getDate() + 7);
+    else if (rep === "m") {
+      var day = base.getDate();
+      d = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+      var last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(day, last));
+    } else return due;
+    // 过期很久的重复待办,下一次落在今天之后(不补一串逾期的)
+    var today = mid(nowMs);
+    while (d.getTime() < today && rep) { var n2 = parseYmd(nextDue(ymd(d), rep, d.getTime())); if (!n2) break; d = n2; }
+    return ymd(d);
+  }
+
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  /** 进度:有步骤就按步骤算(自动),否则取手填的 pg。 */
+  function progress(t) {
+    var s = t.steps || [];
+    if (s.length && t.auto !== false) {
+      var n = 0; s.forEach(function (x) { if (x.d) n++; });
+      return Math.round(n * 100 / s.length);
+    }
+    return Math.max(0, Math.min(100, t.pg || 0));
+  }
+
+  function listOf(S, id) { for (var i = 0; i < S.lists.length; i++) if (S.lists[i].id === id) return S.lists[i]; return null; }
+  function tagOf(S, id) { for (var i = 0; i < S.tags.length; i++) if (S.tags[i].id === id) return S.tags[i]; return null; }
+  function colorOf(S, t) { var l = listOf(S, t.cat); return (l && PAL[l.c]) || SRC; }
+
+  /** 排序:有日期的按日期升序在前(逾期自然最前),同日按时间、再按优先级;无日期按优先级、再按创建先后。 */
+  function cmp(a, b) {
+    var da = dueMs(a), db = dueMs(b);
+    if (!!da !== !!db) return da ? -1 : 1;
+    if (da !== db) return da - db;
+    var ta = a.tm || "99:99", tb = b.tm || "99:99";
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    if ((b.pr || 0) !== (a.pr || 0)) return (b.pr || 0) - (a.pr || 0);
+    return (a.ca || 0) - (b.ca || 0);
+  }
+
+  var WD_ZH = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  var WD_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var MO_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  /** 日期的两种语言写法都存:切语言时组件重取数但 `w` 不会重写,只存一种就会在另一种语言下露馅。 */
+  function dateTexts(d) {
+    return { mdz: (d.getMonth() + 1) + "月" + d.getDate() + "日", mde: MO_EN[d.getMonth()] + " " + d.getDate(),
+             wdz: WD_ZH[d.getDay()], wde: WD_EN[d.getDay()] };
+  }
+
+  /** 进 `w` 的一条记录:只放组件真画的东西,全是标量(RCN 在 forEach 里用 `${_it.x}` 读)。 */
+  function rec(S, t, i, icons) {
+    var c = colorOf(S, t), dm = dueMs(t), d = dm ? new Date(dm) : null;
+    var pg = progress(t), st = t.steps || [], sd = 0;
+    st.forEach(function (x) { if (x.d) sd++; });
+    var l = listOf(S, t.cat), g = (t.tags || []).length ? tagOf(S, t.tags[0]) : null;
+    var nt = (t.notes || []);
+    var last = nt.length ? nt[nt.length - 1].x : "";
+    if (t.ic) icons[t.ic] = 1;
+    // 副行:清单名 · 步骤 2/5 · #标签 —— 全是用户内容或与语言无关的数字,可以在这里拼好
+    var meta = [];
+    if (l) meta.push(l.n);
+    if (st.length) meta.push(sd + "/" + st.length);
+    if (g) meta.push("#" + g.n);
+    var hpg = (pg > 0 && pg < 100 && !t.st) ? 1 : 0;
+    var dt = d ? dateTexts(d) : { mdz: "", mde: "", wdz: "", wde: "" };
+    return {
+      i: i, id: t.id, t: t.t || "", ic: t.ic || "", hic: t.ic ? 1 : 0,
+      c: c.c, cw: c.w, pc: PRC[t.pr || 0], pr: t.pr || 0,
+      pg: pg, pgf: Math.max(0.04, Math.round(pg) / 100), hpg: hpg,
+      st: t.st ? 1 : 0, dm: dm, hdm: dm ? 1 : 0, tm: t.tm || "", htm: t.tm ? 1 : 0,
+      mdz: dt.mdz, mde: dt.mde, wdz: dt.wdz, wde: dt.wde,
+      rm: remindAt(t) ? 1 : 0, rep: t.rep ? 1 : 0, nn: nt.length, sd: sd, sn: st.length,
+      ln: l ? l.n : "", g: g ? g.n : "", meta: meta.join(" · "), h2: (meta.length || hpg) ? 1 : 0,
+      note: last.length > 80 ? last.slice(0, 80) + "…" : last, hnote: last ? 1 : 0
+    };
+  }
+
+  /** 组件视图 `w`(整份)。nowMs 可注入(夹具 / 测试)。 */
+  function buildW(S, nowMs) {
+    var base = mid(nowMs), icons = {};
+    var open = S.todos.filter(function (t) { return !t.st; }).sort(cmp);
+    var dated = open.filter(function (t) { return dueMs(t) > 0; });
+    var w = { v: 1, base: base, H: H, PAST: PAST, any: S.todos.length ? 1 : 0, s: {}, sc: {}, sn: {}, f: {} };
+
+    function scope(key, arr, max) {
+      w.sc[key] = arr.length;
+      w.s[key] = arr.slice(0, max || SCOPE_MAX).map(function (t, i) { return rec(S, t, i, icons); });
+    }
+    // 「今天 / 逾期」= dated 的前缀(按日期升序,dm ≤ 今天那一段恰好是开头)—— 组件按 dm 截,计数按天查 rem/over
+    scope("today", dated, TODAY_MAX);
+    scope("all", open);
+    scope("doing", open.filter(function (t) { var p = progress(t); return p > 0 && p < 100; })
+      .sort(function (a, b) { return progress(b) - progress(a); }));
+    scope("inbox", open.filter(function (t) { return !listOf(S, t.cat); }));
+    scope("star", open.filter(function (t) { return (t.pr || 0) >= 3; }));
+    scope("nodate", open.filter(function (t) { return !dueMs(t); }));
+    S.lists.forEach(function (l) {
+      scope("L" + l.id, open.filter(function (t) { return t.cat === l.id; }));
+      w.sn["L" + l.id] = l.n;
+    });
+    S.tags.forEach(function (g) {
+      scope("G" + g.id, open.filter(function (t) { return (t.tags || []).indexOf(g.id) >= 0; }));
+      w.sn["G" + g.id] = g.n;
+    });
+
+    // ── 按天摊开:下标 k = 0..H-1 对应 base+k 天。组件的 .df 只做一件事:算出今天的 k,再 index:: 取格 ──
+    var dms = dated.map(dueMs), dueD = [];
+    for (var k = 0; k < H + 7; k++) {
+      var dk0 = addDays(base, k), dd0 = 0;
+      for (var j = 0; j < dms.length; j++) if (dms[j] === dk0) dd0++;
+      dueD.push(dd0);
+    }
+    // 完成历史:下标 PAST = 保存当天;之后是未来(恒 0 —— 真有完成时页面一写就会重算)
+    var hs = [];
+    for (var h = -PAST; h < H; h++) hs.push(h <= 0 ? (S.hist[ymd(new Date(addDays(base, h)))] || 0) : 0);
+    var best = 0, run = 0, prev = null;
+    Object.keys(S.hist).sort().forEach(function (kk) {
+      if (!(S.hist[kk] > 0)) return;
+      var d = parseYmd(kk); if (!d) return;
+      run = (prev !== null && dayDiff(prev, d.getTime()) === 1) ? run + 1 : 1;
+      prev = d.getTime(); if (run > best) best = run;
+    });
+    w.best = best;
+    var D = { rem: [], over: [], dueT: [], doneT: [], stk: [], done7: [], bars: [], ag: [], wk: [] };
+    for (k = 0; k < H; k++) {
+      var day0 = addDays(base, k), r = 0, o = 0;
+      for (j = 0; j < dms.length; j++) { if (dms[j] <= day0) r++; if (dms[j] < day0) o++; }
+      D.rem.push(r); D.over.push(o); D.dueT.push(dueD[k]);
+      var at = PAST + k;
+      D.doneT.push(hs[at]);
+      // 连续天数:第 k 天有完成就从当天数起,还没有就从前一天数起(当天还没过完,不算断)
+      var n = 0, i2 = hs[at] > 0 ? at : at - 1;
+      while (i2 >= 0 && hs[i2] > 0) { n++; i2--; }
+      D.stk.push(n);
+      // 近 7 天完成(含当天):柱高按这 7 天的最大值归一;0 画成一截桩(形状在,读得出「这天没有」)
+      var bars = [], mx = 0, sum = 0;
+      for (var q = 0; q < 7; q++) { var v = hs[at - 6 + q] || 0; mx = Math.max(mx, v); sum += v; }
+      for (q = 0; q < 7; q++) {
+        var v2 = hs[at - 6 + q] || 0, dq = new Date(addDays(base, k - 6 + q));
+        bars.push({ i: q, n: v2, f: mx ? Math.max(0.06, Math.round(v2 * 100 / mx) / 100) : 0.06, z: v2 ? 0 : 1,
+                    t: q === 6 ? 1 : 0, wdz: WD_ZH[dq.getDay()].slice(1), wde: WD_EN[dq.getDay()].slice(0, 1) });
+      }
+      D.done7.push(sum); D.bars.push(bars);
+      // 七日条:从第 k 天起 7 天,每天到期几件(未完成);最多画 4 颗点,多了写数字
+      var strip = [], smx = 0;
+      for (q = 0; q < 7; q++) smx = Math.max(smx, dueD[k + q]);
+      for (q = 0; q < 7; q++) {
+        var dt = new Date(addDays(base, k + q)), nn = dueD[k + q];
+        strip.push({ i: q, n: nn, hn: nn ? 1 : 0, f: smx ? Math.max(0.1, Math.round(nn * 100 / smx) / 100) : 0,
+                     da: dt.getDate(), wdz: WD_ZH[dt.getDay()].slice(1), wde: WD_EN[dt.getDay()].slice(0, 2),
+                     t: q === 0 ? 1 : 0, we: (dt.getDay() === 0 || dt.getDay() === 6) ? 1 : 0 });
+      }
+      D.wk.push(strip);
+      // 日程:先「已逾期」(若有,最多带 2 条),再第 k 天起 7 天里有事的日子:日期头 + 当天各条,截到 AG_MAX 行
+      var rows = [], ov = dated.filter(function (t) { return dueMs(t) < day0; });
+      if (ov.length) {
+        rows.push(agHead(1, ov.length, null));
+        ov.slice(0, 2).forEach(function (t) { rows.push(agRow(S, t, icons)); });
+      }
+      for (q = 0; q < 7 && rows.length < AG_MAX - 1; q++) {
+        var dday = addDays(base, k + q);
+        var its = dated.filter(function (t) { return dueMs(t) === dday; });
+        if (!its.length) continue;
+        rows.push(agHead(q === 0 ? 2 : q === 1 ? 3 : 4, its.length, new Date(dday)));
+        its.forEach(function (t) { if (rows.length < AG_MAX) rows.push(agRow(S, t, icons)); });
+      }
+      // 日期头不许落在最后一行(下面一件都没有的头读起来像 bug)
+      if (rows.length && rows[rows.length - 1].h) rows.pop();
+      rows.forEach(function (x, i) { x.i = i; });
+      D.ag.push(rows);
+    }
+    w.d = D;
+    w.nOpen = open.length;
+    w.nDone = S.todos.length - open.length;
+
+    // ── 清单格子(不随日子变):收件箱 + 各清单,各带未完成 / 已完成 ──
+    var tiles = [];
+    function tile(key, name, ic, pal, arr) {
+      var o = 0, d = 0;
+      arr.forEach(function (t) { if (t.st) d++; else o++; });
+      if (ic) icons[ic] = 1;
+      tiles.push({ k: key, n: name, ic: ic || "", hic: ic ? 1 : 0, c: pal.c, cw: pal.w, o: o, d: d,
+                   p: (o + d) ? Math.round(d * 100 / (o + d)) / 100 : 0 });
+    }
+    var inboxAll = S.todos.filter(function (t) { return !listOf(S, t.cat); });
+    if (inboxAll.length || !S.lists.length) tile("inbox", "", "", SRC, inboxAll);
+    S.lists.forEach(function (l) { tile("L" + l.id, l.n, l.ic, PAL[l.c] || SRC, S.todos.filter(function (t) { return t.cat === l.id; })); });
+    tiles.forEach(function (x, i) { x.i = i; });
+    w.lists = tiles.slice(0, 6);
+    w.nLists = tiles.length;
+
+    // ── 单件组件(按 id 取):未完成的全部 + 最近 3 天完成的 ──
+    S.todos.forEach(function (t) {
+      if (t.st && (nowMs - (t.dn || 0)) > 3 * DAY) return;
+      w.f[t.id] = rec(S, t, 0, icons);
+    });
+
+    // 图标路径表:只带用到的(RCN 用 get::(${w.ic},${_it.ic}) 取)
+    w.ic = { __tray: UI_D.tray || "", __plus: UI_D.plus || "" };
+    Object.keys(icons).forEach(function (k) { if (ICON_D[k]) w.ic[k] = ICON_D[k]; });
+    return w;
+  }
+  function agRow(S, t, icons) {
+    var c = colorOf(S, t); if (t.ic) icons[t.ic] = 1;
+    return { h: 0, id: t.id, t: t.t || "", tm: t.tm || "", htm: t.tm ? 1 : 0, c: c.c, pc: PRC[t.pr || 0],
+             ic: t.ic || "", hic: t.ic ? 1 : 0, cw: c.w, dk: 0, n: 0, mdz: "", mde: "", wdz: "", wde: "" };
+  }
+  /** 日程的日期头。dk:1 已逾期 / 2 今天 / 3 明天 / 4 其它日子(显示「周五 · 9月26日」)。 */
+  function agHead(dk, n, d) {
+    var dt = d ? dateTexts(d) : { mdz: "", mde: "", wdz: "", wde: "" };
+    return { h: 1, dk: dk, n: n, mdz: dt.mdz, mde: dt.mde, wdz: dt.wdz, wde: dt.wde,
+             id: "", t: "", tm: "", htm: 0, c: "", pc: "", ic: "", hic: 0, cw: "" };
+  }
+
+  /** 提醒时刻拆成一次性提醒要的两个参数(设备本地墙上钟):{date:"YYYY-MM-DD", time:"HH:MM"};没有提醒 = null。 */
+  function remindParts(t) {
+    var r = remindAt(t); if (!r) return null;
+    var d = new Date(r);
+    return { date: ymd(d), time: pad(d.getHours()) + ":" + pad(d.getMinutes()) };
+  }
+  /** 这件待办此刻「该有」的一次性提醒(xJob/once.xjob):未完成、不重复、有提醒、时刻还在未来。 */
+  function onceWanted(t, nowMs) {
+    if (t.st || t.rep) return null;
+    var r = remindAt(t); if (!r || r <= nowMs) return null;
+    return remindParts(t);
+  }
+  /** 已排上的一次性提醒(t.ro,页面在 alertAdd 回 ok 后记下的 {d,t,n})是否就是此刻该有的那一条。 */
+  function onceArmed(t, nowMs) {
+    var w = onceWanted(t, nowMs);
+    return !!(w && t.ro && t.ro.d === w.date && t.ro.t === w.time);
+  }
+
+  /** 到点提醒的队列(xJob/due.xjob 读):未完成、有提醒的,按时刻升序,最多 12 条。
+   *  ⚠️ 已排上一次性提醒(准点)的待办排除在外 —— 否则同一件会各响一次。没排上的(面板里取消了、名额满了、
+   *  日期改了还没重新确认)留在队列里兜底:宁可晚一点响,不可不响。 */
+  function buildRQ(S, nowMs) {
+    var q = [], now = nowMs || Date.now();
+    S.todos.forEach(function (t) {
+      if (t.st || onceArmed(t, now)) return;
+      var r = remindAt(t); if (r) q.push({ t: r, n: t.t || "" });
+    });
+    q.sort(function (a, b) { return a.t - b.t; });
+    q = q.slice(0, 12);
+    return { ts: q.map(function (x) { return x.t; }), ns: q.map(function (x) { return x.n; }) };
+  }
+
+  // 图标路径表由 build.py 在注入前填(页面里同一张表也给 SVG 用)
+  var ICON_D = {};
+  var UI_D = {};
+
+  function empty() { return { todos: [], lists: [], tags: [], hist: {}, cfg: {} }; }
+  function normalize(S) {
+    S = S || {};
+    var o = empty();
+    o.todos = Array.isArray(S.todos) ? S.todos : [];
+    o.lists = Array.isArray(S.lists) ? S.lists : [];
+    o.tags = Array.isArray(S.tags) ? S.tags : [];
+    o.hist = (S.hist && typeof S.hist === "object" && !Array.isArray(S.hist)) ? S.hist : {};
+    o.cfg = (S.cfg && typeof S.cfg === "object" && !Array.isArray(S.cfg)) ? S.cfg : {};
+    o.todos.forEach(function (t) {
+      if (!t.id) t.id = uid();
+      if (!Array.isArray(t.steps)) t.steps = [];
+      if (!Array.isArray(t.notes)) t.notes = [];
+      if (!Array.isArray(t.tags)) t.tags = [];
+    });
+    return o;
+  }
+
+  /** 勾掉 / 取消勾。重复待办勾掉 = 留一条已完成的副本 + 原件顺延到下一次(步骤清零)。返回被勾的那条 id。 */
+  function toggle(S, id, nowMs) {
+    var t = S.todos.filter(function (x) { return x.id === id; })[0];
+    if (!t) return null;
+    var key = ymd(new Date(nowMs));
+    if (!t.st) {
+      S.hist[key] = (S.hist[key] || 0) + 1;
+      if (t.rep) {
+        var done = JSON.parse(JSON.stringify(t));
+        done.id = uid(); done.st = 1; done.dn = nowMs; done.rep = ""; done.rmo = -1; done.of = t.id; delete done.ro;
+        S.todos.push(done);
+        t.due = nextDue(t.due, t.rep, nowMs);
+        t.steps.forEach(function (x) { x.d = 0; });
+        if (t.steps.length === 0) t.pg = 0;
+        t.ua = nowMs;
+        return done.id;
+      }
+      t.st = 1; t.dn = nowMs; t.ua = nowMs;
+      return t.id;
+    }
+    var dkey = ymd(new Date(t.dn || nowMs));
+    if (S.hist[dkey] > 0) { S.hist[dkey]--; if (!S.hist[dkey]) delete S.hist[dkey]; }
+    t.st = 0; t.dn = 0; t.ua = nowMs;
+    return t.id;
+  }
+
+  /** 历史只留近 400 天(连续天数与「最佳纪录」够用) */
+  function trimHist(S, nowMs) {
+    var cut = ymd(new Date(addDays(mid(nowMs), -400)));
+    Object.keys(S.hist).forEach(function (k) { if (k < cut) delete S.hist[k]; });
+  }
+
+  return {
+    DAY: DAY, H: H, PAL: PAL, PAL_KEYS: PAL_KEYS, SRC: SRC, PRC: PRC, ICON_D: ICON_D, UI_D: UI_D,
+    ymd: ymd, parseYmd: parseYmd, mid: mid, addDays: addDays, dayDiff: dayDiff, dueMs: dueMs,
+    remindAt: remindAt, remindParts: remindParts, onceWanted: onceWanted, onceArmed: onceArmed, nextDue: nextDue, uid: uid, progress: progress, listOf: listOf, tagOf: tagOf,
+    colorOf: colorOf, cmp: cmp, buildW: buildW, buildRQ: buildRQ, empty: empty, normalize: normalize,
+    toggle: toggle, trimHist: trimHist
+  };
+})();
+if (typeof module !== "undefined") module.exports = TodoModel;
+
+(function(){var I={"icons":[["briefcase","M152 112a8 8 0 0 1-8 8H112a8 8 0 0 1 0-16h32A8 8 0 0 1 152 112Zm80-40V200a16 16 0 0 1-16 16H40a16 16 0 0 1-16-16V72A16 16 0 0 1 40 56H80V48a24 24 0 0 1 24-24h48a24 24 0 0 1 24 24v8h40A16 16 0 0 1 232 72ZM96 56h64V48a8 8 0 0 0-8-8H104a8 8 0 0 0-8 8Zm120 57.61V72H40v41.61A184 184 0 0 0 128 136 184 184 0 0 0 216 113.61Z"],["presentation","M216 40H136V24a8 8 0 0 0-16 0V40H40A16 16 0 0 0 24 56V176a16 16 0 0 0 16 16H79.36L57.75 219a8 8 0 0 0 12.5 10l29.59-37h56.32l29.59 37a8 8 0 1 0 12.5-10l-21.61-27H216a16 16 0 0 0 16-16V56A16 16 0 0 0 216 40Z"],["chart","M216 40H40A16 16 0 0 0 24 56V200a16 16 0 0 0 16 16H216a16 16 0 0 0 16-16V56A16 16 0 0 0 216 40ZM200 176a8 8 0 0 1 0 16H56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v62.92l34.88-29.07a8 8 0 0 1 9.56-.51l43 28.69 43.41-36.18a8 8 0 0 1 10.24 12.3l-48 40a8 8 0 0 1-9.56.51l-43-28.69L64 155.75V176Z"],["file","M213.66 82.34l-56-56A8 8 0 0 0 152 24H56A16 16 0 0 0 40 40V216a16 16 0 0 0 16 16H200a16 16 0 0 0 16-16V88A8 8 0 0 0 213.66 82.34ZM160 176H96a8 8 0 0 1 0-16h64a8 8 0 0 1 0 16Zm0-32H96a8 8 0 0 1 0-16h64a8 8 0 0 1 0 16Zm-8-56V44l44 44Z"],["code","M216 40H40A16 16 0 0 0 24 56V200a16 16 0 0 0 16 16H216a16 16 0 0 0 16-16V56A16 16 0 0 0 216 40ZM92.8 145.6a8 8 0 1 1-9.6 12.8l-32-24a8 8 0 0 1 0-12.8l32-24a8 8 0 0 1 9.6 12.8L69.33 128Zm58.89-71.4-32 112a8 8 0 1 1-15.38-4.4l32-112a8 8 0 0 1 15.38 4.4Zm53.11 60.2-32 24a8 8 0 0 1-9.6-12.8L186.67 128 163.2 110.4a8 8 0 1 1 9.6-12.8l32 24a8 8 0 0 1 0 12.8Z"],["bug","M168 92a12 12 0 1 1-12-12A12 12 0 0 1 168 92ZM100 80a12 12 0 1 0 12 12A12 12 0 0 0 100 80Zm116 64A87.76 87.76 0 0 1 213 167l22.24 9.72A8 8 0 0 1 232 192a7.89 7.89 0 0 1-3.2-.67L207.38 182a88 88 0 0 1-158.76 0L27.2 191.33A7.89 7.89 0 0 1 24 192a8 8 0 0 1-3.2-15.33L43 167A87.76 87.76 0 0 1 40 144v-8H16a8 8 0 0 1 0-16H40v-8a87.76 87.76 0 0 1 3-23L20.8 79.33a8 8 0 1 1 6.4-14.66L48.62 74a88 88 0 0 1 158.76 0l21.42-9.36a8 8 0 0 1 6.4 14.66L213 89.05a87.76 87.76 0 0 1 3 23v8h24a8 8 0 0 1 0 16H216Zm-80 0a8 8 0 0 0-16 0v64a8 8 0 0 0 16 0Zm64-32a72 72 0 0 0-144 0v8H200Z"],["laptop","M232 168h-8V72a24 24 0 0 0-24-24H56A24 24 0 0 0 32 72v96H24a8 8 0 0 0-8 8v16a24 24 0 0 0 24 24H216a24 24 0 0 0 24-24V176A8 8 0 0 0 232 168ZM112 72h32a8 8 0 0 1 0 16H112a8 8 0 0 1 0-16ZM224 192a8 8 0 0 1-8 8H40a8 8 0 0 1-8-8v-8H224Z"],["rocket","M152 224a8 8 0 0 1-8 8H112a8 8 0 0 1 0-16h32A8 8 0 0 1 152 224Zm71.62-68.17-12.36 55.63a16 16 0 0 1-25.51 9.11L158.51 200h-61L70.25 220.57a16 16 0 0 1-25.51-9.11L32.38 155.83a16.09 16.09 0 0 1 3.32-13.71l28.56-34.26a123.07 123.07 0 0 1 8.57-36.67c12.9-32.34 36-52.63 45.37-59.85a16 16 0 0 1 19.6 0c9.34 7.22 32.47 27.51 45.37 59.85a123.07 123.07 0 0 1 8.57 36.67l28.56 34.26A16.09 16.09 0 0 1 223.62 155.83Zm-139.23 34Q68.28 160.5 64.83 132.16L48 152.36 60.36 208l.18-.13ZM140 100a12 12 0 1 0-12 12A12 12 0 0 0 140 100Zm68 52.36-16.83-20.2q-3.42 28.28-19.56 57.69l23.85 18 .18.13Z"],["phone","M231.88 175.08A56.26 56.26 0 0 1 176 224C96.6 224 32 159.4 32 80A56.26 56.26 0 0 1 80.92 24.12a16 16 0 0 1 16.62 9.52l21.12 47.15 0 .12A16 16 0 0 1 117.39 96c-.18.27-.37.52-.57.77L96 121.45c7.49 15.22 23.41 31 38.83 38.51l24.34-20.71a8.12 8.12 0 0 1 .75-.56 16 16 0 0 1 15.17-1.4l.13.06 47.11 21.11A16 16 0 0 1 231.88 175.08Z"],["mail","M224 48H32a8 8 0 0 0-8 8V192a16 16 0 0 0 16 16H216a16 16 0 0 0 16-16V56A8 8 0 0 0 224 48ZM98.71 128 40 181.81V74.19Zm11.84 10.85 12 11.05a8 8 0 0 0 10.82 0l12-11.05 58 53.15H52.57ZM157.29 128 216 74.18V181.82Z"],["chat","M232 128A104 104 0 0 1 79.12 219.82L45.07 231.17a16 16 0 0 1-20.24-20.24l11.35-34.05A104 104 0 1 1 232 128Z"],["users","M164.47 195.63a8 8 0 0 1-6.7 12.37H10.23a8 8 0 0 1-6.7-12.37 95.83 95.83 0 0 1 47.22-37.71 60 60 0 1 1 66.5 0A95.83 95.83 0 0 1 164.47 195.63Zm87.91-.15a95.87 95.87 0 0 0-47.13-37.56A60 60 0 0 0 144.7 54.59a4 4 0 0 0-1.33 6A75.83 75.83 0 0 1 147 150.53a4 4 0 0 0 1.07 5.53 112.32 112.32 0 0 1 29.85 30.83 23.92 23.92 0 0 1 3.65 16.47 4 4 0 0 0 3.95 4.64h60.3a8 8 0 0 0 7.73-5.93A8.22 8.22 0 0 0 252.38 195.48Z"],["calendar","M208 32H184V24a8 8 0 0 0-16 0v8H88V24a8 8 0 0 0-16 0v8H48A16 16 0 0 0 32 48V208a16 16 0 0 0 16 16H208a16 16 0 0 0 16-16V48A16 16 0 0 0 208 32Zm0 48H48V48H72v8a8 8 0 0 0 16 0V48h80v8a8 8 0 0 0 16 0V48h24Z"],["alarm","M61.66 37.66l-32 32A8 8 0 0 1 18.34 58.34l32-32A8 8 0 0 1 61.66 37.66Zm176 20.68-32-32a8 8 0 0 0-11.32 11.32l32 32a8 8 0 0 0 11.32-11.32ZM224 136a96 96 0 1 1-96-96A96.11 96.11 0 0 1 224 136Zm-32 0a8 8 0 0 0-8-8H136V80a8 8 0 0 0-16 0v56a8 8 0 0 0 8 8h56A8 8 0 0 0 192 136Z"],["bell","M221.8 175.94C216.25 166.38 208 139.33 208 104a80 80 0 1 0-160 0c0 35.34-8.26 62.38-13.81 71.94A16 16 0 0 0 48 200H88.81a40 40 0 0 0 78.38 0H208a16 16 0 0 0 13.8-24.06ZM128 216a24 24 0 0 1-22.62-16h45.24A24 24 0 0 1 128 216Z"],["flag","M232 56V176a8 8 0 0 1-2.76 6c-15.28 13.23-29.89 18-43.82 18-18.91 0-36.57-8.74-53-16.85C105.87 170 82.79 158.61 56 179.77V224a8 8 0 0 1-16 0V56a8 8 0 0 1 2.77-6h0c36-31.18 68.31-15.21 96.79-1.12C167 62.46 190.79 74.2 218.76 50A8 8 0 0 1 232 56Z"],["star","M234.29 114.85l-45 38.83L203 211.75a16.4 16.4 0 0 1-24.5 17.82L128 198.49 77.47 229.57A16.4 16.4 0 0 1 53 211.75l13.76-58.07-45-38.83A16.46 16.46 0 0 1 31.08 86l59-4.76 22.76-55.08a16.36 16.36 0 0 1 30.27 0l22.75 55.08 59 4.76a16.46 16.46 0 0 1 9.37 28.86Z"],["target","M221.87 83.16A104.1 104.1 0 1 1 195.67 49l22.67-22.68a8 8 0 0 1 11.32 11.32L167.6 99.71h0l-37.71 37.71-23.95 23.95a40 40 0 0 0 62-35.67 8 8 0 1 1 16-.9 56 56 0 0 1-95.5 42.79h0a56 56 0 0 1 73.13-84.43L184.3 60.39a87.88 87.88 0 1 0 23.13 29.67 8 8 0 0 1 14.44-6.9Z"],["trophy","M232 64H208V48a8 8 0 0 0-8-8H56a8 8 0 0 0-8 8V64H24A16 16 0 0 0 8 80V96a40 40 0 0 0 40 40h3.65A80.13 80.13 0 0 0 120 191.61V216H96a8 8 0 0 0 0 16h64a8 8 0 0 0 0-16H136V191.58c31.94-3.23 58.44-25.64 68.08-55.58H208a40 40 0 0 0 40-40V80A16 16 0 0 0 232 64ZM48 120A24 24 0 0 1 24 96V80H48v32q0 4 .39 8ZM232 96a24 24 0 0 1-24 24h-.5a81.81 81.81 0 0 0 .5-8.9V80h24Z"],["bulb","M176 232a8 8 0 0 1-8 8H88a8 8 0 0 1 0-16h80A8 8 0 0 1 176 232Zm40-128a87.55 87.55 0 0 1-33.64 69.21A16.24 16.24 0 0 0 176 186v6a16 16 0 0 1-16 16H96a16 16 0 0 1-16-16v-6a16 16 0 0 0-6.23-12.66A87.59 87.59 0 0 1 40 104.49C39.74 56.83 78.26 17.14 125.88 16A88 88 0 0 1 216 104Zm-32.11-9.34a57.6 57.6 0 0 0-46.56-46.55 8 8 0 0 0-2.66 15.78c16.57 2.79 30.63 16.85 33.44 33.45A8 8 0 0 0 176 104a9 9 0 0 0 1.35-.11A8 8 0 0 0 183.89 94.66Z"],["book","M240 56V200a8 8 0 0 1-8 8H160a24 24 0 0 0-24 23.94 7.9 7.9 0 0 1-5.12 7.55A8 8 0 0 1 120 232a24 24 0 0 0-24-24H24a8 8 0 0 1-8-8V56a8 8 0 0 1 8-8H88a32 32 0 0 1 32 32v87.73a8.17 8.17 0 0 0 7.47 8.25 8 8 0 0 0 8.53-8V80a32 32 0 0 1 32-32h64A8 8 0 0 1 240 56Z"],["study","M176 207.24a119 119 0 0 0 16-7.73V240a8 8 0 0 1-16 0Zm11.76-88.43-56-29.87a8 8 0 0 0-7.52 14.12L171 128l17-9.06Zm64-29.87-120-64a8 8 0 0 0-7.52 0l-120 64a8 8 0 0 0 0 14.12L32 117.87v48.42a15.91 15.91 0 0 0 4.06 10.65C49.16 191.53 78.51 216 128 216a130 130 0 0 0 48-8.76V130.67L171 128l-43 22.93L43.83 106l0 0L25 96 128 41.07 231 96l-18.78 10-.06 0L188 118.94a8 8 0 0 1 4 6.93v73.64a115.63 115.63 0 0 0 27.94-22.57A15.91 15.91 0 0 0 224 166.29V117.87l27.76-14.81a8 8 0 0 0 0-14.12Z"],["pencil","M227.31 73.37 182.63 28.68a16 16 0 0 0-22.63 0L36.69 152A15.86 15.86 0 0 0 32 163.31V208a16 16 0 0 0 16 16H92.69A15.86 15.86 0 0 0 104 219.31L227.31 96a16 16 0 0 0 0-22.63ZM192 108.68 147.31 64l24-24L216 84.68Z"],["palette","M200.77 53.89A103.27 103.27 0 0 0 128 24h-1.07A104 104 0 0 0 24 128c0 43 26.58 79.06 69.36 94.17A32 32 0 0 0 136 192a16 16 0 0 1 16-16h46.21a31.81 31.81 0 0 0 31.2-24.88 104.43 104.43 0 0 0 2.59-24A103.28 103.28 0 0 0 200.77 53.89ZM84 168a12 12 0 1 1 12-12A12 12 0 0 1 84 168Zm0-56a12 12 0 1 1 12-12A12 12 0 0 1 84 112Zm44-24a12 12 0 1 1 12-12A12 12 0 0 1 128 88Zm44 24a12 12 0 1 1 12-12A12 12 0 0 1 172 112Z"],["home","M224 120v96a8 8 0 0 1-8 8H160a8 8 0 0 1-8-8V164a4 4 0 0 0-4-4H108a4 4 0 0 0-4 4v52a8 8 0 0 1-8 8H40a8 8 0 0 1-8-8V120a16 16 0 0 1 4.69-11.31l80-80a16 16 0 0 1 22.62 0l80 80A16 16 0 0 1 224 120Z"],["cart","M230.14 58.87A8 8 0 0 0 224 56H62.68L56.6 22.57A8 8 0 0 0 48.73 16H24a8 8 0 0 0 0 16h18L67.56 172.29a24 24 0 0 0 5.33 11.27 28 28 0 1 0 44.4 8.44h45.42A27.75 27.75 0 0 0 160 204a28 28 0 1 0 28-28H91.17a8 8 0 0 1-7.87-6.57L80.13 152h116a24 24 0 0 0 23.61-19.71l12.16-66.86A8 8 0 0 0 230.14 58.87ZM104 204a12 12 0 1 1-12-12A12 12 0 0 1 104 204Zm96 0a12 12 0 1 1-12-12A12 12 0 0 1 200 204Z"],["package","M223.68 66.15 135.68 18a15.88 15.88 0 0 0-15.36 0l-88 48.17a16 16 0 0 0-8.32 14v95.64a16 16 0 0 0 8.32 14l88 48.17a15.88 15.88 0 0 0 15.36 0l88-48.17a16 16 0 0 0 8.32-14V80.18A16 16 0 0 0 223.68 66.15ZM128 32l80.35 44L178.57 92.29l-80.35-44Zm0 88L47.65 76 81.56 57.43l80.35 44Zm88 55.85h0l-80 43.79V133.83l32-17.51V152a8 8 0 0 0 16 0V107.56l32-17.51v85.76Z"],["broom","M235.29 216.7C212.86 205.69 200 182.12 200 152V134.69a15.94 15.94 0 0 0-10.09-14.87l-28.65-11.46A8 8 0 0 1 156.79 98l22.32-56.67C184 28.79 178 14.21 165.34 9.51a24 24 0 0 0-30.7 13.71L112.25 80.08a8 8 0 0 1-10.41 4.5L73.11 73.08a15.91 15.91 0 0 0-17.38 3.66C34.68 98.4 24 123.71 24 152a111.53 111.53 0 0 0 31.15 77.53A8.06 8.06 0 0 0 61 232H232a8 8 0 0 0 8-7.51A8.21 8.21 0 0 0 235.29 216.7ZM115.11 216a87.52 87.52 0 0 1-24.26-41.71 8.21 8.21 0 0 0-9.25-6.18A8 8 0 0 0 75.28 178a105.33 105.33 0 0 0 18.36 38H64.44A95.62 95.62 0 0 1 40 152a85.92 85.92 0 0 1 7.73-36.3l137.8 55.13c3 18.06 10.55 33.5 21.89 45.19Z"],["wrench","M232 96a72 72 0 0 1-100.94 66L79 222.22c-.12.14-.26.29-.39.42a32 32 0 0 1-45.26-45.26c.14-.13.28-.27.43-.39L94 124.94a72.07 72.07 0 0 1 83.54-98.78 8 8 0 0 1 3.93 13.19L144 80l5.66 26.35L176 112l40.65-37.52a8 8 0 0 1 13.19 3.93A72.6 72.6 0 0 1 232 96Z"],["shirt","M247.59 61.22 195.83 33A8 8 0 0 0 192 32H160a8 8 0 0 0-8 8 24 24 0 0 1-48 0 8 8 0 0 0-8-8H64a8 8 0 0 0-3.84 1L8.41 61.22A15.76 15.76 0 0 0 1.82 82.48l19.27 36.81A16.37 16.37 0 0 0 35.67 128H56v80a16 16 0 0 0 16 16H184a16 16 0 0 0 16-16V128h20.34a16.37 16.37 0 0 0 14.58-8.71l19.27-36.81A15.76 15.76 0 0 0 247.59 61.22ZM35.67 112a.62.62 0 0 1-.41-.13L16.09 75.26 56 53.48V112Zm185.07-.14a.55.55 0 0 1-.41.14H200V53.48l39.92 21.78Z"],["key","M216.57 39.43A80 80 0 0 0 83.91 120.78L28.69 176A15.86 15.86 0 0 0 24 187.31V216a16 16 0 0 0 16 16H72a8 8 0 0 0 8-8V208H96a8 8 0 0 0 8-8V184h16a8 8 0 0 0 5.66-2.34l9.56-9.57A79.73 79.73 0 0 0 160 176h.1A80 80 0 0 0 216.57 39.43ZM180 92a16 16 0 1 1 16-16A16 16 0 0 1 180 92Z"],["scissors","M236.52 187.09l-143-97.87a36 36 0 1 0-14.38 17.27l21.39 21.69L79.15 149.54l0 0a35.91 35.91 0 1 0 14.38 17.27l26.91-18.41L170 198.64a32.26 32.26 0 0 0 22.7 9.37 31.52 31.52 0 0 0 4.11-.27l.28 0 36.27-6.11a8 8 0 0 0 3.19-14.5Zm-162.38-97A20 20 0 1 1 80 76 20 20 0 0 1 74.14 90.13Zm0 104A20 20 0 1 1 80 180 20 20 0 0 1 74.14 194.15Zm61-101.5L169.94 57.4a32.19 32.19 0 0 1 26.84-9.14l.28 0 36 6.07a8.21 8.21 0 0 1 6.09 4.42 8 8 0 0 1-2.67 10.12l-69.93 47.85a4 4 0 0 1-4.51 0l-26.31-18A4 4 0 0 1 135.18 92.65Z"],["wallet","M216 64H56a8 8 0 0 1 0-16H192a8 8 0 0 0 0-16H56A24 24 0 0 0 32 56V184a24 24 0 0 0 24 24H216a16 16 0 0 0 16-16V80A16 16 0 0 0 216 64Zm-36 80a12 12 0 1 1 12-12A12 12 0 0 1 180 144Z"],["card","M224 48H32A16 16 0 0 0 16 64V192a16 16 0 0 0 16 16H224a16 16 0 0 0 16-16V64A16 16 0 0 0 224 48ZM136 176H120a8 8 0 0 1 0-16h16a8 8 0 0 1 0 16Zm64 0H168a8 8 0 0 1 0-16h32a8 8 0 0 1 0 16ZM32 88V64H224V88Z"],["receipt","M216 40H40A16 16 0 0 0 24 56V208a8 8 0 0 0 11.58 7.15L64 200.94l28.42 14.21a8 8 0 0 0 7.16 0L128 200.94l28.42 14.21a8 8 0 0 0 7.16 0L192 200.94l28.42 14.21A8 8 0 0 0 232 208V56A16 16 0 0 0 216 40ZM176 144H80a8 8 0 0 1 0-16h96a8 8 0 0 1 0 16Zm0-32H80a8 8 0 0 1 0-16h96a8 8 0 0 1 0 16Z"],["gift","M216 72H180.92c.39-.33.79-.65 1.17-1A29.53 29.53 0 0 0 192 49.57 32.62 32.62 0 0 0 158.44 16 29.53 29.53 0 0 0 137 25.91a54.94 54.94 0 0 0-9 14.48 54.94 54.94 0 0 0-9-14.48A29.53 29.53 0 0 0 97.56 16 32.62 32.62 0 0 0 64 49.57 29.53 29.53 0 0 0 73.91 71c.38.33.78.65 1.17 1H40A16 16 0 0 0 24 88v32a16 16 0 0 0 16 16v64a16 16 0 0 0 16 16h60a4 4 0 0 0 4-4V120H40V88h80v32h16V88h80v32H136v92a4 4 0 0 0 4 4h60a16 16 0 0 0 16-16V136a16 16 0 0 0 16-16V88A16 16 0 0 0 216 72ZM84.51 59a13.69 13.69 0 0 1-4.5-10A16.62 16.62 0 0 1 96.59 32h.49a13.69 13.69 0 0 1 10 4.5c8.39 9.48 11.35 25.2 12.39 34.92C109.71 70.39 94 67.43 84.51 59Zm87 0c-9.49 8.4-25.24 11.36-35 12.4C137.7 60.89 141 45.5 149 36.51a13.69 13.69 0 0 1 10-4.5h.49A16.62 16.62 0 0 1 176 49.08 13.69 13.69 0 0 1 171.49 59Z"],["plane","M240 136v32a8 8 0 0 1-8 8 7.61 7.61 0 0 1-1.57-.16L156 161v23.73l17.66 17.65A8 8 0 0 1 176 208v24a8 8 0 0 1-11 7.43l-37-14.81L91 239.43A8 8 0 0 1 80 232V208a8 8 0 0 1 2.34-5.66L100 184.69V161L25.57 175.84A7.61 7.61 0 0 1 24 176a8 8 0 0 1-8-8V136a8 8 0 0 1 4.42-7.16L100 89.06V44a28 28 0 0 1 56 0V89.06l79.58 39.78A8 8 0 0 1 240 136Z"],["car","M240 104H229.2L201.42 41.5A16 16 0 0 0 186.8 32H69.2a16 16 0 0 0-14.62 9.5L26.8 104H16a8 8 0 0 0 0 16h8v80a16 16 0 0 0 16 16H64a16 16 0 0 0 16-16v-8h96v8a16 16 0 0 0 16 16h24a16 16 0 0 0 16-16V120h8a8 8 0 0 0 0-16ZM80 152H56a8 8 0 0 1 0-16H80a8 8 0 0 1 0 16Zm120 0H176a8 8 0 0 1 0-16h24a8 8 0 0 1 0 16ZM44.31 104 69.2 48H186.8l24.89 56Z"],["bike","M54.46 164.71 82.33 126.5a48 48 0 1 1-12.92-9.44L41.54 155.29a8 8 0 1 0 12.92 9.42ZM208 112a47.81 47.81 0 0 0-16.93 3.09L214.91 156A8 8 0 1 1 201.09 164l-23.83-40.86A48 48 0 1 0 208 112ZM165.93 72H192a8 8 0 0 1 8 8 8 8 0 0 0 16 0 24 24 0 0 0-24-24H152a8 8 0 0 0-6.91 12l11.65 20H99.26L82.91 60A8 8 0 0 0 76 56H48a8 8 0 0 0 0 16H71.41L85.12 95.51 69.41 117.06a47.87 47.87 0 0 1 12.92 9.44l11.59-15.9L125.09 164A8 8 0 1 0 138.91 156l-30.32-52h57.48l11.19 19.17a48.11 48.11 0 0 1 13.81-8.08Z"],["pin","M128 16a88.1 88.1 0 0 0-88 88c0 75.3 80 132.17 83.41 134.55a8 8 0 0 0 9.18 0C136 236.17 216 179.3 216 104A88.1 88.1 0 0 0 128 16Zm0 56a32 32 0 1 1-32 32A32 32 0 0 1 128 72Z"],["globe","M128 24h0A104 104 0 1 0 232 128 104.12 104.12 0 0 0 128 24Zm78.36 64H170.71a135.28 135.28 0 0 0-22.3-45.6A88.29 88.29 0 0 1 206.37 88ZM216 128a87.61 87.61 0 0 1-3.33 24H174.16a157.44 157.44 0 0 0 0-48h38.51A87.61 87.61 0 0 1 216 128ZM128 43a115.27 115.27 0 0 1 26 45H102A115.11 115.11 0 0 1 128 43ZM102 168H154a115.11 115.11 0 0 1-26 45A115.27 115.27 0 0 1 102 168Zm-3.9-16a140.84 140.84 0 0 1 0-48h59.88a140.84 140.84 0 0 1 0 48Zm50.35 61.6a135.28 135.28 0 0 0 22.3-45.6h35.66A88.29 88.29 0 0 1 148.41 213.6Z"],["run","M120 56a32 32 0 1 1 32 32A32 32 0 0 1 120 56Zm103.28 74.08a8 8 0 0 0-10.6-4c-.25.12-26.71 10.72-72.18-20.19-52.29-35.54-88-7.77-89.51-6.57a8 8 0 1 0 10 12.48c.26-.21 25.12-19.5 64.07 3.27-4.25 13.35-12.76 31.82-25.25 47-18.56 22.48-41.11 32.56-67 30A8 8 0 0 0 31.2 208a92.29 92.29 0 0 0 9.34.47c27.38 0 52-12.38 71.63-36.18.57-.69 1.14-1.4 1.69-2.1C133.31 175.29 168 190.3 168 232a8 8 0 0 0 16 0c0-24.65-10.08-45.35-29.15-59.86a104.29 104.29 0 0 0-31.31-15.81A169.31 169.31 0 0 0 139 124c26.14 16.09 46.84 20 60.69 20 12.18 0 19.06-3 19.67-3.28A8 8 0 0 0 223.28 130.08Z"],["gym","M200 64V192a16 16 0 0 1-16 16H168a16 16 0 0 1-16-16V136H104v56a16 16 0 0 1-16 16H72a16 16 0 0 1-16-16V64A16 16 0 0 1 72 48H88a16 16 0 0 1 16 16v56h48V64a16 16 0 0 1 16-16h16A16 16 0 0 1 200 64ZM36 72H32A16 16 0 0 0 16 88v32H8.27A8.18 8.18 0 0 0 0 127.47 8 8 0 0 0 8 136h8v32a16 16 0 0 0 16 16h4a4 4 0 0 0 4-4V76A4 4 0 0 0 36 72Zm220 55.47a8.18 8.18 0 0 0-8.25-7.47H240V88a16 16 0 0 0-16-16h-4a4 4 0 0 0-4 4V180a4 4 0 0 0 4 4h4a16 16 0 0 0 16-16V136h8A8 8 0 0 0 256 127.47Z"],["heart","M240 102c0 70-103.79 126.66-108.21 129a8 8 0 0 1-7.58 0C119.79 228.66 16 172 16 102A62.07 62.07 0 0 1 78 40c20.65 0 38.73 8.88 50 23.89C139.27 48.88 157.35 40 178 40A62.07 62.07 0 0 1 240 102Z"],["pill","M216.43 39.6a53.27 53.27 0 0 0-75.33 0L39.6 141.09a53.26 53.26 0 0 0 75.32 75.31L216.43 114.91A53.32 53.32 0 0 0 216.43 39.6Zm-11.32 64-50.75 50.74-52.69-52.68 50.75-50.75a37.26 37.26 0 0 1 52.69 52.69ZM189.68 82.34a8 8 0 0 1 0 11.32l-24 24a8 8 0 1 1-11.31-11.32l24-24A8 8 0 0 1 189.68 82.34Z"],["tooth","M168 24H88A56 56 0 0 0 32 79.75c0 42.72 8 75.4 14.7 95.28 8.72 25.8 20.62 45.49 32.64 54A15.67 15.67 0 0 0 88.47 232a16.09 16.09 0 0 0 16-14.9c.85-11.52 5-49.11 23.53-49.11s22.68 37.59 23.53 49.11a16.09 16.09 0 0 0 9.18 13.36 15.69 15.69 0 0 0 15.95-1.41c12-8.53 23.92-28.22 32.64-54C216 155.15 224 122.47 224 79.75A56 56 0 0 0 168 24Zm3 56.57A8 8 0 1 1 165 95.42L128 80.61 91 95.42A8 8 0 1 1 85 80.57L106.46 72 85 63.42A8 8 0 1 1 91 48.57l37 14.81 37-14.81A8 8 0 1 1 171 63.42L149.54 72Z"],["drop","M174 47.75a254.19 254.19 0 0 0-41.45-38.3 8 8 0 0 0-9.18 0A254.19 254.19 0 0 0 82 47.75C54.51 79.32 40 112.6 40 144a88 88 0 0 0 176 0C216 112.6 201.49 79.32 174 47.75Zm9.85 105.59a57.6 57.6 0 0 1-46.56 46.55A8.75 8.75 0 0 1 136 200a8 8 0 0 1-1.32-15.89c16.57-2.79 30.63-16.85 33.44-33.45a8 8 0 0 1 15.78 2.68Z"],["food","M216 40V224a8 8 0 0 1-16 0V176H152a8 8 0 0 1-8-8 268.75 268.75 0 0 1 7.22-56.88c9.78-40.49 28.32-67.63 53.63-78.47A8 8 0 0 1 216 40Zm-96.11-1.31a8 8 0 1 0-15.78 2.63L111.89 88H88V40a8 8 0 0 0-16 0V88H48.11l7.78-46.68a8 8 0 1 0-15.78-2.63l-8 48A8.17 8.17 0 0 0 32 88a48.07 48.07 0 0 0 40 47.32V224a8 8 0 0 0 16 0V135.32A48.07 48.07 0 0 0 128 88a8.17 8.17 0 0 0-.11-1.31Z"],["coffee","M208 80H32a8 8 0 0 0-8 8v48a96.3 96.3 0 0 0 32.54 72H32a8 8 0 0 0 0 16H208a8 8 0 0 0 0-16H183.46a96.59 96.59 0 0 0 27-40.09A40 40 0 0 0 248 128v-8A40 40 0 0 0 208 80Zm24 48a24 24 0 0 1-17.2 23 95.78 95.78 0 0 0 1.2-15V97.38A24 24 0 0 1 232 120ZM112 56V24a8 8 0 0 1 16 0V56a8 8 0 0 1-16 0Zm32 0V24a8 8 0 0 1 16 0V56a8 8 0 0 1-16 0ZM80 56V24a8 8 0 0 1 16 0V56a8 8 0 0 1-16 0Z"],["cook","M88 48V16a8 8 0 0 1 16 0V48a8 8 0 0 1-16 0Zm40 8a8 8 0 0 0 8-8V16a8 8 0 0 0-16 0V48A8 8 0 0 0 128 56Zm32 0a8 8 0 0 0 8-8V16a8 8 0 0 0-16 0V48A8 8 0 0 0 160 56Zm94.4 35.2a8 8 0 0 0-11.2-1.6L224 104V80a8 8 0 0 0-8-8H40a8 8 0 0 0-8 8v24L12.8 89.6a8 8 0 0 0-9.6 12.8L32 124v60a32 32 0 0 0 32 32H192a32 32 0 0 0 32-32V124l28.8-21.6A8 8 0 0 0 254.4 91.2Z"],["cake","M208 88H136V79a32.06 32.06 0 0 0 24-31c0-28-26.44-45.91-27.56-46.66a8 8 0 0 0-8.88 0C122.44 2.09 96 20 96 48a32.06 32.06 0 0 0 24 31v9H48a24 24 0 0 0-24 24v23.33a40.84 40.84 0 0 0 8 24.24V200a24 24 0 0 0 24 24H200a24 24 0 0 0 24-24V159.57a40.84 40.84 0 0 0 8-24.24V112A24 24 0 0 0 208 88ZM112 48c0-13.57 10-24.46 16-29.79 6 5.33 16 16.22 16 29.79a16 16 0 0 1-32 0Zm104 87.33c0 13.25-10.46 24.31-23.32 24.66A24 24 0 0 1 168 136a8 8 0 0 0-16 0 24 24 0 0 1-48 0 8 8 0 0 0-16 0 24 24 0 0 1-24.68 24C50.46 159.64 40 148.58 40 135.33V112a8 8 0 0 1 8-8H208a8 8 0 0 1 8 8Z"],["baby","M134.16 24.1a4 4 0 0 0-3.56 1.81C120.3 41.48 120 55.79 120 56a8 8 0 0 0 9.68 7.79A8.24 8.24 0 0 0 136 55.68 8 8 0 0 1 144.8 48a8.14 8.14 0 0 1 7.2 8.23 24 24 0 0 1-48-.27c0-.63.09-10.78 5.44-24a4 4 0 0 0-4.59-5.39A104.16 104.16 0 0 0 24.07 131.66C26 186.72 71.23 231 126.32 231.9a104 104 0 0 0 7.84-207.8ZM80 127.91a12 12 0 1 1 12 12A12 12 0 0 1 80 127.91Zm80.27 54.77a61 61 0 0 1-64.54 0 8 8 0 0 1 8.54-13.54 45 45 0 0 0 47.46 0 8 8 0 0 1 8.54 13.54ZM164 139.91a12 12 0 1 1 12-12A12 12 0 0 1 164 139.91Z"],["dog","M239.71 125l-16.42-88a16 16 0 0 0-19.61-12.58l-.31.09L150.85 40h-45.7L52.63 24.56l-.31-.09A16 16 0 0 0 32.71 37.05L16.29 125a15.77 15.77 0 0 0 9.12 17.52A16.26 16.26 0 0 0 32.12 144 15.48 15.48 0 0 0 40 141.84V184a40 40 0 0 0 40 40h96a40 40 0 0 0 40-40V141.85a15.5 15.5 0 0 0 7.87 2.16 16.31 16.31 0 0 0 6.72-1.47A15.77 15.77 0 0 0 239.71 125ZM176 208H136V195.31l13.66-13.65a8 8 0 0 0-11.32-11.32L128 180.69l-10.34-10.35a8 8 0 0 0-11.32 11.32L120 195.31V208H80a24 24 0 0 1-24-24V123.11L107.93 56h40.14L200 123.11V184A24 24 0 0 1 176 208Zm-72-68a12 12 0 1 1-12-12A12 12 0 0 1 104 140Zm72 0a12 12 0 1 1-12-12A12 12 0 0 1 176 140Z"],["plant","M205.41 159.07a60.9 60.9 0 0 1-31.83 8.86 71.71 71.71 0 0 1-27.36-5.66A55.55 55.55 0 0 0 136 194.51V224a8 8 0 0 1-8.53 8 8.18 8.18 0 0 1-7.47-8.25V211.31L81.38 172.69A52.5 52.5 0 0 1 63.44 176a45.82 45.82 0 0 1-23.92-6.67C17.73 156.09 6 125.62 8.27 87.79a8 8 0 0 1 7.52-7.52c37.83-2.23 68.3 9.46 81.5 31.25A46 46 0 0 1 103.74 140a4 4 0 0 1-6.89 2.43l-19.2-20.1a8 8 0 0 0-11.31 11.31l53.88 55.25c.06-.78.13-1.56.21-2.33a68.56 68.56 0 0 1 18.64-39.46l50.59-53.46a8 8 0 0 0-11.31-11.32l-49 51.82a4 4 0 0 1-6.78-1.74c-4.74-17.48-2.65-34.88 6.4-49.82 17.86-29.48 59.42-45.26 111.18-42.22a8 8 0 0 1 7.52 7.52C250.67 99.65 234.89 141.21 205.41 159.07Z"],["leaf","M223.45 40.07a8 8 0 0 0-7.52-7.52C139.8 28.08 78.82 51 52.82 94a87.09 87.09 0 0 0-12.76 49A101.72 101.72 0 0 0 46.7 175.2a4 4 0 0 0 6.61 1.43l85-86.3a8 8 0 0 1 11.32 11.32L56.74 195.94 42.55 210.13a8.2 8.2 0 0 0-.6 11.1 8 8 0 0 0 11.71.43l16.79-16.79c14.14 6.84 28.41 10.57 42.56 11.07q1.67.06 3.33.06A86.93 86.93 0 0 0 162 203.18C205 177.18 227.93 116.21 223.45 40.07Z"],["sun","M120 40V16a8 8 0 0 1 16 0V40a8 8 0 0 1-16 0Zm8 24a64 64 0 1 0 64 64A64.07 64.07 0 0 0 128 64ZM58.34 69.66A8 8 0 0 0 69.66 58.34l-16-16A8 8 0 0 0 42.34 53.66Zm0 116.68-16 16a8 8 0 0 0 11.32 11.32l16-16a8 8 0 0 0-11.32-11.32ZM192 72a8 8 0 0 0 5.66-2.34l16-16a8 8 0 0 0-11.32-11.32l-16 16A8 8 0 0 0 192 72Zm5.66 114.34a8 8 0 0 0-11.32 11.32l16 16a8 8 0 0 0 11.32-11.32ZM48 128a8 8 0 0 0-8-8H16a8 8 0 0 0 0 16H40A8 8 0 0 0 48 128Zm80 80a8 8 0 0 0-8 8v24a8 8 0 0 0 16 0V216A8 8 0 0 0 128 208Zm112-88H216a8 8 0 0 0 0 16h24a8 8 0 0 0 0-16Z"],["moon","M235.54 150.21a104.84 104.84 0 0 1-37 52.91A104 104 0 0 1 32 120 103.09 103.09 0 0 1 52.88 57.48a104.84 104.84 0 0 1 52.91-37 8 8 0 0 1 10 10 88.08 88.08 0 0 0 109.8 109.8 8 8 0 0 1 10 10Z"],["music","M210.3 56.34l-80-24A8 8 0 0 0 120 40V148.26A48 48 0 1 0 136 184V98.75l69.7 20.91A8 8 0 0 0 216 112V64A8 8 0 0 0 210.3 56.34Z"],["camera","M208 56H180.28L166.65 35.56A8 8 0 0 0 160 32H96a8 8 0 0 0-6.65 3.56L75.71 56H48A24 24 0 0 0 24 80V192a24 24 0 0 0 24 24H208a24 24 0 0 0 24-24V80A24 24 0 0 0 208 56Zm-44 76a36 36 0 1 1-36-36A36 36 0 0 1 164 132Z"],["film","M216 40H40A16 16 0 0 0 24 56V200a16 16 0 0 0 16 16H216a16 16 0 0 0 16-16V56A16 16 0 0 0 216 40ZM184 56h32V72H184ZM72 200H40V184H72ZM72 72H40V56H72Zm48 128H88V184h32Zm0-128H88V56h32Zm48 128H136V184h32Zm0-128H136V56h32Zm48 128H184V184h32v16Z"],["game","M247.44 173.75a.68.68 0 0 0 0-.14L231.05 89.44c0-.06 0-.12 0-.18A60.08 60.08 0 0 0 172 40H83.89a59.88 59.88 0 0 0-59 49.52L8.58 173.61a.68.68 0 0 0 0 .14 36 36 0 0 0 60.9 31.71l.35-.37L109.52 160h37l39.71 45.09c.11.13.23.25.35.37A36.08 36.08 0 0 0 212 216a36 36 0 0 0 35.43-42.25ZM104 112H96v8a8 8 0 0 1-16 0v-8H72a8 8 0 0 1 0-16h8V88a8 8 0 0 1 16 0v8h8a8 8 0 0 1 0 16Zm40-8a8 8 0 0 1 8-8h24a8 8 0 0 1 0 16H152A8 8 0 0 1 144 104Zm84.37 87.47a19.84 19.84 0 0 1-12.9 8.23A20.09 20.09 0 0 1 198 194.31L167.8 160H172a60 60 0 0 0 51-28.38l8.74 45A19.82 19.82 0 0 1 228.37 191.47Z"],["sparkle","M208 144a15.78 15.78 0 0 1-10.42 14.94L146 178l-19 51.62a15.92 15.92 0 0 1-29.88 0L78 178l-51.62-19a15.92 15.92 0 0 1 0-29.88L78 110l19-51.62a15.92 15.92 0 0 1 29.88 0L146 110l51.62 19A15.78 15.78 0 0 1 208 144ZM152 48h16V64a8 8 0 0 0 16 0V48h16a8 8 0 0 0 0-16H184V16a8 8 0 0 0-16 0V32H152a8 8 0 0 0 0 16Zm88 32h-8V72a8 8 0 0 0-16 0v8h-8a8 8 0 0 0 0 16h8v8a8 8 0 0 0 16 0V96h8a8 8 0 0 0 0-16Z"]],"ui":{"check":"M229.66 77.66l-128 128a8 8 0 0 1-11.32 0l-56-56a8 8 0 0 1 11.32-11.32L96 188.69 218.34 66.34a8 8 0 0 1 11.32 11.32Z","plus":"M224 128a8 8 0 0 1-8 8H136v80a8 8 0 0 1-16 0V136H40a8 8 0 0 1 0-16h80V40a8 8 0 0 1 16 0v80h80A8 8 0 0 1 224 128Z","x":"M205.66 194.34a8 8 0 0 1-11.32 11.32L128 139.31 61.66 205.66a8 8 0 0 1-11.32-11.32L116.69 128 50.34 61.66A8 8 0 0 1 61.66 50.34L128 116.69l66.34-66.35a8 8 0 0 1 11.32 11.32L139.31 128Z","trash":"M216 48H176V40a24 24 0 0 0-24-24H104A24 24 0 0 0 80 40v8H40a8 8 0 0 0 0 16h8V208a16 16 0 0 0 16 16H192a16 16 0 0 0 16-16V64h8a8 8 0 0 0 0-16ZM96 40a8 8 0 0 1 8-8h48a8 8 0 0 1 8 8v8H96Zm96 168H64V64H192ZM112 104v64a8 8 0 0 1-16 0V104a8 8 0 0 1 16 0Zm48 0v64a8 8 0 0 1-16 0V104a8 8 0 0 1 16 0Z","bell":"M221.8 175.94C216.25 166.38 208 139.33 208 104a80 80 0 1 0-160 0c0 35.34-8.26 62.38-13.81 71.94A16 16 0 0 0 48 200H88.81a40 40 0 0 0 78.38 0H208a16 16 0 0 0 13.8-24.06ZM128 216a24 24 0 0 1-22.62-16h45.24A24 24 0 0 1 128 216ZM48 184c7.7-13.24 16-43.92 16-80a64 64 0 1 1 128 0c0 36.05 8.28 66.73 16 80Z","repeat":"M24 128A72.08 72.08 0 0 1 96 56H204.69L194.34 45.66a8 8 0 0 1 11.32-11.32l24 24a8 8 0 0 1 0 11.32l-24 24a8 8 0 0 1-11.32-11.32L204.69 72H96a56.06 56.06 0 0 0-56 56 8 8 0 0 1-16 0Zm200-8a8 8 0 0 0-8 8 56.06 56.06 0 0 1-56 56H51.31l10.35-10.34a8 8 0 0 0-11.32-11.32l-24 24a8 8 0 0 0 0 11.32l24 24a8 8 0 0 0 11.32-11.32L51.31 200H160a72.08 72.08 0 0 0 72-72A8 8 0 0 0 224 120Z","note":"M208 32H48A16 16 0 0 0 32 48V208a16 16 0 0 0 16 16H156.69A15.86 15.86 0 0 0 168 219.31L219.31 168A15.86 15.86 0 0 0 224 156.69V48A16 16 0 0 0 208 32ZM48 48H208V152H160a8 8 0 0 0-8 8v48H48ZM196.69 168 168 196.69V168Z","flag":"M42.76 50A8 8 0 0 0 40 56V224a8 8 0 0 0 16 0V179.77c26.79-21.16 49.87-9.75 76.45 3.41 16.4 8.11 34.06 16.85 53 16.85 13.93 0 28.54-4.75 43.82-18a8 8 0 0 0 2.76-6V56A8 8 0 0 0 218.76 50c-28 24.23-51.72 12.49-79.21-1.12C111.07 34.76 78.78 18.79 42.76 50ZM216 172.25c-26.79 21.16-49.87 9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16 49.87-9.75 76.45 3.4 25 12.35 52.82 26.13 83.55 8.4Z","cal":"M208 32H184V24a8 8 0 0 0-16 0v8H88V24a8 8 0 0 0-16 0v8H48A16 16 0 0 0 32 48V208a16 16 0 0 0 16 16H208a16 16 0 0 0 16-16V48A16 16 0 0 0 208 32ZM72 48v8a8 8 0 0 0 16 0V48h80v8a8 8 0 0 0 16 0V48h24V80H48V48ZM208 208H48V96H208V208Z","clock":"M128 24A104 104 0 1 0 232 128 104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88A88.1 88.1 0 0 1 128 216Zm64-88a8 8 0 0 1-8 8H128a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48A8 8 0 0 1 192 128Z","tag":"M243.31 136 144 36.69A15.86 15.86 0 0 0 132.69 32H40a8 8 0 0 0-8 8v92.69A15.86 15.86 0 0 0 36.69 144L136 243.31a16 16 0 0 0 22.63 0l84.68-84.68a16 16 0 0 0 0-22.63Zm-96 96L48 132.69V48h84.69L232 147.31ZM96 84A12 12 0 1 1 84 72 12 12 0 0 1 96 84Z","list":"M80 64a8 8 0 0 1 8-8H216a8 8 0 0 1 0 16H88A8 8 0 0 1 80 64Zm136 56H88a8 8 0 0 0 0 16H216a8 8 0 0 0 0-16Zm0 64H88a8 8 0 0 0 0 16H216a8 8 0 0 0 0-16ZM44 52A12 12 0 1 0 56 64 12 12 0 0 0 44 52Zm0 64a12 12 0 1 0 12 12A12 12 0 0 0 44 116Zm0 64a12 12 0 1 0 12 12A12 12 0 0 0 44 180Z","tray":"M208 32H48A16 16 0 0 0 32 48V208a16 16 0 0 0 16 16H208a16 16 0 0 0 16-16V48A16 16 0 0 0 208 32Zm0 16V152h-28.7A15.86 15.86 0 0 0 168 156.69L148.69 176H107.31L88 156.69A15.86 15.86 0 0 0 76.69 152H48V48Zm0 160H48V168H76.69L96 187.31A15.86 15.86 0 0 0 107.31 192h41.38A15.86 15.86 0 0 0 160 187.31L179.31 168H208v40Z","steps":"M224 128a8 8 0 0 1-8 8H128a8 8 0 0 1 0-16h88A8 8 0 0 1 224 128ZM128 72h88a8 8 0 0 0 0-16H128a8 8 0 0 0 0 16Zm88 112H128a8 8 0 0 0 0 16h88a8 8 0 0 0 0-16ZM82.34 42.34 56 68.69 45.66 58.34A8 8 0 0 0 34.34 69.66l16 16a8 8 0 0 0 11.32 0l32-32A8 8 0 0 0 82.34 42.34Zm0 64L56 132.69 45.66 122.34a8 8 0 0 0-11.32 11.32l16 16a8 8 0 0 0 11.32 0l32-32a8 8 0 0 0-11.32-11.32Zm0 64L56 196.69 45.66 186.34a8 8 0 0 0-11.32 11.32l16 16a8 8 0 0 0 11.32 0l32-32a8 8 0 0 0-11.32-11.32Z","search":"M229.66 218.34l-50.07-50.06a88.11 88.11 0 1 0-11.31 11.31l50.06 50.07a8 8 0 0 0 11.32-11.32ZM40 112a72 72 0 1 1 72 72A72.08 72.08 0 0 1 40 112Z","chev":"M181.66 133.66l-80 80a8 8 0 0 1-11.32-11.32L164.69 128 90.34 53.66a8 8 0 0 1 11.32-11.32l80 80A8 8 0 0 1 181.66 133.66Z","chevd":"M213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80A8 8 0 0 1 53.66 90.34L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32Z","pencil":"M227.31 73.37 182.63 28.68a16 16 0 0 0-22.63 0L36.69 152A15.86 15.86 0 0 0 32 163.31V208a16 16 0 0 0 16 16H92.69A15.86 15.86 0 0 0 104 219.31L227.31 96a16 16 0 0 0 0-22.63ZM92.69 208H48V163.31l88-88L180.69 120ZM192 108.68 147.31 64l24-24L216 84.68Z","gear":"M128 80a48 48 0 1 0 48 48A48.05 48.05 0 0 0 128 80Zm0 80a32 32 0 1 1 32-32A32 32 0 0 1 128 160Zm109.94-52.79a8 8 0 0 0-3.89-5.4l-29.83-17-.12-33.62a8 8 0 0 0-2.83-6.08 111.91 111.91 0 0 0-36.72-20.67 8 8 0 0 0-6.46.59L128 41.85 97.88 25a8 8 0 0 0-6.47-.6A112.1 112.1 0 0 0 54.73 45.15a8 8 0 0 0-2.83 6.07l-.15 33.65-29.83 17a8 8 0 0 0-3.89 5.4 106.47 106.47 0 0 0 0 41.56 8 8 0 0 0 3.89 5.4l29.83 17 .12 33.62a8 8 0 0 0 2.83 6.08 111.91 111.91 0 0 0 36.72 20.67 8 8 0 0 0 6.46-.59L128 214.15 158.12 231a7.91 7.91 0 0 0 3.9 1 8.09 8.09 0 0 0 2.57-.42 112.1 112.1 0 0 0 36.68-20.73 8 8 0 0 0 2.83-6.07l.15-33.65 29.83-17a8 8 0 0 0 3.89-5.4A106.47 106.47 0 0 0 237.94 107.21Zm-15 34.91-28.57 16.25a8 8 0 0 0-3 3c-.58 1-1.19 2.06-1.81 3.06a7.94 7.94 0 0 0-1.22 4.21l-.15 32.25a95.89 95.89 0 0 1-25.37 14.3L134 199.13a8 8 0 0 0-3.91-1h-.19c-1.21 0-2.43 0-3.64 0a8.08 8.08 0 0 0-4.1 1l-28.84 16.1A96 96 0 0 1 67.88 201l-.11-32.2a8 8 0 0 0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09 8.09 0 0 0-3-3.06l-28.6-16.29a90.49 90.49 0 0 1 0-28.26L61.67 97.63a8 8 0 0 0 3-3c.58-1 1.19-2.06 1.81-3.06a7.94 7.94 0 0 0 1.22-4.21l.15-32.25a95.89 95.89 0 0 1 25.37-14.3L122 56.87a8 8 0 0 0 4.1 1c1.21 0 2.43 0 3.64 0a8.08 8.08 0 0 0 4.1-1l28.84-16.1A96 96 0 0 1 188.12 55l.11 32.2a8 8 0 0 0 1.22 4.22c.62 1 1.23 2 1.8 3.06a8.09 8.09 0 0 0 3 3.06l28.6 16.29A90.49 90.49 0 0 1 222.9 142.12Z","sun":"M120 40V16a8 8 0 0 1 16 0V40a8 8 0 0 1-16 0Zm72 88a64 64 0 1 1-64-64A64.07 64.07 0 0 1 192 128Zm-16 0a48 48 0 1 0-48 48A48.05 48.05 0 0 0 176 128ZM58.34 69.66A8 8 0 0 0 69.66 58.34l-16-16A8 8 0 0 0 42.34 53.66Zm0 116.68-16 16a8 8 0 0 0 11.32 11.32l16-16a8 8 0 0 0-11.32-11.32ZM192 72a8 8 0 0 0 5.66-2.34l16-16a8 8 0 0 0-11.32-11.32l-16 16A8 8 0 0 0 192 72Zm5.66 114.34a8 8 0 0 0-11.32 11.32l16 16a8 8 0 0 0 11.32-11.32ZM48 128a8 8 0 0 0-8-8H16a8 8 0 0 0 0 16H40A8 8 0 0 0 48 128Zm80 80a8 8 0 0 0-8 8v24a8 8 0 0 0 16 0V216A8 8 0 0 0 128 208Zm112-88H216a8 8 0 0 0 0 16h24a8 8 0 0 0 0-16Z","dots":"M104 60A12 12 0 1 1 92 48 12 12 0 0 1 104 60Zm60 12a12 12 0 1 0-12-12A12 12 0 0 0 164 72ZM92 116a12 12 0 1 0 12 12A12 12 0 0 0 92 116Zm72 0a12 12 0 1 0 12 12A12 12 0 0 0 164 116ZM92 184a12 12 0 1 0 12 12A12 12 0 0 0 92 184Zm72 0a12 12 0 1 0 12 12A12 12 0 0 0 164 184Z","up":"M205.66 117.66a8 8 0 0 1-11.32 0L136 59.31V216a8 8 0 0 1-16 0V59.31L61.66 117.66a8 8 0 0 1-11.32-11.32l72-72a8 8 0 0 1 11.32 0l72 72A8 8 0 0 1 205.66 117.66Z","down":"M205.66 149.66l-72 72a8 8 0 0 1-11.32 0l-72-72a8 8 0 0 1 11.32-11.32L120 196.69V40a8 8 0 0 1 16 0V196.69l58.34-58.35a8 8 0 0 1 11.32 11.32Z","sort":"M128 128a8 8 0 0 1-8 8H48a8 8 0 0 1 0-16h72A8 8 0 0 1 128 128ZM48 72H184a8 8 0 0 0 0-16H48a8 8 0 0 0 0 16Zm56 112H48a8 8 0 0 0 0 16h56a8 8 0 0 0 0-16Zm125.66-21.66a8 8 0 0 0-11.32 0L192 188.69V112a8 8 0 0 0-16 0v76.69l-26.34-26.35a8 8 0 0 0-11.32 11.32l40 40a8 8 0 0 0 11.32 0l40-40A8 8 0 0 0 229.66 162.34Z","undo":"M224 128a96 96 0 0 1-94.71 96H128A95.38 95.38 0 0 1 62.1 197.8a8 8 0 0 1 11-11.63A80 80 0 1 0 71.43 71.39a3.07 3.07 0 0 1-.26.25L44.59 96H72a8 8 0 0 1 0 16H24a8 8 0 0 1-8-8V56a8 8 0 0 1 16 0V85.8L60.25 60A96 96 0 0 1 224 128Z","progress":"M128 24A104 104 0 1 0 232 128 104.11 104.11 0 0 0 128 24Zm8 16.37a86.4 86.4 0 0 1 16 3V212.67a86.4 86.4 0 0 1-16 3Zm32 9.26a87.81 87.81 0 0 1 16 10.54V195.83a87.81 87.81 0 0 1-16 10.54ZM40 128a88.11 88.11 0 0 1 80-87.63V215.63A88.11 88.11 0 0 1 40 128Zm160 50.54V77.46a87.82 87.82 0 0 1 0 101.08Z","smile":"M128 24A104 104 0 1 0 232 128 104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88A88.1 88.1 0 0 1 128 216ZM80 108a12 12 0 1 1 12 12A12 12 0 0 1 80 108Zm104 0a8 8 0 0 1-8 8H152a8 8 0 0 1 0-16h24A8 8 0 0 1 184 108Zm-9.08 48c-10.29 17.79-27.39 28-46.92 28s-36.63-10.2-46.93-28a8 8 0 1 1 13.86-8c7.46 12.91 19.2 20 33.07 20s25.61-7.1 33.08-20a8 8 0 1 1 13.84 8Z","broom":"M235.5 216.81c-22.56-11-35.5-34.58-35.5-64.8V134.73a15.94 15.94 0 0 0-10.09-14.87L165 110a8 8 0 0 1-4.48-10.34l21.32-53a28 28 0 0 0-16.1-37 28.14 28.14 0 0 0-35.82 16 .61.61 0 0 0 0 .12L108.9 79a8 8 0 0 1-10.37 4.49L73.11 73.14A15.89 15.89 0 0 0 55.74 76.8C34.68 98.45 24 123.75 24 152a111.45 111.45 0 0 0 31.18 77.53A8 8 0 0 0 61 232H232a8 8 0 0 0 3.5-15.19ZM67.14 88l25.41 10.3a24 24 0 0 0 31.23-13.45l21-53c2.56-6.11 9.47-9.27 15.43-7a12 12 0 0 1 6.88 15.92L145.69 93.76a24 24 0 0 0 13.43 31.14L184 134.73V152c0 .33 0 .66 0 1L55.77 101.71A108.84 108.84 0 0 1 67.14 88Zm48 128a87.53 87.53 0 0 1-24.34-42 8 8 0 0 0-15.49 4 105.16 105.16 0 0 0 18.36 38H64.44A95.54 95.54 0 0 1 40 152a85.9 85.9 0 0 1 7.73-36.29l137.8 55.12c3 18 10.56 33.48 21.89 45.16Z","grid":"M104 40H56A16 16 0 0 0 40 56v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16V56A16 16 0 0 0 104 40Zm0 64H56V56h48v48Zm96-64H152a16 16 0 0 0-16 16v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16V56A16 16 0 0 0 200 40Zm0 64H152V56h48v48Zm-96 32H56a16 16 0 0 0-16 16v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16V152A16 16 0 0 0 104 136Zm0 64H56V152h48v48Zm96-64H152a16 16 0 0 0-16 16v48a16 16 0 0 0 16 16h48a16 16 0 0 0 16-16V152A16 16 0 0 0 200 136Zm0 64H152V152h48v48Z","warn":"M128 24A104 104 0 1 0 232 128 104.11 104.11 0 0 0 128 24Zm0 192a88 88 0 1 1 88-88A88.1 88.1 0 0 1 128 216Zm-8-80V80a8 8 0 0 1 16 0v56a8 8 0 0 1-16 0Zm20 36a12 12 0 1 1-12-12A12 12 0 0 1 140 172Z"}};I.icons.forEach(function(p){TodoModel.ICON_D[p[0]]=p[1];});for(var k in I.ui)TodoModel.UI_D[k]=I.ui[k];})();
+/* ── todo ui kit(桥 / 文案 / 存盘 / 小组件)─────────────────────────────────────────
+ * 单一真源 = tools/todo/src/ui.js,由 build.py 逐字注入每个页面(包是离线分发的,没有运行时共享件)。
+ * 依赖 TodoModel(model.js,同样注入在前)。
+ */
+var U = (function () {
+  var M = TodoModel;
+  var inApp = !!(window.xbridge && typeof xbridge.isXBundleEnv === "function" && xbridge.isXBundleEnv());
+
+  /** call 型桥方法回信封 {code,msg,data},不会 reject(G49):统一拆一层。 */
+  async function call(p) {
+    var r = await p;
+    if (!r || r.code !== 0) throw new Error((r && r.msg) || "bridge");
+    return r.data;
+  }
+
+  // ── 语言(doc/overseas-first.md §1–§2):<html data-lang>(宿主 documentStart 注入,bootEnv 再用 appInfo 校正)
+  //    → nbLang;都没有一律英文(不读 navigator.language,不以中文为缺省)。nbLang 由 build.py 从 kit/nbenv.py 注入在前。
+  function lang() {
+    return nbLang(document.documentElement.getAttribute("data-lang") || "");
+  }
+  var STR = {
+    zh: {
+      appName: "待办", today: "今天", tomorrow: "明天", yesterday: "昨天", plan: "计划", all: "全部",
+      doing: "进行中", done: "已完成", inbox: "收件箱", nodate: "没有日期", overdue: "已逾期", later: "以后",
+      star: "高优先级", search: "搜索", searchPh: "搜索待办、备注", addPh: "添加待办，回车保存",
+      addPhList: "添加到「{0}」", addPhToday: "添加到今天", add: "添加", cancel: "取消", save: "保存", del: "删除",
+      left: "还剩 {0} 件", leftNone: "今天没有要做的事", allDone: "今天的都做完了", overN: "其中 {0} 件已逾期",
+      doneN: "今天已完成 {0} 件", nOpen: "{0} 件待办", nItems: "{0} 件",
+      subToday: "{0} · 还剩 {1} 件", subTodayOver: "{0} · 还剩 {1} 件，{2} 件已逾期", subDone: "{0} · 今天的都做完了",
+      subEmpty: "{0} · 还没有待办",
+      emptyAllT: "还没有待办", emptyAllD: "在上面的输入框里写下第一件，回车就记下了。",
+      emptyTodayT: "今天没有要做的事", emptyTodayD: "给待办设个日期，它就会在那天出现在这里。",
+      emptyScopeT: "这里没有待办", emptyScopeD: "换个清单看看，或者在上面添加一件。",
+      emptyDoneT: "还没有完成的待办", emptyDoneD: "勾掉一件，它会出现在这里。",
+      emptySearch: "没有找到相关的待办",
+      doneToast: "已完成「{0}」", undo: "撤销", restored: "已恢复", deleted: "已删除「{0}」",
+      nextRep: "已完成，下一次：{0}",
+      clearDone: "清除已完成", clearDoneQ: "清除全部已完成的待办？", clearDoneM: "会删除 {0} 件已完成的待办，删除后不能恢复。", clearDoneM1: "会删除 1 件已完成的待办，删除后不能恢复。",
+      cleared: "已清除 {0} 件",
+      doneSec: "今天完成的", showDone: "显示已完成", hideDone: "收起",
+      lists: "清单", tags: "标签", manage: "清单与标签", manageD: "新建、改名、换颜色和图标",
+      reminders: "提醒", daily: "每日待办提醒", dailyD: "每天定时提醒你看一眼今天的待办",
+      dueR: "待办到点提醒", dueRD: "重复的待办到点发通知，可能稍晚一些",
+      alertOk: "提醒已开启", alertQuota: "提醒已达上限，可以在「我的 › 提醒」里删掉不用的",
+      pickTitle: "把待办加到仪表盘", pickDesc: "今天、清单、日程、进度等组件",
+      pickOne: "把这件加到仪表盘", pickOneD: "在桌面上盯住它的进度和截止日期",
+      privacy: "待办只保存在这台设备上，不会上传到我们的服务器；会随 App 的备份一起导出。",
+      // 详情
+      titlePh: "要做什么？", newHint: "写下要做的事，会自动保存。", list: "清单", tag: "标签", prio: "优先级", due: "日期", time: "时间",
+      remind: "提醒", repeat: "重复", progress: "进度", steps: "步骤", notes: "备注", icon: "图标",
+      none: "无", noTime: "不设时间", noRemind: "不提醒", noRepeat: "不重复", noDate: "没有日期",
+      pr0: "无", pr1: "低", pr2: "中", pr3: "高",
+      rm0: "准时", rm5: "提前 5 分钟", rm10: "提前 10 分钟", rm30: "提前 30 分钟", rm60: "提前 1 小时", rm1440: "提前 1 天",
+      repd: "每天", repwd: "工作日", repw: "每周", repm: "每月",
+      nextMon: "下周一", clear: "清除",
+      remindNeedDate: "先给它定个日期，才能设提醒",
+      remindHint: "重复的待办到点后提醒你，可能会晚一些（最多约半小时）。",
+      onceOk: "到点准时提醒你。", onceNeed: "这个提醒还没排上。", onceSet: "设置", onceTitle: "提醒里还是旧标题。", onceUpd: "更新",
+      oncePast: "提醒时间已经过了。", onceQuota: "提醒名额已满，这件会改用「待办到点提醒」，可能晚一些。",
+      remindOff: "还没开启「待办到点提醒」，开启后才会发通知。", enable: "开启",
+      autoPg: "按步骤自动计算", manualPg: "手动",
+      stepPh: "添加步骤", notePh: "写一条备注…", addNote: "添加备注", edited: "已编辑",
+      delQ: "删除这件待办？", delM: "它的步骤和备注会一起删除，删除后不能恢复。",
+      delNoteQ: "删除这条备注？", delNoteM: "删除后不能恢复。",
+      markDone: "标记为完成", markOpen: "改为未完成", created: "创建于 {0}", finished: "完成于 {0}",
+      notFound: "这件待办不存在了", notFoundD: "它可能已经被删除。",
+      newList: "新建清单", newTag: "新建标签", listName: "清单名称", tagName: "标签名称", color: "颜色",
+      moveUp: "上移", moveDown: "下移", delListQ: "删除清单「{0}」？", delListM: "里面的 {0} 件待办会移到收件箱，不会被删除。", delListM1: "里面的 1 件待办会移到收件箱，不会被删除。",
+      delTagQ: "删除标签「{0}」？", delTagM: "只会从待办上摘掉这个标签，待办本身不受影响。",
+      nameEmpty: "名字不能为空", added: "刚记下的",
+      addMore: "添加", addAndGo: "添加", addedN: "已记下「{0}」",
+      // 组件设置
+      editTitle: "这个组件显示什么", editDesc: "点一项立即生效，关掉这一页就能看到。",
+      pickTodo: "这个组件盯住哪一件", pickTodoD: "只列出未完成的待办。",
+      builtin: "常用", applied: "已切换", noBrick: "请从仪表盘上长按组件进入这里",
+      wd: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+      date: function (d) { return (d.getMonth() + 1) + "月" + d.getDate() + "日"; },
+      dateY: function (d) { return d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日"; }
+    },
+    en: {
+      appName: "To-do", today: "Today", tomorrow: "Tomorrow", yesterday: "Yesterday", plan: "Upcoming", all: "All",
+      doing: "In progress", done: "Done", inbox: "Inbox", nodate: "No date", overdue: "Overdue", later: "Later",
+      star: "High priority", search: "Search", searchPh: "Search to-dos and notes", addPh: "Add a to-do, press Return",
+      addPhList: "Add to “{0}”", addPhToday: "Add to Today", add: "Add", cancel: "Cancel", save: "Save", del: "Delete",
+      left: "{0} left", leftNone: "Nothing due today", allDone: "All done for today", overN: "{0} overdue",
+      doneN: "{0} done today", nOpen: "{0} open", nItems: "{0}",
+      subToday: "{0} · {1} left", subTodayOver: "{0} · {1} left, {2} overdue", subDone: "{0} · all done for today",
+      subEmpty: "{0} · no to-dos yet",
+      emptyAllT: "No to-dos yet", emptyAllD: "Type your first one in the box above and press Return.",
+      emptyTodayT: "Nothing due today", emptyTodayD: "Give a to-do a date and it shows up here on that day.",
+      emptyScopeT: "Nothing here", emptyScopeD: "Try another list, or add one above.",
+      emptyDoneT: "Nothing done yet", emptyDoneD: "Check one off and it lands here.",
+      emptySearch: "No matching to-dos",
+      doneToast: "Done: “{0}”", undo: "Undo", restored: "Restored", deleted: "Deleted “{0}”",
+      nextRep: "Done. Next: {0}",
+      clearDone: "Clear done", clearDoneQ: "Clear all done to-dos?", clearDoneM: "This deletes {0} done to-dos. You can't undo this.", clearDoneM1: "This deletes 1 done to-do. You can't undo this.",
+      cleared: "Cleared {0}",
+      doneSec: "Done today", showDone: "Show done", hideDone: "Hide",
+      lists: "Lists", tags: "Tags", manage: "Lists & tags", manageD: "Create, rename, recolor, change icons",
+      reminders: "Reminders", daily: "Daily to-do reminder", dailyD: "A daily nudge to check today's list",
+      dueR: "To-do reminders", dueRD: "Notifies you when repeating to-dos come due; may be a little late",
+      alertOk: "Reminder turned on", alertQuota: "Reminder limit reached. Remove unused ones in Me › Reminders",
+      pickTitle: "Add to-dos to your dashboard", pickDesc: "Today, lists, agenda, progress and more",
+      pickOne: "Add this to your dashboard", pickOneD: "Keep an eye on its progress and due date",
+      privacy: "Your to-dos stay on this device and are never uploaded to our servers. They're included in app backups.",
+      titlePh: "What needs doing?", newHint: "Type what needs doing. It's saved automatically.", list: "List", tag: "Tags", prio: "Priority", due: "Date", time: "Time",
+      remind: "Reminder", repeat: "Repeat", progress: "Progress", steps: "Steps", notes: "Notes", icon: "Icon",
+      none: "None", noTime: "No time", noRemind: "None", noRepeat: "Never", noDate: "No date",
+      pr0: "None", pr1: "Low", pr2: "Medium", pr3: "High",
+      rm0: "At time", rm5: "5 min before", rm10: "10 min before", rm30: "30 min before", rm60: "1 hour before", rm1440: "1 day before",
+      repd: "Daily", repwd: "Weekdays", repw: "Weekly", repm: "Monthly",
+      nextMon: "Next Mon", clear: "Clear",
+      remindNeedDate: "Set a date first to add a reminder",
+      remindHint: "Repeating to-dos are reminded around their time, up to about 30 minutes late.",
+      onceOk: "You'll be reminded right on time.", onceNeed: "This reminder isn't set yet.", onceSet: "Set", onceTitle: "The reminder still shows the old title.", onceUpd: "Update",
+      oncePast: "That reminder time has passed.", onceQuota: "Reminder limit reached. This one falls back to To-do reminders and may be a little late.",
+      remindOff: "To-do reminders are off. Turn them on to get notified.", enable: "Turn on",
+      autoPg: "From steps", manualPg: "Manual",
+      stepPh: "Add a step", notePh: "Write a note…", addNote: "Add note", edited: "edited",
+      delQ: "Delete this to-do?", delM: "Its steps and notes are deleted too. You can't undo this.",
+      delNoteQ: "Delete this note?", delNoteM: "You can't undo this.",
+      markDone: "Mark as done", markOpen: "Mark as not done", created: "Created {0}", finished: "Done {0}",
+      notFound: "This to-do is gone", notFoundD: "It may have been deleted.",
+      newList: "New list", newTag: "New tag", listName: "List name", tagName: "Tag name", color: "Color",
+      moveUp: "Move up", moveDown: "Move down", delListQ: "Delete list “{0}”?", delListM: "Its {0} to-dos move to the Inbox. They won't be deleted.", delListM1: "Its 1 to-do moves to the Inbox. It won't be deleted.",
+      delTagQ: "Delete tag “{0}”?", delTagM: "The tag is removed from to-dos. The to-dos themselves stay.",
+      nameEmpty: "Name can't be empty", added: "Just jotted down",
+      addMore: "Add", addAndGo: "Add", addedN: "Saved “{0}”",
+      editTitle: "What this widget shows", editDesc: "Tap one to switch. Close this page to see it.",
+      pickTodo: "Which to-do this widget follows", pickTodoD: "Only open to-dos are listed.",
+      builtin: "Views", applied: "Switched", noBrick: "Open this from a widget on your dashboard (long-press it)",
+      wd: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      date: function (d) { return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()] + " " + d.getDate(); },
+      dateY: function (d) { return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear(); }
+    }
+  };
+  function t(k) {
+    var v = STR[lang()][k];
+    if (v == null) v = STR.en[k];   // 缺键回落英文(§2);空串是合法译文,只认 null
+    if (typeof v !== "string") return v;
+    var a = arguments;
+    return v.replace(/\{(\d)\}/g, function (_, i) { return a[+i + 1] != null ? a[+i + 1] : ""; });
+  }
+
+  // ── 小工具 ──
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function dark() { return document.documentElement.getAttribute("data-theme") === "dark"; }
+  /** 色板键 → 当前主题下的实色 / 淡底 */
+  function palC(key) { var p = M.PAL[key] || M.SRC; return dark() ? p.d : p.l; }
+  function palW(key) { var p = M.PAL[key] || M.SRC; return (p.w.split("|")[dark() ? 1 : 0]); }
+  function todoColor(S, t) { var l = M.listOf(S, t.cat); return palC(l ? l.c : ""); }
+  function todoWash(S, t) { var l = M.listOf(S, t.cat); return palW(l ? l.c : ""); }
+  /** 图标 SVG:用户图标(fill 权重)或界面图标(regular 权重),都是 256 视框、currentColor 填充。 */
+  function svg(d, cls) { return '<svg class="' + (cls || "g") + '" viewBox="0 0 256 256" aria-hidden="true"><path d="' + d + '" fill="currentColor"/></svg>'; }
+  function ic(name, cls) { return M.ICON_D[name] ? svg(M.ICON_D[name], cls) : ""; }
+  function ui(name, cls) { return M.UI_D[name] ? svg(M.UI_D[name], cls) : ""; }
+
+  // ── 日期文案 ──
+  function relDay(dueStr, nowMs) {
+    var d = M.parseYmd(dueStr); if (!d) return { txt: "", cls: "" };
+    var n = M.dayDiff(nowMs, d.getTime());
+    if (n < -1) return { txt: t("date")(d), cls: "over" };
+    if (n === -1) return { txt: t("yesterday"), cls: "over" };
+    if (n === 0) return { txt: t("today"), cls: "today" };
+    if (n === 1) return { txt: t("tomorrow"), cls: "" };
+    if (n < 7) return { txt: t("wd")[d.getDay()], cls: "" };
+    var y = new Date(nowMs).getFullYear() === d.getFullYear();
+    return { txt: y ? t("date")(d) : t("dateY")(d), cls: "" };
+  }
+  function fmtStamp(ms, nowMs) {
+    var d = new Date(ms), n = M.dayDiff(ms, nowMs);
+    var hm = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    if (n === 0) return t("today") + " " + hm;
+    if (n === 1) return t("yesterday") + " " + hm;
+    return (new Date(nowMs).getFullYear() === d.getFullYear() ? t("date")(d) : t("dateY")(d)) + " " + hm;
+  }
+
+  // ── 反馈 ──
+  function haptic(k) { if (inApp) { try { xbridge.haptic(k || "tap"); } catch (e) {} } }
+  function toast(msg, type) { if (inApp) { try { xbridge.toast(msg, type); } catch (e) {} } else console.log("[toast]", msg); }
+  async function confirm(title, msg, okText) {
+    if (!inApp) return window.confirm(title + "\n" + (msg || ""));
+    try { return !!(await call(xbridge.confirm(title, msg || "", okText ? { okText: okText, destructive: true } : undefined))); }
+    catch (e) { return false; }
+  }
+  /** 撤销条:toast 一闪就没,撤销得有一个能按到的按钮。页内自绘,4 秒。 */
+  var snackT = null;
+  function snack(msg, actionText, onAction) {
+    var el = $("snack");
+    if (!el) { el = document.createElement("div"); el.id = "snack"; el.className = "snack"; document.body.appendChild(el); }
+    el.innerHTML = '<span class="sm">' + esc(msg) + "</span>" + (actionText ? '<button type="button" class="sa">' + esc(actionText) + "</button>" : "");
+    el.classList.add("on");
+    if (actionText) el.querySelector(".sa").onclick = function () { el.classList.remove("on"); clearTimeout(snackT); onAction && onAction(); };
+    clearTimeout(snackT);
+    snackT = setTimeout(function () { el.classList.remove("on"); }, 4200);
+  }
+
+  // ── 状态:读 / 写 ──
+  var S = M.empty();
+  var rev = "";
+  async function load() {
+    if (!inApp) { S = M.normalize(window.__DEMO__ || {}); return S; }
+    var d = await call(xbridge.runDataFlow("read", {}));
+    S = M.normalize(d || {});
+    try { rev = String((await call(xbridge.getData("rev"))) || ""); } catch (e) { rev = ""; }
+    return S;
+  }
+  /** 存盘串行化:两次写盘并发会让后发的先落、先发的覆盖回去。 */
+  var saving = Promise.resolve();
+  function save() {
+    var now = Date.now();
+    M.trimHist(S, now);
+    var job = saving.then(async function () {
+      if (!inApp) return;
+      var w = M.buildW(S, now), rq = M.buildRQ(S, now);
+      await call(xbridge.runFlow("save", { todos: S.todos, lists: S.lists, tags: S.tags, hist: S.hist, cfg: S.cfg, w: w, rq: rq }));
+      rev = String(now);
+      try { await call(xbridge.setData("rev", rev)); } catch (e) {}
+      scheduleRefresh();
+    });
+    saving = job.catch(function (e) { toast(lang() === "zh" ? "保存失败，请重试" : "Couldn't save. Try again", "error"); });
+    return saving;
+  }
+  var saveT = null;
+  /** 打字类的改动(标题 / 备注)攒 400ms 再存。 */
+  function saveSoon() { clearTimeout(saveT); saveT = setTimeout(save, 400); }
+  function flush() { if (saveT) { clearTimeout(saveT); saveT = null; return save(); } return saving; }
+
+  // 组件刷新:原语同一包 5 秒只兑现第一次 —— 先立即刷,窗口里的后续改动合成一次补刷
+  var lastRefresh = 0, refreshT = null;
+  function scheduleRefresh() {
+    if (!inApp) return;
+    var wait = lastRefresh + 5300 - Date.now();
+    if (wait <= 0) { doRefresh(); return; }
+    if (!refreshT) refreshT = setTimeout(function () { refreshT = null; doRefresh(); }, wait);
+  }
+  function doRefresh() { lastRefresh = Date.now(); try { xbridge.refreshWidget(); } catch (e) {} }
+
+  /** 别的页改过数据(详情页、添加面板)回到这一页时重读:rev 变了才重读,轮询只读一个小键。 */
+  function watch(onChange) {
+    if (!inApp) return;
+    async function check() {
+      if (document.visibilityState === "hidden") return;
+      try {
+        var r = String((await call(xbridge.getData("rev"))) || "");
+        if (r !== rev) { rev = r; await load(); onChange(); }
+      } catch (e) {}
+    }
+    setInterval(check, 1500);
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+  }
+
+  /** 今天的都勾完了 → 撤掉「每日待办提醒」今天剩下的那一发。 */
+  function maybeSkipDaily() {
+    if (!inApp) return;
+    var now = Date.now(), today = M.mid(now);
+    var left = S.todos.some(function (x) { var d = M.dueMs(x); return !x.st && d && d <= today; });
+    if (!left) { try { xbridge.runFlow("skip", {}); } catch (e) {} }
+  }
+
+  async function alertAdd(id, params) {
+    if (!inApp) return "";
+    try {
+      var r = await call(xbridge.alertAdd(params ? { id: id, params: params } : { id: id }));
+      if (r === "ok") { toast(t("alertOk"), "success"); if (id === "due") { S.cfg.dueOn = 1; save(); } }
+      else if (r === "quota" && id !== "once") toast(t("alertQuota"));
+      return r;
+    } catch (e) { return ""; }
+  }
+
+  /** 撤本包 once 规则里匹配的一次性提醒(alert-design §4.6:params 子集匹配,只给 tid 就删这一件的全部)。 */
+  async function alertRemove(params) {
+    if (!inApp || typeof xbridge.alertRemove !== "function") return 0;
+    try { var r = await call(xbridge.alertRemove({ id: "once", params: params })); return (r && r.removed) || 0; }
+    catch (e) { return 0; }
+  }
+
+  /** 让一件待办的一次性提醒(xJob/once.xjob)对齐到「此刻该有的」那一条。
+   *  ask=false(改了日期 / 时间 / 重复、完成、删除):只撤不建 —— 旧的那一发时间已经不对,先撤;要不要重新排上等用户点。
+   *  ask=true(用户刚选了提醒、或点了「设置 / 更新」):先按 tid 撤光,再弹同意面板建新的。
+   *    ⚠️ 顺序必须是先撤后建:用户可能在面板里改过日期 / 标题,页面记下的 t.ro 未必是实例的真参数,
+   *       按「旧日期时间」精确撤会漏撤;只按 tid 撤是唯一可靠的键。面板里取消 = 这件没有一次性提醒,
+   *       由到点提醒队列 rq 兜底(model.buildRQ 只排除「已排上」的)。
+   *  返回 ok | cancel | quota | removed | none。 */
+  async function syncOnce(x, ask) {
+    var now = Date.now(), want = M.onceWanted(x, now), ro = x.ro;
+    if (want && ro && ro.d === want.date && ro.t === want.time && ro.n === (x.t || "")) return "none";
+    if (!ask || !want) {
+      if (ro && !(want && ro.d === want.date && ro.t === want.time)) { await alertRemove({ tid: x.id }); delete x.ro; return "removed"; }
+      return "none";
+    }
+    await alertRemove({ tid: x.id });
+    delete x.ro;
+    var r = await alertAdd("once", { tid: x.id, title: x.t || "", date: want.date, time: want.time });
+    if (r === "ok") x.ro = { d: want.date, t: want.time, n: x.t || "" };
+    else if (r === "quota") toast(t("onceQuota"));
+    return r || "cancel";
+  }
+
+  function route(path) { if (inApp) { try { xbridge.route("numable://self/page" + path); } catch (e) {} } else location.href = "#" + path; }
+  function q(name) { var m = new RegExp("[?&]" + name + "=([^&]*)").exec(location.search || ""); return m ? decodeURIComponent(m[1]) : ""; }
+
+  /** 主题 / 语言:容器改属性 + 派发事件,不重载页面 —— 渲染函数要能重跑。 */
+  function onEnv(fn) {
+    addEventListener("themechange", fn);
+    addEventListener("languagechange", function () { document.documentElement.lang = lang() === "zh" ? "zh" : "en"; fn(); });
+  }
+  async function bootEnv() {
+    if (!inApp) return;
+    try {
+      var a = await call(xbridge.appInfo());
+      var h = document.documentElement;
+      if (!h.getAttribute("data-theme") && a && a.theme) h.setAttribute("data-theme", a.theme === "dark" ? "dark" : "light");
+      // appInfo 回来以它为准(market boot() 同法);拿不到就保留宿主注入的 data-lang,再没有 = 英文
+      if (a && (a.language || a.locale)) h.setAttribute("data-lang", a.language || a.locale);
+    } catch (e) {}
+  }
+
+  /** 页内底部面板(选清单 / 标签 / 图标…)。挂在页面自己的 body 里,天然在容器边界内。 */
+  function sheet(html, onMount) {
+    var bg = document.createElement("div");
+    bg.className = "shbg";
+    bg.innerHTML = '<div class="sh" role="dialog"><div class="shh"></div>' + html + "</div>";
+    document.body.appendChild(bg);
+    requestAnimationFrame(function () { bg.classList.add("on"); });
+    function close() { bg.classList.remove("on"); setTimeout(function () { bg.remove(); }, 220); }
+    bg.addEventListener("click", function (e) { if (e.target === bg) close(); });
+    onMount && onMount(bg.querySelector(".sh"), close);
+    return close;
+  }
+
+  return {
+    inApp: inApp, call: call, lang: lang, t: t, $: $, esc: esc, dark: dark, palC: palC, palW: palW,
+    todoColor: todoColor, todoWash: todoWash, svg: svg, ic: ic, ui: ui, relDay: relDay, fmtStamp: fmtStamp,
+    haptic: haptic, toast: toast, confirm: confirm, snack: snack, alertRemove: alertRemove, syncOnce: syncOnce,
+    get S() { return S; }, set S(v) { S = v; }, load: load, save: save, saveSoon: saveSoon, flush: flush,
+    scheduleRefresh: scheduleRefresh, watch: watch, maybeSkipDaily: maybeSkipDaily, alertAdd: alertAdd,
+    route: route, q: q, onEnv: onEnv, bootEnv: bootEnv, sheet: sheet
+  };
+})();
+
+(function () {
+  var M = TodoModel, t = U.t, $ = U.$, esc = U.esc;
+  var brick = U.q("brickId"), mode = "pick", chosen = "";
+  function S() { return U.S; }
+  function row(val, icon, color, wash, title, sub) {
+    return '<button class="sr' + (chosen === val ? " on" : "") + '" type="button" data-v="' + esc(val) + '"><span class="lic" style="background:' + wash + ";color:" + color + '">' + icon +
+      '</span><span class="sb"><b>' + esc(title) + "</b>" + (sub ? "<small>" + esc(sub) + "</small>" : "") + '</span><span class="cv">' + U.ui("chev") + "</span></button>";
+  }
+  function n(f) { return S().todos.filter(function (x) { return !x.st && f(x); }).length; }
+  function render() {
+    document.documentElement.lang = U.lang() === "zh" ? "zh" : "en";
+    var src = U.palC(""), srcW = U.palW("");
+    var h = "", td = M.mid(Date.now());
+    if (mode === "pick") {
+      $("h1").textContent = t("pickTodo"); $("sub").textContent = t("pickTodoD");
+      var op = S().todos.filter(function (x) { return !x.st; }).sort(M.cmp);
+      h = op.length ? '<div class="card">' + op.map(function (x) {
+        var rd = U.relDay(x.due, Date.now());
+        return row(x.id, x.ic ? U.ic(x.ic) : U.ui("check"), U.todoColor(S(), x), U.todoWash(S(), x), x.t || "—",
+          [rd.txt, (M.listOf(S(), x.cat) || {}).n].filter(Boolean).join(" · "));
+      }).join("") + "</div>" : '<div class="card empty"><div class="ei">' + U.ui("tray") + "</div><b>" + esc(t("emptyAllT")) + "</b><p></p></div>";
+    } else {
+      $("h1").textContent = t("editTitle"); $("sub").textContent = t("editDesc");
+      h += '<div class="sec"><span>' + esc(t("builtin")) + '</span></div><div class="card">';
+      h += row("today", U.ui("sun"), src, srcW, t("today"), t("nOpen", n(function (x) { var d = M.dueMs(x); return d && d <= td; })));
+      h += row("over", U.ui("warn"), U.palC("red"), U.palW("red"), t("overdue"), t("nOpen", n(function (x) { var d = M.dueMs(x); return d && d < td; })));
+      h += row("all", U.ui("list"), src, srcW, t("all"), t("nOpen", n(function () { return true; })));
+      h += row("doing", U.ui("progress"), src, srcW, t("doing"), t("nOpen", n(function (x) { var p = M.progress(x); return p > 0 && p < 100; })));
+      h += row("star", U.ui("flag"), U.palC("red"), U.palW("red"), t("star"), t("nOpen", n(function (x) { return (x.pr || 0) >= 3; })));
+      h += row("nodate", U.ui("cal"), src, srcW, t("nodate"), t("nOpen", n(function (x) { return !M.dueMs(x); })));
+      h += row("inbox", U.ui("tray"), src, srcW, t("inbox"), t("nOpen", n(function (x) { return !M.listOf(S(), x.cat); })));
+      h += "</div>";
+      if (S().lists.length) {
+        h += '<div class="sec"><span>' + esc(t("lists")) + '</span></div><div class="card">' + S().lists.map(function (l) {
+          return row("L" + l.id, l.ic ? U.ic(l.ic) : U.ui("list"), U.palC(l.c), U.palW(l.c), l.n, t("nOpen", n(function (x) { return x.cat === l.id; })));
+        }).join("") + "</div>";
+      }
+      if (S().tags.length) {
+        h += '<div class="sec"><span>' + esc(t("tags")) + '</span></div><div class="card">' + S().tags.map(function (g) {
+          return row("G" + g.id, U.ui("tag"), U.palC(g.c), U.palW(g.c), "#" + g.n, t("nOpen", n(function (x) { return (x.tags || []).indexOf(g.id) >= 0; })));
+        }).join("") + "</div>";
+      }
+    }
+    $("body").innerHTML = h;
+  }
+  document.addEventListener("click", async function (e) {
+    var b = e.target.closest("[data-v]"); if (!b) return;
+    if (!U.inApp) return;
+    if (!brick) { U.toast(t("noBrick")); return; }
+    chosen = b.getAttribute("data-v"); render();
+    try {
+      await U.call(xbridge.updateParams(brick, mode === "pick" ? { id: chosen } : { scope: chosen }));
+      await U.call(xbridge.refreshWidget());
+      U.haptic("success"); U.toast(t("applied"), "success");
+    } catch (err) { U.toast(U.lang() === "zh" ? "没能切换，请重试" : "Couldn't switch. Try again", "error"); }
+  });
+  U.onEnv(render);
+  (async function () { await U.bootEnv(); try { await U.load(); } catch (e) {} render(); })();
+})();
+</script>
+</body>
+</html>

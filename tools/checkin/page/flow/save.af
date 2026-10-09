@@ -1,0 +1,55 @@
+{
+ "_note": "写一件事的记录 + 它的派生统计。入参 {id, log, stat}。\n⚠️ 入参多一个 `agg`(整份跨事项日聚合,页面算好送来);缺它会把 agg 写成空,三张聚合卡一起变空。",
+ "version": 1,
+ "actions": [
+  {
+   "_note": "⚠️ **写盘流的第一步恒是触觉反馈**(doc/feedback-primitives-spec.md §8 / infosource lint G22)。\n这条流是「记一笔」的唯一落点——首页那颗圆、quick 页、详情页三处的 `saveLog()` 都汇到这里。\n放在 actions[0] 而不是写盘之后:反馈要在动作**开始**时给,那才是「收到了」的意思。\n⚠️ 档位取 `tap` 不取 `success`:这条流也承载撤销/减一次(H5 里同一个 saveLog),\n达标与否是 H5 自己算的事,流这一层只回答「这一下我收到了」。",
+   "action": "ui.haptic",
+   "params": {
+    "type": "tap"
+   }
+  },
+  {
+   "_note": "先拼键再用 `${lk}`：与 appwatch/app.df 的 `snap_${appId}_${country}` 同一个已验形状。",
+   "op": "set",
+   "props": {
+    "key": "lk",
+    "value": "log_${id}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "sk",
+    "value": "stat_${id}"
+   }
+  },
+  {
+   "_note": "⚠️ `${log}` / `${stat}` 必须整取，不许在这里拼字面量（长度会被写死）。增删与派生量全在 H5 的 JS 里算完、整份写回。",
+   "action": "data.set",
+   "params": {
+    "key": "${lk}",
+    "value": "${log}"
+   }
+  },
+  {
+   "action": "data.set",
+   "params": {
+    "key": "${sk}",
+    "value": "${stat}"
+   }
+  },
+  {
+   "_note": "跨事项日聚合,三张聚合卡(progress/week/month)读它。由页面 JS 的 computeAgg() 算好整份送来 —— flow 没有 map/filter,而这需要遍历所有事项的 byDay。⚠️ 必须在 widget.refresh **之前**写:反过来的话卡片刷新时读到的还是上一份。",
+   "action": "data.set",
+   "params": {
+    "key": "agg",
+    "value": "${agg}"
+   }
+  },
+  {
+   "_note": "记完一笔立刻让本包的卡真取数重渲。⚠️ 不是 reload —— 渲染图缓存的 key 是 ref+params+dark/locale+gen，**不含数据维度**，reload 的第一步 cacheGet 会命中旧图，刷了等于没刷且日志干净（见 doc/widget-refresh-primitive.md §3）。\nscope 缺省 = bundle（本包所有事项的卡都该跟着变），desktop 缺省 = true（桌面卡一并踢）。",
+   "action": "widget.refresh"
+  }
+ ]
+}

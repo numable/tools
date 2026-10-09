@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<!--
+  App Store Connect 设置页(路由 /settings)。由 tools/infosource/gen_asc.py 生成,别手改。
+  · 供应商编号 `vendor`、结算币种 `ccy` 存包级 data.*(配置不是秘密,credential-vault 判据);
+  · 一把密钥 asc 只读状态(credentialState),填写走原生凭证面板;绑定后跑 m-perm.df 做权限体检(appstore-merged §4)。
+-->
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Settings</title>
+<style>
+:root{--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F3F4F6;--card:#FFFFFF;--ink:#0E1116;--sub:#6B7280;--line:#E4E7EC;--tile:#E7E9EE;
+  --src:#0A7AFF;--srcSoft:#D8EAFF;--ok:#128F66;--warn:#B45309;--bad:#D93A2B}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--ink:#F3F4F6;--sub:#8E939B;--line:#262A31;--tile:#20232A;
+  --src:#4DA0FF;--srcSoft:#1F3043;--ok:#6FE8BE;--warn:#FFB84D;--bad:#FF7A66}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  padding:calc(var(--xb-content-top) + 12px) 14px calc(var(--xb-content-bottom) + 24px)}
+h2{font-size:13px;font-weight:700;color:var(--sub);margin:18px 2px 8px}
+.card{background:var(--card);border-radius:14px;padding:4px 16px}
+.row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.grow{flex:1 1 auto;min-width:0}
+.t{font-size:14px;font-weight:700}
+.s{font-size:12px;color:var(--sub);margin-top:2px}
+.chip{font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;background:var(--tile);color:var(--sub);white-space:nowrap}
+.chip.bound{color:var(--ok)} .chip.expired{color:var(--bad)}
+button{font:inherit;font-size:13px;font-weight:700;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;
+  background:var(--srcSoft);color:var(--src);white-space:nowrap}
+button:active{opacity:.7}
+input,select{font:inherit;font-size:16px;color:var(--ink);background:var(--tile);border:0;border-radius:10px;
+  padding:10px 12px;width:100%;appearance:none;-webkit-appearance:none}
+.field{padding:12px 0}
+.inline{display:flex;gap:8px;margin-top:10px}
+.msg{font-size:12px;margin-top:6px;min-height:16px;color:var(--sub)}
+.msg.bad{color:var(--bad)} .msg.ok{color:var(--ok)}
+.foot{font-size:12px;color:var(--sub);margin:16px 2px 0}
+</style>
+</head>
+<body>
+<div class="foot" style="margin-top:4px" data-i="intro"></div>
+<h2 data-i="keys"></h2>
+<div class="card">
+  <div class="row"><div class="grow"><div class="t" data-i="kAsc"></div><div class="s" data-i="kAscS"></div></div>
+    <span class="chip" id="stAsc">…</span><button id="bAsc"></button></div>
+</div>
+<div id="permBox" hidden>
+<h2 data-i="perm"></h2>
+<div class="card">
+  <div class="row"><div class="grow t" data-i="pApps"></div><span class="chip" id="pmApps">…</span></div>
+  <div class="row"><div class="grow t" data-i="pRel"></div><span class="chip" id="pmRel">…</span></div>
+  <div class="row"><div class="grow t" data-i="pBuild"></div><span class="chip" id="pmBuild">…</span></div>
+  <div class="row"><div class="grow t" data-i="pSales"></div><span class="chip" id="pmSales">…</span></div>
+</div>
+<div class="msg bad" id="pmNote"></div>
+</div>
+<h2 data-i="vendor"></h2>
+<div class="card"><div class="field">
+  <div class="s" data-i="vendorS"></div>
+  <div class="inline"><input id="vendor" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="bSave" data-i="save"></button></div>
+  <div class="msg" id="vMsg"></div>
+</div></div>
+<h2 data-i="ccy"></h2>
+<div class="card"><div class="field">
+  <div class="s" data-i="ccyS"></div>
+  <div class="inline"><select id="ccy"></select></div>
+</div></div>
+<div class="foot" data-i="foot"></div>
+<script>
+(function(){
+var I18N={"zh": {"keys": "密钥", "kAsc": "App Store Connect 密钥", "kAscS": "建议用 Admin 角色生成，一把就能看到全部内容", "perm": "这把密钥能看到", "pApps": "账号里的 App", "pRel": "审核进度 · 评论 · 性能", "pBuild": "构建 · TestFlight", "pSales": "下载 · 收益 · 订阅", "yes": "能", "no": "看不到", "unk": "暂时没法确认", "needV": "先填供应商编号", "checking": "正在确认…", "nBuild": "这把密钥看不到构建。要看构建，换一把 Admin 或开发者权限的密钥。", "nSales": "这把密钥看不到销售数据。要看下载和收益，换一把 Admin 或销售权限的密钥。", "intro": "接入后，你自己的 App 会多出下载、收益、审核进度、性能和完整评论。其他 App 的公开数据不受影响。", "bound": "已填写", "unbound": "未填写", "expired": "已失效", "bind": "去填写", "manage": "管理", "vendor": "供应商编号", "vendorS": "在 App Store Connect 的「付款和财务报告」页左上角，是一串数字", "vendorPh": "例如 88012345", "save": "保存", "saved": "已保存", "bad": "只能是数字", "ccy": "结算币种", "ccyS": "预估收益按这个币种折算", "ccyDef": "（默认）", "foot": "供应商编号和结算币种不是密钥，只存在这个工具里，用来读取你的销售报告。", "notX": "请在 Numable 里打开这一页", "vChecking": "正在核对…", "vOk": "已保存，编号正确", "vBad": "已保存，但 Apple 说这个编号不对，请核对", "vNoPerm": "已保存。这把密钥看不到销售数据，换一把 Admin 或销售权限的密钥", "vUnk": "已保存，暂时没法核对，稍后组件会自己再试"}, "en": {"keys": "Key", "kAsc": "App Store Connect key", "kAscS": "Create it with the Admin role and one key shows everything", "perm": "What this key can see", "pApps": "Apps in your account", "pRel": "Review status · reviews · performance", "pBuild": "Builds · TestFlight", "pSales": "Downloads · proceeds · subscriptions", "yes": "Yes", "no": "No", "unk": "Can't tell right now", "needV": "Add your vendor number first", "checking": "Checking…", "nBuild": "This key can't see builds. Use an Admin or Developer key to see them.", "nSales": "This key can't see sales. Use an Admin or Sales key to see downloads and proceeds.", "intro": "Once connected, your own apps get downloads, proceeds, review status, performance and every review. Public data for other apps stays the same.", "bound": "Added", "unbound": "Not added", "expired": "Expired", "bind": "Add", "manage": "Manage", "vendor": "Vendor number", "vendorS": "Top left of Payments and Financial Reports in App Store Connect", "vendorPh": "e.g. 88012345", "save": "Save", "saved": "Saved", "bad": "Digits only", "ccy": "Currency", "ccyS": "Estimated proceeds are converted to this currency", "ccyDef": " (default)", "foot": "Your vendor number and currency are not secrets. They stay inside this tool and are used to read your sales reports.", "notX": "Open this page in Numable", "vChecking": "Checking…", "vOk": "Saved. The vendor number checks out", "vBad": "Saved, but Apple rejected this vendor number. Please check it", "vNoPerm": "Saved. This key can't see sales data. Use an Admin or Sales key", "vUnk": "Saved. Couldn't check it right now, widgets will retry"}};
+var CCY={"zh": [["AED", "阿联酋迪拉姆"], ["AUD", "澳元"], ["BRL", "巴西雷亚尔"], ["CAD", "加元"], ["CHF", "瑞士法郎"], ["CLP", "智利比索"], ["CNY", "人民币"], ["COP", "哥伦比亚比索"], ["CZK", "捷克克朗"], ["DKK", "丹麦克朗"], ["EGP", "埃及镑"], ["EUR", "欧元"], ["GBP", "英镑"], ["HKD", "港元"], ["HUF", "匈牙利福林"], ["IDR", "印尼盾"], ["ILS", "以色列新谢克尔"], ["INR", "印度卢比"], ["JPY", "日元"], ["KRW", "韩元"], ["KZT", "哈萨克斯坦坚戈"], ["MXN", "墨西哥比索"], ["MYR", "马来西亚林吉特"], ["NGN", "尼日利亚奈拉"], ["NOK", "挪威克朗"], ["NZD", "新西兰元"], ["PEN", "秘鲁索尔"], ["PKR", "巴基斯坦卢比"], ["PHP", "菲律宾比索"], ["PLN", "波兰兹罗提"], ["QAR", "卡塔尔里亚尔"], ["RON", "罗马尼亚列伊"], ["RUB", "俄罗斯卢布"], ["SAR", "沙特里亚尔"], ["SEK", "瑞典克朗"], ["SGD", "新加坡元"], ["THB", "泰铢"], ["TRY", "土耳其里拉"], ["TWD", "新台币"], ["TZS", "坦桑尼亚先令"], ["USD", "美元"], ["VND", "越南盾"], ["ZAR", "南非兰特"]], "en": [["AED", "UAE Dirham"], ["AUD", "Australian Dollar"], ["BRL", "Brazilian Real"], ["CAD", "Canadian Dollar"], ["CHF", "Swiss Franc"], ["CLP", "Chilean Peso"], ["CNY", "Chinese Yuan"], ["COP", "Colombian Peso"], ["CZK", "Czech Koruna"], ["DKK", "Danish Krone"], ["EGP", "Egyptian Pound"], ["EUR", "Euro"], ["GBP", "Pound Sterling"], ["HKD", "Hong Kong Dollar"], ["HUF", "Hungarian Forint"], ["IDR", "Indonesian Rupiah"], ["ILS", "Israeli New Shekel"], ["INR", "Indian Rupee"], ["JPY", "Japanese Yen"], ["KRW", "Korean Won"], ["KZT", "Kazakhstani Tenge"], ["MXN", "Mexican Peso"], ["MYR", "Malaysian Ringgit"], ["NGN", "Nigerian Naira"], ["NOK", "Norwegian Krone"], ["NZD", "New Zealand Dollar"], ["PEN", "Peruvian Sol"], ["PKR", "Pakistani Rupee"], ["PHP", "Philippine Peso"], ["PLN", "Polish Zloty"], ["QAR", "Qatari Riyal"], ["RON", "Romanian Leu"], ["RUB", "Russian Ruble"], ["SAR", "Saudi Riyal"], ["SEK", "Swedish Krona"], ["SGD", "Singapore Dollar"], ["THB", "Thai Baht"], ["TRY", "Turkish Lira"], ["TWD", "New Taiwan Dollar"], ["TZS", "Tanzanian Shilling"], ["USD", "US Dollar"], ["VND", "Vietnamese Dong"], ["ZAR", "South African Rand"]]};
+var BIND={asc:"numable://app/mine?section=credentials&bundle=01KZD9PY65Y9341817EEV4VT31&bind=asc"};
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准;缺键回落英文(doc/overseas-first.md §1–§2)。 */
+var LANG=nbLang(document.documentElement.getAttribute("data-lang")), CND=LANG==="zh", inApp=false, ccyCur="";
+function t(k){var T=I18N[LANG]||I18N.en; return Object.prototype.hasOwnProperty.call(T,k)?T[k]:(Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k);}
+async function call(p){var r=await p; if(!r||r.code!==0) throw new Error((r&&r.msg)||"bridge"); return r.data;}
+function paint(){
+  document.documentElement.setAttribute("lang", LANG==="zh"?"zh-CN":"en");
+  Array.prototype.forEach.call(document.querySelectorAll("[data-i]"),function(el){el.textContent=t(el.dataset.i);});
+  document.getElementById("vendor").placeholder=t("vendorPh");
+}
+/* 结算币种缺省 = 国内默认判据(与取数流 biz_keys 的 cnd 同一条):国内 CNY,其余 USD。 */
+function defCcy(){return CND?"CNY":"USD";}
+function renderCcy(){
+  var sel=document.getElementById("ccy"), d=defCcy();
+  sel.innerHTML=(CCY[LANG]||CCY.en).map(function(p){
+    var lab=p[0]+" · "+p[1]+(p[0]===d?t("ccyDef"):"");
+    return '<option value="'+p[0]+'"'+(p[0]===(ccyCur||d)?" selected":"")+">"+lab+"</option>";}).join("");
+}
+function stateOf(el, btn, st){
+  st=st||"unbound";
+  el.className="chip "+st; el.textContent=t(st);
+  btn.textContent=st==="bound"?t("manage"):t("bind");
+}
+// 权限体检(appstore-merged §4):同一个槽,不同角色的密钥能看到的东西不同 —— 逐块探一次,结论按 code 画。
+// 200 = 能 · 403 = 看不到 · -1 = 缺供应商编号(经营那一行)· 其它 = 暂时没法确认。
+function pm(id, code){
+  var el=document.getElementById(id), c=parseInt(code,10);
+  if(c===200){ el.className="chip bound"; el.textContent=t("yes"); }
+  else if(c===403){ el.className="chip expired"; el.textContent=t("no"); }
+  else if(c===-1){ el.className="chip"; el.textContent=t("needV"); }
+  else { el.className="chip"; el.textContent=t("unk"); }
+  return c;
+}
+var permSeq=0;
+async function loadPerm(){
+  var box=document.getElementById("permBox"), note=document.getElementById("pmNote"), my=++permSeq;
+  box.hidden=false; note.textContent="";
+  ["pmApps","pmRel","pmBuild","pmSales"].forEach(function(id){var el=document.getElementById(id); el.className="chip"; el.textContent=t("checking");});
+  var d={};
+  try{ d=await call(xbridge.runDataFlow("m-perm",{},25000))||{}; }catch(e){ d={}; }
+  if(my!==permSeq) return;   // 晚回的旧结果不许盖新的(边打字边搜同一类竞态)
+  pm("pmApps", d.apps); pm("pmRel", d.rel); var b=pm("pmBuild", d.build); var s=pm("pmSales", d.sales);
+  var msgs=[]; if(b===403) msgs.push(t("nBuild")); if(s===403) msgs.push(t("nSales"));
+  note.textContent=msgs.join(" ");
+}
+async function loadKeys(){
+  if(!inApp) return;
+  var st="unbound";
+  try{ st=(await call(xbridge.credentialState("asc"))).state; }catch(e){}
+  stateOf(document.getElementById("stAsc"),document.getElementById("bAsc"),st);
+  if(st==="bound") loadPerm(); else document.getElementById("permBox").hidden=true;
+}
+// 保存编号后试取一次最近的日报(§4.1):200/404 = 编号对,400/500 = 编号不对,403 = 没有销售权限,0 = 没拿到答案。
+// 取数流 page/flow/verify-vendor.df 不落盘、不缓存 —— 用户正在这一页上等结论。
+async function verifyVendor(v){
+  var msg=document.getElementById("vMsg");
+  if(!v||!inApp) return null;
+  msg.className="msg"; msg.textContent=t("vChecking");
+  var code=0;
+  try{ var d=await call(xbridge.runDataFlow("m-verify-vendor",{v:v},20000)); code=parseInt((d&&d.code)||0,10)||0; }catch(e){ code=0; }
+  if(code===200||code===404){ msg.className="msg ok"; msg.textContent=t("vOk"); }
+  else if(code===403){ msg.className="msg bad"; msg.textContent=t("vNoPerm"); }
+  else if(code===400||code===500){ msg.className="msg bad"; msg.textContent=t("vBad"); }
+  else { msg.className="msg"; msg.textContent=t("vUnk"); }
+  return code;
+}
+async function afterWrite(){
+  // 经营组件会读 vendor / ccy:写回之后整包组件真取数一次(不是 reload —— 那会命中渲染图缓存)。
+  try{ await call(xbridge.refreshWidget()); }catch(e){}
+}
+// 中文键盘会打出全角数字(「８８０１」)—— 读取与输入时都先归一成半角(G50)
+function norm(s){return String(s||"").replace(/[\uFF10-\uFF19]/g,function(c){
+  return String.fromCharCode(c.charCodeAt(0)-0xFEE0);}).replace(/[\s\u3000]+/g,"");}
+async function saveVendor(){
+  var el=document.getElementById("vendor"), msg=document.getElementById("vMsg");
+  var v=norm(el.value); el.value=v;
+  if(v && !/^\d+$/.test(v)){ msg.className="msg bad"; msg.textContent=t("bad"); return; }
+  if(!inApp) return;
+  try{
+    await call(xbridge.setData("vendor", v));
+    xbridge.haptic("success");
+    msg.className="msg ok"; msg.textContent=t("saved");
+    await verifyVendor(v);   // 覆盖「已保存」为核对结论
+    await afterWrite();
+    loadKeys();              // 经营那一行的体检结论依赖编号,编号变了重探一次
+  }catch(e){ msg.className="msg bad"; msg.textContent=String(e.message||e); }
+}
+async function saveCcy(){
+  ccyCur=document.getElementById("ccy").value;
+  if(!inApp) return;
+  try{ await call(xbridge.setData("ccy", ccyCur)); xbridge.haptic("selection"); await afterWrite(); }catch(e){}
+}
+document.getElementById("bSave").addEventListener("click", saveVendor);
+document.getElementById("vendor").addEventListener("input", function(){
+  var n=norm(this.value); if(n!==this.value) this.value=n; });
+document.getElementById("ccy").addEventListener("change", saveCcy);
+document.getElementById("bAsc").addEventListener("click", function(){ if(inApp) xbridge.route(BIND.asc); });
+addEventListener("languagechange", function(e){
+  LANG=nbLang((e.detail&&e.detail.language)||document.documentElement.getAttribute("data-lang")); paint(); renderCcy(); loadKeys();
+});
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) loadKeys(); });
+(async function boot(){
+  for(var i=0;i<24&&!window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+  inApp=!!(window.xbridge&&xbridge.isXBundleEnv&&xbridge.isXBundleEnv());
+  if(inApp){
+    var info=await nbInfo();
+    LANG=nbLang(info.language||info.locale); CND=nbCnDefault(info);
+    try{ document.getElementById("vendor").value=(await call(xbridge.getData("vendor")))||""; }catch(e){}
+    try{ ccyCur=(await call(xbridge.getData("ccy")))||""; }catch(e){}
+  }
+  paint(); renderCcy(); loadKeys();
+  if(!inApp) document.getElementById("vMsg").textContent=t("notX");
+})();
+})();
+</script>
+</body>
+</html>

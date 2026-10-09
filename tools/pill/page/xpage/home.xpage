@@ -1,0 +1,100 @@
+{
+  "_note": "首页 = 空态 / **今天那一颗 + 这一盒**,页尾一个加卡按钮(v2,2026-08-21;加卡入口 2026-09-06 补;常驻「关于」页脚 2026-09-09 补)。\n\n【v2 改了什么】\nv1 是「今天那一颗 + 最近七天 + 一行摘要」+ 二级页 /pack(整盒点阵)。\n问题:七天条与整盒页是**同一份点阵画两遍**(一份能点、一份只读),改一处必忘另一处;\n而用户想看的从来不是「最近七天」,是「这一盒吃到哪儿了」。\nv2:七天条换成整盒点阵(仍然能点)、`/pack` 整页删除、页脚整行删除 ——\n翻盒与补录收进点阵卡的标题行,设置收进 hero 卡的左上角,累计收进图例行右端。\n结果是两张卡、一屏放得下、不用滚。\n\n【翻盒状态住 pageState,不住 data.*】\n`packSel` 由 pack-go.af 的 `xpage.patchState` 写,随页面消失。v1 时它是 data 域的 `pack` 键,\n因为点阵在二级页里、关掉页就等于结束;搬回首页后持久化它就成了 bug ——\n翻到第 1 盒、退出、明天再打开,上面的圆是「今天」而下面的点阵停在上个月。\n⚠️ 首次进入时 pageState 里没有这个键 → `${packSel}` 求值为空串 → home.df 兜底 -1(跟随今天)。\n\n⚠️⚠️ 【为什么不用 `visible`,而用「高度算 0」】(不变)\n`visible` 四端都是坏的(2026-08-16 iOS 实测):引擎只返回一个空占位节点并跳过它的 depends,\n**没把它从 children 里剔除**,而下游布局循环一处过滤都没有 → 照样建视图、照样占位。\n**连字面 `\"visible\": \"false\"` 都挡不住**。所以显隐一律走 `h`(该藏的算 0),由 home.df 统一算出。\n⚠️ 因此 `gap` 必须是 `0pt`:0 高节点之间若还有 gap,藏起来的节点会累出空隙。\n   卡间留白改由**各卡自己在声明高度里多带 12pt**,卡体画在 `{parent.h}-12pt` 内。",
+  "type": "page",
+  "id": "pill-home",
+  "root": {
+    "type": "container",
+    "id": "root",
+    "_notePad": "上下让位读 `@contentInset`(= @safeArea + 容器 chrome 占位 + 键盘),不写死数字 ——\nchrome 恒浮动,写死会在某个尺寸上正好压在胶囊底下;也不能读 `@safeArea`:\n全屏容器上它碰巧够用,大屏浮层卡里 safeArea 全 0、照样撞。",
+    "paddingTop": "${@contentInset.top}pt",
+    "paddingBottom": "${@contentInset.bottom}pt",
+    "layout": "list",
+    "direction": "vertical",
+    "gap": "0pt",
+    "padding": "16pt",
+    "depends": [
+      {
+        "_note": "必须写成显式 {flow, params} —— XPage §D 纯显式:裸 `@[file://…]` 字符串**传空入参**。\n`packSel` 是「在看第几盒」,取自 pageState(翻盒时由 xpage.patchState 写入);\n首次进入时它不存在 → 求值为空串 → home.df 兜底 -1 = 跟随今天。\n`winW` = 页面可用宽(`@window.width` builtin)。**hero 那个圆的直径随卡宽走**\n(布局表达式 `{parent.w}-140pt`),而卡高只能由 df 给 —— df 自己看不到宽度,所以把它传进去。\n⚠️ 与 `packSel` 同一条:builtin 求不出来时也是**原样透传字面串**,df 里有 `$` 首字符兜底。",
+        "flow": "@[file://page/flow/home.df]",
+        "params": {
+          "packSel": "${packSel}",
+          "winW": "${@window.width}"
+        }
+      }
+    ],
+    "items": [
+      {
+        "type": "Canvas",
+        "id": "empty",
+        "h": "${hEmpty}pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-empty.rcn]"
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "dose",
+        "h": "${hDose}pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-dose.rcn]"
+        }
+      },
+      {
+        "_note": "整盒点阵。⚠️ 它是**一张 Canvas**,不是 XPage 的 grid 容器 —— 后者的子 Canvas\n点击根本不派发(2026-08-16 实测),那正是 /pack 那版点阵只能只读的原因。\n整块画进一张 Canvas 之后,点击靶手写在 RCN 里就能收到事件(七天条已跑通这条路)。",
+        "type": "Canvas",
+        "id": "pack",
+        "h": "${hPack}pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-pack.rcn]"
+        }
+      },
+      {
+        "_note": "v33 记录率块:与 stats 卡同源(卡底换页面卡),生成器 gen_pill_stats.py。有计划才出。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(eq::(findNotEmpty::(${hasPlan},0),1),1,0)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "stats",
+            "h": "170pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-stats.rcn]",
+              "depends": [
+                {
+                  "flow": "@[file://xWidget/flow/stats.df]",
+                  "params": {}
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "_note": "加卡入口 = **一个按钮**(§8.1a):包内不许手抄一份 .xwidget 目录,挑哪张、什么尺寸、预览长什么样全归系统面板。\n三张卡都无参数(「今天记了没」对每个用户是同一个答案),故 pick-home.af 里的候选逐项只给 id。\n⚠️ 高恒 56pt(G27 的基准),**不参与上面那套「高度算 0」的显隐** —— 空态下照样画:\n   新用户先加卡、再回来设计划是完全合理的顺序,而卡在未设置态有自己的引导文案(w.df stKind=0)。\n⚠️ 按钮上方那 12pt 留白不是 gap(根容器 gap 恒 0),是上一张卡自己在声明高度里多带的那 12pt\n   —— 无论上面是 empty / dose+pack 哪一支,紧邻它的那张卡都带着,所以这里不需要再垫 spacer。",
+        "type": "Canvas",
+        "id": "addBtn",
+        "h": "56pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-addbtn.rcn]"
+        },
+        "events": {
+          "onClick": {
+            "flow": "@[file://page/flow/pick-home.af]",
+            "params": {}
+          }
+        }
+      },
+      {
+        "_note": "常驻「关于」页脚(2026-09-09 补)。零网络 + 记录只在本机 + 会被 App 的本地备份带上 —— 这三句原先只写在 p-empty 那张**未配置态**卡上,配好之后就再也看不到了。\n⚠️ 高恒 168pt,**不参与上面那套「高度算 0」的显隐**:空态下也照样画(那时它与 p-empty 里那句一长一短、互不矛盾)。\n⚠️ 168 = 20(上留白,替代根容器恒 0 的 gap)+ 20(标题行)+ 7 行 × 17(按**英文**那档算,英文比中文多 2–3 行)+ 底部余量。文案改动后必须重新按最长 locale 复核这个数(§7.1.6 第 1 条)。\n⚠️ p-about.rcn 刻意不画卡底,理由见该文件头注。",
+        "type": "Canvas",
+        "id": "about",
+        "h": "168pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-about.rcn]"
+        }
+      }
+    ]
+  }
+}

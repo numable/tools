@@ -1,0 +1,48 @@
+{
+  "version": 2,
+  "title": "今日打卡",
+  "sub": "所有事项今天打没打",
+  "i18n": {
+    "en-US": {
+      "title": "Today's check-ins",
+      "sub": "Which habits are done today"
+    }
+  },
+  "layout": 44,
+  "params": {
+    "mask": "0"
+  },
+  "ai": {
+    "shows": "所有打卡事项(最多 6 件)今天达没达标与各自连续天数;没有事项时提示添加",
+    "params": {
+      "mask": {
+        "kind": "enum",
+        "values": {
+          "0": "正常显示",
+          "1": "打码:数字与格子隐去,只在 App 内能看"
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "numable://self"
+  },
+  "canvas": {
+    "source": "@[file://rc/today.rcn]",
+    "depends": [
+      {
+        "_note": "§D 纯显式:裸 `@[file://…df]` 传空入参。⚠️ `mask` 必须**显式传进 flow 再由 flow 透出** —— RCN 的渲染域只有 flow 的输出(iOS `renderSourceCard` 的 `data` 就是流的返回值),`.xwidget` 的 shell params **不在里面**。漏了这一步的表现是 `${mask}` 取空、`eq::(空,1)` 恒假 → **打码从不生效、卡上恒显示真实内容**,而且不报错(lint G28)。",
+        "flow": "@[file://flow/today.df]",
+        "params": {
+          "mask": "${mask}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "3600"
+      ]
+    }
+  },
+  "_note": "不绑定具体事项：读整份清单，最多渲 6 行。点开进首页。"
+}

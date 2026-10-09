@@ -1,0 +1,417 @@
+{
+  "_note": "首页(城市列表)的**城市槽位**:只从 `data.cities` 铺出名字与坐标,**一次网络都不打**。\n每一行的天气由那一行自己的 `canvas.depends → page/flow/detail.df` 去取 ——\n与详情页同一条流、同一个缓存桶 `c.wx.<lat>_<lon>`,所以点进详情页必然秒开,\n列表与详情页也永远是同一份数。\n由 tools/infosource/gen_weather_home.py 生成,别手改 —— 8 个槽位是写死下标展开的。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "「我的城市」= 用户数据,住 data.* 而不是 params(跨启动持久、可增删)。",
+      "action": "data.get",
+      "id": "saved",
+      "params": {
+        "key": "cities",
+        "default": []
+      }
+    },
+    {
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到结果。\n⚠️ v66 起不再读 `cityIdx`:「默认城市」这个隐形状态整个退役 —— 列表首页没有「当前城市」,\n/city 管理页的「点击切换」点了看不出任何变化(2026-09-25 用户报「切换没有意义」)。\n页脚加卡改用**排在第一的城市**,顺序由用户在 /city 里上移/下移决定。",
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[length::(${saved})]"
+      }
+    },
+    {
+      "_note": "⚠️ 取第 0 条必须走 `$[index::()]` 的**字面**下标 —— VParser 的方括号寻址\n只认字面数字与 @last,`${saved[${i}]}` 会静默求空(整页城市名全变 `--`,零报错)。",
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[index::(${saved},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[index::(${saved},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "$[index::(${saved},2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "$[index::(${saved},3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c4",
+        "value": "$[index::(${saved},4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c5",
+        "value": "$[index::(${saved},5)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c6",
+        "value": "$[index::(${saved},6)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c7",
+        "value": "$[index::(${saved},7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r1lat",
+        "value": "${c0.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r1lon",
+        "value": "${c0.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r1n",
+        "value": "${c0.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r1w",
+        "value": "${c0.where}"
+      }
+    },
+    {
+      "_note": "URL 安全的城市名,专供行的 onClick 导航串(`/detail?…&city=${r1q}`)。\n⚠️ 编码放在数据层做,不在 onClick 串里写方法调用 —— 导航串里的**方法求值**全仓零先例,\n而 VParser 对不支持的东西静默求空:真不行时表现是「城市名整段消失」,\n不报错、只有在真机上点一次才看得见。`${}` 插值那条路是确认为真的。",
+      "op": "set",
+      "props": {
+        "key": "r1q",
+        "value": "$[urlEncode::(${c0.name})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r2lat",
+        "value": "${c1.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r2lon",
+        "value": "${c1.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r2n",
+        "value": "${c1.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r2w",
+        "value": "${c1.where}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r2q",
+        "value": "$[urlEncode::(${c1.name})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r3lat",
+        "value": "${c2.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r3lon",
+        "value": "${c2.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r3n",
+        "value": "${c2.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r3w",
+        "value": "${c2.where}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r3q",
+        "value": "$[urlEncode::(${c2.name})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r4lat",
+        "value": "${c3.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r4lon",
+        "value": "${c3.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r4n",
+        "value": "${c3.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r4w",
+        "value": "${c3.where}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r4q",
+        "value": "$[urlEncode::(${c3.name})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r5lat",
+        "value": "${c4.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r5lon",
+        "value": "${c4.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r5n",
+        "value": "${c4.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r5w",
+        "value": "${c4.where}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r5q",
+        "value": "$[urlEncode::(${c4.name})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r6lat",
+        "value": "${c5.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r6lon",
+        "value": "${c5.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r6n",
+        "value": "${c5.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r6w",
+        "value": "${c5.where}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r6q",
+        "value": "$[urlEncode::(${c5.name})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r7lat",
+        "value": "${c6.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r7lon",
+        "value": "${c6.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r7n",
+        "value": "${c6.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r7w",
+        "value": "${c6.where}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r7q",
+        "value": "$[urlEncode::(${c6.name})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r8lat",
+        "value": "${c7.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r8lon",
+        "value": "${c7.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r8n",
+        "value": "${c7.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r8w",
+        "value": "${c7.where}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r8q",
+        "value": "$[urlEncode::(${c7.name})]"
+      }
+    },
+    {
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。\n⚠️ 这里**没有任何天气字段** —— 天气由每一行自己的 `canvas.depends` 去取(detail.df)。\n城市不足 8 座时后面的槽位恒空,那是正常态,L1 的空值豁免记在\ntools/infosource/params/weather/_dfrun.json。",
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "n",
+          "r1n",
+          "r1w",
+          "r1lat",
+          "r1lon",
+          "r1q",
+          "r2n",
+          "r2w",
+          "r2lat",
+          "r2lon",
+          "r2q",
+          "r3n",
+          "r3w",
+          "r3lat",
+          "r3lon",
+          "r3q",
+          "r4n",
+          "r4w",
+          "r4lat",
+          "r4lon",
+          "r4q",
+          "r5n",
+          "r5w",
+          "r5lat",
+          "r5lon",
+          "r5q",
+          "r6n",
+          "r6w",
+          "r6lat",
+          "r6lon",
+          "r6q",
+          "r7n",
+          "r7w",
+          "r7lat",
+          "r7lon",
+          "r7q",
+          "r8n",
+          "r8w",
+          "r8lat",
+          "r8lon",
+          "r8q"
+        ]
+      }
+    }
+  ]
+}

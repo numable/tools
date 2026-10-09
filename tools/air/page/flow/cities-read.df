@@ -1,0 +1,76 @@
+{
+  "_note": "给 /city、/pick 两张 H5 页读「我的城市」与当前标准(管理页的分段控件标选中态用)。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "saved",
+      "action": "data.get",
+      "params": {
+        "key": "cities",
+        "default": []
+      }
+    },
+    {
+      "_note": "屏障(勿删):request / data.get 之后紧邻的节点读不到结果(晚一拍),隔一个空 set 再用。",
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "list",
+        "value": "${saved}"
+      }
+    },
+    {
+      "id": "sv",
+      "action": "data.get",
+      "params": {
+        "key": "aqStd",
+        "default": ""
+      }
+    },
+    {
+      "_note": "屏障(勿删):request / data.get 之后紧邻的节点读不到结果(晚一拍),隔一个空 set 再用。",
+      "op": "set",
+      "props": {
+        "key": "_bs",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lang",
+        "value": "$[findNotEmpty::(${@app.language},en)]"
+      }
+    },
+    {
+      "_note": "国内默认判据(doc/overseas-first.md §1,逐字照抄):地区 cn,或地区未知且界面中文 → 1。",
+      "op": "set",
+      "props": {
+        "key": "cnd",
+        "value": "$[if::(eq::(${@app.region},cn),1,if::(eq::(${@app.region},overseas),0,if::(startsWith::(${@app.language},zh),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "std",
+        "value": "$[if::(eq::(${sv},cn),cn,if::(eq::(${sv},us),us,if::(eq::(${cnd},1),cn,us)))]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "list",
+          "std"
+        ]
+      }
+    }
+  ]
+}

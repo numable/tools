@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "_note": "HN 官方 firebase API 要 N+1 次请求(先 topstories 再逐条 item),Algolia 的 front_page 一次拿全。attributesToRetrieve/attributesToHighlight 把响应从 ~14KB 压到 ~1.5KB —— 透传整份 hits 会把 children(每条上百个评论 id)和 _highlightResult 一起落进渲染数据和磁盘缓存。",
+      "id": "resp",
+      "action": "request",
+      "params": {
+        "url": "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=${n}&attributesToRetrieve=title,url,points,num_comments,author,created_at_i,objectID&attributesToHighlight=",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "list",
+        "value": "${resp.hits}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "count",
+        "value": "$[length::(${resp.hits})]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(${count},0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "hn_unreachable"
+          }
+        }
+      ],
+      "_note": "主干 = 榜单本体。HN 首页恒有内容,「一条都没有」实际只会由取数失败造成。\n取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)。"
+    },
+    {
+      "_note": "榜单本身没有「数据时间」字段,用取数时刻兜底 —— 没有时间锚点的榜单看不出是不是几小时前的旧数据(标准 §4.4)。",
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "_note": "头条 id 提成**顶层标量**:整卡 onClick 的插值只认顶层标量键,嵌套路径 ${list[0].objectID} 一律取空。",
+      "op": "set",
+      "props": {
+        "key": "id0",
+        "value": "${resp.hits[0].objectID}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "list",
+          "count",
+          "at",
+          "nowMs",
+          "id0"
+        ]
+      }
+    }
+  ]
+}

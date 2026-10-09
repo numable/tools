@@ -1,0 +1,1182 @@
+{
+  "_note": "生成器 tools/infosource/gen_releases.py。`xJob/new.xjob` 的判定段:按 tag 去重、首跑只建基线、不补报。状态(每个仓库上次看到的版本)只写在这里,取数段 xWidget/flow/board.df 与组件共用、不写状态。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "jin0",
+        "value": "${j0}"
+      },
+      "_note": "入参落地(勿删):方法参数里的 ${} 看不见 flow 入参。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jf0",
+        "value": "$[split::(${jin0},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P0",
+        "value": {
+          "cn": "$[toLowerCase::(findNotEmpty::(index::(${jf0},0),-))]",
+          "nm": "$[index::(split::(findNotEmpty::(index::(${jf0},0),-),/),1)]",
+          "tg": "$[findNotEmpty::(index::(${jf0},1),)]",
+          "ms": "$[findNotEmpty::(index::(${jf0},2),0)]",
+          "ok": "$[findNotEmpty::(index::(${jf0},3),0)]"
+        }
+      },
+      "_note": "拆「正名~tag~毫秒~取到了没有」;没关注的槽入参是 `-`,正名落成 `-`。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kn0",
+        "value": "$[if::(eq::(${P0.ok},1),1,0)]"
+      },
+      "_note": "知道这个仓库此刻的状态 = 取到了 feed。一个 tag 都没有的仓库也算「知道」,基线记成 `~0` ——这样它发第一个版本时照样会报(否则那一轮才第一次有基线,首个版本就被当成基线吞掉)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ht0",
+        "value": "$[if::(gt::(length::(${P0.tg}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk0",
+        "value": "$[connect::(rl.last.,${P0.cn})]"
+      },
+      "_note": "基线键拼上仓库正名:同一轮里 8 个仓库挨个判,共用一个键会互相顶掉基线。"
+    },
+    {
+      "id": "pv0",
+      "action": "data.get",
+      "params": {
+        "key": "${sk0}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr0",
+        "value": "${pv0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pp0",
+        "value": "$[split::(${pr0},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp0",
+        "value": "$[if::(eq::(findNotEmpty::(${pr0},__none__),__none__),0,1)]"
+      },
+      "_note": "有没有基线。判空用 findNotEmpty 哨兵(length:: 对数字恒 0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same0",
+        "value": "$[if::(eq::(connect::(k,${P0.tg}),connect::(k,findNotEmpty::(index::(${pp0},0),))),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "later0",
+        "value": "$[if::(gt::(${P0.ms},findNotEmpty::(index::(${pp0},1),0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit0",
+        "value": "$[if::(and::(eq::(${kn0},1),eq::(${ht0},1),eq::(${hp0},1),eq::(${same0},0),eq::(${later0},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${kn0},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${sk0}",
+            "value": "${P0.tg}~${P0.ms}"
+          }
+        }
+      ],
+      "_note": "只在「知道」时写基线;取不到的这一轮什么都不动。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc0",
+        "value": "${P0.nm} ${P0.tg}"
+      },
+      "_note": "通知正文里的一段:「uv 0.12.20」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cand0",
+        "value": "${pc0}"
+      },
+      "_note": "正文 = 命中的「仓库 版本」用 · 连起来。模板串内插(中间的空格活得下来),connect:: 会吃掉分隔符两侧的空格。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": "$[if::(eq::(${hit0},1),${cand0},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jin1",
+        "value": "${j1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jf1",
+        "value": "$[split::(${jin1},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P1",
+        "value": {
+          "cn": "$[toLowerCase::(findNotEmpty::(index::(${jf1},0),-))]",
+          "nm": "$[index::(split::(findNotEmpty::(index::(${jf1},0),-),/),1)]",
+          "tg": "$[findNotEmpty::(index::(${jf1},1),)]",
+          "ms": "$[findNotEmpty::(index::(${jf1},2),0)]",
+          "ok": "$[findNotEmpty::(index::(${jf1},3),0)]"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kn1",
+        "value": "$[if::(eq::(${P1.ok},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ht1",
+        "value": "$[if::(gt::(length::(${P1.tg}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk1",
+        "value": "$[connect::(rl.last.,${P1.cn})]"
+      }
+    },
+    {
+      "id": "pv1",
+      "action": "data.get",
+      "params": {
+        "key": "${sk1}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr1",
+        "value": "${pv1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pp1",
+        "value": "$[split::(${pr1},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp1",
+        "value": "$[if::(eq::(findNotEmpty::(${pr1},__none__),__none__),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same1",
+        "value": "$[if::(eq::(connect::(k,${P1.tg}),connect::(k,findNotEmpty::(index::(${pp1},0),))),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "later1",
+        "value": "$[if::(gt::(${P1.ms},findNotEmpty::(index::(${pp1},1),0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit1",
+        "value": "$[if::(and::(eq::(${kn1},1),eq::(${ht1},1),eq::(${hp1},1),eq::(${same1},0),eq::(${later1},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${kn1},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${sk1}",
+            "value": "${P1.tg}~${P1.ms}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc1",
+        "value": "${P1.nm} ${P1.tg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cand1",
+        "value": "${acc} · ${pc1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": "$[if::(eq::(${hit1},1),if::(gt::(length::(${acc}),0),${cand1},${pc1}),${acc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jin2",
+        "value": "${j2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jf2",
+        "value": "$[split::(${jin2},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P2",
+        "value": {
+          "cn": "$[toLowerCase::(findNotEmpty::(index::(${jf2},0),-))]",
+          "nm": "$[index::(split::(findNotEmpty::(index::(${jf2},0),-),/),1)]",
+          "tg": "$[findNotEmpty::(index::(${jf2},1),)]",
+          "ms": "$[findNotEmpty::(index::(${jf2},2),0)]",
+          "ok": "$[findNotEmpty::(index::(${jf2},3),0)]"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kn2",
+        "value": "$[if::(eq::(${P2.ok},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ht2",
+        "value": "$[if::(gt::(length::(${P2.tg}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk2",
+        "value": "$[connect::(rl.last.,${P2.cn})]"
+      }
+    },
+    {
+      "id": "pv2",
+      "action": "data.get",
+      "params": {
+        "key": "${sk2}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr2",
+        "value": "${pv2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pp2",
+        "value": "$[split::(${pr2},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp2",
+        "value": "$[if::(eq::(findNotEmpty::(${pr2},__none__),__none__),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same2",
+        "value": "$[if::(eq::(connect::(k,${P2.tg}),connect::(k,findNotEmpty::(index::(${pp2},0),))),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "later2",
+        "value": "$[if::(gt::(${P2.ms},findNotEmpty::(index::(${pp2},1),0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit2",
+        "value": "$[if::(and::(eq::(${kn2},1),eq::(${ht2},1),eq::(${hp2},1),eq::(${same2},0),eq::(${later2},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${kn2},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${sk2}",
+            "value": "${P2.tg}~${P2.ms}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc2",
+        "value": "${P2.nm} ${P2.tg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cand2",
+        "value": "${acc} · ${pc2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": "$[if::(eq::(${hit2},1),if::(gt::(length::(${acc}),0),${cand2},${pc2}),${acc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jin3",
+        "value": "${j3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jf3",
+        "value": "$[split::(${jin3},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P3",
+        "value": {
+          "cn": "$[toLowerCase::(findNotEmpty::(index::(${jf3},0),-))]",
+          "nm": "$[index::(split::(findNotEmpty::(index::(${jf3},0),-),/),1)]",
+          "tg": "$[findNotEmpty::(index::(${jf3},1),)]",
+          "ms": "$[findNotEmpty::(index::(${jf3},2),0)]",
+          "ok": "$[findNotEmpty::(index::(${jf3},3),0)]"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kn3",
+        "value": "$[if::(eq::(${P3.ok},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ht3",
+        "value": "$[if::(gt::(length::(${P3.tg}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk3",
+        "value": "$[connect::(rl.last.,${P3.cn})]"
+      }
+    },
+    {
+      "id": "pv3",
+      "action": "data.get",
+      "params": {
+        "key": "${sk3}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b3",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr3",
+        "value": "${pv3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pp3",
+        "value": "$[split::(${pr3},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp3",
+        "value": "$[if::(eq::(findNotEmpty::(${pr3},__none__),__none__),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same3",
+        "value": "$[if::(eq::(connect::(k,${P3.tg}),connect::(k,findNotEmpty::(index::(${pp3},0),))),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "later3",
+        "value": "$[if::(gt::(${P3.ms},findNotEmpty::(index::(${pp3},1),0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit3",
+        "value": "$[if::(and::(eq::(${kn3},1),eq::(${ht3},1),eq::(${hp3},1),eq::(${same3},0),eq::(${later3},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${kn3},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${sk3}",
+            "value": "${P3.tg}~${P3.ms}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc3",
+        "value": "${P3.nm} ${P3.tg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cand3",
+        "value": "${acc} · ${pc3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": "$[if::(eq::(${hit3},1),if::(gt::(length::(${acc}),0),${cand3},${pc3}),${acc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jin4",
+        "value": "${j4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jf4",
+        "value": "$[split::(${jin4},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P4",
+        "value": {
+          "cn": "$[toLowerCase::(findNotEmpty::(index::(${jf4},0),-))]",
+          "nm": "$[index::(split::(findNotEmpty::(index::(${jf4},0),-),/),1)]",
+          "tg": "$[findNotEmpty::(index::(${jf4},1),)]",
+          "ms": "$[findNotEmpty::(index::(${jf4},2),0)]",
+          "ok": "$[findNotEmpty::(index::(${jf4},3),0)]"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kn4",
+        "value": "$[if::(eq::(${P4.ok},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ht4",
+        "value": "$[if::(gt::(length::(${P4.tg}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk4",
+        "value": "$[connect::(rl.last.,${P4.cn})]"
+      }
+    },
+    {
+      "id": "pv4",
+      "action": "data.get",
+      "params": {
+        "key": "${sk4}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b4",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr4",
+        "value": "${pv4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pp4",
+        "value": "$[split::(${pr4},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp4",
+        "value": "$[if::(eq::(findNotEmpty::(${pr4},__none__),__none__),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same4",
+        "value": "$[if::(eq::(connect::(k,${P4.tg}),connect::(k,findNotEmpty::(index::(${pp4},0),))),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "later4",
+        "value": "$[if::(gt::(${P4.ms},findNotEmpty::(index::(${pp4},1),0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit4",
+        "value": "$[if::(and::(eq::(${kn4},1),eq::(${ht4},1),eq::(${hp4},1),eq::(${same4},0),eq::(${later4},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${kn4},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${sk4}",
+            "value": "${P4.tg}~${P4.ms}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc4",
+        "value": "${P4.nm} ${P4.tg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cand4",
+        "value": "${acc} · ${pc4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": "$[if::(eq::(${hit4},1),if::(gt::(length::(${acc}),0),${cand4},${pc4}),${acc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jin5",
+        "value": "${j5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jf5",
+        "value": "$[split::(${jin5},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P5",
+        "value": {
+          "cn": "$[toLowerCase::(findNotEmpty::(index::(${jf5},0),-))]",
+          "nm": "$[index::(split::(findNotEmpty::(index::(${jf5},0),-),/),1)]",
+          "tg": "$[findNotEmpty::(index::(${jf5},1),)]",
+          "ms": "$[findNotEmpty::(index::(${jf5},2),0)]",
+          "ok": "$[findNotEmpty::(index::(${jf5},3),0)]"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kn5",
+        "value": "$[if::(eq::(${P5.ok},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ht5",
+        "value": "$[if::(gt::(length::(${P5.tg}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk5",
+        "value": "$[connect::(rl.last.,${P5.cn})]"
+      }
+    },
+    {
+      "id": "pv5",
+      "action": "data.get",
+      "params": {
+        "key": "${sk5}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b5",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr5",
+        "value": "${pv5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pp5",
+        "value": "$[split::(${pr5},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp5",
+        "value": "$[if::(eq::(findNotEmpty::(${pr5},__none__),__none__),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same5",
+        "value": "$[if::(eq::(connect::(k,${P5.tg}),connect::(k,findNotEmpty::(index::(${pp5},0),))),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "later5",
+        "value": "$[if::(gt::(${P5.ms},findNotEmpty::(index::(${pp5},1),0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit5",
+        "value": "$[if::(and::(eq::(${kn5},1),eq::(${ht5},1),eq::(${hp5},1),eq::(${same5},0),eq::(${later5},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${kn5},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${sk5}",
+            "value": "${P5.tg}~${P5.ms}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc5",
+        "value": "${P5.nm} ${P5.tg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cand5",
+        "value": "${acc} · ${pc5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": "$[if::(eq::(${hit5},1),if::(gt::(length::(${acc}),0),${cand5},${pc5}),${acc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jin6",
+        "value": "${j6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jf6",
+        "value": "$[split::(${jin6},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P6",
+        "value": {
+          "cn": "$[toLowerCase::(findNotEmpty::(index::(${jf6},0),-))]",
+          "nm": "$[index::(split::(findNotEmpty::(index::(${jf6},0),-),/),1)]",
+          "tg": "$[findNotEmpty::(index::(${jf6},1),)]",
+          "ms": "$[findNotEmpty::(index::(${jf6},2),0)]",
+          "ok": "$[findNotEmpty::(index::(${jf6},3),0)]"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kn6",
+        "value": "$[if::(eq::(${P6.ok},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ht6",
+        "value": "$[if::(gt::(length::(${P6.tg}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk6",
+        "value": "$[connect::(rl.last.,${P6.cn})]"
+      }
+    },
+    {
+      "id": "pv6",
+      "action": "data.get",
+      "params": {
+        "key": "${sk6}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b6",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr6",
+        "value": "${pv6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pp6",
+        "value": "$[split::(${pr6},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp6",
+        "value": "$[if::(eq::(findNotEmpty::(${pr6},__none__),__none__),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same6",
+        "value": "$[if::(eq::(connect::(k,${P6.tg}),connect::(k,findNotEmpty::(index::(${pp6},0),))),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "later6",
+        "value": "$[if::(gt::(${P6.ms},findNotEmpty::(index::(${pp6},1),0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit6",
+        "value": "$[if::(and::(eq::(${kn6},1),eq::(${ht6},1),eq::(${hp6},1),eq::(${same6},0),eq::(${later6},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${kn6},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${sk6}",
+            "value": "${P6.tg}~${P6.ms}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc6",
+        "value": "${P6.nm} ${P6.tg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cand6",
+        "value": "${acc} · ${pc6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": "$[if::(eq::(${hit6},1),if::(gt::(length::(${acc}),0),${cand6},${pc6}),${acc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jin7",
+        "value": "${j7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "jf7",
+        "value": "$[split::(${jin7},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "P7",
+        "value": {
+          "cn": "$[toLowerCase::(findNotEmpty::(index::(${jf7},0),-))]",
+          "nm": "$[index::(split::(findNotEmpty::(index::(${jf7},0),-),/),1)]",
+          "tg": "$[findNotEmpty::(index::(${jf7},1),)]",
+          "ms": "$[findNotEmpty::(index::(${jf7},2),0)]",
+          "ok": "$[findNotEmpty::(index::(${jf7},3),0)]"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kn7",
+        "value": "$[if::(eq::(${P7.ok},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ht7",
+        "value": "$[if::(gt::(length::(${P7.tg}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk7",
+        "value": "$[connect::(rl.last.,${P7.cn})]"
+      }
+    },
+    {
+      "id": "pv7",
+      "action": "data.get",
+      "params": {
+        "key": "${sk7}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b7",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr7",
+        "value": "${pv7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pp7",
+        "value": "$[split::(${pr7},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp7",
+        "value": "$[if::(eq::(findNotEmpty::(${pr7},__none__),__none__),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same7",
+        "value": "$[if::(eq::(connect::(k,${P7.tg}),connect::(k,findNotEmpty::(index::(${pp7},0),))),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "later7",
+        "value": "$[if::(gt::(${P7.ms},findNotEmpty::(index::(${pp7},1),0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit7",
+        "value": "$[if::(and::(eq::(${kn7},1),eq::(${ht7},1),eq::(${hp7},1),eq::(${same7},0),eq::(${later7},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${kn7},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${sk7}",
+            "value": "${P7.tg}~${P7.ms}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc7",
+        "value": "${P7.nm} ${P7.tg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cand7",
+        "value": "${acc} · ${pc7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": "$[if::(eq::(${hit7},1),if::(gt::(length::(${acc}),0),${cand7},${pc7}),${acc})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitN",
+        "value": "$[calc::(${hit0}+${hit1}+${hit2}+${hit3}+${hit4}+${hit5}+${hit6}+${hit7})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit",
+        "value": "$[if::(gt::(${hitN},0),1,0)]"
+      },
+      "_note": "alert 没写 activeCondition,默认读 hit。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "detail",
+        "value": "${acc}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "hit",
+          "hitN",
+          "detail"
+        ]
+      }
+    }
+  ]
+}

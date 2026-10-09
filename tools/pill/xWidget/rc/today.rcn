@@ -1,0 +1,384 @@
+{
+  "_note": "2×2 桌面卡:今天一件事。\n\n⚠️ **默认脱敏**:标题走用户自设别名,留空则是中性的「每日记录」;整张卡不出现药名、\n   不出现任何提示用途的词、不用医疗色。桌面是别人也会看到的屏幕。\n   (这只挡得住桌面 —— 包名仍会出现在市场/安装面板/已安装列表里,那里没有脱敏开关。)\n⚠️ 未设置计划时不画空骨架,画一句可读的引导 —— 空白卡看起来像组件坏了。\n⚠️ **2026-08-21 起卡片可写**(方案 C),推翻了上一版「桌面卡只读」的结论。\n   原理由仍然成立:「口袋里误触写下的假记录,后果是让人以为自己吃过了」。\n   但只读的代价被低估了 —— 它让这个包最高频的动作每天恒定要走三跳,\n   而这张卡每天都在提醒你去走那三跳。**提醒的成本和执行的成本差一个数量级。**\n   现在的姿态不是「不让写」,而是「写得起、也撤得掉」:\n     ① 只写「已服用」一态(「未服用」需要判断,必须进 App 显式选)\n     ② 已标过就一个字节都不写,改为打开 App(幂等,连点两下不会写两条)\n     ③ 停药期不写,只回一句「今天休息」\n     ④ 写完在首页留一个常驻撤销入口(不是 toast 那种一闪而过的)\n   判据与实现见 flow/mark-today.af。卡上那个「记一笔」药丸是这条路的第五道闸 ——\n   一个不说明自己会做什么的按钮才是危险的。\n⚠️ **纵向节律是固定的四段,别再往回挤**(2026-08-31):画布 158×158,自上而下\n   标题 13(→28)· 圆盘 36→90(54pt)· 第二行 98→124(药丸)/101→119(状态字)· 日期行 132→147,\n   四个间隙一律 8pt、底边留 11pt。上一版圆盘 72pt,圆盘↔药丸、药丸↔日期各只剩 **2pt**,\n   底边 5pt —— 三个元素粘成一坨。2×2 卡就这么高,要间距只能从圆盘直径里出,\n   **不是**去压间隙:间隙压没了读者会把三行读成一块,而盘小 18pt 没人看得出来。\n   圆盘的 x 是手算的居中值 `(158−54)/2 = 52`,改直径必须同步改 x 与 cornerRadius(=直径/2)。\n⚠️ **圆盘与盘里的字形是同一个 cell**(`txt` 自带 bgColor/cornerRadius/border,DSL §7 通用字段),\n   竖直居中交 `alignmentV:\"1\"`(算法在四端共用的 C++ StaticCanvas core 里,不是各端各写)。\n   拆成「layer 底板 + txt」两格的老写法有三个必然的毛病:改字号要人肉重算 y、挪位置要同步\n   改两处坐标而**渲染不报错**、节点数翻倍白付光栅。别再拆回去。",
+  "rc": {
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#F9FCFB\\,#EDF7F4)@90|linear(#15171A\\,#161A1D\\,#192021)@90"
+      },
+      {
+        "_note": "源色点(card-design-system §2):5pt 圆点 / 卡名左侧 / 间距 9pt / 每张卡恰好一次。本包的源色 = 已服用那一档用的薄荷绿 —— 它已经是这个包在盘上的样子,不另起一个。",
+        "id": "dot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{alias.y}+({alias.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#128F66|#6FE8BE",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "id": "alias",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-21pt-14pt-50pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${alias},${@i18n.defaultAlias})]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "_note": "卡名 = 对象名(方案别名,§1.1 第一行);13pt / System-Bold / textPrimary(§1.2)。"
+      },
+      {
+        "_note": "日期锚(card-design-system §3):右上角 / 9pt / 次级 / 右对齐 / MM-DD。零网络包,锚答的是「这一屏说的是哪天」。⚠️ 它是从下面那句「第 N 天 · MM-DD」里**挪上来**的,不是新加的一份 —— 同一张卡上不放两个日期。",
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-54pt",
+        "y": "14pt",
+        "w": "42pt",
+        "h": "-1",
+        "alignmentH": "2",
+        "maxLines": "1",
+        "text": "$[findNotEmpty::(${atMd},--)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B"
+      },
+      {
+        "_note": "未设置计划:引导句,不画空骨架。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[ne::(findNotEmpty::(${hasPlan},0),1)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "52pt",
+            "y": "36pt",
+            "w": "54pt",
+            "h": "54pt",
+            "bgColor": "#EDEFF2|#22252A",
+            "cornerRadius": {
+              "leftT": "27pt",
+              "leftB": "27pt",
+              "rightT": "27pt",
+              "rightB": "27pt"
+            },
+            "_note": "新用户:幽灵圈保住版式 + 一句动作文案(整卡点开就是首页的设置)。"
+          },
+          {
+            "type": "txt",
+            "x": "8pt",
+            "y": "101pt",
+            "w": "{parent.w}-16pt",
+            "h": "-1",
+            "text": "${@i18n.needSetup}",
+            "fontSize": "12pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "alignmentH": "1",
+            "maxLines": "2"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "${hasPlan}"
+        },
+        "react": [
+          {
+            "_note": "① 已服:实心绿盘 + ✓。",
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${stKind},1)]"
+            },
+            "react": [
+              {
+                "type": "txt",
+                "x": "52pt",
+                "y": "36pt",
+                "w": "54pt",
+                "h": "54pt",
+                "text": "✓",
+                "fontSize": "22pt",
+                "typeface": "System-Bold",
+                "alignmentH": "1",
+                "alignmentV": "1",
+                "textColor": "#FFFFFF|#0B0C0E",
+                "maxLines": "1",
+                "bgColor": "#128F66|#6FE8BE",
+                "cornerRadius": {
+                  "leftT": "27pt",
+                  "leftB": "27pt",
+                  "rightT": "27pt",
+                  "rightB": "27pt"
+                }
+              },
+              {
+                "type": "txt",
+                "x": "8pt",
+                "y": "101pt",
+                "w": "{parent.w}-16pt",
+                "h": "-1",
+                "text": "${@i18n.stTaken}",
+                "fontSize": "13pt",
+                "alignmentH": "1",
+                "typeface": "System-Bold",
+                "textColor": "#128F66|#6FE8BE",
+                "maxLines": "1"
+              }
+            ]
+          },
+          {
+            "_note": "② 未服:实心中性灰 + 横杠。不用红 —— 那是用户陈述的事实,不是我们判定的过错。",
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${stKind},2)]"
+            },
+            "react": [
+              {
+                "type": "txt",
+                "x": "52pt",
+                "y": "36pt",
+                "w": "54pt",
+                "h": "54pt",
+                "text": "—",
+                "fontSize": "22pt",
+                "typeface": "System-Bold",
+                "alignmentH": "1",
+                "alignmentV": "1",
+                "textColor": "#FFFFFF|#F3F4F6",
+                "maxLines": "1",
+                "bgColor": "#6B7280|#5A5C63",
+                "cornerRadius": {
+                  "leftT": "27pt",
+                  "leftB": "27pt",
+                  "rightT": "27pt",
+                  "rightB": "27pt"
+                },
+                "paddingTop": "5.5pt"
+              },
+              {
+                "type": "txt",
+                "x": "8pt",
+                "y": "101pt",
+                "w": "{parent.w}-16pt",
+                "h": "-1",
+                "text": "${@i18n.stSkipped}",
+                "fontSize": "13pt",
+                "alignmentH": "1",
+                "typeface": "System-Bold",
+                "textColor": "#6B7280|#A0A2A8",
+                "maxLines": "1"
+              }
+            ]
+          },
+          {
+            "_note": "③ 未标记:空心圈。这一态是这张卡存在的理由 —— 「今天还没记」是关于**记录完整性**\n的事实陈述,不是「该吃药了」的医学提醒,但落在同一个时刻上。",
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${stKind},3)]"
+            },
+            "react": [
+              {
+                "type": "layer",
+                "x": "52pt",
+                "y": "36pt",
+                "w": "54pt",
+                "h": "54pt",
+                "bgColor": "#00000000|#00000000",
+                "cornerRadius": {
+                  "leftT": "27pt",
+                  "leftB": "27pt",
+                  "rightT": "27pt",
+                  "rightB": "27pt"
+                },
+                "borderColor": "#128F66|#6FE8BE",
+                "borderWidth": "2.5pt",
+                "_note": "待记(2026-10-08 评审 pill-3):原先圆里一个「?」,读不出含义;改成源色描边的空圈 —— 与 mini 的状态圈、cycle 点阵里今天那一格的描边同一个意思:「今天这一格还空着」。"
+              },
+              {
+                "_note": "「记一笔」药丸。⚠️ 它**不是一个独立的点击靶** —— 桌面小组件的 tap 只有整卡一个靶\n(WidgetKit / RemoteViews / 鸿蒙 Form 都是如此),点卡上任何位置都走同一个 onClick。\n画它是为了把「点这张卡会发生什么」说出来:一个写明意图的按钮,是这条路对误触唯一\n也是足够的防线(另外三道在 flow/mark-today.af 里)。\n只在 stKind==3 时画 —— 已记录/未服/停药/未开始四态点击都不写盘,画了就是撒谎。",
+                "type": "txt",
+                "x": "34pt",
+                "y": "98pt",
+                "w": "{parent.w}-68pt",
+                "h": "26pt",
+                "text": "${@i18n.ctaLog}",
+                "fontSize": "12pt",
+                "typeface": "System-Bold",
+                "alignmentH": "1",
+                "alignmentV": "1",
+                "textColor": "#FFFFFF|#0B0C0E",
+                "maxLines": "1",
+                "bgColor": "#128F66|#6FE8BE",
+                "cornerRadius": {
+                  "leftT": "13pt",
+                  "leftB": "13pt",
+                  "rightT": "13pt",
+                  "rightB": "13pt"
+                }
+              }
+            ]
+          },
+          {
+            "_note": "④ 还没记 · 停药期。停药那几天是四分之一的时间,以前和「忘了记」共用同一种灰,\n卡上说不清楚。现在它有自己的一态:弱化实心盘 + 一句明确的答复。\n⚠️ 不用虚线圈 —— RCN 的 border 没有 dash,四端能不能渲没对拍过。",
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${stKind},4)]"
+            },
+            "react": [
+              {
+                "type": "txt",
+                "x": "52pt",
+                "y": "36pt",
+                "w": "54pt",
+                "h": "54pt",
+                "text": "${@i18n.restGlyph}",
+                "fontSize": "17pt",
+                "typeface": "System-Bold",
+                "alignmentH": "1",
+                "alignmentV": "1",
+                "textColor": "#9AA0A6|#7A8088",
+                "maxLines": "1",
+                "bgColor": "#EDEFF2|#22252A",
+                "cornerRadius": {
+                  "leftT": "27pt",
+                  "leftB": "27pt",
+                  "rightT": "27pt",
+                  "rightB": "27pt"
+                },
+                "paddingTop": "4pt"
+              },
+              {
+                "type": "txt",
+                "x": "8pt",
+                "y": "101pt",
+                "w": "{parent.w}-16pt",
+                "h": "-1",
+                "text": "${@i18n.stRest}",
+                "fontSize": "13pt",
+                "alignmentH": "1",
+                "typeface": "System-Bold",
+                "textColor": "#6B7280|#A0A2A8",
+                "maxLines": "1"
+              }
+            ]
+          },
+          {
+            "_note": "⑤ 计划未开始:弱盘占位。文案由下面 future 那一行给出。\n少了这一支,起始日填在未来时圆盘整个消失(以前由 tState==0 那支兜着)。",
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${stKind},0)]"
+            },
+            "react": [
+              {
+                "type": "layer",
+                "x": "52pt",
+                "y": "36pt",
+                "w": "54pt",
+                "h": "54pt",
+                "bgColor": "#EDEFF2|#22252A",
+                "cornerRadius": {
+                  "leftT": "27pt",
+                  "leftB": "27pt",
+                  "rightT": "27pt",
+                  "rightB": "27pt"
+                }
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "$[eq::(${future},0)]"
+            },
+            "react": [
+              {
+                "type": "txt",
+                "x": "8pt",
+                "y": "132pt",
+                "w": "{parent.w}-16pt",
+                "h": "-1",
+                "text": "$[connect::(${@i18n.dayPre},${todayNo},${@i18n.dayPost})]",
+                "fontSize": "11pt",
+                "alignmentH": "1",
+                "textColor": "#6B7280|#8E939B",
+                "maxLines": "1"
+              }
+            ]
+          },
+          {
+            "type": "op",
+            "action": "if",
+            "props": {
+              "val": "${future}"
+            },
+            "react": [
+              {
+                "type": "txt",
+                "x": "8pt",
+                "y": "132pt",
+                "w": "{parent.w}-16pt",
+                "h": "-1",
+                "text": "${@i18n.notStarted}",
+                "fontSize": "11pt",
+                "alignmentH": "1",
+                "textColor": "#6B7280|#8E939B",
+                "maxLines": "1"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "defaultAlias": "每日记录",
+        "stTaken": "今天已记录",
+        "stSkipped": "今天记为未服",
+        "dayPre": "第 ",
+        "dayPost": " 天",
+        "notStarted": "计划尚未开始",
+        "needSetup": "点这里设置起始日",
+        "stRest": "今天休息",
+        "restGlyph": "—",
+        "ctaLog": "记一笔"
+      },
+      "en-US": {
+        "defaultAlias": "Daily log",
+        "stTaken": "Logged today",
+        "stSkipped": "Not taken today",
+        "dayPre": "Day ",
+        "dayPost": "",
+        "notStarted": "Not started yet",
+        "needSetup": "Tap to set a start date",
+        "stRest": "Break day",
+        "restGlyph": "—",
+        "ctaLog": "Log it"
+      }
+    },
+    "i18nEmptyOk": [
+      "dayPost"
+    ]
+  }
+}

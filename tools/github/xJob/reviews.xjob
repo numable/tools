@@ -1,0 +1,42 @@
+{
+  "_note": "**动态提醒打样 ②(电平 + cooldown)** —— doc/alert-design.md §12「github」,施工单 N2-B。\n\n型 = 组合判:有 `alert` + `task.depends` = 动态提醒。**没有 `then`** —— 这是电平型:\n条件持续为真时每隔 `cooldown` 秒提一次,不做边沿、不需要状态,`activeCondition`\n直接对取数流的输出写表达式。\n\n⚠️ **`depends` 复用组件的 `xWidget/flow/todo.df`,一个字节都不复制**(§5.3)。\n   v41 起那条流是**一条 GraphQL**(cost 1 点,5000 点/小时),配额不再是约束;\n   `interval` 仍写 1800 —— review 请求不是分钟级的事,更密只会更吵。\n\n⚠️ `activeCondition` 读的是 `nRv`(user-review-requested 那一桶 = 点名到你本人的,不含团队请求),**不是 `sum`**:\n   assignee / mentions 那两桶是「你自己的事」,不该半夜把人叫起来。\n   `todo.df` 的 `ok` 键只表示「请求成没成」—— 那正是 §5.2 三值判定该读的位:\n   没绑令牌时宿主直接不跑(凭证 required),判**未知**(不响),连续 ≥2 轮且 24h 后\n   按 §8 #4 标「无法检查」,而不是误报成「今天很干净」。\n\n⚠️ **`cooldown: 14400` 的语义是「判真之后冷却」**(§2.3):这一轮判真,往后 4 小时\n   整条规则不再评估(`then` 也不跑)。清零之后下一轮恢复。要一直盯着变化就别写\n   cooldown,靠 `then` 自己做边沿 —— 那是 `ci.xjob` 的形状,与这条刻意分成两种。\n\n⚠️ `level: quiet` —— 「有人等你 review」不是「真的不能等」那一档;只进通知中心不打断。\n   与同包的 `ci.xjob`(urgent)一起,这个包的分档才有意义(G45.all-urgent 看的是包级比例)。\n\n⚠️ 无 `params` / 无 `form` = 同意面板**没有字段区**,只剩强度 + 预览 + 添加;\n   实例 id = (包, 规则 id, {}),这条规则只会有一个实例,重复添加应当合并。",
+  "version": 1,
+  "id": "reviews",
+  "title": "待处理 review",
+  "sub": "有人点名请你 review 就提醒，清空了就不响",
+  "i18n": {
+    "en-US": {
+      "title": "Pending reviews",
+      "sub": "Nudges you while someone is waiting on your review",
+      "message": {
+        "title": "Reviews waiting on you: ${nRv}",
+        "body": "Someone asked for your review"
+      }
+    }
+  },
+  "events": {
+    "onClick": "/"
+  },
+  "task": {
+    "_note_depends": "取数段 = 首页 / 卡片那条流的原样复用(只读)。它自己的 data.* 读写照常。",
+    "depends": [
+      {
+        "flow": "@[file://xWidget/flow/todo.df]"
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "1800"
+      ],
+      "cooldown": 14400
+    }
+  },
+  "alert": {
+    "level": "quiet",
+    "activeCondition": "$[gt::(${nRv},0)]",
+    "message": {
+      "title": "有 ${nRv} 个 review 等你",
+      "body": "有人点名请你 review"
+    }
+  }
+}

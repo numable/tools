@@ -1,0 +1,527 @@
+{
+  "_note": "下一场计划维护(next 42 / nextmini 21)。生成器 gen_cloudflare.py(维护段的改动见那里的注释)。upcoming.json 按 scheduled_for 升序,[0] 即最近一场;active.json 回答此刻有几场正在进行。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "MONE",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_now",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzL",
+        "value": "$[calc::(formatDate::(${_now},HH)*60+formatDate::(${_now},mm))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzM",
+        "value": "$[floor::(calc::(${_now}/60000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzD",
+        "value": "$[floor::(calc::(${_now}/86400000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzX",
+        "value": "$[calc::(${_tzL}-(${_tzM}-${_tzD}*1440))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_tzO",
+        "value": "$[if::(gt::(${_tzX},840),calc::(${_tzX}-1440),if::(lt::(${_tzX},-720),calc::(${_tzX}+1440),${_tzX}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMs",
+        "value": "$[calc::(${_tzO}*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d0",
+        "value": "$[formatDate::(${_now},yyyyMMdd)]"
+      },
+      "_note": "今天 / 明天的日期码(纯数字,eq 数字比较在各端一致)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d1",
+        "value": "$[formatDate::(calc::(${_now}+86400000),yyyyMMdd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wToday",
+        "value": "今天"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wTodayE",
+        "value": "Today"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wTmr",
+        "value": "明天"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_wTmrE",
+        "value": "Tomorrow"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_re",
+        "value": "^[A-Z]{3} \\x28.*"
+      },
+      "_note": "数据中心维护的标题形如「SYD (Sydney) on 2026-10-08」。正则先落成键再传(方法参数会吃括号);括号写 \\x28 / \\x29(字面括号过不了生成器的括号配平检查)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lp",
+        "value": "\\x28"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_rp",
+        "value": "\\x29"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CITY",
+        "value": "~AMS=阿姆斯特丹~AMM=安曼~ADL=阿德莱德~QWJ=亚美利加纳~ACC=阿克拉~AMD=艾哈迈达巴德~ABQ=阿尔伯克基~AKL=奥克兰~ATH=雅典~ARI=阿里卡~ALG=阿尔及尔~ALA=阿拉木图~LLK=阿斯塔拉~ANC=安克雷奇~IAD=阿什本~BNE=布里斯班~BCN=巴塞罗那~BGW=巴格达~ASU=亚松森~AAE=安纳巴~ATL=亚特兰大~BEG=贝尔格莱德~GYD=巴库~BLR=班加罗尔~TNR=塔那那利佛~CBR=堪培拉~BEL=贝伦~TXL=柏林~BKK=曼谷~CPT=开普敦~CNF=贝洛奥里藏特~BSR=巴士拉~CHC=基督城~AUS=奥斯汀~BEY=贝鲁特~BWN=斯里巴加湾~GUM=阿加尼亚~BGR=班戈~BOD=波尔多~BOS=波士顿~BOG=波哥大~DKR=达喀尔~DMM=达曼~BTS=布拉迪斯拉发~MEL=墨尔本~DOH=多哈~BRU=布鲁塞尔~DAR=达累斯萨拉姆~BSB=巴西利亚~EZE=布宜诺斯艾利斯~OTP=布加勒斯特~DXB=迪拜~JIB=吉布提~YYC=卡尔加里~CEB=宿务~NOU=努美阿~PER=珀斯~BUD=布达佩斯~DUR=德班~CLT=夏洛特~CFC=卡萨多尔~EBL=埃尔比勒~IXC=昌迪加尔~ORD=芝加哥~SYD=悉尼~KIV=基希讷乌~VCP=坎皮纳斯~CGD=常德~HFA=海法~GBE=哈博罗内~CPH=哥本哈根~MAA=金奈~HRE=哈拉雷~JED=吉达~PPT=塔希提~CLE=克利夫兰~JNB=约翰内斯堡~KWI=科威特城~DUB=都柏林~CMH=哥伦布~COR=科尔多瓦~SUV=苏瓦~DFW=达拉斯~DUS=杜塞尔多夫~BAH=麦纳麦~KGL=基加利~CGP=吉大港~HBA=霍巴特~FRA=法兰克福~MCT=马斯喀特~DEN=丹佛~CMB=科伦坡~LOS=拉各斯~CWB=库里蒂巴~WLG=惠灵顿~LAD=罗安达~DTW=底特律~GVA=日内瓦~DAC=达卡~FLN=弗洛里亚诺波利斯~NJF=纳杰夫~FOR=福塔莱萨~GOT=哥德堡~MPM=马普托~FUO=佛山~XNH=纳西里耶~RDU=达勒姆~MBA=蒙巴萨~HAM=汉堡~ZDM=拉姆安拉~GEO=乔治敦~FUK=福冈~GDL=瓜达拉哈拉~HEL=赫尔辛基~RUH=利雅得~NBO=内罗毕~GYN=戈亚尼亚~FOC=福州~YHZ=哈利法克斯~CAN=广州~IST=伊斯坦布尔~GUA=危地马拉城~HNL=檀香山~ISU=苏莱曼尼亚~ORN=奥兰~TLV=特拉维夫~IAH=休斯敦~GYE=瓜亚基尔~HAK=海口~OUA=瓦加杜古~ADB=伊兹密尔~KBP=基辅~MRU=路易港~IND=印第安纳波利斯~HAN=河内~LIS=里斯本~JAX=杰克逊维尔~SJW=衡水~JOI=若茵维莱~LHR=伦敦~MCI=堪萨斯城~SGN=胡志明市~TUN=突尼斯~JDO=北茹阿泽鲁~HKG=香港~LIM=利马~LUX=卢森堡~KIN=金斯敦~FIH=金沙萨~LAS=拉斯维加斯~HYD=海得拉巴~MAO=马瑙斯~LYS=里昂~CAI=开罗~LAX=洛杉矶~MAD=马德里~MDE=麦德林~ISB=伊斯兰堡~WDH=温得和克~MAN=曼彻斯特~MEM=孟菲斯~CGK=雅加达~NQN=内乌肯~ASK=亚穆苏克罗~MRS=马赛~PTY=巴拿马城~MEX=墨西哥城~ABJ=阿比让~MIA=迈阿密~MXP=米兰~TNA=济南~PBM=帕拉马里博~EBB=坎帕拉~MSP=明尼阿波利斯~POA=阿雷格里港~MSQ=明斯克~YUL=蒙特利尔~DME=莫斯科~RUN=圣但尼~UIO=基多~MUC=慕尼黑~KNU=坎普尔~BNA=纳什维尔~EWR=纽瓦克~LCA=尼科西亚~KHH=高雄~REC=累西腓~OSL=奥斯陆~ORF=诺福克~KHI=卡拉奇~RAO=里贝朗普雷图~GIG=里约热内卢~KTM=加德满都~PMO=巴勒莫~OKC=俄克拉何马城~CDG=巴黎~OMA=奥马哈~PRG=布拉格~CCU=加尔各答~SJO=圣何塞~SCL=圣地亚哥~KEF=雷克雅未克~PHL=费城~LUN=卢萨卡~KUL=吉隆坡~PHX=凤凰城~RIX=里加~SDQ=圣多明各~ADD=亚的斯亚贝巴~FCO=罗马~PIT=匹兹堡~SJP=里约普雷图~PDX=波特兰~LED=圣彼得堡~PKX=廊坊~SJK=圣若泽杜斯坎普斯~CZL=君士坦丁~GRU=圣保罗~QRO=克雷塔罗~MLA=圣韦内拉~DLA=杜阿拉~RIC=里士满~SOD=索罗卡巴~SKP=斯科普里~LLW=利隆圭~SOF=索非亚~MFM=澳门~SMF=萨克拉门托~ARN=斯德哥尔摩~SLC=盐湖城~MLE=马累~TGU=特古西加尔巴~NVT=廷博~STR=斯图加特~SAT=圣安东尼奥~MNL=马尼拉~SAN=圣迭戈~TLL=塔林~UDI=乌贝兰迪亚~BOM=孟买~TBS=第比利斯~SFO=旧金山~VIX=维多利亚~SJC=圣何塞~SKG=塞萨洛尼基~NAG=那格浦尔~YXE=萨斯卡通~OKA=那霸~TIA=地拉那~CAW=坎普斯~SEA=西雅图~VIE=维也纳~DEL=新德里~XAP=沙佩科~KIX=大阪~VNO=维尔纽斯~FSD=苏福尔斯~BGI=布里奇敦~WAW=华沙~STL=圣路易斯~PAT=巴特那~GND=圣乔治~PNH=金边~TLH=塔拉哈西~STI=圣地亚哥-德洛斯卡瓦列罗斯~WRO=弗罗茨瓦夫~ZAG=萨格勒布~TAO=青岛~TPA=坦帕~LPB=拉巴斯~YYZ=多伦多~ICN=首尔~ZRH=苏黎世~YVR=温哥华~SHA=上海~SJU=圣胡安~SIN=新加坡~YWG=温尼伯~BAQ=巴兰基亚~URT=素叻他尼~PMW=帕尔马斯~CVG=辛辛那提~TPE=台北~ARU=阿拉萨图巴~POS=西班牙港~SSA=萨尔瓦多~NRT=东京~ULN=乌兰巴托~VTE=万象~KHN=新余~EVN=埃里温~JOG=日惹~CGY=卡加延德奥罗~LJU=卢布尔雅那~COK=科钦~CGB=库亚巴~DPS=登巴萨~CNN=坎努尔~CLO=卡利~SAP=圣佩德罗苏拉~SZX=深圳~KWE=贵阳~HGH=绍兴~CZX=常州~KMG=昆明~CNX=清迈~CGO=郑州~TYN=阳泉~CSX=长沙~DLC=大连~CKG=重庆~XFN=襄阳~DAD=岘港~JXG=嘉兴~CRK=打拉~PBH=廷布~XIY=宝鸡~KCH=古晋~AKX=阿克托别~TEN=铜仁~HYN=台州~FRU=比什凯克~MLG=玛琅~LHE=拉合尔~CTU=成都~AGR=阿格拉~CJB=哥印拜陀~ACX=兴义~BBI=布巴内斯瓦尔~LYA=洛阳~PNQ=浦那~JRG=桑巴尔布尔~AVA=安顺~NQZ=阿斯塔纳~BDQ=贾姆讷格尔~UDR=乌代浦~AIP=贾朗达尔~LHW=兰州~DYU=杜尚别~LUH=卢迪亚纳~"
+      },
+      "_note": "三字码 → 中文城市(cf_iata_zh.py)。按「~码=」切两半取值,缺码自然得空。"
+    },
+    {
+      "id": "up",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflarestatus.com/api/v2/scheduled-maintenances/upcoming.json",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "ac",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflarestatus.com/api/v2/scheduled-maintenances/active.json",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${up.page.id}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_maint_unreachable"
+          }
+        }
+      ],
+      "_note": "主干 = Statuspage 响应信封(page.id)。⚠️ 不能用维护条数当判据 —— 「近期没有计划维护」是最常见的正常态。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nAct",
+        "value": "$[length::(${ac.scheduled_maintenances})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nUp",
+        "value": "$[length::(${up.scheduled_maintenances})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mnm",
+        "value": "${up.scheduled_maintenances[0].name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_msf",
+        "value": "${up.scheduled_maintenances[0].scheduled_for}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_msu",
+        "value": "${up.scheduled_maintenances[0].scheduled_until}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(length::(${_msf}),10),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_mpop",
+            "value": "$[if::(matches::(${_mnm},${_re}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mcd",
+            "value": "$[subString::(${_mnm},0,3)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mce",
+            "value": "$[index::(split::(index::(split::(${_mnm},${_lp}),1),${_rp}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mcz",
+            "value": "$[index::(split::(index::(split::(${CITY},~${_mcd}=),1),~),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mY",
+            "value": "$[if::(eq::(${_zh},1),findNotEmpty::(${_mcz},${_mce}),${_mce})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mC",
+            "value": "$[if::(eq::(${_mpop},1),${_mcd},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mT",
+            "value": "$[if::(eq::(${_mpop},1),${_mcd} ${mY},${_mnm})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mS",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_msf},0,10),yyyy-MM-dd)+subString::(${_msf},11,13)*3600000+subString::(${_msf},14,16)*60000)+${tzMs})]"
+          },
+          "_note": "UTC 串按本地解析再加回偏移 = 真实时刻;再 formatDate 就是本地时间。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_me",
+            "value": "$[calc::(calc::(parseDate::(subString::(${_msu},0,10),yyyy-MM-dd)+subString::(${_msu},11,13)*3600000+subString::(${_msu},14,16)*60000)+${tzMs})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mH",
+            "value": "$[parseNumber::(calc::((${_me}-${mS})/3600000),0.#)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mST",
+            "value": "$[formatDate::(${mS},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mET",
+            "value": "$[formatDate::(${_me},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDdc",
+            "value": "$[formatDate::(${mS},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDmo",
+            "value": "$[parseNumber::(formatDate::(${mS},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDdy",
+            "value": "$[parseNumber::(formatDate::(${mS},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDme",
+            "value": "$[index::(${MONE},calc::(${_mSDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDmz",
+            "value": "${_mSDmo}月${_mSDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDmn",
+            "value": "${_mSDme} ${_mSDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDmd",
+            "value": "$[if::(eq::(${_zh},1),${_mSDmz},${_mSDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mSDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mSD",
+            "value": "$[if::(eq::(${_mSDdc},${_d0}),${_mSDtd},if::(eq::(${_mSDdc},${_d1}),${_mSDtm},${_mSDmd}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDdc",
+            "value": "$[formatDate::(${_me},yyyyMMdd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDmo",
+            "value": "$[parseNumber::(formatDate::(${_me},MM),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDdy",
+            "value": "$[parseNumber::(formatDate::(${_me},dd),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDme",
+            "value": "$[index::(${MONE},calc::(${_mEDmo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDmz",
+            "value": "${_mEDmo}月${_mEDdy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDmn",
+            "value": "${_mEDme} ${_mEDdy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDmd",
+            "value": "$[if::(eq::(${_zh},1),${_mEDmz},${_mEDmn})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDtd",
+            "value": "$[if::(eq::(${_zh},1),${_wToday},${_wTodayE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_mEDtm",
+            "value": "$[if::(eq::(${_zh},1),${_wTmr},${_wTmrE})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mED",
+            "value": "$[if::(eq::(${_mEDdc},${_d0}),${_mEDtd},if::(eq::(${_mEDdc},${_d1}),${_mEDtm},${_mEDmd}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(length::(${mST}),5),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_hx",
+            "value": "$[calc::((${mS}-${_now})/3600000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mHt",
+            "value": "$[if::(le::(${_hx},0),0,if::(lt::(${_hx},10),parseNumber::(${_hx},0.#),round::(${_hx})))]"
+          },
+          "_note": "距开始还有几小时:10 小时内留一位小数,已到点写 0。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${_now},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ok",
+          "nAct",
+          "nUp",
+          "mC",
+          "mY",
+          "mT",
+          "mSD",
+          "mST",
+          "mH",
+          "mHt",
+          "at"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "_note": "下拉刷新:**先删缓存键再重载**,保证下拉一定穿透(§5.5.2 契约 2)。\n\n⚠️ 声明了 `root.events.onRefresh` 之后,容器**不再**自动 reloadPage —— 刷新这件事整个由本流负责,所以末尾那句 `xpage.reloadPage` 不能少。\n⚠️ 穿透靠**删键**,不靠传 force:depends 的 params 是静态的,传不进去。\n⚠️ 键必须与 page/flow/feed.df 里 wrap_cache 生成的 `ckey` **逐字一致**(都是 `c.tw.` + 五个频道 id 用 `_` 相连);对不上就是「下拉了、数字纹丝不动」而日志干净 —— 正是 [[widget-refresh-idle-cache]] 那次的形状。",
+  "version": 1,
+  "actions": [
+    { "id": "chans", "action": "data.get", "params": { "key": "tw_chans", "default": [] } },
+    { "op": "set", "props": { "key": "_b", "value": "1" },
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到结果。" },
+    { "op": "set", "props": { "key": "c1", "value": "${chans[0].id}" } },
+    { "op": "set", "props": { "key": "c2", "value": "${chans[1].id}" } },
+    { "op": "set", "props": { "key": "c3", "value": "${chans[2].id}" } },
+    { "op": "set", "props": { "key": "c4", "value": "${chans[3].id}" } },
+    { "op": "set", "props": { "key": "c5", "value": "${chans[4].id}" } },
+    { "op": "set", "props": { "key": "ck",
+      "value": "$[connect::(c.tw.,${c1},_,${c2},_,${c3},_,${c4},_,${c5})]" } },
+    { "action": "data.remove", "params": { "key": "${ck}" } },
+    { "action": "xpage.reloadPage" }
+  ]
+}

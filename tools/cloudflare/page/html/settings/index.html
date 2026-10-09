@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<!--
+  设置页(路由 /settings):可选的 Cloudflare **只读** API Token。
+
+  ⚠️ 这不违反「零密钥」硬闸(doc/infosource-standard.md §3.1)。那条闸禁的是
+  「密钥进签名包」与「没密钥就不能用」;本包的四张公开卡(全局状态/边缘节点/
+  下一场维护/维护日程)**不碰令牌**,无令牌时一个字都不变。令牌只解锁「你自己
+  账号里的域名」那一块。见 §3.6。
+
+  ⚠️ 与 github 包(PAT)的实质差异,写在页面文案里而不是只写在注释里:
+  GitHub 可以建一个**零权限**令牌,拿到也做不了什么;Cloudflare 不行 ——
+  要读数据就必须给 Zone 读权限,而同一套令牌体系也能签发能改 DNS 的令牌。
+  所以引导必须明确到「勾哪两条、别勾什么、别用 Global API Key」。
+  2026-08-09 拿真令牌实测后从三条收到两条:三张卡一条 DNS 权限都没用到,
+  而 `/dns_records` 在只有 Zone+Analytics 的令牌下本就 403 —— 要一个用不上的权限,
+  只会让这个字符串万一泄露时更值钱。
+
+  ⚠️ 令牌住 **App 凭证中心**(2026-09-09 从 data.* 沙盒迁入):本页既不收也不显令牌,
+  录入由宿主的凭证面板负责(credential-vault §7「凭证录入永远是 App 的事,不是包的事」)。
+  本页只做两件事:显示「连没连上」,和给一个**直达凭证面板**的按钮(G25 #4 要求可执行的下一步,
+  不是一句「去我的→凭证管理」的纯文字指引)。
+  迁移买到的三样东西,都是结构性的而非纪律性的:
+    · 页面/流**读不到令牌本体** —— 从前靠「不写进 resultFilter」的自觉,现在是宿主在网络边界注入;
+    · 令牌**不进本地备份**(credential-vault 红线三 vs local-backup-restore 里 data.* 是必备项);
+    · 落**系统保险箱**而不是磁盘明文。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cloudflare account</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --chip:#E7E9EE;--src:#F38020;--srcSoft:#FFF1E3;--danger:#FF5C4D;--onSrc:#FFFFFF}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--chip:#20232A;--src:#FBAD41;--srcSoft:#3A2A16;--onSrc:#0B0C0E}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:24px;margin:0 0 2px;letter-spacing:-.6px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+/* §2 段标题 = 左名字 + 右摘要,13pt/sub。 */
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:20px 0 8px;
+  display:flex;align-items:baseline}
+.sec em{font-style:normal;font-weight:400;font-size:13px;margin-left:auto}
+.card{background:var(--card);border-radius:14px;padding:14px}
+.st{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.dot{width:8px;height:8px;border-radius:4px;background:var(--sub);flex:0 0 auto}
+.dot.on{background:#1FC77D}.dot.bad{background:var(--danger)}
+.st b{font-size:14px;font-weight:600}
+.st i{margin-left:auto;font-style:normal;color:var(--sub);font-size:11px}
+/* 输入控件字号必须 ≥16px:iOS WKWebView 聚焦会放大整页(闸门 G15) */
+input.tk{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--fg);
+  border-radius:12px;padding:11px 12px;font-size:16px;outline:none;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+input.tk:focus{border-color:var(--src)}
+.row{display:flex;gap:8px;margin-top:10px}
+.btn{flex:1 1 0;border:0;border-radius:12px;padding:11px 4px;font-size:14px;font-weight:600;cursor:pointer}
+.btn[disabled]{opacity:.45}
+.primary{background:var(--src);color:var(--onSrc)}
+.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.ghost.warn{color:var(--danger);border-color:var(--danger)}
+.note{color:var(--sub);font-size:12px;line-height:1.75;margin-top:12px}
+.note b{color:var(--fg)}
+table.perm{width:100%;border-collapse:collapse;margin:8px 0 2px;font-size:12px}
+table.perm td{padding:6px 8px;background:var(--chip);border-radius:8px}
+table.perm td:last-child{color:var(--src);font-weight:700;text-align:right;width:64px}
+table.perm tr+tr td{border-top:2px solid var(--card)}
+.warnbox{background:var(--srcSoft);border-radius:12px;padding:10px 12px;margin-top:12px;
+  color:var(--fg);font-size:11px;line-height:1.7}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.xb-tap{position:relative}
+.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.btn,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.btn:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style></head><body>
+<h1 data-i="h1">Cloudflare account</h1>
+<!-- §1 副标 = 这一页此刻的状态(由 render() 按绑定态写入),不是「这一页是干什么的」那种描述。
+     静态文案默认英文,脚本按语言重写(doc/overseas-first.md §2:首帧闪英文好过对第三语言用户闪中文)。 -->
+<div class="sub" id="lead">Checking…</div>
+
+<div class="sec"><span id="secStatus" data-i="secStatus">Status</span><em id="vStatus"></em></div>
+<div class="card">
+  <div class="st"><span class="dot" id="dot"></span><b id="stText">Checking…</b><i id="at"></i></div>
+  <div class="note" id="msg"></div>
+  <!-- 直达凭证面板。deeplink 三段都不能省:section 定位到凭证区、bundle 说清给哪个包绑、
+       bind 指名 manifest.credentials[0].id(cf),面板直接开到那一条的绑定态。 -->
+  <div class="row"><button class="btn primary" id="bind" data-i="btnOff">Add a token in Credentials</button></div>
+</div>
+
+<div class="sec" data-i="secHow">How to create a token</div>
+<div class="card">
+  <div class="note" style="margin-top:0" data-h="how1"></div>
+  <table class="perm">
+    <tr><td>Zone　·　Zone</td><td>Read</td></tr>
+    <tr><td>Zone　·　Analytics</td><td>Read</td></tr>
+  </table>
+  <div class="note" data-h="how2"></div>
+  <div class="warnbox" data-h="warn"></div>
+</div>
+
+<div class="sec" data-i="secWhere">Where the token is kept</div>
+<div class="card">
+  <div class="note" style="margin-top:0" data-h="where"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const bridge = () => (window.xbridge || {});
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 文案中英两份(doc/overseas-first.md §2):缺省英文,先用 <html data-lang>,appInfo 回来再以它为准;缺键回落英文。 */
+var I18N = {zh: {"h1": "Cloudflare 账号", "checking": "检查中…", "secStatus": "当前状态", "secHow": "如何创建令牌", "how1": "Cloudflare 后台 › 头像 › <b>My Profile</b> › <b>API Tokens</b> › <b>Create Token</b> › <b>Create Custom Token</b>，权限只勾选以下两项（均为 Read）：", "how2": "<b>Zone Resources</b> 选择你想查看的域名（或 All zones）。创建后回到这里绑定。", "warn": "⚠️ <b>只勾选这两项。</b>这个工具的组件不需要任何 DNS 权限。权限越少，令牌万一泄露时风险越小。<br>⚠️ <b>不要勾选任何 Edit 权限。</b>读取数据不需要写权限。<br>⚠️ <b>不要使用 Global API Key。</b>它拥有整个账号的全部权限，无法限定域名，也无法设置过期时间。<br>⚠️ 建议为令牌设置<b>过期时间</b>，你也可以随时在 Cloudflare 后台撤销它。", "secWhere": "令牌保存在哪里", "where": "令牌由 <b>App 的凭证管理</b>保存在<b>这台设备的系统安全存储</b>中，<b>默认不会上传</b>，也<b>不会写入备份</b>。只有你在多设备同步里打开「同步密钥与凭证」，它才会加密后同步到你的其他设备，服务器上只有密文，我们无法解开。<br><br>它只会发送给 <b>api.cloudflare.com</b>，也就是安装面板上列出的网站；这一限制由 App 在发送请求时强制执行。<br><br>这个工具的页面和组件都<b>无法读取令牌内容</b>，App 只在发送请求时附上令牌，所以它不会出现在页面、日志或分享截图中。<br><br>你可以随时撤销：在 App 的凭证管理中删除它，或直接在 Cloudflare 后台吊销。", "checkedAt": "检查于 ", "stOff": "未连接", "stOn": "已连接", "stBad": "令牌不可用", "msgOff": "现在只显示 Cloudflare 的公开状态。绑定后可以看你自己账号里的域名。", "btnOff": "去凭证管理绑定令牌", "msgOn": "令牌在 App 的凭证管理里。要换或要删，都在那里。", "btnOn": "在凭证管理里查看", "msgBad": "令牌可能已过期、被撤销，或权限不足。到 Cloudflare 后台确认后，在凭证管理里换一个。", "btnBad": "去凭证管理换一个", "badPre": "（", "badSuf": "）", "fail": "检查失败", "failMsg": "读不到本机状态："},
+ en: {"h1": "Cloudflare account", "checking": "Checking…", "secStatus": "Status", "secHow": "How to create a token", "how1": "In the Cloudflare dashboard: avatar › <b>My Profile</b> › <b>API Tokens</b> › <b>Create Token</b> › <b>Create Custom Token</b>. Grant only these two permissions (both Read):", "how2": "Under <b>Zone Resources</b>, pick the zones you want to see (or All zones). Then come back here to add the token.", "warn": "⚠️ <b>Grant only these two.</b> This tool's widgets need no DNS permissions. The fewer permissions, the less a leaked token can do.<br>⚠️ <b>Don't grant any Edit permission.</b> Reading data never needs write access.<br>⚠️ <b>Don't use the Global API Key.</b> It has full access to your whole account, can't be limited to zones and can't expire.<br>⚠️ Give the token an <b>expiry date</b>. You can also revoke it in Cloudflare at any time.", "secWhere": "Where the token is kept", "where": "The token is kept by <b>the app's credential manager</b> in <b>this device's secure system storage</b>. It is <b>not uploaded by default</b> and <b>never written to backups</b>. Only if you turn on “Sync keys and credentials” in multi-device sync is it encrypted and synced to your other devices; the server only stores ciphertext we can't decrypt.<br><br>It is only ever sent to <b>api.cloudflare.com</b>, the site listed in the install panel. The app enforces this when it sends each request.<br><br>This tool's pages and widgets <b>can't read the token</b>. The app attaches it only when sending a request, so it never shows up in pages, logs or shared screenshots.<br><br>You can revoke it at any time: delete it in the app's credential manager, or revoke it in Cloudflare.", "checkedAt": "checked at ", "stOff": "Not connected", "stOn": "Connected", "stBad": "Token not working", "msgOff": "Only Cloudflare's public status is shown for now. Add a token to see the zones in your own account.", "btnOff": "Add a token in Credentials", "msgOn": "The token lives in the app's credential manager. Change or remove it there.", "btnOn": "View in Credentials", "msgBad": "The token may have expired, been revoked or lack permissions. Check it in Cloudflare, then replace it in Credentials.", "btnBad": "Replace it in Credentials", "badPre": " (", "badSuf": ")", "fail": "Check failed", "failMsg": "Couldn't read the local status: "}};
+var LANG = nbLang(document.documentElement.getAttribute("data-lang"));
+function t(k){ var m = I18N[LANG]; if (m && Object.prototype.hasOwnProperty.call(m, k)) return m[k];
+  return Object.prototype.hasOwnProperty.call(I18N.en, k) ? I18N.en[k] : k; }
+function paintStatic(){
+  document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+  document.querySelectorAll("[data-i]").forEach(function(el){ el.textContent = t(el.dataset.i); });
+  document.querySelectorAll("[data-h]").forEach(function(el){ el.innerHTML = t(el.dataset.h); });
+}
+paintStatic();
+let LAST = null;
+
+// 状态渲染的唯一入口:三态(未连接 / 已连接 / 连上了但令牌不好使)。
+// ⚠️ 三态必须分开 —— 后两者都取不到数,但用户要做的事完全相反
+//    (一个是去建令牌,一个是令牌被撤销/过期了要换一个)。
+// ⚠️ `bound` **就是**「用户绑没绑」的直接查询(credential-vault · credential.state,2026-09-09 起)。
+//    此前它是**从响应本身推**的(resp 空 = 没绑)—— 那把「没绑」与「网络挂了」压成同一个
+//    观测量,断网的用户会被告知「去绑定令牌」而他令牌明明配着。现在 bound 是本地事实、
+//    ok 才看服务端答案,两者各管一件事。
+// ⚠️ `ok` 不能只看信封 `success` —— 过期令牌打 /user/tokens/verify 回的是 200 + success:true,
+//    真相在 result.status 里。少判一步就会把死钥匙报成「已连接」(2026-09-09 实测修正)。
+function render(d) {
+  const bound = String(d?.bound ?? "0") === "1";
+  const ok = String(d?.ok ?? "0") === "1";
+  LAST = d;
+  $("at").textContent = d?.at ? t("checkedAt") + d.at : "";
+  $("dot").className = "dot" + (bound ? (ok ? " on" : " bad") : "");
+  // §1 副标 = 此刻的状态;§2 段标题右侧 = 这一段的答案。两处同一个事实,一处在页头一处在段头。
+  const st = !bound ? t("stOff") : (ok ? t("stOn") : t("stBad"));
+  $("lead").textContent = st + (d?.at ? " · " + t("checkedAt") + d.at : "");
+  $("vStatus").textContent = st;
+  if (!bound) {
+    $("stText").textContent = t("stOff");
+    $("msg").textContent = t("msgOff");
+    $("bind").textContent = t("btnOff");
+  } else if (ok) {
+    $("stText").textContent = t("stOn");
+    $("msg").textContent = t("msgOn");
+    $("bind").textContent = t("btnOn");
+  } else {
+    $("stText").textContent = t("stBad") + (d.tokenStatus ? t("badPre") + d.tokenStatus + t("badSuf") : "");
+    $("msg").textContent = t("msgBad");
+    $("bind").textContent = t("btnBad");
+  }
+}
+
+async function refresh() {
+  try {
+    const r = await bridge().runDataFlow?.("verify", {});
+    render(r?.data ?? r ?? {});
+  } catch (e) {
+    $("stText").textContent = t("fail");
+    $("lead").textContent = t("fail");
+    $("vStatus").textContent = t("fail");
+    $("msg").textContent = t("failMsg") + (e?.message || e);
+  }
+}
+
+function nav(url) {
+  try { if (bridge().openUrl) return bridge().openUrl(url); } catch (e) {}
+  try { if (bridge().open) return bridge().open(url); } catch (e) {}
+  location.href = url;
+}
+// bundle = manifest.id(ULID),bind = manifest.credentials[0].id。
+// ⚠️ 写死字面量:页面拿不到 manifest,而 deeplink 少了 bundle/bind 只会开到凭证列表,
+//    用户还得自己找是哪个包的哪一条 —— 那就退回成「纯文字指引」了。
+$("bind").onclick = () => nav("numable://app/mine?section=credentials&bundle=01KZJMJ1XY74B1S0J50MT86PXG&bind=cf");
+
+// 从凭证面板回来时重查一次:绑定发生在宿主那边,包拿不到回调,只能靠回前台自查。
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+addEventListener("languagechange", (e) => {
+  LANG = nbLang((e && e.detail && e.detail.language) || document.documentElement.getAttribute("data-lang"));
+  paintStatic(); if (LAST) render(LAST);
+});
+
+// 主题跟 App 注入,回退系统(xbundle-template.md §6c);语言 = appInfo → data-lang → 英文。
+(async () => {
+  const info = await nbInfo();
+  if (info.theme === "dark" || info.theme === "light") document.documentElement.setAttribute("data-theme", info.theme);
+  LANG = nbLang(info.language || info.locale);
+  paintStatic();
+  refresh();
+})();
+</script>
+</body></html>

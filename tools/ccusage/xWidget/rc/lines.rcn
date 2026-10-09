@@ -1,0 +1,201 @@
+{
+  "rc": {
+    "_note": "代码改动(2026-09-24):大数 = 今天 Claude Code 新增的行数(编辑补丁里行首 + 的行 + 新建文件的行);柱 = 近 7 天每天新增 + 删除;底行 = 近 7 天合计与对比前 7 天。",
+    "i18n": {
+      "zh-CN": {
+        "title": "代码改动",
+        "empty": "等待首次同步",
+        "sub": "今天新增 · 删除 ",
+        "d7": "近 7 天 "
+      },
+      "en-US": {
+        "title": "Lines",
+        "empty": "Not synced yet",
+        "sub": "Added today · removed ",
+        "d7": "7 days "
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FDFBFA\\,#FBF3F1)@90|linear(#15171A\\,#1A1A1C\\,#221E1F)@90",
+        "_note": "代码改动(2026-09-24):大数 = 今天 Claude Code 新增的行数(编辑补丁里行首 + 的行 + 新建文件的行);柱 = 近 7 天每天新增 + 删除;底行 = 近 7 天合计与对比前 7 天。"
+      },
+      {
+        "_note": "源色身份点:本包统一用 Claude 暖橙两档。",
+        "id": "dot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#C15F3C|#E8916B"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-92pt",
+        "h": "-1",
+        "text": "${@i18n.title}",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${w.lines.add}),k),0,1)]"
+        },
+        "react": [
+          {
+            "id": "big",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "+${w.lines.add}",
+            "fontSize": "28pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.lines.add}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+8.4pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "28pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "txt",
+        "x": "12pt",
+        "y": "{parent.h}*0.26+32pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "${@i18n.sub}$[findNotEmpty::(${w.lines.del},--)]",
+        "fontSize": "10pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "layer",
+        "x": "12pt",
+        "y": "{parent.h}-32pt",
+        "w": "{parent.w}-24pt",
+        "h": "1pt",
+        "bgColor": "#EFE5E1|#2A2522"
+      },
+      {
+        "type": "op",
+        "action": "forEach",
+        "props": {
+          "items": "${w.lines.bars}",
+          "key": "_it",
+          "index": "_i"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "12pt+${_it.i}*({parent.w}-24pt)/7",
+            "y": "{parent.h}-58pt+26pt*${_it.u}",
+            "w": "({parent.w}-24pt)/7-5pt",
+            "h": "26pt*${_it.v}",
+            "cornerRadius": {
+              "leftT": "1.5pt",
+              "rightT": "1.5pt",
+              "leftB": "0pt",
+              "rightB": "0pt"
+            },
+            "bgColor": "$[if::(eq::(${_it.t},1),#C15F3C|#E8916B,#E9D5CD|#3B302B)]"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${w.lines.sum7}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-24pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.d7}${w.lines.sum7}  ${w.lines.c}",
+            "fontSize": "10pt",
+            "textColor": "#C15F3C|#E8916B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.lines.sum7}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-24pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.d7}--",
+            "fontSize": "10pt",
+            "textColor": "#C15F3C|#E8916B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "时效锚:右上角、与卡名同一基线、9pt、右对齐(卡片设计系统 §3)。",
+        "id": "at",
+        "type": "txt",
+        "x": "12pt",
+        "y": "14pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},${@i18n.empty})]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "2"
+      }
+    ]
+  }
+}

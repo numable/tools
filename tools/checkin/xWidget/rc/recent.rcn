@@ -1,0 +1,265 @@
+{
+  "rc": {
+    "i18n": {
+      "zh-CN": {
+        "days": "天",
+        "recent": "30 天里",
+        "doneToday": "今天已达标",
+        "todayIs": "今天",
+        "never": "还没有记录",
+        "pickItem": "选择事项",
+        "masked": "已隐藏"
+      },
+      "en-US": {
+        "days": "d",
+        "recent": "Last 30 days",
+        "doneToday": "Goal met",
+        "todayIs": "Today",
+        "never": "No entries yet",
+        "pickItem": "Pick a habit",
+        "masked": "Hidden"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#F9FCFB\\,#EEF7F3)@90|linear(#15171A\\,#161B1D\\,#182221)@90"
+      },
+      {
+        "_note": "源色点(card-design-system §2):5pt 圆点 / 卡名左侧 / 间距 9pt / 每张卡恰好一次。⚠️ 色值恒 #2E9E6B|#45C793,**不跟事项的调色板走** —— 这颗点答的是「这是 checkin 的卡」,不是「这件事是紫色的」;跟着 pal 变会让同一个包在盘上看着像六个源。⚠️ y 引用顶层的 nm2(不带图标那份名字,带图标时 hide 但照样布局,与 nm1 同 y 同字号):锚点不能落进 op:if 分支,否则另一档整卡算不出来(2026-10-03 第一行统一)。",
+        "id": "dot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{nm2.y}+({nm2.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#2E9E6B|#45C793",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${hicon},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "ic",
+            "type": "img",
+            "x": "21pt",
+            "y": "9pt",
+            "w": "16pt",
+            "h": "16pt",
+            "url": "@[file://xWidget/assets/ic/${icon}.$[if::(eq::(${theme},dark),d,l)].uri]"
+          },
+          {
+            "id": "nm1",
+            "type": "txt",
+            "x": "{ic.r}+5pt",
+            "y": "11pt",
+            "w": "{parent.w}-83pt-{ic.w}-5pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${iname},${@i18n.pickItem})]",
+            "fontSize": "13pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "id": "nm2",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-83pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${iname},${@i18n.pickItem})]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "hide": "$[if::(eq::(${hicon},1),1,0)]"
+      },
+      {
+        "_note": "标签 + 数字 + 单位三件必须连起来读得通(A1「卡面自解释」):「30 天里」在上、「18 天」在下 = 「30 天里 18 天」。只留一个光秃秃的 18 时,这张卡和 streak(连续 12 天)在加卡面板里长得一模一样。",
+        "id": "lbl",
+        "type": "txt",
+        "x": "12pt",
+        "y": "33pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "${@i18n.recent}",
+        "fontSize": "11pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "_note": "时效锚移到标题行右上(2026-10-08 评审 checkin-7,card-design-system §3:锚 y = 名 y + 3),与同包其他组件一致。",
+        "id": "date",
+        "type": "txt",
+        "x": "{parent.w}-58pt",
+        "y": "14pt",
+        "w": "46pt",
+        "h": "-1",
+        "text": "$[if::(eq::(${mask},1),${@i18n.masked},findNotEmpty::(${atLbl},--))]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "2"
+      },
+      {
+        "_note": "数的是**天**不是次：一天记两次只算一天。打卡看的是坚持了几天。\n数字与单位的对齐(2026-09-07,与 intimacy v31 同一轮):StaticCanvas 的 txt 盒顶 = 该行字形 ink 顶(不是盒顶+字体 ascent),44pt 粗体数字基线在 y+31、12pt 汉字基线在 y+9.5 → 单位盒顶放 y+21.5(40pt 数字则 +20.5);老写法 82/80 是按 ascent 猜的,汉字比数字低 11pt。`••` 打码也是紧排会被顶到盒顶,故单独分支压到基线(y = 基线 − 11pt)。量法见 Numable-bundles/tools/rcnrender。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "11pt",
+            "w": "-1",
+            "h": "-1",
+            "fontSize": "44pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "id": "num",
+            "y": "50pt",
+            "text": "$[findNotEmpty::(${days30},0)]"
+          },
+          {
+            "type": "txt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${@i18n.days}",
+            "fontSize": "12pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1",
+            "id": "unit",
+            "x": "{num.r}+5pt",
+            "y": "71.5pt"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "11pt",
+            "w": "-1",
+            "h": "-1",
+            "fontSize": "44pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "id": "numM",
+            "y": "70pt",
+            "text": "••"
+          },
+          {
+            "type": "txt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${@i18n.days}",
+            "fontSize": "12pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1",
+            "id": "unitM",
+            "x": "{numM.r}+5pt",
+            "y": "71.5pt"
+          }
+        ]
+      },
+      {
+        "_note": "底部脚注不要胶囊底(2026-08-27 用户拍板,与 gold banks 基准价同规则)。此层保留为纯锚点:cT/cN 等以 {chip.x/y/w} 定位,删层会断锚 → 透明化即可。",
+        "id": "chip",
+        "type": "layer",
+        "x": "12pt",
+        "y": "124pt",
+        "w": "{parent.w}-24pt",
+        "h": "22pt",
+        "bgColor": "#00000000|#00000000"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${done},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "cD",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.doneToday}",
+            "fontSize": "11pt",
+            "textColor": "${mc}",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${has},1),if::(eq::(${done},0),1,0),0)]"
+        },
+        "react": [
+          {
+            "id": "cT",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.todayIs} $[findNotEmpty::(${todayCnt},0)]/$[findNotEmpty::(${goal},1)]",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${has},1),0,1)]"
+        },
+        "react": [
+          {
+            "id": "cN",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.never}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ]
+  }
+}

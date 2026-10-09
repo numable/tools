@@ -1,0 +1,37 @@
+{
+  "_note": "详情页进页校新:首屏先出的是旧货(_stale=1)就置 state.reval=1 再软重载 —— 重取成功覆盖写入,\n失败则旧内容与缓存都留着。不删键。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "st",
+        "value": "${stale}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isStale",
+        "value": "$[parseNumber::(${st},0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${isStale},1),1,0)]"
+      },
+      "items": [
+        {
+          "action": "xpage.patchState",
+          "params": {
+            "reval": 1
+          }
+        },
+        {
+          "action": "xpage.reloadPage"
+        }
+      ]
+    }
+  ]
+}

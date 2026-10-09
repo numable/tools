@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<!--
+  卡片参数编辑页（路由 /pick，.xwidget events.onEdit 指到这里）：长按卡 →「编辑参数」→
+  本页以 sheet 呈现，?brickId=<实例> 定位要改的那张卡。点一行 → updateParams 立即回写
+  （改即生效，壳上的「完成」只负责关闭）。
+
+  为什么必须有这一页：城市是烤在卡片 params 里的，而「我的城市」是另一份数据(data.cities) ——
+  两者互不相干。v12 四张卡一个 onEdit 都没有，于是用户加了一张「上海」就再也改不了、
+  连入口都没有（也过不了上线闸 G12e：onEdit 的目标必须**有写回能力**）。
+
+  桥上没有「读实例当前参数」的 API，故本页不预选中 —— 只展示可选项，点了才写。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Choose a City</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --sky:#2E86C8;--skyWash:#E8F1F9}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--sky:#5AA9E0;--skyWash:#152532}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 20px)) 16px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:20px;margin:0 0 4px;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:16px}
+.sec{font-size:12px;color:var(--sub);font-weight:600;margin:18px 0 10px;letter-spacing:.3px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+/* font-size 16px 是硬下限：iOS 聚焦 <16px 输入控件会自动放大整页 */
+input.q{width:100%;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:12px;padding:11px 14px;font-size:16px;outline:none}
+input.q:focus{border-color:var(--sky)}
+.row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.row:last-child{border-bottom:0}
+.row.on{background:var(--skyWash)}
+.row .grow{flex:1 1 auto;min-width:0}
+.row b{display:block;font-size:15px;font-weight:600}
+.row small{color:var(--sub);font-size:12px}
+.dot{flex:0 0 auto;width:8px;height:8px;border-radius:4px;background:var(--sky)}
+.dot.off{background:transparent}
+.state{color:var(--sub);font-size:13px;padding:14px;text-align:center}
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.6}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.row,.xb-tap{position:relative}
+.row::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.row:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style></head>
+<body>
+  <h1 data-i="title"></h1>
+  <div class="sub" data-i="sub"></div>
+
+  <div class="sec" data-i="mineSec"></div>
+  <div id="mine" class="card"></div>
+
+  <div class="sec" data-i="searchSec"></div>
+  <input id="q" class="q" type="search" autocomplete="off">
+  <div id="hits" class="card" style="display:none"></div>
+
+  <div class="foot" data-i="foot"></div>
+<script>
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+(function(){
+var I18N = {
+  "zh": {"title":"选择城市","sub":"这个组件显示哪个城市的天气","mineSec":"我的城市",
+         "searchSec":"搜索其它城市","ph":"搜索城市，如 上海 / Tokyo",
+         "searching":"搜索中…","noHit":"没有找到匹配的城市","emptyMine":"还没有城市",
+         "foot":"只修改这一个组件，不影响首页的「我的城市」列表；不过在这里搜到的新城市会同时加入该列表。城市检索结果含 OpenStreetMap 数据（© OSM 贡献者）。",
+         "notX":"当前不在 XBundle 环境中","noBrick":"无法识别这个组件，请长按组件并选择「编辑参数」进入"},
+  "en": {"title":"Choose a City","sub":"Which city this widget shows","mineSec":"My cities",
+         "searchSec":"Search another city","ph":"Search a city, e.g. Tokyo",
+         "searching":"Searching…","noHit":"No matching city","emptyMine":"No cities yet",
+         "foot":"This changes only this widget. The city list on the home page is a different thing — though a new city you find here is added to it too. City search results include data from OpenStreetMap (© OSM contributors).",
+         "notX":"Not running inside XBundle","noBrick":"No widget instance — open this from the widget's Edit action"}
+};
+var LANG='en', list=[], sel='', CND=false;
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键;缺键回落英文(§2) */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function applyTheme(th){
+  var dark = th==='dark' || (th!=='light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+}
+function paint(){
+  Array.prototype.forEach.call(document.querySelectorAll('[data-i]'),function(el){
+    el.textContent = t(el.dataset.i); });
+  document.getElementById('q').placeholder = t('ph');
+}
+// ⚠️ 用 URLSearchParams 取，不要自己正则 location.search —— 容器真机上两者等价，
+// 但验收台的 iframe 是 srcdoc（about:srcdoc，没有 location.search），它靠包一层
+// URLSearchParams 把 route query 补回来。自己读 location.search = 这一页在验收台里
+// 永远拿不到 brickId，于是「点了没反应」，而真机上是好的 —— 最难查的那种分叉。
+var brickId = new URLSearchParams(location.search).get('brickId') || '';
+function key(c){ return String(c.lat)+','+String(c.lon); }
+
+// v49:从搜索结果选中的城市,**同时**进「我的城市」。
+// 在此之前这一页只调 updateParams —— 城市烤进了卡片参数,却没人告诉 data.cities:
+// 于是用户给卡片选了长沙,信息源首页里从头到尾没有长沙,首页那条 chip 条也切不过去。
+// 卡片参数与「我的城市」成了两份互不相干的真源,而两边各自都「看起来是对的」。
+// ⚠️ 满了(MAX)就只写卡片、不写列表 —— 卡片照常显示长沙,只是首页列表里没有它。
+//    这里不弹错、也不拦:用户此刻的意图是「这张卡要看长沙」,那件事必须成。
+// ⚠️ 只 append 到末尾,不动已有顺序 —— 顺序是用户在 /city 里排的,
+//    给一张卡换城市不该顺手把首页列表也打乱。
+var MAX = 8;   // 与 /city 管理页、首页列表槽位一致
+function remember(c){
+  if(!(window.xbridge && xbridge.runFlow)) return;
+  if(list.length >= MAX) return;
+  var dup = list.some(function(x){ return String(x.lat)===c.lat && String(x.lon)===c.lon; });
+  if(dup) return;
+  list = list.concat([c]);
+  renderMine();
+  try{ xbridge.runFlow('cities-save',{list:list},8000); }catch(e){}
+}
+
+function apply(c){
+  if(!(window.xbridge && xbridge.updateParams && brickId)) return;
+  sel = key(c);
+  // 三个键一起写：lat/lon 决定取数，city 决定卡上那行字。少写 city 会让卡片显示旧城市名
+  // 而数字是新城市的 —— 比不生效更糟。
+  xbridge.updateParams(brickId, {lat:String(c.lat), lon:String(c.lon), city:String(c.name)});
+  renderMine();
+}
+function renderMine(){
+  var box = document.getElementById('mine');
+  if(!list.length){ box.innerHTML='<div class="state">'+t('emptyMine')+'</div>'; return; }
+  box.innerHTML = list.map(function(c,i){
+    return '<div class="row'+(key(c)===sel?' on':'')+'" data-k="'+i+'">'+
+      '<span class="dot'+(key(c)===sel?'':' off')+'"></span>'+
+      '<div class="grow"><b>'+esc(c.name)+'</b><small>'+esc(c.where||'')+'</small></div></div>';
+  }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('.row'),function(el){
+    el.addEventListener('click',function(){ apply(list[+el.dataset.k]); });
+  });
+}
+
+// v70:语言 / 地区按 doc/overseas-first.md §1–§2(numable-env:nbInfo 等桥、处理信封,缺省英文)。
+(async function boot(){
+  var info = await nbInfo();
+  applyTheme(info.theme);
+  LANG = nbLang(info.language || info.locale);
+  CND = nbCnDefault(info);
+  paint();
+  if(!window.xbridge){ document.getElementById('mine').innerHTML='<div class="state">'+t('notX')+'</div>'; return; }
+  if(!brickId){ document.getElementById('mine').innerHTML='<div class="state">'+t('noBrick')+'</div>'; }
+  xbridge.runDataFlow('cities-read',{},8000).then(function(r){
+    var d = (r&&r.code===0&&r.data)||{};
+    list = Array.isArray(d.list)? d.list : [];
+    renderMine();
+  }).catch(function(){ renderMine(); });
+})();
+
+// 两路检索结果合并(geo.df 发了「裸词」与「词+市」两路,见那条流的长注)。
+// ⚠️ 排序按 **population 降序**:open-meteo 的返回顺序不是按重要性的 ——
+//    搜「长沙」裸搜回来的八条是重庆/贵州/广东的同名村镇(人口一千到四万),
+//    而真正的湖南长沙市(pop=309万)只在「长沙市」那一路里。按人口排,它自己会站到第一位。
+// ⚠️ 去重按坐标(同一个地方可能两路都回),保留先遇到的那条。
+// ⚠️ 没有人口数据的条目(多数是村、镇、住宅区)一律排在有人口的之后 —— 不是丢掉:
+//    小地方也可能正是用户要的(他自己搜的名字),只是不该挡在省会前面。
+// Nominatim(第二源)条目 → 与 open-meteo 同形状。只在 open-meteo 交白卷时才有(见 geo.df)。
+// ⚠️ 名字带**简繁双写**:「纽约;紐約」「东京都/東京都」「韩国 / 南韓」—— 分隔符 `;` 与 `/` 都有,
+//    取第一段。伦敦那条是繁体在前(「大倫敦;大伦敦」),会显示成「大倫敦」——认得出,不为它再加规则。
+// ⚠️ 借 `importance`(0~1)折算成伪人口参与同一套排序:0.88 → 880 万,与真实人口量级可比,
+//    于是三路结果能排在同一把尺子上,不用为「哪一路优先」再写一套规则。
+/* 港澳台按「地区 · 中国」显示,不与国家并列(doc/cn-review-standard.md CN-3)—— 只在国内默认(CND)时;海外默认照数据源原样显示。
+   open-meteo 搜「Taipei」回的 country 是「台湾」,原样拼就成了「台湾」占国家那一格。 */
+var CN_SAR={TW:['台湾','Taiwan'],HK:['香港','Hong Kong'],MO:['澳门','Macau']};
+function placeOf(c){
+  var r=CN_SAR[String((c&&(c.country_code||c.cc))||'').toUpperCase()];
+  if(r && CND){ var zh=LANG==='zh'; return (zh?r[0]:r[1])+' · '+(zh?'中国':'China'); }   /* 只在国内默认时(doc/overseas-first.md §8) */
+  return [c.admin1,c.country].filter(Boolean).join(' · ');
+}
+function normNom(x){
+  var a = x.address || {};
+  var cut = function(s){ return String(s == null ? '' : s).split(/[;/]/)[0].trim(); };
+  var lat = parseFloat(x.lat), lon = parseFloat(x.lon);
+  if(!isFinite(lat) || !isFinite(lon)) return null;
+  return { name: cut(x.name || a.city), latitude: lat, longitude: lon,
+           admin1: cut(a.state), country: cut(a.country), cc: String(a.country_code || '').toUpperCase(),
+           population: Math.round((x.importance || 0) * 1e7) };
+}
+
+function mergeHits(data){
+  var a = (data && data.listC) || [], b = (data && data.list) || [];
+  var c = ((data && data.listN) || []).map(normNom).filter(Boolean);
+  var seen = {}, out = [];
+  [].concat(a, b, c).forEach(function(x){
+    if(!x || x.latitude == null || x.longitude == null) return;
+    var k = x.latitude + ',' + x.longitude;
+    if(seen[k]) return;
+    seen[k] = 1; out.push(x);
+  });
+  out.sort(function(p, q){ return (q.population || 0) - (p.population || 0); });
+  return out.slice(0, 8);
+}
+
+// ⚠️ **请求序号守卫**:搜索是「边打字边发」,而三路的耗时差得很远 ——
+//    open-meteo 两路 ~0.8s,补 OSM 那一路要 2s 上下。于是先发的慢请求会**晚于**后发的快请求回来,
+//    把正确结果覆盖掉:实测打「长」→350ms→「长沙」,最后停在屏幕上的是搜「长」的结果(日本的「長」)。
+//    这不是「搜错了」,是**后到的旧答案盖住了先到的新答案** —— 用户看到的现象是「搜索触发有问题」。
+//    修法是每次发请求领一个号,回来时号对不上就丢弃(经典做法,别用 AbortController:
+//    这里的请求走的是桥,不是 fetch)。
+var seq = 0;
+var timer=null;
+document.getElementById('q').addEventListener('input',function(e){
+  var kw=e.target.value.trim(); clearTimeout(timer);
+  var box=document.getElementById('hits');
+  // ⚠️ 单字不搜:中文城市名至少两字,而「长」「京」这种单字必然搜出一屏无关小地方、
+  //    还会触发那条慢的补充检索(见 geo.df 第三路)。等第二个字再发,既准又省。
+  if(kw.length < 2){ box.style.display='none'; seq++; return; }
+  // 300ms 防抖：每敲一个字母打一次地理编码接口既慢又浪费。
+  timer=setTimeout(function(){
+    box.style.display='block'; box.innerHTML='<div class="state">'+t('searching')+'</div>';
+    var my = ++seq;
+    xbridge.runDataFlow('geo',{kw:kw,lang:LANG==='zh'?'zh':'en'},10000).then(function(r){
+      if(my !== seq) return;                    // 已经有更新的一次搜索了 —— 丢弃这份旧答案
+      var hits = (r && r.code === 0) ? mergeHits(r.data) : [];
+      if(!hits.length){box.innerHTML='<div class="state">'+t('noHit')+'</div>';return;}
+      box.innerHTML=hits.map(function(c,i){
+        var where=placeOf(c);
+        return '<div class="row" data-k="'+i+'"><span class="dot off"></span>'+
+          '<div class="grow"><b>'+esc(c.name)+'</b><small>'+esc(where)+'</small></div></div>';}).join('');
+      Array.prototype.forEach.call(box.querySelectorAll('.row'),function(el){
+        el.addEventListener('click',function(){
+          var c=hits[+el.dataset.k];
+          var where=placeOf(c);
+          var city={lat:String(c.latitude), lon:String(c.longitude), name:c.name, where:where};
+          remember(city);          // 先进「我的城市」,再写卡片参数
+          apply(city);
+          if(xbridge.closePage) setTimeout(function(){ xbridge.closePage(); },320);
+        });});
+    }).catch(function(){ if(my !== seq) return; box.innerHTML='<div class="state">'+t('noHit')+'</div>'; });
+  },400);
+});
+})();
+</script>
+</body></html>

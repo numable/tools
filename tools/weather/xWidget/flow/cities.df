@@ -1,0 +1,1169 @@
+{
+  "_note": "多城市卡取数:「我的城市」前 5 座,**一次多坐标请求**拿全。\n⚠️ 这条流**不缓存**(§5.5:组件卡的 .df 恒不缓存)—— 卡片的新鲜度由宿主的 refresh 周期管。\n由 tools/infosource/gen_weather_cities.py 生成。",
+  "version": 1,
+  "i18n": {
+    "zh-CN": {
+      "autoCn": "上海",
+      "autoUs": "纽约"
+    },
+    "en-US": {
+      "autoCn": "Shanghai",
+      "autoUs": "New York"
+    }
+  },
+  "actions": [
+    {
+      "_note": "「我的城市」—— 这张卡不吃实例参数,整份列表就是它的数据源。",
+      "id": "saved",
+      "action": "data.get",
+      "params": {
+        "key": "cities",
+        "default": []
+      }
+    },
+    {
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到结果。",
+      "op": "set",
+      "props": {
+        "key": "_bs",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_n0",
+        "value": "$[length::(${saved})]"
+      }
+    },
+    {
+      "_note": "国内默认判据(doc/overseas-first.md §1,逐字照抄):地区 cn,或地区未知且界面中文 → 1。",
+      "op": "set",
+      "props": {
+        "key": "cnd",
+        "value": "$[if::(eq::(${@app.region},cn),1,if::(eq::(${@app.region},overseas),0,if::(startsWith::(${@app.language},zh),1,0)))]"
+      }
+    },
+    {
+      "_note": "2026-10-08:「我的城市」为空(新用户)时退回默认城市一行(国内上海 / 海外纽约,与单城市卡的 auto 同一套),\n渲染层给这一行标「默认」并在底部写一句现状 —— 此前整张 44 只有一行灰字,大片空白。",
+      "op": "set",
+      "props": {
+        "key": "dflt",
+        "value": "$[if::(gt::(${_n0},0),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dn",
+        "value": "$[if::(eq::(${cnd},1),findNotEmpty::(${@i18n.autoCn},Shanghai),findNotEmpty::(${@i18n.autoUs},New York))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dla",
+        "value": "$[if::(eq::(${cnd},1),31.2222,40.7128)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dlo",
+        "value": "$[if::(eq::(${cnd},1),121.4581,-74.0060)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${dflt}"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "saved",
+            "value": [
+              {
+                "name": "${_dn}",
+                "lat": "${_dla}",
+                "lon": "${_dlo}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "_note": "`n` 是渲染层的行数守卫 —— 卡上画几行由它定(列表为空时已换成默认城市,n=1)。",
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[length::(${saved})]"
+      }
+    },
+    {
+      "_note": "wxenv.unit_acts:温度单位设置 `data.wxUnit` = c / f(doc/overseas-first.md §7)。管理页「我的城市」里切换;没设过 → 按系统地区(@app.country)缺省。",
+      "id": "_wxu",
+      "action": "data.get",
+      "params": {
+        "key": "wxUnit",
+        "default": ""
+      }
+    },
+    {
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到结果。",
+      "op": "set",
+      "props": {
+        "key": "_bu",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缺省按国家:US / LR / MM / BS / BZ / KY / PW / FM / MH → f(华氏),其余(含 country 为空 = 未知)→ c。",
+      "op": "set",
+      "props": {
+        "key": "unit",
+        "value": "$[if::(eq::(${_wxu},f),f,if::(eq::(${_wxu},c),c,if::(or::(eq::(${@app.country},US),or::(eq::(${@app.country},LR),or::(eq::(${@app.country},MM),or::(eq::(${@app.country},BS),or::(eq::(${@app.country},BZ),or::(eq::(${@app.country},KY),or::(eq::(${@app.country},PW),or::(eq::(${@app.country},FM),eq::(${@app.country},MH))))))))),f,c)))]"
+      }
+    },
+    {
+      "_note": "拼到 Open-Meteo URL 末尾;摄氏时为空,URL 与此前逐字相同。",
+      "op": "set",
+      "props": {
+        "key": "uq",
+        "value": "$[if::(eq::(${unit},f),&temperature_unit=fahrenheit&wind_speed_unit=mph,)]"
+      }
+    },
+    {
+      "_note": "风速单位文案(渲染层拼在「风速」后面)。",
+      "op": "set",
+      "props": {
+        "key": "wu",
+        "value": "$[if::(eq::(${unit},f),mph,km/h)]"
+      }
+    },
+    {
+      "_note": "行几何三档:5 座 62 / 4 座 76 / ≤3 座 100(pt)。之前恒 62 → 3 座只占上半张卡,下半张一片空。\n所有纵向坐标与字号都在这里算完,RCN 只吃 `${裸变量}pt`(坐标字段里写算术/方法 = 静默失效)。",
+      "op": "set",
+      "props": {
+        "key": "_rh",
+        "value": "$[if::(eq::(${n},5),62,if::(eq::(${n},4),76,100))]"
+      }
+    },
+    {
+      "_note": "剩余高度均分成 n+1 段间隙 → 行块在行区内均匀铺开(1 座居中、2 座三等分…)。",
+      "op": "set",
+      "props": {
+        "key": "_sp",
+        "value": "$[calc::((306-${n}*${_rh})/(${n}+1))]"
+      }
+    },
+    {
+      "_note": "5 座那档 5×62 略超 306 → 间隙钳 0(行卡 54 高,最后一行底 340 < 354 不溢出)。",
+      "op": "set",
+      "props": {
+        "key": "_g",
+        "value": "$[if::(lt::(${_sp},0),0,floor::(${_sp}))]"
+      }
+    },
+    {
+      "_note": "行卡高 = 行距 − 8pt 行间隙。",
+      "op": "set",
+      "props": {
+        "key": "rb",
+        "value": "$[if::(eq::(${_rh},62),54,if::(eq::(${_rh},76),68,92))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_no",
+        "value": "$[if::(eq::(${_rh},62),8,if::(eq::(${_rh},76),12,20))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_co",
+        "value": "$[if::(eq::(${_rh},62),30,if::(eq::(${_rh},76),37,50))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_to",
+        "value": "$[if::(eq::(${_rh},62),3,if::(eq::(${_rh},76),8,15))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ho",
+        "value": "$[if::(eq::(${_rh},62),33,if::(eq::(${_rh},76),42,60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nf",
+        "value": "$[if::(eq::(${_rh},62),15,if::(eq::(${_rh},76),16,17))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cf",
+        "value": "$[if::(eq::(${_rh},62),11.5,if::(eq::(${_rh},76),12,13))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tf",
+        "value": "$[if::(eq::(${_rh},62),24,if::(eq::(${_rh},76),28,34))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hf",
+        "value": "$[if::(eq::(${_rh},62),10.5,if::(eq::(${_rh},76),11,12))]"
+      }
+    },
+    {
+      "_note": "天况图标:与天况文字同一行、在文字左边。`_io` = 图标顶相对行卡顶的偏移,`isz` = 图标边长,\n`cx` = 天况文字让出图标后的 x。三档随字号一起走,图标竖向中心对齐文字 ink 中心\n(txt 盒顶 = 字形 ink 顶,中心 ≈ 盒顶 + 0.42×字号)。",
+      "op": "set",
+      "props": {
+        "key": "_io",
+        "value": "$[if::(eq::(${_rh},62),27,if::(eq::(${_rh},76),33.5,46.5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isz",
+        "value": "$[if::(eq::(${_rh},62),16,if::(eq::(${_rh},76),17,18))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cx",
+        "value": "$[if::(eq::(${_rh},62),45,if::(eq::(${_rh},76),46,47))]"
+      }
+    },
+    {
+      "_note": "第 i 行行卡顶 y = Y0 + g + i×(rh + g)。",
+      "op": "set",
+      "props": {
+        "key": "ry0",
+        "value": "$[calc::(38+${_g}+0*(${_rh}+${_g}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ny0",
+        "value": "$[calc::(${ry0}+${_no})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cy0",
+        "value": "$[calc::(${ry0}+${_co})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty0",
+        "value": "$[calc::(${ry0}+${_to})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hy0",
+        "value": "$[calc::(${ry0}+${_ho})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "iy0",
+        "value": "$[calc::(${ry0}+${_io})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ry1",
+        "value": "$[calc::(38+${_g}+1*(${_rh}+${_g}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ny1",
+        "value": "$[calc::(${ry1}+${_no})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cy1",
+        "value": "$[calc::(${ry1}+${_co})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty1",
+        "value": "$[calc::(${ry1}+${_to})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hy1",
+        "value": "$[calc::(${ry1}+${_ho})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "iy1",
+        "value": "$[calc::(${ry1}+${_io})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ry2",
+        "value": "$[calc::(38+${_g}+2*(${_rh}+${_g}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ny2",
+        "value": "$[calc::(${ry2}+${_no})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cy2",
+        "value": "$[calc::(${ry2}+${_co})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty2",
+        "value": "$[calc::(${ry2}+${_to})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hy2",
+        "value": "$[calc::(${ry2}+${_ho})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "iy2",
+        "value": "$[calc::(${ry2}+${_io})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ry3",
+        "value": "$[calc::(38+${_g}+3*(${_rh}+${_g}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ny3",
+        "value": "$[calc::(${ry3}+${_no})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cy3",
+        "value": "$[calc::(${ry3}+${_co})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty3",
+        "value": "$[calc::(${ry3}+${_to})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hy3",
+        "value": "$[calc::(${ry3}+${_ho})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "iy3",
+        "value": "$[calc::(${ry3}+${_io})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ry4",
+        "value": "$[calc::(38+${_g}+4*(${_rh}+${_g}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ny4",
+        "value": "$[calc::(${ry4}+${_no})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cy4",
+        "value": "$[calc::(${ry4}+${_co})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ty4",
+        "value": "$[calc::(${ry4}+${_to})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hy4",
+        "value": "$[calc::(${ry4}+${_ho})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "iy4",
+        "value": "$[calc::(${ry4}+${_io})]"
+      }
+    },
+    {
+      "_note": "⚠️ 字面下标 —— VParser 的方括号寻址只认字面数字,`${saved[${i}]}` 会静默求空。",
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[index::(${saved},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[index::(${saved},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "$[index::(${saved},2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "$[index::(${saved},3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c4",
+        "value": "$[index::(${saved},4)]"
+      }
+    },
+    {
+      "_note": "⚠️ 坐标必须**逐槽兜底**,空槽回落到第一座城市(第一座也没有就落 0)——\n多坐标 URL 里出现空段(`latitude=31.2,,,,`)会让 Open-Meteo 返 400,\n而一个 400 会让整条流失败:连有城市的那几行也一起没了。\n回落只是让同一个坐标在**同一次请求**里重复出现,不额外往返、也不会被限流\n(这正是从「5 路并发 + 回落」换成「一次多坐标」的收益之一)。",
+      "op": "set",
+      "props": {
+        "key": "_la0",
+        "value": "$[findNotEmpty::(${c0.lat},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lo0",
+        "value": "$[findNotEmpty::(${c0.lon},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm0",
+        "value": "${c0.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la0",
+        "value": "$[findNotEmpty::(${c0.lat},${_la0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo0",
+        "value": "$[findNotEmpty::(${c0.lon},${_lo0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm1",
+        "value": "${c1.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la1",
+        "value": "$[findNotEmpty::(${c1.lat},${_la0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo1",
+        "value": "$[findNotEmpty::(${c1.lon},${_lo0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm2",
+        "value": "${c2.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la2",
+        "value": "$[findNotEmpty::(${c2.lat},${_la0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo2",
+        "value": "$[findNotEmpty::(${c2.lon},${_lo0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm3",
+        "value": "${c3.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la3",
+        "value": "$[findNotEmpty::(${c3.lat},${_la0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo3",
+        "value": "$[findNotEmpty::(${c3.lon},${_lo0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm4",
+        "value": "${c4.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la4",
+        "value": "$[findNotEmpty::(${c4.lat},${_la0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo4",
+        "value": "$[findNotEmpty::(${c4.lon},${_lo0})]"
+      }
+    },
+    {
+      "_note": "⚠️ n=1 那一档把同一个坐标写两遍 —— Open-Meteo 只在多坐标时返回数组,单坐标返回对象。\n不这么做,「只有一座城市」就成了一条几乎没人走、也没人测的取值分叉。\n重复坐标对服务端近乎零成本(实测 generationtime 亚毫秒)。",
+      "op": "set",
+      "props": {
+        "key": "u1",
+        "value": "https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto&latitude=${la0},${la0}&longitude=${lo0},${lo0}${uq}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u2",
+        "value": "https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto&latitude=${la0},${la1}&longitude=${lo0},${lo1}${uq}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u3",
+        "value": "https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto&latitude=${la0},${la1},${la2}&longitude=${lo0},${lo1},${lo2}${uq}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u4",
+        "value": "https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto&latitude=${la0},${la1},${la2},${la3}&longitude=${lo0},${lo1},${lo2},${lo3}${uq}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u5",
+        "value": "https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto&latitude=${la0},${la1},${la2},${la3},${la4}&longitude=${lo0},${lo1},${lo2},${lo3},${lo4}${uq}"
+      }
+    },
+    {
+      "_note": "按城市数选那一条拼好的 URL。**只有一个 request** —— 分档发生在拼串上,不在请求上。\n⚠️ 嵌套方法只在最外层包一次方法括号,内层直接写方法名:DSL 不允许嵌套的方法起始符,\n   多写一层会原样拼进 URL。",
+      "op": "set",
+      "props": {
+        "key": "url",
+        "value": "$[if::(eq::(${n},1),${u1},if::(eq::(${n},2),${u2},if::(eq::(${n},3),${u3},if::(eq::(${n},4),${u4},${u5}))))]"
+      }
+    },
+    {
+      "_note": "一次请求拿全部城市。响应是**数组**,逐项 `$[index::(${resp},k)]` 取(字面下标)。\n⚠️ `formatType: \"json\"` 不能漏 —— 漏了响应不解析,下面每一个取值都静默变空。",
+      "id": "resp",
+      "action": "request",
+      "params": {
+        "url": "${url}",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "_note": "读取屏障(勿删):request 之后紧邻的节点读不到结果。",
+      "op": "set",
+      "props": {
+        "key": "_barrier",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_x0",
+        "value": "$[index::(${resp},0)]"
+      }
+    },
+    {
+      "_note": "⚠️ 取不到就**留空**,不要落 0 —— `eq::` 是数字化比较,空串与 0 无从区分,\n于是「没取到」会被渲成一个理直气壮的 `0°`。空值让渲染层自己走 `--`。",
+      "op": "set",
+      "props": {
+        "key": "tp0",
+        "value": "$[if::(eq::(findNotEmpty::(${_x0.current.temperature_2m},__none__),__none__),,parseNumber::(${_x0.current.temperature_2m},0))]"
+      }
+    },
+    {
+      "_note": "当日最高/最低(`daily[0]`,URL 带 `timezone=auto` + `forecast_days=1` → 就是该城本地的今天)。\n取不到同样**留空**不落 0,理由同 tp。",
+      "op": "set",
+      "props": {
+        "key": "_hm0",
+        "value": "$[index::(${_x0.daily.temperature_2m_max},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hn0",
+        "value": "$[index::(${_x0.daily.temperature_2m_min},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi0",
+        "value": "$[if::(eq::(findNotEmpty::(${_hm0},__none__),__none__),,parseNumber::(${_hm0},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo0",
+        "value": "$[if::(eq::(findNotEmpty::(${_hn0},__none__),__none__),,parseNumber::(${_hn0},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cd0",
+        "value": "${_x0.current.weather_code}"
+      }
+    },
+    {
+      "_note": "`is_day` 由服务端按**该城市自己的时区**给(URL 带 `timezone=auto`)——\n不能拿本机时间去判:这张卡的卖点正是「几座城市一起看」,跨时区是常态。",
+      "op": "set",
+      "props": {
+        "key": "_nt0",
+        "value": "$[if::(eq::(${_x0.current.is_day},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp0",
+        "value": "$[if::(le::(${_cd0},0),clear,if::(le::(${_cd0},2),partly,if::(le::(${_cd0},3),cloudy,if::(le::(${_cd0},48),fog,if::(le::(${_cd0},57),drizzle,if::(le::(${_cd0},67),rain,if::(le::(${_cd0},77),snow,if::(le::(${_cd0},82),rain,if::(le::(${_cd0},86),snow,thunder)))))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk0",
+        "value": "$[if::(eq::(${_nt0},1),night,if::(or::(eq::(${gp0},clear),eq::(${gp0},partly)),clear,if::(eq::(${gp0},snow),snow,if::(or::(eq::(${gp0},cloudy),eq::(${gp0},fog)),overcast,rain))))]"
+      }
+    },
+    {
+      "_note": "图标键 = 天况组,夜里的晴 / 多云换成月亮变体 —— 与 weather.df 的 `iconKey` 逐字同式。",
+      "op": "set",
+      "props": {
+        "key": "ic0",
+        "value": "$[if::(eq::(${_nt0},1),if::(eq::(${gp0},clear),clear_night,if::(eq::(${gp0},partly),partly_night,${gp0})),${gp0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_x1",
+        "value": "$[index::(${resp},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tp1",
+        "value": "$[if::(eq::(findNotEmpty::(${_x1.current.temperature_2m},__none__),__none__),,parseNumber::(${_x1.current.temperature_2m},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hm1",
+        "value": "$[index::(${_x1.daily.temperature_2m_max},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hn1",
+        "value": "$[index::(${_x1.daily.temperature_2m_min},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi1",
+        "value": "$[if::(eq::(findNotEmpty::(${_hm1},__none__),__none__),,parseNumber::(${_hm1},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo1",
+        "value": "$[if::(eq::(findNotEmpty::(${_hn1},__none__),__none__),,parseNumber::(${_hn1},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cd1",
+        "value": "${_x1.current.weather_code}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_nt1",
+        "value": "$[if::(eq::(${_x1.current.is_day},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp1",
+        "value": "$[if::(le::(${_cd1},0),clear,if::(le::(${_cd1},2),partly,if::(le::(${_cd1},3),cloudy,if::(le::(${_cd1},48),fog,if::(le::(${_cd1},57),drizzle,if::(le::(${_cd1},67),rain,if::(le::(${_cd1},77),snow,if::(le::(${_cd1},82),rain,if::(le::(${_cd1},86),snow,thunder)))))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk1",
+        "value": "$[if::(eq::(${_nt1},1),night,if::(or::(eq::(${gp1},clear),eq::(${gp1},partly)),clear,if::(eq::(${gp1},snow),snow,if::(or::(eq::(${gp1},cloudy),eq::(${gp1},fog)),overcast,rain))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ic1",
+        "value": "$[if::(eq::(${_nt1},1),if::(eq::(${gp1},clear),clear_night,if::(eq::(${gp1},partly),partly_night,${gp1})),${gp1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_x2",
+        "value": "$[index::(${resp},2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tp2",
+        "value": "$[if::(eq::(findNotEmpty::(${_x2.current.temperature_2m},__none__),__none__),,parseNumber::(${_x2.current.temperature_2m},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hm2",
+        "value": "$[index::(${_x2.daily.temperature_2m_max},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hn2",
+        "value": "$[index::(${_x2.daily.temperature_2m_min},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi2",
+        "value": "$[if::(eq::(findNotEmpty::(${_hm2},__none__),__none__),,parseNumber::(${_hm2},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo2",
+        "value": "$[if::(eq::(findNotEmpty::(${_hn2},__none__),__none__),,parseNumber::(${_hn2},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cd2",
+        "value": "${_x2.current.weather_code}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_nt2",
+        "value": "$[if::(eq::(${_x2.current.is_day},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp2",
+        "value": "$[if::(le::(${_cd2},0),clear,if::(le::(${_cd2},2),partly,if::(le::(${_cd2},3),cloudy,if::(le::(${_cd2},48),fog,if::(le::(${_cd2},57),drizzle,if::(le::(${_cd2},67),rain,if::(le::(${_cd2},77),snow,if::(le::(${_cd2},82),rain,if::(le::(${_cd2},86),snow,thunder)))))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk2",
+        "value": "$[if::(eq::(${_nt2},1),night,if::(or::(eq::(${gp2},clear),eq::(${gp2},partly)),clear,if::(eq::(${gp2},snow),snow,if::(or::(eq::(${gp2},cloudy),eq::(${gp2},fog)),overcast,rain))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ic2",
+        "value": "$[if::(eq::(${_nt2},1),if::(eq::(${gp2},clear),clear_night,if::(eq::(${gp2},partly),partly_night,${gp2})),${gp2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_x3",
+        "value": "$[index::(${resp},3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tp3",
+        "value": "$[if::(eq::(findNotEmpty::(${_x3.current.temperature_2m},__none__),__none__),,parseNumber::(${_x3.current.temperature_2m},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hm3",
+        "value": "$[index::(${_x3.daily.temperature_2m_max},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hn3",
+        "value": "$[index::(${_x3.daily.temperature_2m_min},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi3",
+        "value": "$[if::(eq::(findNotEmpty::(${_hm3},__none__),__none__),,parseNumber::(${_hm3},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo3",
+        "value": "$[if::(eq::(findNotEmpty::(${_hn3},__none__),__none__),,parseNumber::(${_hn3},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cd3",
+        "value": "${_x3.current.weather_code}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_nt3",
+        "value": "$[if::(eq::(${_x3.current.is_day},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp3",
+        "value": "$[if::(le::(${_cd3},0),clear,if::(le::(${_cd3},2),partly,if::(le::(${_cd3},3),cloudy,if::(le::(${_cd3},48),fog,if::(le::(${_cd3},57),drizzle,if::(le::(${_cd3},67),rain,if::(le::(${_cd3},77),snow,if::(le::(${_cd3},82),rain,if::(le::(${_cd3},86),snow,thunder)))))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk3",
+        "value": "$[if::(eq::(${_nt3},1),night,if::(or::(eq::(${gp3},clear),eq::(${gp3},partly)),clear,if::(eq::(${gp3},snow),snow,if::(or::(eq::(${gp3},cloudy),eq::(${gp3},fog)),overcast,rain))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ic3",
+        "value": "$[if::(eq::(${_nt3},1),if::(eq::(${gp3},clear),clear_night,if::(eq::(${gp3},partly),partly_night,${gp3})),${gp3})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_x4",
+        "value": "$[index::(${resp},4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tp4",
+        "value": "$[if::(eq::(findNotEmpty::(${_x4.current.temperature_2m},__none__),__none__),,parseNumber::(${_x4.current.temperature_2m},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hm4",
+        "value": "$[index::(${_x4.daily.temperature_2m_max},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hn4",
+        "value": "$[index::(${_x4.daily.temperature_2m_min},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi4",
+        "value": "$[if::(eq::(findNotEmpty::(${_hm4},__none__),__none__),,parseNumber::(${_hm4},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo4",
+        "value": "$[if::(eq::(findNotEmpty::(${_hn4},__none__),__none__),,parseNumber::(${_hn4},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cd4",
+        "value": "${_x4.current.weather_code}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_nt4",
+        "value": "$[if::(eq::(${_x4.current.is_day},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gp4",
+        "value": "$[if::(le::(${_cd4},0),clear,if::(le::(${_cd4},2),partly,if::(le::(${_cd4},3),cloudy,if::(le::(${_cd4},48),fog,if::(le::(${_cd4},57),drizzle,if::(le::(${_cd4},67),rain,if::(le::(${_cd4},77),snow,if::(le::(${_cd4},82),rain,if::(le::(${_cd4},86),snow,thunder)))))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk4",
+        "value": "$[if::(eq::(${_nt4},1),night,if::(or::(eq::(${gp4},clear),eq::(${gp4},partly)),clear,if::(eq::(${gp4},snow),snow,if::(or::(eq::(${gp4},cloudy),eq::(${gp4},fog)),overcast,rain))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ic4",
+        "value": "$[if::(eq::(${_nt4},1),if::(eq::(${gp4},clear),clear_night,if::(eq::(${gp4},partly),partly_night,${gp4})),${gp4})]"
+      }
+    },
+    {
+      "_note": "**错误出口**(G 闸要求:有 request 的流必须有 `error` 出口)。判据是**业务的** ——\n第一座城市的温度取不到 = 这张卡没有任何意义;报成功会让平台的兜底整条走不到\n(不落盘 / 回落上次成功 / 桌面卡回落旧图),空数据反而覆盖掉好数据。\n⚠️ 一座城市都没有(`n=0`)**不抛错** —— 那是未就绪不是失败,卡上渲空态文案。\n   那一档的坐标兜底成 0,0,请求照发照成功,只是没人看它的结果。\n⚠️ op:if 的条件字段是 `props.val`(不是 .xpage 的 `cond`)。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(${n},0),if::(gt::(length::(${tp0}),0),0,1),0)]"
+      },
+      "items": [
+        {
+          "action": "error"
+        }
+      ]
+    },
+    {
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。\n城市不足 5 座时后面的槽恒空 —— 那是正常态,L1 豁免记在\ntools/infosource/params/weather/_dfrun.json。",
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "n",
+          "dflt",
+          "rb",
+          "nf",
+          "cf",
+          "tf",
+          "hf",
+          "isz",
+          "cx",
+          "nm0",
+          "tp0",
+          "hi0",
+          "lo0",
+          "gp0",
+          "sk0",
+          "ic0",
+          "ry0",
+          "ny0",
+          "cy0",
+          "ty0",
+          "hy0",
+          "iy0",
+          "nm1",
+          "tp1",
+          "hi1",
+          "lo1",
+          "gp1",
+          "sk1",
+          "ic1",
+          "ry1",
+          "ny1",
+          "cy1",
+          "ty1",
+          "hy1",
+          "iy1",
+          "nm2",
+          "tp2",
+          "hi2",
+          "lo2",
+          "gp2",
+          "sk2",
+          "ic2",
+          "ry2",
+          "ny2",
+          "cy2",
+          "ty2",
+          "hy2",
+          "iy2",
+          "nm3",
+          "tp3",
+          "hi3",
+          "lo3",
+          "gp3",
+          "sk3",
+          "ic3",
+          "ry3",
+          "ny3",
+          "cy3",
+          "ty3",
+          "hy3",
+          "iy3",
+          "nm4",
+          "tp4",
+          "hi4",
+          "lo4",
+          "gp4",
+          "sk4",
+          "ic4",
+          "ry4",
+          "ny4",
+          "cy4",
+          "ty4",
+          "hy4",
+          "iy4"
+        ]
+      }
+    }
+  ]
+}

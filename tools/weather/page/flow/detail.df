@@ -1,0 +1,1248 @@
+{
+  "_note": "城市详情页取数:与 home.df **同一个缓存桶**(`c.wx.<lat>_<lon>`,5 分钟 TTL),区别只在城市从哪来 —— 本流吃路由 query(`/detail?lat=&lon=&city=`),home.df 只从 `data.cities` 铺城市槽位、不取天气。\n共享缓存是刻意的:仪表盘上那张卡刚渲过长沙,点进来就该是秒开,不该再打一次 Open-Meteo。\n⚠️ 取数段与输出段是从 home.df **逐字复制**的 —— 改任一处都要两边同改,不然「首页看到的」与「点进来看到的」会是两套数⚠️ 首版由 tools/infosource/gen_weather_detail.py 从**当时的** home.df 派生;\nv49 起 home.df 已改成「只铺城市槽位、不取数」的列表流,**那条派生链就此断开** ——\n本文件自此是手写真源,那个脚本只作历史考据,别再跑它(它会从新的 home.df 里找不到取数分支而报错)。",
+  "version": 1,
+  "i18n": {
+    "zh-CN": {
+      "autoCn": "上海",
+      "autoUs": "纽约"
+    },
+    "en-US": {
+      "autoCn": "Shanghai",
+      "autoUs": "New York"
+    }
+  },
+  "actions": [
+    {
+      "_note": "wxenv.auto_city:组件默认参数是哨兵 `auto`(doc/overseas-first.md §3)—— 城市不写进 .xwidget,在这里按 cnd 兜底:国内默认上海,海外默认纽约。用户选过城市就是真坐标,原样用。",
+      "op": "set",
+      "props": {
+        "key": "_latIn",
+        "value": "${lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lonIn",
+        "value": "${lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cityRaw",
+        "value": "${city}"
+      }
+    },
+    {
+      "_note": "国内默认判据(doc/overseas-first.md §1,逐字照抄):地区 cn,或地区未知且界面中文 → 1。",
+      "op": "set",
+      "props": {
+        "key": "cnd",
+        "value": "$[if::(eq::(${@app.region},cn),1,if::(eq::(${@app.region},overseas),0,if::(startsWith::(${@app.language},zh),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_auto",
+        "value": "$[if::(eq::(${_latIn},auto),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lat",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),31.2222,40.7128),${_latIn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lon",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),121.4581,-74.0060),${_lonIn})]"
+      }
+    },
+    {
+      "_note": "城市名走本文件 A 表(按 App 语言);宿主没注入 @i18n 时退回英文。",
+      "op": "set",
+      "props": {
+        "key": "_cityIn",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),findNotEmpty::(${@i18n.autoCn},Shanghai),findNotEmpty::(${@i18n.autoUs},New York)),${_cityRaw})]"
+      }
+    },
+    {
+      "_note": "wxenv.unit_acts:温度单位设置 `data.wxUnit` = c / f(doc/overseas-first.md §7)。管理页「我的城市」里切换;没设过 → 按系统地区(@app.country)缺省。",
+      "id": "_wxu",
+      "action": "data.get",
+      "params": {
+        "key": "wxUnit",
+        "default": ""
+      }
+    },
+    {
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到结果。",
+      "op": "set",
+      "props": {
+        "key": "_bu",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缺省按国家:US / LR / MM / BS / BZ / KY / PW / FM / MH → f(华氏),其余(含 country 为空 = 未知)→ c。",
+      "op": "set",
+      "props": {
+        "key": "unit",
+        "value": "$[if::(eq::(${_wxu},f),f,if::(eq::(${_wxu},c),c,if::(or::(eq::(${@app.country},US),or::(eq::(${@app.country},LR),or::(eq::(${@app.country},MM),or::(eq::(${@app.country},BS),or::(eq::(${@app.country},BZ),or::(eq::(${@app.country},KY),or::(eq::(${@app.country},PW),or::(eq::(${@app.country},FM),eq::(${@app.country},MH))))))))),f,c)))]"
+      }
+    },
+    {
+      "_note": "拼到 Open-Meteo URL 末尾;摄氏时为空,URL 与此前逐字相同。",
+      "op": "set",
+      "props": {
+        "key": "uq",
+        "value": "$[if::(eq::(${unit},f),&temperature_unit=fahrenheit&wind_speed_unit=mph,)]"
+      }
+    },
+    {
+      "_note": "风速单位文案(渲染层拼在「风速」后面)。",
+      "op": "set",
+      "props": {
+        "key": "wu",
+        "value": "$[if::(eq::(${unit},f),mph,km/h)]"
+      }
+    },
+    {
+      "_note": "入参先落地(§9.5 #3)。`swr:1` = 详情页(有缓存先渲);首页城市行不传。",
+      "op": "set",
+      "props": {
+        "key": "_swrIn",
+        "value": "${swr}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_swr",
+        "value": "$[parseNumber::(${_swrIn},0)]"
+      }
+    },
+    {
+      "_note": "`n` 是「这一页有没有城市可渲」——**不是**城市总数(home.df 那边才是)。\nquery 丢了就渲诚实空态,不去 data.* 里随便找一个城市顶上(顶上就等于在撒谎:用户点的是长沙,页面却说上海)。",
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[if::(gt::(length::(${lat}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.wx.,${lat},_,${lon})]"
+      }
+    },
+    {
+      "_note": "⚠️ 缓存键按**坐标**而不是按下标 —— 下标会随增删城市漂移,漂移后就会把 A 城市的天气渲成 B 城市的,而且不报错。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[if::(eq::(findNotEmpty::(${hit.u},c),${unit}),parseNumber::(${hit.ts},0),0)]"
+      },
+      "_note": "缓存里记着取数时的温度单位(`u`,老缓存没有 = 摄氏);与现在的单位不同 = 当没缓存,前台重取 —— 切了 °C / °F 不会先贴出另一种单位的数。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里,嵌套是四端都验过的写法。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},300000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wxOld",
+        "value": "$[if::(gt::(${hitTs},0),if::(eq::(${fresh},0),1,0),0)]"
+      }
+    },
+    {
+      "_note": "详情页另两块的缓存键(与 xWidget/flow/sky24.df、air.df 的 cached_fetch 逐字同式)。",
+      "op": "set",
+      "props": {
+        "key": "s24key",
+        "value": "$[connect::(c.s24.,${lat},_,${lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aqkey",
+        "value": "$[connect::(c.aq.,${lat},_,${lon})]"
+      }
+    },
+    {
+      "id": "s24hit",
+      "action": "data.get",
+      "params": {
+        "key": "${s24key}",
+        "default": {}
+      }
+    },
+    {
+      "id": "aqhit",
+      "action": "data.get",
+      "params": {
+        "key": "${aqkey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s24Ts",
+        "value": "$[parseNumber::(${s24hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aqTs",
+        "value": "$[parseNumber::(${aqhit.ts},0)]"
+      }
+    },
+    {
+      "_note": "15 分钟 = hours 组件的刷新间隔。",
+      "op": "set",
+      "props": {
+        "key": "s24Old",
+        "value": "$[if::(eq::(${_swr},1),if::(gt::(${s24Ts},0),if::(gt::(calc::(${nowMs}-${s24Ts}),900000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "30 分钟 = air 组件的刷新间隔。",
+      "op": "set",
+      "props": {
+        "key": "aqOld",
+        "value": "$[if::(eq::(${_swr},1),if::(gt::(${aqTs},0),if::(gt::(calc::(${nowMs}-${aqTs}),1800000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "三态的第三位:这一屏渲的是不是旧货(要不要后台校新)。v64 起按**整页**算:天气缓存过了 5 分钟、或详情页那两块(24 小时 / 空气 + 日照)的缓存各自过了 15 / 30 分钟,任一旧了就整页校新一次(revalidate.af 三个键一起删)。\n⚠️ 「没有缓存」不算旧:那一趟本来就是前台真取数,再校新一次 = 白打一轮网络(v63 及以前正是这样)。\n⚠️ 取数分支跑过之后 `fresh` 并不会变 1 —— 这一位取**进页那一刻**的值。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(gt::(calc::(${wxOld}+${s24Old}+${aqOld}),0),1,0)]"
+      }
+    },
+    {
+      "_note": "缓存不新鲜才打网络。命中时整段 items 跳过,连 request 都不建立连接。\n⚠️ v44 加了 `n>0` 这一层(嵌套 if,不用 `and::` —— 它不在确认可用的方法集里):没有城市时 lat/lon 是空串,不拦就会打出 `latitude=&longitude=` 这种请求 —— 白费一次往返,而且 Open-Meteo 返 400 会让整条 depends 失败,**引导屏也跟着渲不出来**(引导屏读的正是这条 flow 的 `n`)。\n⚠️ 详情页传 `swr:1`(v64):**有缓存就不在前台联网**(不看新旧)—— 旧货先渲、revalidate.af 后台校新,这才是 G23「有缓存必先渲」。此前缓存一过 5 分钟,进页就在前台取数,整页先铺宿主的灰色骨架再切成天空,从桌面 / 仪表盘组件点进来几乎每次都撞上。首页城市行不传 swr,行为不变。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(${n},0),if::(eq::(${fresh},0),if::(eq::(${_swr},1),if::(gt::(${hitTs},0),0,1),1),0),0)]"
+      },
+      "items": [
+        {
+          "_note": "一次请求拿全:current(此刻)+ hourly(forecast_hours=12,起点恰是当前整点)+ daily(5 天,含日出日落)。逐时不需要在客户端切片,也不用第二次请求。",
+          "id": "resp",
+          "action": "request",
+          "params": {
+            "url": "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,relative_humidity_2m,apparent_temperature,wind_speed_10m,precipitation,surface_pressure,visibility&hourly=temperature_2m,precipitation_probability,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset&timezone=auto&forecast_days=5&forecast_hours=12${uq}",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "code",
+            "value": "${resp.current.weather_code}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "temp",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.current.temperature_2m},__none__),__none__),,parseNumber::(${resp.current.temperature_2m},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "feels",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.current.apparent_temperature},__none__),__none__),,parseNumber::(${resp.current.apparent_temperature},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hum",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.current.relative_humidity_2m},__none__),__none__),,parseNumber::(${resp.current.relative_humidity_2m},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wind",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.current.wind_speed_10m},__none__),__none__),,parseNumber::(${resp.current.wind_speed_10m},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hi",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.daily.temperature_2m_max[0]},__none__),__none__),,parseNumber::(${resp.daily.temperature_2m_max[0]},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lo",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.daily.temperature_2m_min[0]},__none__),__none__),,parseNumber::(${resp.daily.temperature_2m_min[0]},0))]"
+          }
+        },
+        {
+          "_note": "当地时间 HH:mm(current.time 是该城当地时刻)。首页城市行在城市名下方显示它(p-row,跨时区城市的真信息)。",
+          "op": "set",
+          "props": {
+            "key": "lt",
+            "value": "$[subString::(${resp.current.time},11,16)]"
+          }
+        },
+        {
+          "_note": "时效锚 = 取数那一刻的**本机时间**(与 sky24.df / air.df 同口径;2026-10-08 改判:原取城市当地时间,纽约 07:45 与旁边空气块 19:47 并排像旧了 12 小时)。",
+          "op": "set",
+          "props": {
+            "key": "at",
+            "value": "$[formatDate::(${nowMs},HH:mm)]"
+          }
+        },
+        {
+          "_note": "能见度:接口恒给米;华氏档(英制)换英里,其余换公里。≥ 10 取整,否则一位小数。",
+          "op": "set",
+          "props": {
+            "key": "_visK",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.current.visibility},__none__),__none__),,if::(eq::(${unit},f),calc::(${resp.current.visibility}/1609.34),calc::(${resp.current.visibility}/1000)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "vis",
+            "value": "$[if::(eq::(findNotEmpty::(${_visK},__none__),__none__),,if::(ge::(${_visK},10),round::(${_visK}),parseNumber::(${_visK},0.0)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "prs",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.current.surface_pressure},__none__),__none__),,round::(${resp.current.surface_pressure}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hourly",
+            "value": "${resp.hourly}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "daily",
+            "value": "${resp.daily}"
+          }
+        },
+        {
+          "_note": "当前整点的降水概率(current 只给 mm,概率是 hourly 独有的)。",
+          "op": "set",
+          "props": {
+            "key": "pop",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.hourly.precipitation_probability[0]},__none__),__none__),,parseNumber::(${resp.hourly.precipitation_probability[0]},0))]"
+          }
+        },
+        {
+          "_note": "WMO weather_code(0..99)按升序归成 8 组。内层方法必须裸写(VParser 规则:参数内 $[] 不识别)。",
+          "op": "set",
+          "props": {
+            "key": "group",
+            "value": "$[if::(le::(${code},0),clear,if::(le::(${code},2),partly,if::(le::(${code},3),cloudy,if::(le::(${code},48),fog,if::(le::(${code},57),drizzle,if::(le::(${code},67),rain,if::(le::(${code},77),snow,if::(le::(${code},82),rain,if::(le::(${code},86),snow,thunder)))))))))]"
+          }
+        },
+        {
+          "_note": "昼夜按**日出日落**判,不写死 18:00–06:00 —— 柏林六月晚九点还是白天,写死的时段会让天空黑掉一整段,而这是用户一眼看得出的错。只比小时,分钟的精度不值那层字符串解析。",
+          "op": "set",
+          "props": {
+            "key": "hour",
+            "value": "$[calc::(subString::(${resp.current.time},11,13)*1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "srH",
+            "value": "$[calc::(subString::(${resp.daily.sunrise[0]},11,13)*1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ssH",
+            "value": "$[calc::(subString::(${resp.daily.sunset[0]},11,13)*1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sunrise",
+            "value": "$[subString::(${resp.daily.sunrise[0]},11,16)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sunset",
+            "value": "$[subString::(${resp.daily.sunset[0]},11,16)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "night",
+            "value": "$[if::(or::(lt::(${hour},${srH}),ge::(${hour},${ssH})),1,0)]"
+          }
+        },
+        {
+          "_note": "夜间的晴/多云要换月亮 —— 天空已经是夜档,右上角再画个太阳是 2026-08-20 模拟器实测一眼看出来的错。只有 clear/partly 有夜态,雨雪雾的图形本身与昼夜无关。\n⚠️ **必须排在 `night` 之后。** 2026-08-20 那次「修好了」其实一次都没生效过 ——\n它被写在了 `night` **前面**,于是 `${night}` 恒是空串,而 `eq::(空,1)` 为 false\n(VParser 的 eq 是数字化比较,空↔0 才相等,memory vparser-eq-numeric-empty),\n整个 if 恒落到 else 分支 `${group}` = 白天态。**流里没有依赖图,顺序写反不报错、\ndfrun 也照样绿**(它只看有没有跑完,不看语义)——2026-08-21 真机上「夜里画太阳」\n才第二次暴露出来。凡是 `op:set` 引用别的键,先确认那个键排在自己前面。",
+          "op": "set",
+          "props": {
+            "key": "iconKey",
+            "value": "$[if::(eq::(${night},1),if::(eq::(${group},clear),clear_night,if::(eq::(${group},partly),partly_night,${group})),${group})]"
+          }
+        },
+        {
+          "_note": "天空档(5 档):夜恒为 night —— 夜空看不出雨云,雨雪交给前景装饰,这样 5 档就覆盖得住 8 个天气组,而不是 8×2 套底色。",
+          "op": "set",
+          "props": {
+            "key": "sky",
+            "value": "$[if::(eq::(${night},1),night,if::(or::(eq::(${group},clear),eq::(${group},partly)),clear,if::(eq::(${group},snow),snow,if::(or::(eq::(${group},cloudy),eq::(${group},fog)),overcast,rain))))]"
+          }
+        },
+        {
+          "_note": "装饰档与天空档**正交**:雨夜 = night 底 + rain 丝。",
+          "op": "set",
+          "props": {
+            "key": "decor",
+            "value": "$[if::(or::(eq::(${group},drizzle),or::(eq::(${group},rain),eq::(${group},thunder))),rain,if::(eq::(${group},snow),snow,if::(or::(eq::(${group},cloudy),eq::(${group},fog)),fog,if::(eq::(${night},1),star,glow))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hmax",
+            "value": "$[max::(${resp.hourly.temperature_2m})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hmin",
+            "value": "$[min::(${resp.hourly.temperature_2m})]"
+          }
+        },
+        {
+          "_note": "⚠️ 跨度必须钳下限:12 小时温度一样时 span=0,柱高算式除零 → 尺寸串变成裸 \"pt\",整卡渲染失败(标准 §9.5 #4),比空白严重。",
+          "op": "set",
+          "props": {
+            "key": "hspan",
+            "value": "$[if::(gt::(calc::(${hmax}-${hmin}),1),calc::(${hmax}-${hmin}),1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tmax",
+            "value": "$[max::(${resp.daily.temperature_2m_max})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tmin",
+            "value": "$[min::(${resp.daily.temperature_2m_min})]"
+          }
+        },
+        {
+          "_note": "⚠️ tmax/tmin 是**算术用**的原始浮点(温度条要拿它折算比例),显示必须另取整数版 —— 直接渲会出「31.1°」这种(标准 §4.4:不要让原始浮点直出)。",
+          "op": "set",
+          "props": {
+            "key": "tmaxD",
+            "value": "$[if::(eq::(findNotEmpty::(${tmax},__none__),__none__),,parseNumber::(${tmax},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tminD",
+            "value": "$[if::(eq::(findNotEmpty::(${tmin},__none__),__none__),,parseNumber::(${tmin},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tspan",
+            "value": "$[if::(gt::(calc::(${tmax}-${tmin}),1),calc::(${tmax}-${tmin}),1)]"
+          }
+        },
+        {
+          "_note": "未来 12 小时第一个降水概率 ≥50% 的时刻。取不到时是哨兵 __none__ —— ⚠️ 不能用空串:四端对空值的比较不一致(memory appwatch 那次 `ge(0,0)` 恒真就是这类),字符串哨兵才判得准。",
+          "op": "set",
+          "props": {
+            "key": "rainAtRaw",
+            "value": "$[if::(ge::(get::(${hourly},precipitation_probability[0]),50),get::(${hourly},time[0]),if::(ge::(get::(${hourly},precipitation_probability[1]),50),get::(${hourly},time[1]),if::(ge::(get::(${hourly},precipitation_probability[2]),50),get::(${hourly},time[2]),if::(ge::(get::(${hourly},precipitation_probability[3]),50),get::(${hourly},time[3]),if::(ge::(get::(${hourly},precipitation_probability[4]),50),get::(${hourly},time[4]),if::(ge::(get::(${hourly},precipitation_probability[5]),50),get::(${hourly},time[5]),if::(ge::(get::(${hourly},precipitation_probability[6]),50),get::(${hourly},time[6]),if::(ge::(get::(${hourly},precipitation_probability[7]),50),get::(${hourly},time[7]),if::(ge::(get::(${hourly},precipitation_probability[8]),50),get::(${hourly},time[8]),if::(ge::(get::(${hourly},precipitation_probability[9]),50),get::(${hourly},time[9]),if::(ge::(get::(${hourly},precipitation_probability[10]),50),get::(${hourly},time[10]),if::(ge::(get::(${hourly},precipitation_probability[11]),50),get::(${hourly},time[11]),__none__))))))))))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "rainFlag",
+            "value": "$[if::(eq::(${rainAtRaw},__none__),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "rainAt",
+            "value": "$[if::(eq::(${rainFlag},1),subString::(${rainAtRaw},11,16),)]"
+          }
+        },
+        {
+          "_note": "当前整点就已经 ≥50% → 文案是「正在下雨」而不是「14:00 起有雨」(那个时刻已经过去了)。",
+          "op": "set",
+          "props": {
+            "key": "rainNow",
+            "value": "$[if::(ge::(${pop},50),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_wet0",
+            "value": "$[if::(ge::(get::(${daily},weather_code[0]),51),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_wet1",
+            "value": "$[if::(ge::(get::(${daily},weather_code[1]),51),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_wet2",
+            "value": "$[if::(ge::(get::(${daily},weather_code[2]),51),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_wet3",
+            "value": "$[if::(ge::(get::(${daily},weather_code[3]),51),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_wet4",
+            "value": "$[if::(ge::(get::(${daily},weather_code[4]),51),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "rainDays",
+            "value": "$[calc::(${_wet0}+${_wet1}+${_wet2}+${_wet3}+${_wet4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "ts": "${nowMs}",
+              "temp": "${temp}",
+              "feels": "${feels}",
+              "hum": "${hum}",
+              "wind": "${wind}",
+              "pop": "${pop}",
+              "hi": "${hi}",
+              "lo": "${lo}",
+              "at": "${at}",
+              "lt": "${lt}",
+              "vis": "${vis}",
+              "prs": "${prs}",
+              "code": "${code}",
+              "group": "${group}",
+              "iconKey": "${iconKey}",
+              "sky": "${sky}",
+              "decor": "${decor}",
+              "night": "${night}",
+              "sunrise": "${sunrise}",
+              "sunset": "${sunset}",
+              "hourly": "${hourly}",
+              "hmax": "${hmax}",
+              "hmin": "${hmin}",
+              "hspan": "${hspan}",
+              "daily": "${daily}",
+              "tmax": "${tmax}",
+              "tmin": "${tmin}",
+              "tmaxD": "${tmaxD}",
+              "tminD": "${tminD}",
+              "tspan": "${tspan}",
+              "rainAt": "${rainAt}",
+              "rainFlag": "${rainFlag}",
+              "rainNow": "${rainNow}",
+              "rainDays": "${rainDays}",
+              "city": "${_cityIn}",
+              "u": "${unit}"
+            }
+          },
+          "_note": "⚠️ `city` 也要进桶:详情页的城市名兜底从这里回落(见流末尾那条)。\n   同一坐标的城市名本来就是一致的,按坐标存不会串。"
+        },
+        {
+          "_note": "depends 会因 reload/retry 重跑,这里写的是**当次取数的定值**,幂等安全(dataflow-spec §「重跑幂等」)。",
+          "action": "data.set",
+          "params": {
+            "key": "${ckey}",
+            "value": "${pack}"
+          }
+        },
+        {
+          "_note": "旧键垃圾回收(2026-08-26 键迁移 wx_ → c.wx.,§5.5.4 统一 c. 前缀):v21 及以前写的 wx_ 键从此不再被读,顺手删掉,免得永久留在用户 data.* 里。若干版本后可删本节点。",
+          "action": "data.remove",
+          "params": {
+            "key": "$[connect::(wx_,${lat},_,${lon})]"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:无论走没走网络,都从缓存对象里取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中缓存那条少算了一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "temp",
+        "value": "${box.temp}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feels",
+        "value": "${box.feels}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hum",
+        "value": "${box.hum}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wind",
+        "value": "${box.wind}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pop",
+        "value": "${box.pop}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi",
+        "value": "${box.hi}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo",
+        "value": "${box.lo}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "${box.at}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lt",
+        "value": "${box.lt}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vis",
+        "value": "${box.vis}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "prs",
+        "value": "${box.prs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vu",
+        "value": "$[if::(eq::(${unit},f),mi,km)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "code",
+        "value": "${box.code}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "group",
+        "value": "${box.group}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "iconKey",
+        "value": "${box.iconKey}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sky",
+        "value": "${box.sky}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "decor",
+        "value": "${box.decor}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "night",
+        "value": "${box.night}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sunrise",
+        "value": "${box.sunrise}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sunset",
+        "value": "${box.sunset}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hourly",
+        "value": "${box.hourly}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hmax",
+        "value": "${box.hmax}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hmin",
+        "value": "${box.hmin}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hspan",
+        "value": "${box.hspan}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "daily",
+        "value": "${box.daily}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tmax",
+        "value": "${box.tmax}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tmin",
+        "value": "${box.tmin}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tmaxD",
+        "value": "${box.tmaxD}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tminD",
+        "value": "${box.tminD}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tspan",
+        "value": "${box.tspan}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rainAt",
+        "value": "${box.rainAt}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rainFlag",
+        "value": "${box.rainFlag}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rainNow",
+        "value": "${box.rainNow}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rainDays",
+        "value": "${box.rainDays}"
+      }
+    },
+    {
+      "_note": "英文月名表,下标 = 月份(0 位空)。",
+      "op": "set",
+      "props": {
+        "key": "_MON",
+        "value": [
+          "",
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ds0",
+        "value": "$[findNotEmpty::(get::(${daily},time[0]),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl0_m",
+        "value": "$[parseNumber::(subString::(${_ds0},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl0_d",
+        "value": "$[parseNumber::(subString::(${_ds0},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl0_n",
+        "value": "$[index::(${_MON},${_dl0_m})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl0_z",
+        "value": "${_dl0_m}月${_dl0_d}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl0_e",
+        "value": "${_dl0_n} ${_dl0_d}"
+      }
+    },
+    {
+      "_note": "月日文案(doc/overseas-first.md §5):中文 9月25日,英文 Sep 25。",
+      "op": "set",
+      "props": {
+        "key": "_dl0",
+        "value": "$[if::(startsWith::(${@app.language},zh),${_dl0_z},${_dl0_e})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ds1",
+        "value": "$[findNotEmpty::(get::(${daily},time[1]),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl1_m",
+        "value": "$[parseNumber::(subString::(${_ds1},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl1_d",
+        "value": "$[parseNumber::(subString::(${_ds1},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl1_n",
+        "value": "$[index::(${_MON},${_dl1_m})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl1_z",
+        "value": "${_dl1_m}月${_dl1_d}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl1_e",
+        "value": "${_dl1_n} ${_dl1_d}"
+      }
+    },
+    {
+      "_note": "月日文案(doc/overseas-first.md §5):中文 9月25日,英文 Sep 25。",
+      "op": "set",
+      "props": {
+        "key": "_dl1",
+        "value": "$[if::(startsWith::(${@app.language},zh),${_dl1_z},${_dl1_e})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ds2",
+        "value": "$[findNotEmpty::(get::(${daily},time[2]),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl2_m",
+        "value": "$[parseNumber::(subString::(${_ds2},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl2_d",
+        "value": "$[parseNumber::(subString::(${_ds2},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl2_n",
+        "value": "$[index::(${_MON},${_dl2_m})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl2_z",
+        "value": "${_dl2_m}月${_dl2_d}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl2_e",
+        "value": "${_dl2_n} ${_dl2_d}"
+      }
+    },
+    {
+      "_note": "月日文案(doc/overseas-first.md §5):中文 9月25日,英文 Sep 25。",
+      "op": "set",
+      "props": {
+        "key": "_dl2",
+        "value": "$[if::(startsWith::(${@app.language},zh),${_dl2_z},${_dl2_e})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ds3",
+        "value": "$[findNotEmpty::(get::(${daily},time[3]),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl3_m",
+        "value": "$[parseNumber::(subString::(${_ds3},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl3_d",
+        "value": "$[parseNumber::(subString::(${_ds3},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl3_n",
+        "value": "$[index::(${_MON},${_dl3_m})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl3_z",
+        "value": "${_dl3_m}月${_dl3_d}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl3_e",
+        "value": "${_dl3_n} ${_dl3_d}"
+      }
+    },
+    {
+      "_note": "月日文案(doc/overseas-first.md §5):中文 9月25日,英文 Sep 25。",
+      "op": "set",
+      "props": {
+        "key": "_dl3",
+        "value": "$[if::(startsWith::(${@app.language},zh),${_dl3_z},${_dl3_e})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ds4",
+        "value": "$[findNotEmpty::(get::(${daily},time[4]),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl4_m",
+        "value": "$[parseNumber::(subString::(${_ds4},5,7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl4_d",
+        "value": "$[parseNumber::(subString::(${_ds4},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl4_n",
+        "value": "$[index::(${_MON},${_dl4_m})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl4_z",
+        "value": "${_dl4_m}月${_dl4_d}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_dl4_e",
+        "value": "${_dl4_n} ${_dl4_d}"
+      }
+    },
+    {
+      "_note": "月日文案(doc/overseas-first.md §5):中文 9月25日,英文 Sep 25。",
+      "op": "set",
+      "props": {
+        "key": "_dl4",
+        "value": "$[if::(startsWith::(${@app.language},zh),${_dl4_z},${_dl4_e})]"
+      }
+    },
+    {
+      "_note": "五日行标签(下标与 daily 对齐),从回读后的 daily 现算、不进缓存 —— 文案随语言,而 data.* 缓存不分语言。",
+      "op": "set",
+      "props": {
+        "key": "dlab",
+        "value": [
+          "${_dl0}",
+          "${_dl1}",
+          "${_dl2}",
+          "${_dl3}",
+          "${_dl4}"
+        ]
+      }
+    },
+    {
+      "_note": "城市名:**优先用路由 query 带来的**,拿不到就回落缓存桶里存的那一份。\n⚠️ 这条兜底是必需的,不是保险 —— 四端宿主求 `onClick` 的 `${}` 时\n   **只合并「外壳 params ⊕ 实例 params」**,引用 depends 输出的键会被当成未命中而抹空\n   (`xbundle-spec.md` §events 写的是四层 scope,实现只有两层);而 query 本身也可能在某一端丢中文。\n   两种情况下页面都会拿一个空城市名去渲最显眼的那行标题 → `--`,\n   **数据全在、只有标题是空的** —— 比整页空白更难被当成 bug 报出来\n   (2026-09-10 用户报「点东京的小组件详情页读取不到数据」,就是这个形状)。",
+      "op": "set",
+      "props": {
+        "key": "city",
+        "value": "$[findNotEmpty::(${_cityIn},${box.city})]"
+      }
+    },
+    {
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。\n⚠️ 比 home.df 多透 `ckey` 与 `_stale`:详情页接 G23 三态(有缓存必先渲 + 后台校新),两者都是 revalidate.af 的入参 —— 它不重算新鲜度,只按这两个键决定删不删缓存。",
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "n",
+          "lat",
+          "lon",
+          "city",
+          "temp",
+          "feels",
+          "hum",
+          "wind",
+          "pop",
+          "hi",
+          "lo",
+          "at",
+          "code",
+          "group",
+          "iconKey",
+          "sky",
+          "decor",
+          "night",
+          "sunrise",
+          "sunset",
+          "hourly",
+          "hmax",
+          "hmin",
+          "hspan",
+          "daily",
+          "tmax",
+          "tmin",
+          "tmaxD",
+          "tminD",
+          "tspan",
+          "rainAt",
+          "rainFlag",
+          "rainNow",
+          "rainDays",
+          "ckey",
+          "_stale",
+          "s24key",
+          "aqkey",
+          "dlab",
+          "wu",
+          "unit",
+          "lt",
+          "vis",
+          "prs",
+          "vu"
+        ]
+      }
+    }
+  ]
+}

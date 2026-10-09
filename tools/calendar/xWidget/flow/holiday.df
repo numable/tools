@@ -1,0 +1,421 @@
+{
+  "_note": "下一个假期(国务院安排)。st:1 还没开始 / 2 放假中 / 0 放假表跑完 → 回落到下一个法定节日当天,不画区间、不猜调休(设计 §4.6)。每年 11 月通知发布后更新 cncal/holiday-cn 并重发。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "at0",
+        "value": "${at}"
+      },
+      "_note": "入参先落地:方法参数里的 ${} 看不见 flow 入参(numable docs df)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "today",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      },
+      "_note": "本机日期 —— 日历按本地的「今天」对照(设计 §4.8)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "D",
+        "value": "$[findNotEmpty::(${at0},${today})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y",
+        "value": "$[round::(calc::(subString::(${D},0,4)+0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m",
+        "value": "$[round::(calc::(subString::(${D},5,7)+0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d",
+        "value": "$[round::(calc::(subString::(${D},8,10)+0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tyy",
+        "value": "$[calc::(${y}-if::(le::(${m},2),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tmp",
+        "value": "$[if::(gt::(${m},2),calc::(${m}-3),calc::(${m}+9))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ter",
+        "value": "$[floor::(calc::(${tyy}/400))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tye",
+        "value": "$[calc::(${tyy}-${ter}*400)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdy",
+        "value": "$[calc::(floor::(calc::((153*${tmp}+2)/5))+${d}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdn",
+        "value": "$[round::(calc::(${ter}*146097+${tye}*365+floor::(calc::(${tye}/4))-floor::(calc::(${tye}/100))+${tdy}-719468))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wd",
+        "value": "$[round::(calc::(${tdn}+4-floor::(calc::((${tdn}+4)/7))*7))]"
+      },
+      "_note": "0 = 周日 … 6 = 周六(1970-01-01 是周四)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "HP",
+        "value": "20089_20089_1_元旦_New Year_1 月 1 日_Jan 1_0_-_-_1 月 2 日上班_Back to work Jan 2~20116_20123_8_春节_Spring Fest_1 月 28 日—2 月 4 日_Jan 28 – Feb 4_20114:20127_1 月 26 日（周日）:2 月 8 日（周六）_Jan 26 Sun:Feb 8 Sat_2 月 5 日上班_Back to work Feb 5~20182_20184_3_清明节_Qingming_4 月 4 日—4 月 6 日_Apr 4 – Apr 6_0_-_-_4 月 7 日上班_Back to work Apr 7~20209_20213_5_劳动节_Labour Day_5 月 1 日—5 月 5 日_May 1 – May 5_20205_4 月 27 日（周日）_Apr 27 Sun_5 月 6 日上班_Back to work May 6~20239_20241_3_端午节_Dragon Boat_5 月 31 日—6 月 2 日_May 31 – Jun 2_0_-_-_6 月 3 日上班_Back to work Jun 3~20362_20369_8_国庆节_National Day_10 月 1 日—10 月 8 日_Oct 1 – Oct 8_20359:20372_9 月 28 日（周日）:10 月 11 日（周六）_Sep 28 Sun:Oct 11 Sat_10 月 9 日上班_Back to work Oct 9~20454_20456_3_元旦_New Year_1 月 1 日—1 月 3 日_Jan 1 – Jan 3_20457_1 月 4 日（周日）_Jan 4 Sun_1 月 4 日上班_Back to work Jan 4~20499_20507_9_春节_Spring Fest_2 月 15 日—2 月 23 日_Feb 15 – Feb 23_20498:20512_2 月 14 日（周六）:2 月 28 日（周六）_Feb 14 Sat:Feb 28 Sat_2 月 24 日上班_Back to work Feb 24~20547_20549_3_清明节_Qingming_4 月 4 日—4 月 6 日_Apr 4 – Apr 6_0_-_-_4 月 7 日上班_Back to work Apr 7~20574_20578_5_劳动节_Labour Day_5 月 1 日—5 月 5 日_May 1 – May 5_20582_5 月 9 日（周六）_May 9 Sat_5 月 6 日上班_Back to work May 6~20623_20625_3_端午节_Dragon Boat_6 月 19 日—6 月 21 日_Jun 19 – Jun 21_0_-_-_6 月 22 日上班_Back to work Jun 22~20721_20723_3_中秋节_Mid-Autumn_9 月 25 日—9 月 27 日_Sep 25 – Sep 27_0_-_-_9 月 28 日上班_Back to work Sep 28~20727_20733_7_国庆节_National Day_10 月 1 日—10 月 7 日_Oct 1 – Oct 7_20716:20736_9 月 20 日（周日）:10 月 10 日（周六）_Sep 20 Sun:Oct 10 Sat_10 月 8 日上班_Back to work Oct 8"
+      },
+      "_note": "放假区间(已公布的最近两年):首日_末日_天数_名_英文_区间_英文区间_调休日序_调休显示_英文_上班日_英文"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "LG",
+        "value": "20454#元旦#New Year#1 月 1 日 周四#Jan 1 Thu;20501#春节#Spring Fest#2 月 17 日 周二#Feb 17 Tue;20548#清明节#Qingming#4 月 5 日 周日#Apr 5 Sun;20574#劳动节#Labour Day#5 月 1 日 周五#May 1 Fri;20623#端午节#Dragon Boat#6 月 19 日 周五#Jun 19 Fri;20721#中秋节#Mid-Autumn#9 月 25 日 周五#Sep 25 Fri;20727#国庆节#National Day#10 月 1 日 周四#Oct 1 Thu~20819#元旦#New Year#1 月 1 日 周五#Jan 1 Fri;20855#春节#Spring Fest#2 月 6 日 周六#Feb 6 Sat;20913#清明节#Qingming#4 月 5 日 周一#Apr 5 Mon;20939#劳动节#Labour Day#5 月 1 日 周六#May 1 Sat;20978#端午节#Dragon Boat#6 月 9 日 周三#Jun 9 Wed;21076#中秋节#Mid-Autumn#9 月 15 日 周三#Sep 15 Wed;21092#国庆节#National Day#10 月 1 日 周五#Oct 1 Fri~21184#元旦#New Year#1 月 1 日 周六#Jan 1 Sat;21209#春节#Spring Fest#1 月 26 日 周三#Jan 26 Wed;21278#清明节#Qingming#4 月 4 日 周二#Apr 4 Tue;21305#劳动节#Labour Day#5 月 1 日 周一#May 1 Mon;21332#端午节#Dragon Boat#5 月 28 日 周日#May 28 Sun;21458#国庆节#National Day#10 月 1 日 周日#Oct 1 Sun;21460#中秋节#Mid-Autumn#10 月 3 日 周二#Oct 3 Tue~21550#元旦#New Year#1 月 1 日 周一#Jan 1 Mon;21593#春节#Spring Fest#2 月 13 日 周二#Feb 13 Tue;21643#清明节#Qingming#4 月 4 日 周三#Apr 4 Wed;21670#劳动节#Labour Day#5 月 1 日 周二#May 1 Tue;21716#端午节#Dragon Boat#6 月 16 日 周六#Jun 16 Sat;21814#中秋节#Mid-Autumn#9 月 22 日 周六#Sep 22 Sat;21823#国庆节#National Day#10 月 1 日 周一#Oct 1 Mon~21915#元旦#New Year#1 月 1 日 周二#Jan 1 Tue;21948#春节#Spring Fest#2 月 3 日 周日#Feb 3 Sun;22009#清明节#Qingming#4 月 5 日 周五#Apr 5 Fri;22035#劳动节#Labour Day#5 月 1 日 周三#May 1 Wed;22070#端午节#Dragon Boat#6 月 5 日 周三#Jun 5 Wed;22169#中秋节#Mid-Autumn#9 月 12 日 周四#Sep 12 Thu;22188#国庆节#National Day#10 月 1 日 周二#Oct 1 Tue~22280#元旦#New Year#1 月 1 日 周三#Jan 1 Wed;22302#春节#Spring Fest#1 月 23 日 周四#Jan 23 Thu;22374#清明节#Qingming#4 月 5 日 周六#Apr 5 Sat;22400#劳动节#Labour Day#5 月 1 日 周四#May 1 Thu;22454#端午节#Dragon Boat#6 月 24 日 周二#Jun 24 Tue;22553#中秋节#Mid-Autumn#10 月 1 日 周三#Oct 1 Wed;22553#国庆节#National Day#10 月 1 日 周三#Oct 1 Wed~22645#元旦#New Year#1 月 1 日 周四#Jan 1 Thu;22686#春节#Spring Fest#2 月 11 日 周三#Feb 11 Wed;22739#清明节#Qingming#4 月 4 日 周日#Apr 4 Sun;22766#劳动节#Labour Day#5 月 1 日 周六#May 1 Sat;22808#端午节#Dragon Boat#6 月 12 日 周六#Jun 12 Sat;22907#中秋节#Mid-Autumn#9 月 19 日 周日#Sep 19 Sun;22919#国庆节#National Day#10 月 1 日 周五#Oct 1 Fri~23011#元旦#New Year#1 月 1 日 周六#Jan 1 Sat;23041#春节#Spring Fest#1 月 31 日 周一#Jan 31 Mon;23104#清明节#Qingming#4 月 4 日 周一#Apr 4 Mon;23131#劳动节#Labour Day#5 月 1 日 周日#May 1 Sun;23162#端午节#Dragon Boat#6 月 1 日 周三#Jun 1 Wed;23261#中秋节#Mid-Autumn#9 月 8 日 周四#Sep 8 Thu;23284#国庆节#National Day#10 月 1 日 周六#Oct 1 Sat~23376#元旦#New Year#1 月 1 日 周日#Jan 1 Sun;23425#春节#Spring Fest#2 月 19 日 周日#Feb 19 Sun;23470#清明节#Qingming#4 月 5 日 周三#Apr 5 Wed;23496#劳动节#Labour Day#5 月 1 日 周一#May 1 Mon;23546#端午节#Dragon Boat#6 月 20 日 周二#Jun 20 Tue;23645#中秋节#Mid-Autumn#9 月 27 日 周三#Sep 27 Wed;23649#国庆节#National Day#10 月 1 日 周日#Oct 1 Sun~23741#元旦#New Year#1 月 1 日 周一#Jan 1 Mon;23779#春节#Spring Fest#2 月 8 日 周四#Feb 8 Thu;23835#清明节#Qingming#4 月 5 日 周四#Apr 5 Thu;23861#劳动节#Labour Day#5 月 1 日 周二#May 1 Tue;23901#端午节#Dragon Boat#6 月 10 日 周日#Jun 10 Sun;23999#中秋节#Mid-Autumn#9 月 16 日 周日#Sep 16 Sun;24014#国庆节#National Day#10 月 1 日 周一#Oct 1 Mon~24106#元旦#New Year#1 月 1 日 周二#Jan 1 Tue;24133#春节#Spring Fest#1 月 28 日 周一#Jan 28 Mon;24200#清明节#Qingming#4 月 4 日 周五#Apr 4 Fri;24227#劳动节#Labour Day#5 月 1 日 周四#May 1 Thu;24256#端午节#Dragon Boat#5 月 30 日 周五#May 30 Fri;24380#国庆节#National Day#10 月 1 日 周三#Oct 1 Wed;24383#中秋节#Mid-Autumn#10 月 4 日 周六#Oct 4 Sat~24472#元旦#New Year#1 月 1 日 周四#Jan 1 Thu;24517#春节#Spring Fest#2 月 15 日 周日#Feb 15 Sun;24565#清明节#Qingming#4 月 4 日 周六#Apr 4 Sat;24592#劳动节#Labour Day#5 月 1 日 周五#May 1 Fri;24640#端午节#Dragon Boat#6 月 18 日 周四#Jun 18 Thu;24738#中秋节#Mid-Autumn#9 月 24 日 周四#Sep 24 Thu;24745#国庆节#National Day#10 月 1 日 周四#Oct 1 Thu~24837#元旦#New Year#1 月 1 日 周五#Jan 1 Fri;24871#春节#Spring Fest#2 月 4 日 周四#Feb 4 Thu;24931#清明节#Qingming#4 月 5 日 周一#Apr 5 Mon;24957#劳动节#Labour Day#5 月 1 日 周六#May 1 Sat;24994#端午节#Dragon Boat#6 月 7 日 周一#Jun 7 Mon;25092#中秋节#Mid-Autumn#9 月 13 日 周一#Sep 13 Mon;25110#国庆节#National Day#10 月 1 日 周五#Oct 1 Fri~25202#元旦#New Year#1 月 1 日 周六#Jan 1 Sat;25225#春节#Spring Fest#1 月 24 日 周一#Jan 24 Mon;25296#清明节#Qingming#4 月 5 日 周二#Apr 5 Tue;25322#劳动节#Labour Day#5 月 1 日 周日#May 1 Sun;25348#端午节#Dragon Boat#5 月 27 日 周五#May 27 Fri;25475#国庆节#National Day#10 月 1 日 周六#Oct 1 Sat;25476#中秋节#Mid-Autumn#10 月 2 日 周日#Oct 2 Sun~25567#元旦#New Year#1 月 1 日 周日#Jan 1 Sun;25609#春节#Spring Fest#2 月 12 日 周日#Feb 12 Sun;25661#清明节#Qingming#4 月 4 日 周三#Apr 4 Wed;25688#劳动节#Labour Day#5 月 1 日 周二#May 1 Tue;25732#端午节#Dragon Boat#6 月 14 日 周四#Jun 14 Thu;25830#中秋节#Mid-Autumn#9 月 20 日 周四#Sep 20 Thu;25841#国庆节#National Day#10 月 1 日 周一#Oct 1 Mon~25933#元旦#New Year#1 月 1 日 周二#Jan 1 Tue;25964#春节#Spring Fest#2 月 1 日 周五#Feb 1 Fri;26026#清明节#Qingming#4 月 4 日 周四#Apr 4 Thu;26053#劳动节#Labour Day#5 月 1 日 周三#May 1 Wed;26086#端午节#Dragon Boat#6 月 3 日 周一#Jun 3 Mon;26185#中秋节#Mid-Autumn#9 月 10 日 周二#Sep 10 Tue;26206#国庆节#National Day#10 月 1 日 周二#Oct 1 Tue~26298#元旦#New Year#1 月 1 日 周三#Jan 1 Wed;26319#春节#Spring Fest#1 月 22 日 周三#Jan 22 Wed;26391#清明节#Qingming#4 月 4 日 周五#Apr 4 Fri;26418#劳动节#Labour Day#5 月 1 日 周四#May 1 Thu;26470#端午节#Dragon Boat#6 月 22 日 周日#Jun 22 Sun;26568#中秋节#Mid-Autumn#9 月 28 日 周日#Sep 28 Sun;26571#国庆节#National Day#10 月 1 日 周三#Oct 1 Wed~26663#元旦#New Year#1 月 1 日 周四#Jan 1 Thu;26703#春节#Spring Fest#2 月 10 日 周二#Feb 10 Tue;26757#清明节#Qingming#4 月 5 日 周日#Apr 5 Sun;26783#劳动节#Labour Day#5 月 1 日 周五#May 1 Fri;26824#端午节#Dragon Boat#6 月 11 日 周四#Jun 11 Thu;26922#中秋节#Mid-Autumn#9 月 17 日 周四#Sep 17 Thu;26936#国庆节#National Day#10 月 1 日 周四#Oct 1 Thu~27028#元旦#New Year#1 月 1 日 周五#Jan 1 Fri;27057#春节#Spring Fest#1 月 30 日 周六#Jan 30 Sat;27122#清明节#Qingming#4 月 4 日 周一#Apr 4 Mon;27149#劳动节#Labour Day#5 月 1 日 周日#May 1 Sun;27179#端午节#Dragon Boat#5 月 31 日 周二#May 31 Tue;27302#国庆节#National Day#10 月 1 日 周六#Oct 1 Sat;27306#中秋节#Mid-Autumn#10 月 5 日 周三#Oct 5 Wed~27394#元旦#New Year#1 月 1 日 周日#Jan 1 Sun;27441#春节#Spring Fest#2 月 17 日 周五#Feb 17 Fri;27487#清明节#Qingming#4 月 4 日 周二#Apr 4 Tue;27514#劳动节#Labour Day#5 月 1 日 周一#May 1 Mon;27563#端午节#Dragon Boat#6 月 19 日 周一#Jun 19 Mon;27661#中秋节#Mid-Autumn#9 月 25 日 周一#Sep 25 Mon;27667#国庆节#National Day#10 月 1 日 周日#Oct 1 Sun~27759#元旦#New Year#1 月 1 日 周一#Jan 1 Mon;27795#春节#Spring Fest#2 月 6 日 周二#Feb 6 Tue;27852#清明节#Qingming#4 月 4 日 周三#Apr 4 Wed;27879#劳动节#Labour Day#5 月 1 日 周二#May 1 Tue;27917#端午节#Dragon Boat#6 月 8 日 周五#Jun 8 Fri;28016#中秋节#Mid-Autumn#9 月 15 日 周六#Sep 15 Sat;28032#国庆节#National Day#10 月 1 日 周一#Oct 1 Mon~28124#元旦#New Year#1 月 1 日 周二#Jan 1 Tue;28149#春节#Spring Fest#1 月 26 日 周六#Jan 26 Sat;28218#清明节#Qingming#4 月 5 日 周五#Apr 5 Fri;28244#劳动节#Labour Day#5 月 1 日 周三#May 1 Wed;28272#端午节#Dragon Boat#5 月 29 日 周三#May 29 Wed;28397#国庆节#National Day#10 月 1 日 周二#Oct 1 Tue;28400#中秋节#Mid-Autumn#10 月 4 日 周五#Oct 4 Fri~28489#元旦#New Year#1 月 1 日 周三#Jan 1 Wed;28533#春节#Spring Fest#2 月 14 日 周五#Feb 14 Fri;28583#清明节#Qingming#4 月 4 日 周六#Apr 4 Sat;28610#劳动节#Labour Day#5 月 1 日 周五#May 1 Fri;28655#端午节#Dragon Boat#6 月 15 日 周一#Jun 15 Mon;28754#中秋节#Mid-Autumn#9 月 22 日 周二#Sep 22 Tue;28763#国庆节#National Day#10 月 1 日 周四#Oct 1 Thu~28855#元旦#New Year#1 月 1 日 周五#Jan 1 Fri;28887#春节#Spring Fest#2 月 2 日 周二#Feb 2 Tue;28948#清明节#Qingming#4 月 4 日 周日#Apr 4 Sun;28975#劳动节#Labour Day#5 月 1 日 周六#May 1 Sat;29009#端午节#Dragon Boat#6 月 4 日 周五#Jun 4 Fri;29108#中秋节#Mid-Autumn#9 月 11 日 周六#Sep 11 Sat;29128#国庆节#National Day#10 月 1 日 周五#Oct 1 Fri~29220#元旦#New Year#1 月 1 日 周六#Jan 1 Sat;29242#春节#Spring Fest#1 月 23 日 周日#Jan 23 Sun;29313#清明节#Qingming#4 月 4 日 周一#Apr 4 Mon;29340#劳动节#Labour Day#5 月 1 日 周日#May 1 Sun;29393#端午节#Dragon Boat#6 月 23 日 周四#Jun 23 Thu;29492#中秋节#Mid-Autumn#9 月 30 日 周五#Sep 30 Fri;29493#国庆节#National Day#10 月 1 日 周六#Oct 1 Sat~29585#元旦#New Year#1 月 1 日 周日#Jan 1 Sun;29626#春节#Spring Fest#2 月 11 日 周六#Feb 11 Sat;29679#清明节#Qingming#4 月 5 日 周三#Apr 5 Wed;29705#劳动节#Labour Day#5 月 1 日 周一#May 1 Mon;29748#端午节#Dragon Boat#6 月 13 日 周二#Jun 13 Tue;29846#中秋节#Mid-Autumn#9 月 19 日 周二#Sep 19 Tue;29858#国庆节#National Day#10 月 1 日 周日#Oct 1 Sun~29950#元旦#New Year#1 月 1 日 周一#Jan 1 Mon;29981#春节#Spring Fest#2 月 1 日 周四#Feb 1 Thu;30044#清明节#Qingming#4 月 4 日 周四#Apr 4 Thu;30071#劳动节#Labour Day#5 月 1 日 周三#May 1 Wed;30102#端午节#Dragon Boat#6 月 1 日 周六#Jun 1 Sat;30200#中秋节#Mid-Autumn#9 月 7 日 周六#Sep 7 Sat;30224#国庆节#National Day#10 月 1 日 周二#Oct 1 Tue~30316#元旦#New Year#1 月 1 日 周三#Jan 1 Wed;30365#春节#Spring Fest#2 月 19 日 周三#Feb 19 Wed;30409#清明节#Qingming#4 月 4 日 周五#Apr 4 Fri;30436#劳动节#Labour Day#5 月 1 日 周四#May 1 Thu;30486#端午节#Dragon Boat#6 月 20 日 周五#Jun 20 Fri;30584#中秋节#Mid-Autumn#9 月 26 日 周五#Sep 26 Fri;30589#国庆节#National Day#10 月 1 日 周三#Oct 1 Wed~30681#元旦#New Year#1 月 1 日 周四#Jan 1 Thu;30719#春节#Spring Fest#2 月 8 日 周日#Feb 8 Sun;30774#清明节#Qingming#4 月 4 日 周六#Apr 4 Sat;30801#劳动节#Labour Day#5 月 1 日 周五#May 1 Fri;30841#端午节#Dragon Boat#6 月 10 日 周三#Jun 10 Wed;30939#中秋节#Mid-Autumn#9 月 16 日 周三#Sep 16 Wed;30954#国庆节#National Day#10 月 1 日 周四#Oct 1 Thu~31046#元旦#New Year#1 月 1 日 周五#Jan 1 Fri;31073#春节#Spring Fest#1 月 28 日 周四#Jan 28 Thu;31140#清明节#Qingming#4 月 5 日 周一#Apr 5 Mon;31166#劳动节#Labour Day#5 月 1 日 周六#May 1 Sat;31195#端午节#Dragon Boat#5 月 30 日 周日#May 30 Sun;31319#国庆节#National Day#10 月 1 日 周五#Oct 1 Fri;31323#中秋节#Mid-Autumn#10 月 5 日 周二#Oct 5 Tue~31411#元旦#New Year#1 月 1 日 周六#Jan 1 Sat;31456#春节#Spring Fest#2 月 15 日 周二#Feb 15 Tue;31505#清明节#Qingming#4 月 4 日 周二#Apr 4 Tue;31532#劳动节#Labour Day#5 月 1 日 周一#May 1 Mon;31579#端午节#Dragon Boat#6 月 17 日 周六#Jun 17 Sat;31678#中秋节#Mid-Autumn#9 月 24 日 周日#Sep 24 Sun;31685#国庆节#National Day#10 月 1 日 周日#Oct 1 Sun~31777#元旦#New Year#1 月 1 日 周一#Jan 1 Mon;31811#春节#Spring Fest#2 月 4 日 周日#Feb 4 Sun;31870#清明节#Qingming#4 月 4 日 周三#Apr 4 Wed;31897#劳动节#Labour Day#5 月 1 日 周二#May 1 Tue;31933#端午节#Dragon Boat#6 月 6 日 周三#Jun 6 Wed;32032#中秋节#Mid-Autumn#9 月 13 日 周四#Sep 13 Thu;32050#国庆节#National Day#10 月 1 日 周一#Oct 1 Mon~32142#元旦#New Year#1 月 1 日 周二#Jan 1 Tue;32165#春节#Spring Fest#1 月 24 日 周四#Jan 24 Thu;32235#清明节#Qingming#4 月 4 日 周四#Apr 4 Thu;32262#劳动节#Labour Day#5 月 1 日 周三#May 1 Wed;32317#端午节#Dragon Boat#6 月 25 日 周二#Jun 25 Tue;32415#国庆节#National Day#10 月 1 日 周二#Oct 1 Tue;32416#中秋节#Mid-Autumn#10 月 2 日 周三#Oct 2 Wed~32507#元旦#New Year#1 月 1 日 周三#Jan 1 Wed;32549#春节#Spring Fest#2 月 12 日 周三#Feb 12 Wed;32601#清明节#Qingming#4 月 5 日 周六#Apr 5 Sat;32627#劳动节#Labour Day#5 月 1 日 周四#May 1 Thu;32671#端午节#Dragon Boat#6 月 14 日 周六#Jun 14 Sat;32770#中秋节#Mid-Autumn#9 月 21 日 周日#Sep 21 Sun;32780#国庆节#National Day#10 月 1 日 周三#Oct 1 Wed~32872#元旦#New Year#1 月 1 日 周四#Jan 1 Thu;32904#春节#Spring Fest#2 月 2 日 周一#Feb 2 Mon;32966#清明节#Qingming#4 月 4 日 周日#Apr 4 Sun;32993#劳动节#Labour Day#5 月 1 日 周六#May 1 Sat;33026#端午节#Dragon Boat#6 月 3 日 周四#Jun 3 Thu;33124#中秋节#Mid-Autumn#9 月 9 日 周四#Sep 9 Thu;33146#国庆节#National Day#10 月 1 日 周五#Oct 1 Fri"
+      },
+      "_note": "法定节日当天(公历年 2026–2060,表外回落用)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "HPA",
+        "value": "$[split::(${HP},~)]"
+      }
+    },
+    {
+      "id": "stg",
+      "action": "data.get",
+      "params": {
+        "key": "settings",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_owS",
+        "value": "$[findNotEmpty::(${stg.offwork},none)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ow",
+        "value": "$[round::(if::(eq::(${_owS},none),${zh},if::(eq::(${_owS},0),0,1)))]"
+      },
+      "_note": "1 = 显示休 / 班(芯片、调休上班提示);用户设置优先,缺省跟界面语言"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pi",
+        "value": "$[round::(if::(ge::(index::(split::(index::(${HPA},0),_),1),${tdn}),0,if::(ge::(index::(split::(index::(${HPA},1),_),1),${tdn}),1,if::(ge::(index::(split::(index::(${HPA},2),_),1),${tdn}),2,if::(ge::(index::(split::(index::(${HPA},3),_),1),${tdn}),3,if::(ge::(index::(split::(index::(${HPA},4),_),1),${tdn}),4,if::(ge::(index::(split::(index::(${HPA},5),_),1),${tdn}),5,if::(ge::(index::(split::(index::(${HPA},6),_),1),${tdn}),6,if::(ge::(index::(split::(index::(${HPA},7),_),1),${tdn}),7,if::(ge::(index::(split::(index::(${HPA},8),_),1),${tdn}),8,if::(ge::(index::(split::(index::(${HPA},9),_),1),${tdn}),9,if::(ge::(index::(split::(index::(${HPA},10),_),1),${tdn}),10,if::(ge::(index::(split::(index::(${HPA},11),_),1),${tdn}),11,if::(ge::(index::(split::(index::(${HPA},12),_),1),${tdn}),12,-1))))))))))))))]"
+      },
+      "_note": "-1 = 表跑完了 → 回落到下一个法定节日"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "R",
+        "value": "$[split::(index::(${HPA},${pi}),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "R2",
+        "value": "$[split::(index::(${HPA},calc::(${pi}+1)),_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ps",
+        "value": "$[index::(${R},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pe",
+        "value": "$[index::(${R},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st",
+        "value": "$[round::(if::(lt::(${pi},0),0,if::(ge::(${tdn},${ps}),2,1)))]"
+      },
+      "_note": "0 表外回落 / 1 还没开始 / 2 放假中"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "name",
+        "value": "$[if::(eq::(${zh},1),index::(${R},3),index::(${R},4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "range",
+        "value": "$[if::(eq::(${zh},1),index::(${R},5),index::(${R},6))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "days",
+        "value": "$[index::(${R},2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lenZ",
+        "value": "共 ${days} 天"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lenE1",
+        "value": "${days} day"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lenE",
+        "value": "${days} days"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lenT",
+        "value": "$[if::(eq::(${st},0),,if::(eq::(${zh},1),${lenZ},if::(eq::(${days},1),${lenE1},${lenE})))]"
+      },
+      "_note": "放假天数(英文按单复数)。st 不匹配的分支键一律置空(2026-10-08:st=0 时曾吐「共  天」「-645 天后」这类垃圾值)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "inD",
+        "value": "$[if::(eq::(${st},1),round::(calc::(${ps}-${tdn})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nth",
+        "value": "$[if::(eq::(${st},2),round::(calc::(${tdn}-${ps}+1)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "left",
+        "value": "$[if::(eq::(${st},2),round::(calc::(${pe}-${tdn})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bar",
+        "value": "$[if::(and::(eq::(${st},2),gt::(${days},0)),round::(calc::(${nth}/${days}*100)),)]"
+      },
+      "_note": "parseNumber 取整四端舍入不一(web 截断 66 / iOS 四舍五入 67),改 round"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "back",
+        "value": "$[if::(eq::(${zh},1),index::(${R},10),index::(${R},11))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "WD",
+        "value": "$[split::(index::(${R},7),:)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "WZ",
+        "value": "$[if::(eq::(${zh},1),split::(index::(${R},8),:),split::(index::(${R},9),:))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1",
+        "value": "$[if::(ge::(findNotEmpty::(index::(${WD},0),0),${tdn}),index::(${WZ},0),if::(ge::(findNotEmpty::(index::(${WD},1),0),${tdn}),index::(${WZ},1),if::(ge::(findNotEmpty::(index::(${WD},2),0),${tdn}),index::(${WZ},2),)))]"
+      },
+      "_note": "最近一个还没到的调休上班日(已过的不再列)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nx",
+        "value": "$[if::(eq::(${zh},1),index::(${R2},3),index::(${R2},4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nxD",
+        "value": "$[round::(calc::(findNotEmpty::(index::(${R2},0),0)-${tdn}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasNx",
+        "value": "$[if::(and::(eq::(${st},2),if::(eq::(findNotEmpty::(${nx},__none__),__none__),0,1)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nxT",
+        "value": "$[if::(eq::(${hasNx},1),if::(eq::(${zh},1),接着是${nx} · ${nxD} 天后,Next · ${nx} in ${nxD}d),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "LGA",
+        "value": "$[split::(${LG},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yo",
+        "value": "$[round::(calc::(${y}-2026))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "FA",
+        "value": "$[split::(connect::(index::(${LGA},${yo}),;,index::(${LGA},calc::(${yo}+1))),;)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fi",
+        "value": "$[round::(if::(ge::(findNotEmpty::(index::(split::(index::(${FA},0),#),0),-1),${tdn}),0,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},1),#),0),-1),${tdn}),1,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},2),#),0),-1),${tdn}),2,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},3),#),0),-1),${tdn}),3,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},4),#),0),-1),${tdn}),4,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},5),#),0),-1),${tdn}),5,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},6),#),0),-1),${tdn}),6,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},7),#),0),-1),${tdn}),7,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},8),#),0),-1),${tdn}),8,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},9),#),0),-1),${tdn}),9,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},10),#),0),-1),${tdn}),10,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},11),#),0),-1),${tdn}),11,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},12),#),0),-1),${tdn}),12,if::(ge::(findNotEmpty::(index::(split::(index::(${FA},13),#),0),-1),${tdn}),13,-1)))))))))))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "FR",
+        "value": "$[split::(index::(${FA},${fi}),#)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fbName",
+        "value": "$[if::(eq::(${zh},1),index::(${FR},1),index::(${FR},2))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fbDate",
+        "value": "$[if::(eq::(${zh},1),index::(${FR},3),index::(${FR},4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fbIn",
+        "value": "$[round::(calc::(index::(${FR},0)-${tdn}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pendT",
+        "value": "$[if::(eq::(${zh},1),2027 年放假安排尚未公布,2027 holiday schedule not yet published)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "st",
+          "name",
+          "range",
+          "days",
+          "inD",
+          "nth",
+          "left",
+          "bar",
+          "back",
+          "w1",
+          "hasNx",
+          "nxT",
+          "fbName",
+          "fbDate",
+          "fbIn",
+          "pendT",
+          "ow",
+          "lenT"
+        ]
+      }
+    }
+  ]
+}

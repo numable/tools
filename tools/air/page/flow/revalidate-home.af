@@ -1,0 +1,395 @@
+{
+  "_note": "首页进页校新(root onLoad,整个生命周期一次):**只读**各城市缓存的时间戳,有过期(> 10 分钟)的\n就置 state.reval=1 再软重载一次 —— 过期的那几行重取、成功后覆盖写入,新鲜的照旧用缓存。\n不删键、不等待:哪一行先读缓存、哪一行先重取都不会丢数据,没有时序依赖。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "saved",
+      "action": "data.get",
+      "params": {
+        "key": "cities",
+        "default": []
+      }
+    },
+    {
+      "_note": "屏障(勿删):request / data.get 之后紧邻的节点读不到结果(晚一拍),隔一个空 set 再用。",
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "id": "sv",
+      "action": "data.get",
+      "params": {
+        "key": "aqStd",
+        "default": ""
+      }
+    },
+    {
+      "_note": "屏障(勿删):request / data.get 之后紧邻的节点读不到结果(晚一拍),隔一个空 set 再用。",
+      "op": "set",
+      "props": {
+        "key": "_bs",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lang",
+        "value": "$[findNotEmpty::(${@app.language},en)]"
+      }
+    },
+    {
+      "_note": "国内默认判据(doc/overseas-first.md §1,逐字照抄):地区 cn,或地区未知且界面中文 → 1。",
+      "op": "set",
+      "props": {
+        "key": "cnd",
+        "value": "$[if::(eq::(${@app.region},cn),1,if::(eq::(${@app.region},overseas),0,if::(startsWith::(${@app.language},zh),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "std",
+        "value": "$[if::(eq::(${sv},cn),cn,if::(eq::(${sv},us),us,if::(eq::(${cnd},1),cn,us)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[index::(${saved},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[index::(${saved},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "$[index::(${saved},2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "$[index::(${saved},3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c4",
+        "value": "$[index::(${saved},4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c5",
+        "value": "$[index::(${saved},5)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c6",
+        "value": "$[index::(${saved},6)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c7",
+        "value": "$[index::(${saved},7)]"
+      }
+    },
+    {
+      "_note": "屏障(勿删):request / data.get 之后紧邻的节点读不到结果(晚一拍),隔一个空 set 再用。",
+      "op": "set",
+      "props": {
+        "key": "_b2",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0",
+        "value": "$[connect::(c.aq.,${std},.,${c0.lat},_,${c0.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1",
+        "value": "$[connect::(c.aq.,${std},.,${c1.lat},_,${c1.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2",
+        "value": "$[connect::(c.aq.,${std},.,${c2.lat},_,${c2.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3",
+        "value": "$[connect::(c.aq.,${std},.,${c3.lat},_,${c3.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4",
+        "value": "$[connect::(c.aq.,${std},.,${c4.lat},_,${c4.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5",
+        "value": "$[connect::(c.aq.,${std},.,${c5.lat},_,${c5.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k6",
+        "value": "$[connect::(c.aq.,${std},.,${c6.lat},_,${c6.lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k7",
+        "value": "$[connect::(c.aq.,${std},.,${c7.lat},_,${c7.lon})]"
+      }
+    },
+    {
+      "id": "h0",
+      "action": "data.get",
+      "params": {
+        "key": "${k0}",
+        "default": {}
+      }
+    },
+    {
+      "id": "h1",
+      "action": "data.get",
+      "params": {
+        "key": "${k1}",
+        "default": {}
+      }
+    },
+    {
+      "id": "h2",
+      "action": "data.get",
+      "params": {
+        "key": "${k2}",
+        "default": {}
+      }
+    },
+    {
+      "id": "h3",
+      "action": "data.get",
+      "params": {
+        "key": "${k3}",
+        "default": {}
+      }
+    },
+    {
+      "id": "h4",
+      "action": "data.get",
+      "params": {
+        "key": "${k4}",
+        "default": {}
+      }
+    },
+    {
+      "id": "h5",
+      "action": "data.get",
+      "params": {
+        "key": "${k5}",
+        "default": {}
+      }
+    },
+    {
+      "id": "h6",
+      "action": "data.get",
+      "params": {
+        "key": "${k6}",
+        "default": {}
+      }
+    },
+    {
+      "id": "h7",
+      "action": "data.get",
+      "params": {
+        "key": "${k7}",
+        "default": {}
+      }
+    },
+    {
+      "_note": "屏障(勿删):request / data.get 之后紧邻的节点读不到结果(晚一拍),隔一个空 set 再用。",
+      "op": "set",
+      "props": {
+        "key": "_b3",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[parseNumber::(${h0.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "$[if::(gt::(${t0},0),if::(gt::(calc::(${nowMs}-${t0}),600000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1",
+        "value": "$[parseNumber::(${h1.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s1",
+        "value": "$[if::(gt::(${t1},0),if::(gt::(calc::(${nowMs}-${t1}),600000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2",
+        "value": "$[parseNumber::(${h2.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2",
+        "value": "$[if::(gt::(${t2},0),if::(gt::(calc::(${nowMs}-${t2}),600000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3",
+        "value": "$[parseNumber::(${h3.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s3",
+        "value": "$[if::(gt::(${t3},0),if::(gt::(calc::(${nowMs}-${t3}),600000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t4",
+        "value": "$[parseNumber::(${h4.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s4",
+        "value": "$[if::(gt::(${t4},0),if::(gt::(calc::(${nowMs}-${t4}),600000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t5",
+        "value": "$[parseNumber::(${h5.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s5",
+        "value": "$[if::(gt::(${t5},0),if::(gt::(calc::(${nowMs}-${t5}),600000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t6",
+        "value": "$[parseNumber::(${h6.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s6",
+        "value": "$[if::(gt::(${t6},0),if::(gt::(calc::(${nowMs}-${t6}),600000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t7",
+        "value": "$[parseNumber::(${h7.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s7",
+        "value": "$[if::(gt::(${t7},0),if::(gt::(calc::(${nowMs}-${t7}),600000),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "anyStale",
+        "value": "$[sum::(${s0},${s1},${s2},${s3},${s4},${s5},${s6},${s7})]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(${anyStale},0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "xpage.patchState",
+          "params": {
+            "reval": 1
+          }
+        },
+        {
+          "action": "xpage.reloadPage"
+        }
+      ]
+    }
+  ]
+}

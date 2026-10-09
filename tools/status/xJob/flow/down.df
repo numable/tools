@@ -1,0 +1,284 @@
+{
+  "_note": "`xJob/down.xjob` 的判定段:服务「从正常变成出事」时报一次,出事期间又冒出新事故时再报,恢复正常时再报一次「已恢复」。\n状态(上一次的签名)只写在这里,取数段 xWidget/flow/follow.df 与组件共用、不写状态。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "svcIn",
+        "value": "$[findNotEmpty::(${svc},)]"
+      },
+      "_note": "入参落地(勿删):方法参数里的 ${} 看不见 flow 入参。以下入参都由 .xjob 的 then.params 从取数段输出里显式传进来。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lvIn",
+        "value": "$[findNotEmpty::(${lv},__none__)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oIn",
+        "value": "$[findNotEmpty::(${o},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "iidIn",
+        "value": "$[findNotEmpty::(${iid},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nmIn",
+        "value": "$[findNotEmpty::(${nm},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tIn",
+        "value": "$[findNotEmpty::(${t},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "known",
+        "value": "$[if::(eq::(${lvIn},__none__),0,if::(ge::(${lvIn},0),1,0))]"
+      },
+      "_note": "三值判定的「知道」这一位:取不到状态(-1 / 缺键)= 不知道 → 不响、也不动基线。绝不拿「不知道」当「正常」或「异常」。⚠️ 判空用 findNotEmpty 哨兵,不用 length::(档位是数字,length:: 对数字恒 0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oN",
+        "value": "$[parseNumber::(${oIn},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bad",
+        "value": "$[if::(eq::(${known},1),if::(or::(gt::(${oN},0),ge::(${lvIn},2)),1,0),0)]"
+      },
+      "_note": "「出事」= 有进行中的事故,或总体状态在「轻微异常」及以上。计划维护(档位 1)不算出事。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasIid",
+        "value": "$[if::(eq::(findNotEmpty::(${iidIn},__none__),__none__),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sig",
+        "value": "$[if::(eq::(${bad},1),if::(eq::(${hasIid},1),connect::(i.,${iidIn}),connect::(l.,${lvIn})),ok)]"
+      },
+      "_note": "这一次的状态签名:正常 = ok;出事且有事故 = i.<事故 id>;出事但官方还没发事故 = l.<档位>。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "skey",
+        "value": "$[connect::(down.last.,${svcIn})]"
+      },
+      "_note": "状态键拼上本实例的参数(服务 id):同一条规则的多份实例在同一个机会里挨个跑,共用一个键会互相顶掉基线。"
+    },
+    {
+      "id": "prevRaw",
+      "action": "data.get",
+      "params": {
+        "key": "${skey}",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "读取屏障(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "prev",
+        "value": "${prevRaw}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasPrev",
+        "value": "$[if::(eq::(findNotEmpty::(${prev},__none__),__none__),0,1)]"
+      },
+      "_note": "第一次跑(新建 / 换设备 / 重装)没有基线:只建基线、不响 —— 否则把当下已经在出的事一次全报出来。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wasOk",
+        "value": "$[if::(eq::(connect::(k,${prev}),kok),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "same",
+        "value": "$[if::(eq::(connect::(k,${prev}),connect::(k,${sig})),1,0)]"
+      },
+      "_note": "⚠️ 拼 k 前缀再比:两边恒为字符串,不走 eq 的数字化比较。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitBad",
+        "value": "$[if::(and::(eq::(${known},1),eq::(${bad},1),eq::(${hasPrev},1),or::(eq::(${wasOk},1),and::(eq::(${hasIid},1),eq::(${same},0)))),1,0)]"
+      },
+      "_note": "边沿:从正常变成出事,或出事期间又冒出一起新的事故(事故 id 变了)。同一起事故只报一次。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitRec",
+        "value": "$[if::(and::(eq::(${known},1),eq::(${bad},0),eq::(${hasPrev},1),eq::(${wasOk},0)),1,0)]"
+      },
+      "_note": "恢复:上一次记的是出事,这一次没事了。只报一次(基线随即写成 ok)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hit",
+        "value": "$[if::(or::(eq::(${hitBad},1),eq::(${hitRec},1)),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${known},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${skey}",
+            "value": "${sig}"
+          }
+        }
+      ],
+      "_note": "只在「知道」时写基线;取不到的那一轮什么都不动(平台也把它当未知,不响)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lang",
+        "value": "$[findNotEmpty::(${@app.language},en)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${lang},zh),1,0)]"
+      },
+      "_note": "通知文案按当前语言在这里出(与 stock 的 tick.df 同法:.xjob 没有 @i18n,message 的译文又必须和基准语言引用同一组 ${})。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lvw",
+        "value": "$[if::(eq::(${zh},1),if::(eq::(${lvIn},0),运行正常,if::(eq::(${lvIn},1),维护中,if::(eq::(${lvIn},2),轻微异常,if::(eq::(${lvIn},3),部分中断,if::(eq::(${lvIn},4),重大中断,状态未知))))),if::(eq::(${lvIn},0),Operational,if::(eq::(${lvIn},1),Maintenance,if::(eq::(${lvIn},2),Minor issues,if::(eq::(${lvIn},3),Partial outage,if::(eq::(${lvIn},4),Major outage,Unknown))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "state",
+        "value": "$[if::(eq::(${hitRec},1),if::(eq::(${zh},1),已恢复正常,Back to normal),${lvw})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dNo",
+        "value": "$[if::(eq::(${zh},1),部分功能受影响，官方还没有发布事故说明,Something is affected but no incident has been posted yet)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dRec",
+        "value": "$[if::(eq::(${zh},1),没有进行中的事故了,No open incidents now)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "detail",
+        "value": "$[if::(or::(eq::(${hitRec},1),eq::(${bad},0)),${dRec},if::(eq::(${hasIid},1),${tIn},${dNo}))]"
+      },
+      "_note": "出事时正文 = 事故标题(服务商英文原文)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "svc",
+        "value": "$[findNotEmpty::(${nmIn},${svcIn})]"
+      },
+      "_note": "⚠️ 故意与参数同名:送达时文案 scope = params < depends < then(alert-design 附录 B.1 末,四端同序),这里把参数里的服务 id(github)顶成显示名(GitHub)。同意面板的预览**只拿 params 做 ${} 代入**(不跑流、不求 $[] 方法),所以预览里是 id、送达时是显示名 —— 这是让预览不出空冒号的唯一办法。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sid",
+        "value": "${svcIn}"
+      },
+      "_note": "点通知打开的详情页用它(svc 已被顶成显示名,不能再拿去拼路由)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sepZh",
+        "value": "："
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sepEn",
+        "value": ":"
+      },
+      "_note": "英文分隔符后面那个空格写在 message 模板里:值两端的空白(含 NBSP)会被 JS 引擎的 trim 吃掉。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sep",
+        "value": "$[if::(eq::(${zh},1),${sepZh},${sepEn})]"
+      },
+      "_note": "中英文案必须引同一组 ${}(G47.message),所以分隔符按语言在这里挑好,两份模板都只写 ${sep}。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "hit",
+          "svc",
+          "sid",
+          "sep",
+          "state",
+          "detail"
+        ]
+      },
+      "_note": "alert 没写 activeCondition,默认读 hit。"
+    }
+  ]
+}

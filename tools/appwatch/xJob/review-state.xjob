@@ -1,0 +1,48 @@
+{
+ "_note_gen": "tools/infosource/gen_appstore.py",
+ "_note": "动态提醒(§7):某个版本进入审核 / 通过 / 被拒 / 上架时告诉你。\n取数段直接复用 fleet 组件的 fleet.df(账号前 6 个 App,只读);判定段 xJob/flow/review-state.df 按 (App, 版本, 状态档) 做边沿,首次运行只建基线。没有 params = 包级单实例,盯全部 App。\n30 分钟一评估(免费档地板)。文案按语言在判定段里挑好,message 两种语言引用同一组键。",
+ "version": 1,
+ "id": "review-state",
+ "title": "审核进度提醒",
+ "sub": "版本进入审核、通过、被拒或上架时告诉你",
+ "i18n": {
+  "en-US": {
+   "title": "Review status alert",
+   "sub": "Tells you when a version enters review, is approved, rejected or goes live",
+   "message": {
+    "title": "${app} ${ver} ${ev}",
+    "body": "${evb}${evm}"
+   }
+  }
+ },
+ "events": {
+  "onClick": "/"
+ },
+ "task": {
+  "depends": [
+   {
+    "flow": "@[file://xJob/flow/fleet.df]"
+   }
+  ],
+  "then": {
+   "flow": "@[file://xJob/flow/review-state.df]",
+   "params": {
+    "list": "${list}",
+    "total": "${total}",
+    "ok": "${ok}"
+   }
+  },
+  "refresh": {
+   "interval": [
+    "1800"
+   ]
+  }
+ },
+ "alert": {
+  "level": "normal",
+  "message": {
+   "title": "${app} ${ver} ${ev}",
+   "body": "${evb}${evm}"
+  }
+ }
+}

@@ -1,0 +1,1516 @@
+{
+  "_note": "**近一个月(44)** —— 35 格(5 行 × 7 列)跨事项热力 + 底部三项统计。入参 {mask}。\n刻意做**近 35 天的连续窗口**而不是「本月日历」:日历要知道当月第一天是星期几才能排版,\n而那要在 flow 里做星期计算(formatDate 的星期格式跨端不一,属于 parseDate 安全子集之外)。\n连续窗口零风险,信息量一样,而且最后一格恒是今天、不会出现「月初只有两格」的空卡。\n⚠️ 与 today(44) 的分工:today 是**今天的横切面**(哪几件打了),这张是**一个月的纵深**。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "入参先落地成 data 域的键(§9.5 #3),再由 resultFilter 透出去 —— **RCN 只看得见 flow 的输出**,shell params 不进渲染域。`mask` 决定卡上打不打码(打码开关在事项页,经 pickWidgets 的 per-item params 传进来)。",
+      "op": "set",
+      "props": {
+        "key": "mask",
+        "value": "${mask}"
+      }
+    },
+    {
+      "_note": "跨事项聚合的真源 agg={total,byDay},由页面 JS 的 computeAgg() 落盘。",
+      "id": "agg",
+      "action": "data.get",
+      "params": {
+        "key": "agg",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "total",
+        "value": "$[findNotEmpty::(${agg.total},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "byDay",
+        "value": "${agg.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(formatDate::(${nowMs},yyyy-MM-dd),yyyy-MM-dd)]"
+      },
+      "_note": "按自然日归零再相减 —— 直接拿 nowMs 减 86400000,同一天的上午/下午会算出不同的「昨天」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0",
+        "value": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#EDEEF0|#20232A)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p1",
+        "value": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#7ABEA0|#3A896C)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p2",
+        "value": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#54AE86|#40A880)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p3",
+        "value": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#2E9E6B|#45C793)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0",
+        "value": "$[formatDate::(calc::(${todayMs}-2937600000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v0",
+        "value": "$[findNotEmpty::(get::(${byDay},${k0}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[if::(eq::(${v0},0),${e0},if::(ge::(calc::(${v0}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v0}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d0",
+        "value": "$[formatDate::(calc::(${todayMs}-2937600000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1",
+        "value": "$[formatDate::(calc::(${todayMs}-2851200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v1",
+        "value": "$[findNotEmpty::(get::(${byDay},${k1}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[if::(eq::(${v1},0),${e0},if::(ge::(calc::(${v1}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v1}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d1",
+        "value": "$[formatDate::(calc::(${todayMs}-2851200000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2",
+        "value": "$[formatDate::(calc::(${todayMs}-2764800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v2",
+        "value": "$[findNotEmpty::(get::(${byDay},${k2}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "$[if::(eq::(${v2},0),${e0},if::(ge::(calc::(${v2}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v2}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d2",
+        "value": "$[formatDate::(calc::(${todayMs}-2764800000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3",
+        "value": "$[formatDate::(calc::(${todayMs}-2678400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v3",
+        "value": "$[findNotEmpty::(get::(${byDay},${k3}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "$[if::(eq::(${v3},0),${e0},if::(ge::(calc::(${v3}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v3}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d3",
+        "value": "$[formatDate::(calc::(${todayMs}-2678400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4",
+        "value": "$[formatDate::(calc::(${todayMs}-2592000000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v4",
+        "value": "$[findNotEmpty::(get::(${byDay},${k4}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c4",
+        "value": "$[if::(eq::(${v4},0),${e0},if::(ge::(calc::(${v4}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v4}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d4",
+        "value": "$[formatDate::(calc::(${todayMs}-2592000000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5",
+        "value": "$[formatDate::(calc::(${todayMs}-2505600000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v5",
+        "value": "$[findNotEmpty::(get::(${byDay},${k5}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c5",
+        "value": "$[if::(eq::(${v5},0),${e0},if::(ge::(calc::(${v5}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v5}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d5",
+        "value": "$[formatDate::(calc::(${todayMs}-2505600000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k6",
+        "value": "$[formatDate::(calc::(${todayMs}-2419200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v6",
+        "value": "$[findNotEmpty::(get::(${byDay},${k6}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c6",
+        "value": "$[if::(eq::(${v6},0),${e0},if::(ge::(calc::(${v6}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v6}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d6",
+        "value": "$[formatDate::(calc::(${todayMs}-2419200000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k7",
+        "value": "$[formatDate::(calc::(${todayMs}-2332800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v7",
+        "value": "$[findNotEmpty::(get::(${byDay},${k7}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c7",
+        "value": "$[if::(eq::(${v7},0),${e0},if::(ge::(calc::(${v7}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v7}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d7",
+        "value": "$[formatDate::(calc::(${todayMs}-2332800000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k8",
+        "value": "$[formatDate::(calc::(${todayMs}-2246400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v8",
+        "value": "$[findNotEmpty::(get::(${byDay},${k8}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c8",
+        "value": "$[if::(eq::(${v8},0),${e0},if::(ge::(calc::(${v8}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v8}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d8",
+        "value": "$[formatDate::(calc::(${todayMs}-2246400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k9",
+        "value": "$[formatDate::(calc::(${todayMs}-2160000000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v9",
+        "value": "$[findNotEmpty::(get::(${byDay},${k9}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c9",
+        "value": "$[if::(eq::(${v9},0),${e0},if::(ge::(calc::(${v9}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v9}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d9",
+        "value": "$[formatDate::(calc::(${todayMs}-2160000000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k10",
+        "value": "$[formatDate::(calc::(${todayMs}-2073600000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v10",
+        "value": "$[findNotEmpty::(get::(${byDay},${k10}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c10",
+        "value": "$[if::(eq::(${v10},0),${e0},if::(ge::(calc::(${v10}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v10}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d10",
+        "value": "$[formatDate::(calc::(${todayMs}-2073600000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k11",
+        "value": "$[formatDate::(calc::(${todayMs}-1987200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v11",
+        "value": "$[findNotEmpty::(get::(${byDay},${k11}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c11",
+        "value": "$[if::(eq::(${v11},0),${e0},if::(ge::(calc::(${v11}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v11}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d11",
+        "value": "$[formatDate::(calc::(${todayMs}-1987200000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k12",
+        "value": "$[formatDate::(calc::(${todayMs}-1900800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v12",
+        "value": "$[findNotEmpty::(get::(${byDay},${k12}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c12",
+        "value": "$[if::(eq::(${v12},0),${e0},if::(ge::(calc::(${v12}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v12}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d12",
+        "value": "$[formatDate::(calc::(${todayMs}-1900800000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k13",
+        "value": "$[formatDate::(calc::(${todayMs}-1814400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v13",
+        "value": "$[findNotEmpty::(get::(${byDay},${k13}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c13",
+        "value": "$[if::(eq::(${v13},0),${e0},if::(ge::(calc::(${v13}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v13}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d13",
+        "value": "$[formatDate::(calc::(${todayMs}-1814400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k14",
+        "value": "$[formatDate::(calc::(${todayMs}-1728000000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v14",
+        "value": "$[findNotEmpty::(get::(${byDay},${k14}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c14",
+        "value": "$[if::(eq::(${v14},0),${e0},if::(ge::(calc::(${v14}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v14}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d14",
+        "value": "$[formatDate::(calc::(${todayMs}-1728000000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k15",
+        "value": "$[formatDate::(calc::(${todayMs}-1641600000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v15",
+        "value": "$[findNotEmpty::(get::(${byDay},${k15}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c15",
+        "value": "$[if::(eq::(${v15},0),${e0},if::(ge::(calc::(${v15}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v15}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d15",
+        "value": "$[formatDate::(calc::(${todayMs}-1641600000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k16",
+        "value": "$[formatDate::(calc::(${todayMs}-1555200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v16",
+        "value": "$[findNotEmpty::(get::(${byDay},${k16}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c16",
+        "value": "$[if::(eq::(${v16},0),${e0},if::(ge::(calc::(${v16}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v16}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d16",
+        "value": "$[formatDate::(calc::(${todayMs}-1555200000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k17",
+        "value": "$[formatDate::(calc::(${todayMs}-1468800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v17",
+        "value": "$[findNotEmpty::(get::(${byDay},${k17}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c17",
+        "value": "$[if::(eq::(${v17},0),${e0},if::(ge::(calc::(${v17}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v17}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d17",
+        "value": "$[formatDate::(calc::(${todayMs}-1468800000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k18",
+        "value": "$[formatDate::(calc::(${todayMs}-1382400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v18",
+        "value": "$[findNotEmpty::(get::(${byDay},${k18}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c18",
+        "value": "$[if::(eq::(${v18},0),${e0},if::(ge::(calc::(${v18}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v18}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d18",
+        "value": "$[formatDate::(calc::(${todayMs}-1382400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k19",
+        "value": "$[formatDate::(calc::(${todayMs}-1296000000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v19",
+        "value": "$[findNotEmpty::(get::(${byDay},${k19}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c19",
+        "value": "$[if::(eq::(${v19},0),${e0},if::(ge::(calc::(${v19}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v19}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d19",
+        "value": "$[formatDate::(calc::(${todayMs}-1296000000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k20",
+        "value": "$[formatDate::(calc::(${todayMs}-1209600000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v20",
+        "value": "$[findNotEmpty::(get::(${byDay},${k20}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c20",
+        "value": "$[if::(eq::(${v20},0),${e0},if::(ge::(calc::(${v20}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v20}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d20",
+        "value": "$[formatDate::(calc::(${todayMs}-1209600000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k21",
+        "value": "$[formatDate::(calc::(${todayMs}-1123200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v21",
+        "value": "$[findNotEmpty::(get::(${byDay},${k21}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c21",
+        "value": "$[if::(eq::(${v21},0),${e0},if::(ge::(calc::(${v21}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v21}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d21",
+        "value": "$[formatDate::(calc::(${todayMs}-1123200000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k22",
+        "value": "$[formatDate::(calc::(${todayMs}-1036800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v22",
+        "value": "$[findNotEmpty::(get::(${byDay},${k22}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c22",
+        "value": "$[if::(eq::(${v22},0),${e0},if::(ge::(calc::(${v22}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v22}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d22",
+        "value": "$[formatDate::(calc::(${todayMs}-1036800000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k23",
+        "value": "$[formatDate::(calc::(${todayMs}-950400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v23",
+        "value": "$[findNotEmpty::(get::(${byDay},${k23}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c23",
+        "value": "$[if::(eq::(${v23},0),${e0},if::(ge::(calc::(${v23}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v23}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d23",
+        "value": "$[formatDate::(calc::(${todayMs}-950400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k24",
+        "value": "$[formatDate::(calc::(${todayMs}-864000000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v24",
+        "value": "$[findNotEmpty::(get::(${byDay},${k24}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c24",
+        "value": "$[if::(eq::(${v24},0),${e0},if::(ge::(calc::(${v24}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v24}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d24",
+        "value": "$[formatDate::(calc::(${todayMs}-864000000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k25",
+        "value": "$[formatDate::(calc::(${todayMs}-777600000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v25",
+        "value": "$[findNotEmpty::(get::(${byDay},${k25}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c25",
+        "value": "$[if::(eq::(${v25},0),${e0},if::(ge::(calc::(${v25}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v25}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d25",
+        "value": "$[formatDate::(calc::(${todayMs}-777600000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k26",
+        "value": "$[formatDate::(calc::(${todayMs}-691200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v26",
+        "value": "$[findNotEmpty::(get::(${byDay},${k26}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c26",
+        "value": "$[if::(eq::(${v26},0),${e0},if::(ge::(calc::(${v26}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v26}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d26",
+        "value": "$[formatDate::(calc::(${todayMs}-691200000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k27",
+        "value": "$[formatDate::(calc::(${todayMs}-604800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v27",
+        "value": "$[findNotEmpty::(get::(${byDay},${k27}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c27",
+        "value": "$[if::(eq::(${v27},0),${e0},if::(ge::(calc::(${v27}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v27}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d27",
+        "value": "$[formatDate::(calc::(${todayMs}-604800000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k28",
+        "value": "$[formatDate::(calc::(${todayMs}-518400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v28",
+        "value": "$[findNotEmpty::(get::(${byDay},${k28}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c28",
+        "value": "$[if::(eq::(${v28},0),${e0},if::(ge::(calc::(${v28}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v28}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d28",
+        "value": "$[formatDate::(calc::(${todayMs}-518400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k29",
+        "value": "$[formatDate::(calc::(${todayMs}-432000000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v29",
+        "value": "$[findNotEmpty::(get::(${byDay},${k29}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c29",
+        "value": "$[if::(eq::(${v29},0),${e0},if::(ge::(calc::(${v29}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v29}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d29",
+        "value": "$[formatDate::(calc::(${todayMs}-432000000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k30",
+        "value": "$[formatDate::(calc::(${todayMs}-345600000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v30",
+        "value": "$[findNotEmpty::(get::(${byDay},${k30}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c30",
+        "value": "$[if::(eq::(${v30},0),${e0},if::(ge::(calc::(${v30}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v30}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d30",
+        "value": "$[formatDate::(calc::(${todayMs}-345600000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k31",
+        "value": "$[formatDate::(calc::(${todayMs}-259200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v31",
+        "value": "$[findNotEmpty::(get::(${byDay},${k31}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c31",
+        "value": "$[if::(eq::(${v31},0),${e0},if::(ge::(calc::(${v31}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v31}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d31",
+        "value": "$[formatDate::(calc::(${todayMs}-259200000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k32",
+        "value": "$[formatDate::(calc::(${todayMs}-172800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v32",
+        "value": "$[findNotEmpty::(get::(${byDay},${k32}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c32",
+        "value": "$[if::(eq::(${v32},0),${e0},if::(ge::(calc::(${v32}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v32}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d32",
+        "value": "$[formatDate::(calc::(${todayMs}-172800000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k33",
+        "value": "$[formatDate::(calc::(${todayMs}-86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v33",
+        "value": "$[findNotEmpty::(get::(${byDay},${k33}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c33",
+        "value": "$[if::(eq::(${v33},0),${e0},if::(ge::(calc::(${v33}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v33}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d33",
+        "value": "$[formatDate::(calc::(${todayMs}-86400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k34",
+        "value": "$[formatDate::(${todayMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v34",
+        "value": "$[findNotEmpty::(get::(${byDay},${k34}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c34",
+        "value": "$[if::(eq::(${v34},0),${e0},if::(ge::(calc::(${v34}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v34}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d34",
+        "value": "$[formatDate::(${todayMs},dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayKey",
+        "value": "$[formatDate::(${todayMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "doneToday",
+        "value": "$[findNotEmpty::(get::(${byDay},${todayKey}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b0",
+        "value": "$[if::(ge::(${v0},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b1",
+        "value": "$[if::(ge::(${v1},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b2",
+        "value": "$[if::(ge::(${v2},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b3",
+        "value": "$[if::(ge::(${v3},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b4",
+        "value": "$[if::(ge::(${v4},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b5",
+        "value": "$[if::(ge::(${v5},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b6",
+        "value": "$[if::(ge::(${v6},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b7",
+        "value": "$[if::(ge::(${v7},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b8",
+        "value": "$[if::(ge::(${v8},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b9",
+        "value": "$[if::(ge::(${v9},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b10",
+        "value": "$[if::(ge::(${v10},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b11",
+        "value": "$[if::(ge::(${v11},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b12",
+        "value": "$[if::(ge::(${v12},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b13",
+        "value": "$[if::(ge::(${v13},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b14",
+        "value": "$[if::(ge::(${v14},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b15",
+        "value": "$[if::(ge::(${v15},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b16",
+        "value": "$[if::(ge::(${v16},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b17",
+        "value": "$[if::(ge::(${v17},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b18",
+        "value": "$[if::(ge::(${v18},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b19",
+        "value": "$[if::(ge::(${v19},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b20",
+        "value": "$[if::(ge::(${v20},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b21",
+        "value": "$[if::(ge::(${v21},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b22",
+        "value": "$[if::(ge::(${v22},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b23",
+        "value": "$[if::(ge::(${v23},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b24",
+        "value": "$[if::(ge::(${v24},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b25",
+        "value": "$[if::(ge::(${v25},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b26",
+        "value": "$[if::(ge::(${v26},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b27",
+        "value": "$[if::(ge::(${v27},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b28",
+        "value": "$[if::(ge::(${v28},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b29",
+        "value": "$[if::(ge::(${v29},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b30",
+        "value": "$[if::(ge::(${v30},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b31",
+        "value": "$[if::(ge::(${v31},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b32",
+        "value": "$[if::(ge::(${v32},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b33",
+        "value": "$[if::(ge::(${v33},1),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b34",
+        "value": "$[if::(ge::(${v34},1),1,0)]"
+      }
+    },
+    {
+      "_note": "没有 sum 方法,只能连加。35 项写在一条 calc 里 —— 与 days.df 里 30 格逐格算色同一个量级。",
+      "op": "set",
+      "props": {
+        "key": "days35",
+        "value": "$[calc::(${b0}+${b1}+${b2}+${b3}+${b4}+${b5}+${b6}+${b7}+${b8}+${b9}+${b10}+${b11}+${b12}+${b13}+${b14}+${b15}+${b16}+${b17}+${b18}+${b19}+${b20}+${b21}+${b22}+${b23}+${b24}+${b25}+${b26}+${b27}+${b28}+${b29}+${b30}+${b31}+${b32}+${b33}+${b34})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hits35",
+        "value": "$[calc::(${v0}+${v1}+${v2}+${v3}+${v4}+${v5}+${v6}+${v7}+${v8}+${v9}+${v10}+${v11}+${v12}+${v13}+${v14}+${v15}+${v16}+${v17}+${v18}+${v19}+${v20}+${v21}+${v22}+${v23}+${v24}+${v25}+${v26}+${v27}+${v28}+${v29}+${v30}+${v31}+${v32}+${v33}+${v34})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_MON",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "_note": "日期锚(标准 §4.4)。35 格自己不带任何日期,而桌面小组件的封面缓存 key 不含时间维度 —— 不写窗口起止,这张卡停在上个月和刚渲的一模一样。起点 = 今天 − 34 天(与第 0 格 `k0` 的 2937600000ms 逐字对应)。",
+      "op": "set",
+      "props": {
+        "key": "mStartLbl",
+        "value": "$[formatDate::(calc::(${todayMs}-2937600000),MM-dd)]"
+      }
+    },
+    {
+      "_note": "「mStartLbl」按语言出:中文 9月25日 / 英文 Sep 25(doc/overseas-first.md §5,英文不再出现 09-25)。",
+      "op": "set",
+      "props": {
+        "key": "_m_mStartLbl",
+        "value": "$[parseNumber::(formatDate::(calc::(${todayMs}-2937600000),MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d_mStartLbl",
+        "value": "$[parseNumber::(formatDate::(calc::(${todayMs}-2937600000),dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mStartLbl",
+        "value": "${_m_mStartLbl}月${_d_mStartLbl}日"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_e_mStartLbl",
+            "value": "$[index::(${_MON},calc::(${_m_mStartLbl}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mStartLbl",
+            "value": "${_e_mStartLbl} ${_d_mStartLbl}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "时效锚(card-design-system §3)。⚠️ 与内容日期分开一个键:锚本轮保持 MM-dd 不本地化(doc/overseas-first.md §5 例外,四端 / 全仓锚统一处理),轴标签等内容日期才按语言出。",
+      "op": "set",
+      "props": {
+        "key": "atLbl",
+        "value": "$[formatDate::(${todayMs},MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mEndLbl",
+        "value": "$[formatDate::(${todayMs},MM-dd)]"
+      }
+    },
+    {
+      "_note": "「mEndLbl」按语言出:中文 9月25日 / 英文 Sep 25(doc/overseas-first.md §5,英文不再出现 09-25)。",
+      "op": "set",
+      "props": {
+        "key": "_m_mEndLbl",
+        "value": "$[parseNumber::(formatDate::(${todayMs},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d_mEndLbl",
+        "value": "$[parseNumber::(formatDate::(${todayMs},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mEndLbl",
+        "value": "${_m_mEndLbl}月${_d_mEndLbl}日"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_e_mEndLbl",
+            "value": "$[index::(${_MON},calc::(${_m_mEndLbl}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mEndLbl",
+            "value": "${_e_mEndLbl} ${_d_mEndLbl}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "只透出 RCN 读的键(G44):入参注入(@i18n/@app)与中间量(agg/nowMs/k*/v*/e0/p*)不进渲染域、不落盘。2026-09-13。",
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "c0",
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10",
+          "c11",
+          "c12",
+          "c13",
+          "c14",
+          "c15",
+          "c16",
+          "c17",
+          "c18",
+          "c19",
+          "c20",
+          "c21",
+          "c22",
+          "c23",
+          "c24",
+          "c25",
+          "c26",
+          "c27",
+          "c28",
+          "c29",
+          "c30",
+          "c31",
+          "c32",
+          "c33",
+          "c34",
+          "days35",
+          "doneToday",
+          "hits35",
+          "mEndLbl",
+          "mStartLbl",
+          "mask",
+          "total",
+          "atLbl"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "_note": "域名列表(给 /edit 选域名页用)。与 home.df 里内联的那段同源,但独立成流 —— H5 页面经 `xbridge.runDataFlow('zones')` 调它。\n⚠️ 无令牌时**整个 request 都不发**(Cloudflare 账号 API 没有匿名档,发出去只会 403 把流打挂)。\n⚠️ **定长 8 槽结构化瘦身**,不透传 `zr.result`:原始 zone 对象带一堆恒空字段(`vanity_name_servers` / `original_registrar` / `tenant`…),透传会原样进渲染数据与磁盘缓存,还会把 L1 的空值告警变成噪音。8 是选域名页的展示上限 —— 超出时页面显式说明「只列前 8 个」,**不静默截断**(截断了不说 = 读起来像「你只有 8 个域」)。\n【G23 豁免】编辑页拉 zone 清单:用户主动进配置页才跑,不是首屏;选择列表要新鲜。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "zr",
+      "action": "request",
+      "params": {
+        "url": "https://api.cloudflare.com/client/v4/zones?per_page=50&status=active",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "Accept": "application/json",
+          "User-Agent": "Numable"
+        },
+        "credential": "cf"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasToken",
+        "value": "$[if::(eq::(${zr},),0,1)]"
+      },
+      "_note": "「绑了吗」从响应本身推 —— 未绑时宿主抛 `credential_required(cf)`,请求不发、zr 为空。包读不到令牌本体,也没有查询绑定状态的 action(credential-vault §6)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[length::(${zr.result})]"
+      }
+    },
+    {
+      "_note": "有域才发 list 键(空列表整个键不发,与本包其余列表同一条纪律)。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(findNotEmpty::(${n},0),1),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "list",
+            "value": [
+              {
+                "id": "${zr.result[0].id}",
+                "name": "${zr.result[0].name}",
+                "status": "${zr.result[0].status}",
+                "plan": "${zr.result[0].plan.name}"
+              },
+              {
+                "id": "${zr.result[1].id}",
+                "name": "${zr.result[1].name}",
+                "status": "${zr.result[1].status}",
+                "plan": "${zr.result[1].plan.name}"
+              },
+              {
+                "id": "${zr.result[2].id}",
+                "name": "${zr.result[2].name}",
+                "status": "${zr.result[2].status}",
+                "plan": "${zr.result[2].plan.name}"
+              },
+              {
+                "id": "${zr.result[3].id}",
+                "name": "${zr.result[3].name}",
+                "status": "${zr.result[3].status}",
+                "plan": "${zr.result[3].plan.name}"
+              },
+              {
+                "id": "${zr.result[4].id}",
+                "name": "${zr.result[4].name}",
+                "status": "${zr.result[4].status}",
+                "plan": "${zr.result[4].plan.name}"
+              },
+              {
+                "id": "${zr.result[5].id}",
+                "name": "${zr.result[5].name}",
+                "status": "${zr.result[5].status}",
+                "plan": "${zr.result[5].plan.name}"
+              },
+              {
+                "id": "${zr.result[6].id}",
+                "name": "${zr.result[6].name}",
+                "status": "${zr.result[6].status}",
+                "plan": "${zr.result[6].plan.name}"
+              },
+              {
+                "id": "${zr.result[7].id}",
+                "name": "${zr.result[7].name}",
+                "status": "${zr.result[7].status}",
+                "plan": "${zr.result[7].plan.name}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "hasToken",
+          "n",
+          "list"
+        ]
+      }
+    }
+  ],
+  "_lintCache": "exempt"
+}

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Filing type</title>
+<style>
+/* 与组件同源(§4.2b):同一套块、同一个源色;页边距 14、卡片圆角 14、段标题 13/700(status / pkgstats 同款)。
+   源色只做点 / 线 / 胶囊;平台 accent 绿只留给「添加组件」。 */
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--faint:#9AA0A6;--line:#E4E7EC;--tile:#E7E9EE;
+  --src:#1C3F7A;--srcSoft:rgba(28,63,122,.12);--warn:#B45309;--shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--faint:#5E636B;--line:#262A31;--tile:#20232A;
+  --src:#91AEE8;--srcSoft:rgba(145,174,232,.16);--warn:#F5A524;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC",sans-serif;font-variant-numeric:tabular-nums;
+  padding:calc(var(--xb-content-top) + 12px) 14px calc(var(--xb-content-bottom) + 28px)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+a{color:inherit}
+svg{display:block}
+.hd{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.hd h1{flex:1 1 auto;min-width:0;font-size:24px;font-weight:700;margin:0;letter-spacing:-.5px;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{color:var(--sub);font-size:13px;margin:0 0 4px;min-height:19px}
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:22px 2px 8px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:20px}
+.lnk{color:var(--src);font-size:13px;font-weight:700;padding:8px 2px;margin:-8px 0}
+.grp{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.state{color:var(--sub);font-size:13px;text-align:center;padding:22px 14px}
+.warn{color:var(--warn);font-size:12px;margin:10px 2px 0}
+.foot{color:var(--sub);font-size:11px;line-height:1.7;margin-top:18px;background:var(--tile);border-radius:14px;padding:12px 14px}
+.foot b{color:var(--fg);font-weight:600}
+.foot a{color:var(--src);text-decoration:none;font-weight:600}
+/* 类型胶囊:与组件上的同一颗(源色浅底 + 源色字) */
+.fm{display:inline-block;font-size:11.5px;font-weight:700;line-height:1.25;padding:2px 7px;border-radius:7px;
+  background:var(--srcSoft);color:var(--src);white-space:nowrap}
+/* 添加代码:输入框字号必须 ≥16px(iOS 聚焦 <16px 的输入框会放大整页,G15) */
+.addf{display:flex;gap:8px}
+.addf input{flex:1 1 auto;min-width:0;font-size:16px;height:44px;border-radius:12px;border:1px solid var(--line);
+  padding:0 14px;background:var(--card);color:var(--fg);outline:none;-webkit-appearance:none;text-transform:uppercase}
+.addf input::placeholder{text-transform:none;color:var(--faint)}
+.addf button{flex:0 0 auto;min-width:72px;height:44px;border-radius:22px;background:var(--srcSoft);color:var(--src);
+  font-weight:700;font-size:14px;padding:0 16px}
+.addf button:disabled{opacity:.5}
+.msg{min-height:18px;font-size:12px;color:var(--sub);margin:8px 2px 0}
+.msg:empty{display:none}
+.msg.bad{color:var(--warn)}
+/* 常见公司:点一个就关注 */
+.pre{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.pre button{min-height:36px;min-width:64px;padding:0 14px;border-radius:18px;background:var(--srcSoft);color:var(--src);
+  font-size:13px;font-weight:700}
+.pre button.on{background:var(--tile);color:var(--sub)}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;min-height:62px;text-align:left;position:relative}
+.opt+.opt::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
+.opt .tx{flex:1 1 auto;min-width:0}
+.opt b{display:block;font-size:15px;font-weight:600;line-height:1.35}
+.opt small{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+.opt .ck{flex:0 0 auto;width:22px;height:22px;border-radius:11px;border:2px solid var(--line)}
+.opt.on .ck{border:6px solid var(--src)}
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.opt,.xb-tap{position:relative}
+.opt::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.opt:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+<div class="hd"><h1 data-i="title"></h1></div>
+<div class="sub" data-i="sub"></div>
+<div class="grp" id="opts" style="margin-top:12px"></div>
+<div class="foot" data-i="foot"></div>
+<script>
+var I18N = {
+ "zh": {
+  "title": "显示哪类文件",
+  "sub": "这个组件只显示你选的这一类，关注的公司不变。",
+  "k_all": "全部公告",
+  "d_all": "公司自己交的文件，不含内部人交易与发行说明书",
+  "k_cur": "8-K 重大事项",
+  "d_cur": "业绩发布、高管变动、并购等临时公告",
+  "k_fin": "财报",
+  "d_fin": "季度报告（10-Q）与年度报告（10-K）",
+  "k_ins": "内部人交易",
+  "d_ins": "高管与大股东买卖股票（Form 3、4、5 与 144）",
+  "noBrick": "请从组件上长按「编辑」进入",
+  "saveFail": "没能保存，请再试一次",
+  "foot": "选好后组件马上按新的类型显示。首页上的分段不受影响。"
+ },
+ "en": {
+  "title": "Filing type",
+  "sub": "This widget shows only the type you pick. Your companies stay the same.",
+  "k_all": "All filings",
+  "d_all": "The company's own filings, excluding insider filings and prospectuses",
+  "k_cur": "8-K current reports",
+  "d_cur": "Earnings, leadership changes, deals and other events",
+  "k_fin": "Periodic reports",
+  "d_fin": "Quarterly (10-Q) and annual (10-K) reports",
+  "k_ins": "Insider filings",
+  "d_ins": "Stock trades by officers and major holders (Forms 3, 4, 5 and 144)",
+  "noBrick": "Open this from a widget's Edit menu",
+  "saveFail": "Couldn't save. Try again.",
+  "foot": "The widget switches right away. Tabs on the home page aren't affected."
+ }
+};
+var LANG = "en";
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* ⚠️ 空串是合法译文,不兜底(xbundle-i18n:A 表空串 = 刻意为空)。缺键回落英文表(overseas-first §2)。 */
+function t(k){
+  var m = I18N[LANG];
+  if (m && Object.prototype.hasOwnProperty.call(m, k)) return m[k];
+  return I18N.en[k] !== undefined ? I18N.en[k] : k;
+}
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+/* SEC 的表格名称里偶有 &amp; —— 先解回原字符,再 esc 一次写进 DOM。 */
+function dec(s){ return String(s == null ? "" : s).replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"'); }
+/* SEC 公司名(全大写 + 法律后缀)→ 读法:去末尾连续的 CO / CORP / INC / LTD …,全大写的逐词首字母大写(与 latest.df 同一规则) */
+var NAME_SUF = {CO:1,COM:1,CORP:1,CORPORATION:1,INC:1,INCORPORATED:1,LTD:1,LIMITED:1,PLC:1,LLC:1,LP:1,SA:1,NV:1,AG:1,SE:1,"&":1};
+function nice(s){
+  s = dec(s).trim(); if (!s) return s;
+  var w = s.split(/\s+/), up = s === s.toUpperCase();
+  while (w.length > 1){ var l = w[w.length - 1].replace(/[.,]/g, "").toUpperCase(); if (NAME_SUF[l] || l.charAt(0) === "/") w.pop(); else break; }
+  return w.map(function(x){ x = x.replace(/,$/, ""); return (up && x.indexOf("&") < 0) ? x.charAt(0) + x.slice(1).toLowerCase() : x; }).join(" ");
+}
+/* 只放行 https://www.sec.gov 的链接:行里的 href 来自第三方响应,别让一个 `javascript:` 混进来。 */
+function safeUrl(u){ u = String(u || ""); return /^https:\/\/www\.sec\.gov\//i.test(u) ? u : ""; }
+/* 桥的 call 型方法四端一律 resolve {code,msg,data}、从不 reject(G49)—— 统一在这里拆信封。 */
+function un(r){ if (r && typeof r === "object" && "code" in r){ if (r.code !== 0) throw new Error(r.msg || ("code " + r.code)); return r.data; } return r; }
+function toast(s){ try { xbridge.toast(s); } catch(e){} }
+function applyTheme(th){
+  var dark = th ? th === "dark" : (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+}
+async function ready(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  return !!window.xbridge;
+}
+async function env(){
+  /* 先认宿主 documentStart 写好的 <html data-lang>,appInfo 回来再以它为准;都拿不到 = 英文(overseas-first §1)。 */
+  var hl = document.documentElement.getAttribute("data-lang") || "";
+  if (hl) LANG = nbLang(hl);
+  try { var a = (await xbridge.appInfo().then(un)) || {};
+    applyTheme(a.theme);
+    if (a.language || a.locale) LANG = nbLang(a.language || a.locale);
+  } catch(e){ applyTheme(); }
+  document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+}
+function paintStatic(){
+  if (I18N[LANG] && I18N[LANG].title) document.title = t("title");
+  document.querySelectorAll("[data-i]").forEach(function(el){
+    var k = el.dataset.i; if (/^foot|^step|^setupB/.test(k)) el.innerHTML = t(k); else el.textContent = t(k);
+  });
+  document.querySelectorAll("[data-ph]").forEach(function(el){ el.placeholder = t(el.dataset.ph); });
+}
+/* 并发上限:同时最多 n 个请求(SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟)。 */
+async function pool(items, n, fn){
+  var i = 0;
+  async function worker(){ while (i < items.length){ var k = i++; try { await fn(items[k], k); } catch(e){} } }
+  var ws = []; for (var j = 0; j < Math.min(n, items.length); j++) ws.push(worker());
+  await Promise.all(ws);
+}
+
+/* ── 关注列表(data.sec_list = [{t:"NVDA", n:"NVIDIA CORP"}, …],最多 8 家)── */
+var MAXF = 8, LIST = [];
+async function getList(){
+  var v = null;
+  try { v = await xbridge.getData("sec_list").then(un); } catch(e){ v = null; }
+  if (typeof v === "string"){ try { v = JSON.parse(v); } catch(e){ v = null; } }
+  var out = [], seen = {};
+  (Array.isArray(v) ? v : []).forEach(function(x){
+    var tk = String((x && x.t) || "").toUpperCase();
+    if (tk && !seen[tk] && out.length < MAXF){ seen[tk] = 1; out.push({ t: tk, n: String((x && x.n) || "") }); }
+  });
+  return out;
+}
+async function saveList(){
+  /* 整份数组交给 save.af 落盘(data.set + widget.refresh)。 */
+  await xbridge.runActionFlow("save", { list: LIST.slice() }).then(un);
+}
+/* 代码规整:去空格、转大写、「BRK.B」→「BRK-B」(SEC 只认连字符)。 */
+function normTicker(s){ return String(s || "").trim().toUpperCase().replace(/\s+/g, "").replace(/\./g, "-"); }
+function validTicker(s){ return /^[A-Z][A-Z0-9-]{0,9}$/.test(s); }
+/* 关注一家:先到 SEC 核一次这个代码(probe.df:1 有 / 0 没有 / 空 = 没连上),再落盘。
+   返回 "ok" | "dup" | "full" | "bad" | "none" | "net"。只有成功才算数 —— 失败不锁任何按钮(§9.5 #22)。 */
+async function addTicker(raw){
+  var tk = normTicker(raw);
+  if (!validTicker(tk)) return "bad";
+  if (LIST.some(function(x){ return x.t === tk; })) return "dup";
+  if (LIST.length >= MAXF) return "full";
+  var d = null;
+  try { d = await xbridge.runDataFlow("probe", { t: tk }).then(un); } catch(e){ d = null; }
+  var st = d ? String(d.st == null ? "" : d.st) : "";
+  if (st === "0") return "none";
+  if (st !== "1") return "net";
+  LIST = await getList();
+  if (LIST.some(function(x){ return x.t === tk; })) return "dup";
+  if (LIST.length >= MAXF) return "full";
+  LIST.push({ t: tk, n: dec(d.nm || "") });
+  try { await saveList(); } catch(e){ LIST = await getList(); return "net"; }
+  return "ok";
+}
+function addMsg(code, tk){
+  return ({ ok: t("mOk").replace("{t}", tk), dup: t("mDup").replace("{t}", tk), full: t("mFull"),
+            bad: t("mBad"), none: t("mNone").replace("{t}", tk), net: t("mNet") })[code] || "";
+}
+
+var KINDS = ["all", "cur", "fin", "ins"];
+var Q = new URLSearchParams(location.search), BRICK = String(Q.get("brickId") || Q.get("brick") || ""), CUR = String(Q.get("kind") || "all");
+if (KINDS.indexOf(CUR) < 0) CUR = "all";
+var BUSY = false;
+function paint(){
+  document.getElementById("opts").innerHTML = KINDS.map(function(k){
+    return '<button class="opt' + (k === CUR ? " on" : "") + '" type="button" data-k="' + k + '"><span class="tx"><b>' + esc(t("k_" + k)) +
+      "</b><small>" + esc(t("d_" + k)) + '</small></span><span class="ck"></span></button>';
+  }).join("");
+}
+async function pick(k){
+  if (BUSY) return;
+  CUR = k; paint();
+  if (!BRICK){ toast(t("noBrick")); return; }
+  BUSY = true;
+  /* updateParams 是逐键合并:写回即落盘 + 那个组件重渲,不用再补 widget.refresh */
+  try { await xbridge.updateParams(BRICK, { kind: k }).then(un); } catch(e){ BUSY = false; toast(t("saveFail")); return; }
+  xbridge.haptic && xbridge.haptic();
+  setTimeout(function(){ try { xbridge.closePage(); } catch(e){} }, 320);
+}
+document.addEventListener("click", function(e){ var el = e.target.closest("[data-k]"); if (el) pick(el.dataset.k); });
+(async function boot(){
+  if (!(await ready())){ applyTheme(); paintStatic(); paint(); return; }
+  await env(); paintStatic(); paint();
+})();
+</script>
+</body></html>

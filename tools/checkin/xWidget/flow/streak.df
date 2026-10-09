@@ -1,0 +1,332 @@
+{
+  "_note": "单个事项的连续天数。入参 {itemId, mask}。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "入参先落地成 data 域的键(§9.5 #3),再由 resultFilter 透出去 —— **RCN 只看得见 flow 的输出**,shell params 不进渲染域。`mask` 决定卡上打不打码(打码开关在事项页,经 pickWidgets 的 per-item params 传进来)。",
+      "op": "set",
+      "props": {
+        "key": "mask",
+        "value": "${mask}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sk",
+        "value": "stat_${itemId}"
+      }
+    },
+    {
+      "_note": "「连续天数」只需要 stat 里的几个标量 —— 刻意不复用 days.df（那份要跑 120 次查表与配色），22 档单指标卡不该为一个数字付整段窗口计算。",
+      "id": "s",
+      "action": "data.get",
+      "params": {
+        "key": "${sk}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "byDay",
+        "value": "${s.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pal",
+        "value": "$[findNotEmpty::(${s.pal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "goalRaw",
+        "value": "$[findNotEmpty::(${s.goal},1)]"
+      }
+    },
+    {
+      "_note": "目标下限钉 1:0 或空会让「达标」恒真,连续天数就成了「有没有打开过 App」。",
+      "op": "set",
+      "props": {
+        "key": "goal",
+        "value": "$[if::(ge::(${goalRaw},1),${goalRaw},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "icon",
+        "value": "$[findNotEmpty::(${s.icon},)]"
+      }
+    },
+    {
+      "_note": "有没有图标 —— RCN 没有「按内容让位」的排版，名字的起点要靠两条 op:if 分支切，不能只画一个空的图标位（空图标会在名字左边留一块说不清的白）。",
+      "op": "set",
+      "props": {
+        "key": "hicon",
+        "value": "$[if::(eq::(findNotEmpty::(${icon},_),_),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "iname",
+        "value": "$[findNotEmpty::(${s.name},)]"
+      }
+    },
+    {
+      "_note": "主题色(浅|深)。⚠️ `|` 由 StaticCanvas 核心对**最终字符串**切分(source_scene_paint_internal.cpp `sc_select_dark_paint_branch`),所以运行时算出来的 `#AAA|#BBB` 一样能分明暗 —— 主题色才能跟着事项走。",
+      "op": "set",
+      "props": {
+        "key": "mc",
+        "value": "$[if::(eq::(${pal},1),#2E9E6B|#45C793,if::(eq::(${pal},2),#2F6FE4|#5C9BFF,if::(eq::(${pal},3),#7A5AF8|#A78BFA,if::(eq::(${pal},4),#E07B39|#F0A05F,if::(eq::(${pal},5),#D2536D|#E87A93,#0E9AA7|#35C2CE)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp1",
+        "value": "$[if::(eq::(${pal},1),#7ABEA0|#3A896C,if::(eq::(${pal},2),#7BA2E9|#486FAD,if::(eq::(${pal},3),#A895F5|#7565AA,if::(eq::(${pal},4),#E5A982|#A1724D,if::(eq::(${pal},5),#DD91A1|#9C5B6C,#67BCC4|#318690)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp2",
+        "value": "$[if::(eq::(${pal},1),#54AE86|#40A880,if::(eq::(${pal},2),#5588E6|#5285D6,if::(eq::(${pal},3),#9178F6|#8E78D2,if::(eq::(${pal},4),#E3925E|#C88956,if::(eq::(${pal},5),#D77287|#C26A80,#3BABB6|#33A4AF)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hp3",
+        "value": "$[if::(eq::(${pal},1),#2E9E6B|#45C793,if::(eq::(${pal},2),#2F6FE4|#5C9BFF,if::(eq::(${pal},3),#7A5AF8|#A78BFA,if::(eq::(${pal},4),#E07B39|#F0A05F,if::(eq::(${pal},5),#D2536D|#E87A93,#0E9AA7|#35C2CE)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0",
+        "value": "#EDEEF0|#20232A"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mk",
+        "value": "#DCDDE0|#33353B"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "_note": "按自然日归零再相减，否则同一天的上午/下午会算出不同天数（同 moment/countdown.df）。",
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(formatDate::(${nowMs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayKey",
+        "value": "$[formatDate::(${nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "total",
+        "value": "$[findNotEmpty::(${s.total},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "has",
+        "value": "$[if::(gt::(${total},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayCnt",
+        "value": "$[findNotEmpty::(get::(${byDay},${todayKey}),0)]"
+      }
+    },
+    {
+      "_note": "达标 = 今天次数 ≥ 每日目标。",
+      "op": "set",
+      "props": {
+        "key": "done",
+        "value": "$[if::(ge::(${todayCnt},${goal}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lastDayMs",
+        "value": "$[parseDate::(formatDate::(${s.lastTs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "alive",
+        "value": "$[if::(ge::(${lastDayMs},calc::(${todayMs}-86400000)),1,0)]"
+      }
+    },
+    {
+      "_note": "⚠️ 投影必须用 **streakEnd(最后一个达标日)**,不能用 lastDayMs(最后一条**记录**的日子)——计次型今天打了但没打够时两者差一天,用后者会把没达标的今天白算进去,表现为卡上「连续 10 天」而「最长 9 天」自相矛盾(2026-08-21 页面侧验出并修,本处同源)。\n⚠️ `alive` 仍用 lastDayMs 判 —— 那一天的宽限是**刻意的**(今天打了没打够不该立刻宣告断签),两者不是一回事,别一起改。\n⚠️ 存量 stat 没有 `streakEnd`,`findNotEmpty` 回落到 lastTs(= 老行为),不会因升级而空。",
+      "op": "set",
+      "props": {
+        "key": "endDayMs",
+        "value": "$[parseDate::(formatDate::(findNotEmpty::(${s.streakEnd},${s.lastTs}),yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "streak",
+        "value": "$[if::(eq::(${alive},1),calc::(round::(calc::((${endDayMs}-${s.streakStart})/86400000),0)+1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "best",
+        "value": "$[findNotEmpty::(${s.best},0)]"
+      }
+    },
+    {
+      "_note": "日期锚(标准 §4.4)。本包每一个数都是**时钟的函数**(今天打没打 / 连了几天),而桌面小组件的封面缓存 key 不含时间维度 —— 卡上不写日期,用户无从判断桌面那张是不是停在昨天。",
+      "op": "set",
+      "props": {
+        "key": "d1Lbl",
+        "value": "$[formatDate::(${todayMs},MM-dd)]"
+      }
+    },
+    {
+      "_note": "有没有「最佳纪录」这回事。⚠️ 用显式旗标而不是拿 best 空不空判 —— best 是 `findNotEmpty::(${s.best},0)` 兜出来的**数字**,而 `length::` 对数字恒返 0(memory [[vparser-engine-pitfalls]]),判空必错。",
+      "op": "set",
+      "props": {
+        "key": "bestOk",
+        "value": "$[if::(ge::(${best},1),1,0)]"
+      }
+    },
+    {
+      "_note": "离最佳还差几天。⚠️ 外层 `round::` 是为了**取整数类型** —— calc 在 Android 上恒返 double,不套就渲成「还差 19.0 天」(同 pill/w.df 的 todayNo)。",
+      "op": "set",
+      "props": {
+        "key": "gap",
+        "value": "$[round::(calc::(${best}-${streak}))]"
+      }
+    },
+    {
+      "_note": "第二行语境说哪一句(2026-09-09 加)。这张卡原本只报一个数字,而「连续 12 天」单独看不出**做得怎么样**;把它放回自己的最佳纪录旁边才有意义。\n  0 = 不说话   1 = 距最佳还差 N 天   2 = 已是最佳(含追平)\n  3 = 当前已断,只报最佳纪录   4 = 有记录但从没达标过,且今天还没打\n⚠️ **措辞一律中性**:断签在习惯类产品里本来就常见,卡上不出现任何指责性的词(「你已经断了」这类)。3 档只陈述纪录,不评价。\n⚠️ `mask=1` 时整行不说话 —— 这一行带数字,而打码承诺的就是不露数字。",
+      "op": "set",
+      "props": {
+        "key": "skind",
+        "value": "$[if::(eq::(${mask},1),0,if::(eq::(${has},1),if::(ge::(${streak},1),if::(eq::(${bestOk},1),if::(gt::(${gap},0),1,2),2),if::(eq::(${bestOk},1),3,if::(eq::(${todayCnt},0),4,0))),0))]"
+      }
+    },
+    {
+      "_note": "连续链的总开关。⚠️ `mask=1` 时整条链不画 —— 链的**格数就是最佳纪录**,画出来等于把打码承诺不露的那个数用格子报了一遍。没有纪录(best=0)时也不画:一条空链说不出「你还没开始」,那句话由脚注的「还没有记录」说。",
+      "op": "set",
+      "props": {
+        "key": "chOn",
+        "value": "$[if::(eq::(${mask},1),0,if::(ge::(${best},1),1,0))]"
+      }
+    },
+    {
+      "_note": "链的两种形态,判据只有一条:**这条链还数得清吗**。\n  1 = 刻度链(best ≤ 13):一格一天,格数 = 最佳纪录,亮格 = 当前连续 → 亮格数与暗格数分别就是「连了几天」和「离纪录多远」,两个数都能**数**出来。\n  2 = 整轨(best > 13):13 格以上单格窄过 8.5pt,数格子已经不成立;这时候不分格,改用一条整轨 + 填充,只答**比例**。\n⚠️ 不能只留形态 1 然后把格数封顶 13:best=60 时 13 格全亮会被读成「连了 13 天」,而大数字那儿写着 60 —— 同一张卡上两个互相矛盾的答案,正是本轮要根治的那类静默失效。",
+      "op": "set",
+      "props": {
+        "key": "chMode",
+        "value": "$[if::(eq::(${chOn},0),0,if::(gt::(${best},13),2,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chN",
+        "value": "$[if::(eq::(${chMode},1),${best},0)]"
+      }
+    },
+    {
+      "_note": "除数兜底(勿删):`if::` 的两支都会被求值,chN=0 那一档若直接进分母,整条表达式的结果不可预期 —— 而链宽这个量恰好只在 chMode=1 时才被看,坏值不报错、只会静默画歪。",
+      "op": "set",
+      "props": {
+        "key": "chNs",
+        "value": "$[if::(ge::(${chN},1),${chN},1)]"
+      }
+    },
+    {
+      "_note": "格宽:**链恒占满内容宽 134pt**,格数越多格越细。这条规则本身就是刻度 —— 纪录越长、格越密,一眼能比出两个事项谁的纪录更长。⚠️ 外层 `round::(…,1)` 不只为好看:calc 在 Android 上恒返 double,不套会渲出 `w: \"9.30000000000001pt\"`。",
+      "op": "set",
+      "props": {
+        "key": "chW",
+        "value": "$[round::(calc::((134-(${chNs}-1)*2)/${chNs}),1)]"
+      }
+    },
+    {
+      "_note": "亮格数。钳到 chN 是防御性的:streak 按定义不会超过 best(best 是含当前段的最大值),但存量 stat 里 best 早于 streakStart 写入时两者可能短暂失步,那一拍不该画出一条溢出的链。",
+      "op": "set",
+      "props": {
+        "key": "chLit",
+        "value": "$[if::(eq::(${chMode},1),if::(gt::(${streak},${chN}),${chN},${streak}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bestS",
+        "value": "$[if::(ge::(${best},1),${best},1)]"
+      }
+    },
+    {
+      "_note": "整轨形态的填充终点(轨内 px)。轨盒 134×8、lineWidth 8、圆头 → 可用区间 [4,130];streak=0 时落在 4 = 左端那个圆头,画出来是一个点而不是零宽 —— 零宽的圆角矩形几何构建失败会整卡白屏,所以这一路一律用 line 而不是 layer 的 w。",
+      "op": "set",
+      "props": {
+        "key": "fPx",
+        "value": "$[round::(calc::(4+(126*${streak})/${bestS}),1)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "streak",
+          "d1Lbl",
+          "best",
+          "done",
+          "total",
+          "has",
+          "todayCnt",
+          "goal",
+          "mc",
+          "icon",
+          "hicon",
+          "iname",
+          "mask",
+          "gap",
+          "skind",
+          "chMode",
+          "chN",
+          "chW",
+          "chLit",
+          "fPx"
+        ]
+      }
+    }
+  ]
+}

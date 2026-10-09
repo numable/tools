@@ -1,0 +1,580 @@
+{
+  "_note": "服务详情:summary.json(服务分项 / 进行中事故与全部更新 / 计划维护);incident.io 那几家另取 incidents.json。近期事故与近 30 天统计走 hist.df(与首页共用一份缓存)。解析在页面 JS 里做;首屏缓存同样在 JS 层(存精简模型,DigitalOcean 的 summary 就有 84KB),故豁免 data 层缓存。",
+  "_lintCache": "exempt",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "idIn",
+        "value": "$[findNotEmpty::(${id},)]"
+      },
+      "_note": "入参落地(勿删)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},github),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://www.githubstatus.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},claude),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.claude.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},openai),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.openai.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "hj",
+          "action": "request",
+          "params": {
+            "url": "https://status.openai.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "incident.io 兼容层:summary.json 里没有事故,进行中事故与它们的更新从 incidents.json(最新 25 条)取。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},vercel),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://www.vercel-status.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},cursor),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.cursor.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},npm),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.npmjs.org/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},docker),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://www.dockerstatus.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "hj",
+          "action": "request",
+          "params": {
+            "url": "https://www.dockerstatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "incident.io 兼容层:summary.json 里没有事故,进行中事故与它们的更新从 incidents.json(最新 25 条)取。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},bitbucket),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://bitbucket.status.atlassian.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},circleci),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.circleci.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},netlify),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://www.netlifystatus.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},supabase),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.supabase.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},render),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.render.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},digitalocean),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.digitalocean.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},mongodb),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.mongodb.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},sentry),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.sentry.io/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},datadog),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.datadoghq.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},linear),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://linearstatus.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "hj",
+          "action": "request",
+          "params": {
+            "url": "https://linearstatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "incident.io 兼容层:summary.json 里没有事故,进行中事故与它们的更新从 incidents.json(最新 25 条)取。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},notion),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://www.notion-status.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "hj",
+          "action": "request",
+          "params": {
+            "url": "https://www.notion-status.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "incident.io 兼容层:summary.json 里没有事故,进行中事故与它们的更新从 incidents.json(最新 25 条)取。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},figma),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.figma.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},postman),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://status.postman.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},discord),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://discordstatus.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${idIn},reddit),1,0)]"
+      },
+      "items": [
+        {
+          "id": "sm",
+          "action": "request",
+          "params": {
+            "url": "https://www.redditstatus.com/api/v2/summary.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "请求屏障(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pid",
+        "value": "${sm.page.id}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${pid}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "summary unavailable"
+          }
+        }
+      ],
+      "_note": "主干 = 这个服务的 summary.json。取不到就让流失败,页面保留缓存里的上一份。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "nowMs",
+          "sm",
+          "hj"
+        ]
+      }
+    }
+  ]
+}

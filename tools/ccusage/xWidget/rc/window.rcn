@@ -1,0 +1,291 @@
+{
+  "rc": {
+    "_note": "5 小时窗口(2026-09-24)。大数 = 这个窗口里已用多少(按 API 标价);条 = **时间**走了多少(不是额度 —— 官方剩余额度拿不到,画成额度条会被读成「还剩多少」);底行 = 几点重置 + 按目前速度到重置约多少。\n不在窗口里(winOn=0)是一个真实状态,不是没数据:大数位写「不在窗口中」,不渲 --。\n⚠️ 条底槽画在 op:if 外(G9 空态不空白);填充条宽度 = 纯布局表达式 × 数据变量(同 models.rcn 的写法),winPct 在 df 里保证恒有值。",
+    "i18n": {
+      "zh-CN": {
+        "title": "5 小时窗口",
+        "empty": "等待首次同步",
+        "used": "已用 · 按 API 标价",
+        "idle": "不在窗口中",
+        "idleSub": "下一次对话开始计时",
+        "resets": " 重置",
+        "proj": " · 预计 ",
+        "out": "输出 ",
+        "tA": "窗口时间已过 ",
+        "tB": "%"
+      },
+      "en-US": {
+        "title": "5-hour window",
+        "empty": "Not synced yet",
+        "used": "Used · API list prices",
+        "idle": "No active window",
+        "idleSub": "Starts with your next message",
+        "resets": " reset",
+        "proj": " · est. ",
+        "out": "Output ",
+        "tA": "",
+        "tB": "% of window elapsed"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FDFBFA\\,#FBF3F1)@90|linear(#15171A\\,#1A1A1C\\,#221E1F)@90"
+      },
+      {
+        "_note": "源色身份点：本包统一用 Claude 暖橙两档，与仪表盘上其它信息源区分开。",
+        "id": "dot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#C15F3C|#E8916B"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-92pt",
+        "h": "-1",
+        "text": "${@i18n.title}",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${winOn},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "big",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${winUsd},--)]",
+            "fontSize": "28pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          },
+          {
+            "id": "sub",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+32pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.used}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${winOn},1),0,if::(eq::(${live},1),1,0))]"
+        },
+        "react": [
+          {
+            "id": "idle",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+4pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.idle}",
+            "fontSize": "15pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          },
+          {
+            "id": "idleSub",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+26pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.idleSub}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${winOn},1),0,if::(eq::(${live},1),0,1))]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+8.4pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "28pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          },
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+32pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.used}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${winOn},1),1,0)]"
+        },
+        "_note": "进度条代表什么写在条上方(2026-10-08):条是窗口**时间**走了多少,不是额度用了多少;宽版有这句,窄版原来没有。",
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-64pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "alignmentH": "2",
+            "text": "${@i18n.tA}${winPct}${@i18n.tB}",
+            "fontSize": "8.5pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "id": "track",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{parent.h}-50pt",
+        "w": "{parent.w}-24pt",
+        "h": "6pt",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        },
+        "bgColor": "#EEE4E0|#2A2522"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(gt::(${winPct},0),1,0)]"
+        },
+        "react": [
+          {
+            "id": "fill",
+            "type": "layer",
+            "x": "12pt",
+            "y": "{parent.h}-50pt",
+            "w": "({parent.w}-24pt)*${winPct}/100",
+            "h": "6pt",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            },
+            "bgColor": "#C15F3C|#E8916B"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${winOn},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "reset",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-36pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${winReset}${@i18n.resets}$[if::(eq::(connect::(k,${winProj}),k),,${@i18n.proj}${winProj})]",
+            "fontSize": "10pt",
+            "textColor": "#C15F3C|#E8916B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${winOn},1),0,1)]"
+        },
+        "react": [
+          {
+            "id": "reset0",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}-36pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.out}--",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "时效锚 y = 卡名 y + 3:txt 盒顶 = 墨迹顶,同盒顶时 9pt 锚的基线比 13pt 卡名高 4.5pt(cell_align 实测),+3 后差 ≤ 1pt(卡片设计系统 §3「与组件名同基线」)",
+        "id": "at",
+        "type": "txt",
+        "x": "12pt",
+        "y": "14pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "alignmentH": "2",
+        "text": "$[findNotEmpty::(${at},${@i18n.empty})]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      }
+    ],
+    "i18nEmptyOk": [
+      "tA"
+    ]
+  }
+}

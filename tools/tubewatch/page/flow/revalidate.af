@@ -1,0 +1,18 @@
+{
+  "_note": "首屏三态的中间那一行(§5.5.1):进页时若渲的是旧货(`_stale=1`),后台校新一次。\n\n**挂在 `root.events.onLoad`** —— 它的 gate 挂在节点持久态、**全生命周期恰好一次**,软重载不重置(xpage-design.md §10.1),所以「删键 → reloadPage → 再跑 depends」不会自激。\n⚠️ **绝不能改挂 onVisible**:那个按协议每次可见都触发,配上 reloadPage 就是死循环 —— 何况它在四端**根本没实现**(memory [[xpage-onvisible-not-implemented]]),挂了也不跑。\n\n此刻页面**有数据**,reloadPage 走 stale-while-revalidate(保留旧内容、后台跑 depends、不闪骨架),用户看到的是旧数据原地换成新数据,全程没有骨架、没有浮层 —— 自动校新不该弹浮层(那是用户主动发起的操作才配有的反馈)。\n入参由 feed.df 的 resultFilter 透出(`_stale` / `ckey`),这里不重算新鲜度。",
+  "version": 1,
+  "actions": [
+    { "_note": "入参先落地:方法参数里的 ${} 看不见 flow 入参(§9.5 #3)。",
+      "op": "set", "props": { "key": "st", "value": "${stale}" } },
+    { "op": "set", "props": { "key": "isStale", "value": "$[parseNumber::(${st},0)]" },
+      "_note": "parseNumber 兜底,拿不到就当 0(不校新)—— 宁可少刷一次,也不要空转一轮网络(YouTube 对连打的 RSS 会随机返 404/500)。" },
+    { "op": "set", "props": { "key": "k", "value": "${ckey}" } },
+    { "_note": "⚠️ 键为空时什么都不做 —— 空键 remove 会删掉一个叫空串的键(无害但无意义),而随后的 reloadPage 会白跑一整轮网络。",
+      "op": "if", "props": { "val": "$[if::(eq::(${isStale},1),if::(gt::(length::(${k}),0),1,0),0)]" },
+      "items": [
+        { "action": "data.remove", "params": { "key": "${k}" },
+          "_note": "删键 → 下一趟 depends 必然 miss → 真取数 → 写回新值。**穿透靠删键,不靠传 force**:depends 的 params 是静态的,传不进去。" },
+        { "action": "xpage.reloadPage" }
+      ] }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "_note": "城市管理页读取:我的城市。与 home.df 读的是同一个 key,那边额外取天气、这边不取。\n⚠️ v44 起 `default` 是空数组(不再播种上海,见 home.df 的长注):列表为空是**合法态**,首页会换成引导屏。这一页拿到空数组就画一张空列表,H5 那边也不再自己补一座上海。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "saved",
+      "action": "data.get",
+      "params": {
+        "key": "cities",
+        "default": []
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "list",
+        "value": "${saved}"
+      }
+    },
+    {
+      "_note": "wxenv.unit_acts:温度单位设置 `data.wxUnit` = c / f(doc/overseas-first.md §7)。管理页「我的城市」里切换;没设过 → 按系统地区(@app.country)缺省。",
+      "id": "_wxu",
+      "action": "data.get",
+      "params": {
+        "key": "wxUnit",
+        "default": ""
+      }
+    },
+    {
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到结果。",
+      "op": "set",
+      "props": {
+        "key": "_bu",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缺省按国家:US / LR / MM / BS / BZ / KY / PW / FM / MH → f(华氏),其余(含 country 为空 = 未知)→ c。",
+      "op": "set",
+      "props": {
+        "key": "unit",
+        "value": "$[if::(eq::(${_wxu},f),f,if::(eq::(${_wxu},c),c,if::(or::(eq::(${@app.country},US),or::(eq::(${@app.country},LR),or::(eq::(${@app.country},MM),or::(eq::(${@app.country},BS),or::(eq::(${@app.country},BZ),or::(eq::(${@app.country},KY),or::(eq::(${@app.country},PW),or::(eq::(${@app.country},FM),eq::(${@app.country},MH))))))))),f,c)))]"
+      }
+    },
+    {
+      "_note": "拼到 Open-Meteo URL 末尾;摄氏时为空,URL 与此前逐字相同。",
+      "op": "set",
+      "props": {
+        "key": "uq",
+        "value": "$[if::(eq::(${unit},f),&temperature_unit=fahrenheit&wind_speed_unit=mph,)]"
+      }
+    },
+    {
+      "_note": "风速单位文案(渲染层拼在「风速」后面)。",
+      "op": "set",
+      "props": {
+        "key": "wu",
+        "value": "$[if::(eq::(${unit},f),mph,km/h)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "list",
+          "unit"
+        ]
+      }
+    }
+  ]
+}

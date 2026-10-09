@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "_note": "买卖力量:盘口 20 档买卖金额占比 + 价差(基点)+ 最近 60 笔里主动买入的金额占比与覆盖的分钟数。",
+  "i18n": {
+    "zh-CN": {
+      "noBook": "取不到盘口数据，部分地区暂不提供"
+    },
+    "en-US": {
+      "noBook": "Order book unavailable — not offered in some regions"
+    }
+  },
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "kr",
+        "value": "$[findNotEmpty::(${pair},btcusd)]"
+      },
+      "_note": "⚠️ 入参先落地:方法参数里看不见 flow 入参(§9.5 #3)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "$[if::(contains::(${kr},-),toUpperCase::(${kr}),connect::(toUpperCase::(if::(endsWith::(${kr},usdt),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usdc),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usd),subString::(${kr},0,calc::(length::(${kr})-3)),${kr})))),-,if::(endsWith::(${kr},usdc),USDC,USDT)))]"
+      },
+      "_note": "币对归一:老实例是 Bitstamp 形状 `btcusd`,新实例是 OKX instId `BTC-USDT`,两种都认。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sym",
+        "value": "$[index::(split::(${k},-),0)]"
+      }
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "action": "request",
+          "id": "b",
+          "params": {
+            "url": "https://www.okx.com/api/v5/market/books?instId=${k}&sz=20",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "t",
+          "params": {
+            "url": "https://www.okx.com/api/v5/market/trades?instId=${k}&limit=60",
+            "method": "GET",
+            "formatType": "json"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a1",
+        "value": "$[index::(index::(get::(index::(${b.data},0),asks),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b1",
+        "value": "$[index::(index::(get::(index::(${b.data},0),bids),0),0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${a1}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "${@i18n.noBook}"
+          }
+        }
+      ],
+      "_note": "盘口 / 逐笔是交易所专属数据,没有 Coinbase 那种备用源(crypto_fallback 只兜现货价与 K 线);OKX 在部分地区(如美国)不可用时这里恒失败 —— 失败文案直说(2026-10-08)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bL",
+        "value": "1"
+      },
+      "_note": "买方段 / 主数字的颜色旗标(恒为买方 = 涨色);取数失败时不存在 → 渲染层落灰"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bR",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bidN",
+        "value": "$[calc::(findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),0),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),0),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),1),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),1),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),2),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),2),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),3),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),3),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),4),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),4),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),5),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),5),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),6),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),6),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),7),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),7),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),8),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),8),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),9),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),9),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),10),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),10),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),11),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),11),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),12),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),12),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),13),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),13),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),14),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),14),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),15),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),15),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),16),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),16),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),17),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),17),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),18),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),18),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),19),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),bids),19),1),0))]"
+      },
+      "_note": "20 档逐档 价 × 量 求和(金额口径,不是张数 —— 低价档一大堆张数会虚高)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "askN",
+        "value": "$[calc::(findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),0),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),0),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),1),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),1),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),2),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),2),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),3),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),3),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),4),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),4),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),5),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),5),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),6),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),6),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),7),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),7),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),8),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),8),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),9),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),9),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),10),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),10),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),11),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),11),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),12),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),12),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),13),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),13),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),14),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),14),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),15),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),15),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),16),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),16),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),17),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),17),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),18),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),18),1),0)+findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),19),0),0)*findNotEmpty::(index::(index::(get::(index::(${b.data},0),asks),19),1),0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bidR",
+        "value": "$[parseNumber::(calc::(${bidN}/(${bidN}+${askN})*100),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bidUp",
+        "value": "$[if::(ge::(${bidR},50),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sx",
+        "value": "$[max::(8,min::(126,calc::(${bidR}*1.34)))]"
+      },
+      "_note": "分界点(条宽 134 内的像素)。两段各在分界前后收 2pt、中间露 4pt 卡底当缝 —— 不再拿卡底色竖线去盖:卡底是渐变,盖上去的颜色对不上;圆头也会伸进对方 3pt 互相压。夹在 [8,126] 让极端盘面下少的一侧仍剩一个圆点。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bxL",
+        "value": "$[parseNumber::(calc::(${sx}-5),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bxR",
+        "value": "$[parseNumber::(calc::(${sx}+5),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "spr",
+        "value": "$[calc::(${a1}-${b1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sprS",
+        "value": "$[parseNumber::(calc::(${spr}/((${a1}+${b1})/2)*10000),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tvB",
+        "value": "$[calc::(if::(eq::(get::(index::(${t.data},0),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},0),px),0)*findNotEmpty::(get::(index::(${t.data},0),sz),0)),0)+if::(eq::(get::(index::(${t.data},1),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},1),px),0)*findNotEmpty::(get::(index::(${t.data},1),sz),0)),0)+if::(eq::(get::(index::(${t.data},2),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},2),px),0)*findNotEmpty::(get::(index::(${t.data},2),sz),0)),0)+if::(eq::(get::(index::(${t.data},3),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},3),px),0)*findNotEmpty::(get::(index::(${t.data},3),sz),0)),0)+if::(eq::(get::(index::(${t.data},4),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},4),px),0)*findNotEmpty::(get::(index::(${t.data},4),sz),0)),0)+if::(eq::(get::(index::(${t.data},5),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},5),px),0)*findNotEmpty::(get::(index::(${t.data},5),sz),0)),0)+if::(eq::(get::(index::(${t.data},6),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},6),px),0)*findNotEmpty::(get::(index::(${t.data},6),sz),0)),0)+if::(eq::(get::(index::(${t.data},7),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},7),px),0)*findNotEmpty::(get::(index::(${t.data},7),sz),0)),0)+if::(eq::(get::(index::(${t.data},8),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},8),px),0)*findNotEmpty::(get::(index::(${t.data},8),sz),0)),0)+if::(eq::(get::(index::(${t.data},9),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},9),px),0)*findNotEmpty::(get::(index::(${t.data},9),sz),0)),0)+if::(eq::(get::(index::(${t.data},10),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},10),px),0)*findNotEmpty::(get::(index::(${t.data},10),sz),0)),0)+if::(eq::(get::(index::(${t.data},11),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},11),px),0)*findNotEmpty::(get::(index::(${t.data},11),sz),0)),0)+if::(eq::(get::(index::(${t.data},12),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},12),px),0)*findNotEmpty::(get::(index::(${t.data},12),sz),0)),0)+if::(eq::(get::(index::(${t.data},13),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},13),px),0)*findNotEmpty::(get::(index::(${t.data},13),sz),0)),0)+if::(eq::(get::(index::(${t.data},14),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},14),px),0)*findNotEmpty::(get::(index::(${t.data},14),sz),0)),0)+if::(eq::(get::(index::(${t.data},15),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},15),px),0)*findNotEmpty::(get::(index::(${t.data},15),sz),0)),0)+if::(eq::(get::(index::(${t.data},16),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},16),px),0)*findNotEmpty::(get::(index::(${t.data},16),sz),0)),0)+if::(eq::(get::(index::(${t.data},17),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},17),px),0)*findNotEmpty::(get::(index::(${t.data},17),sz),0)),0)+if::(eq::(get::(index::(${t.data},18),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},18),px),0)*findNotEmpty::(get::(index::(${t.data},18),sz),0)),0)+if::(eq::(get::(index::(${t.data},19),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},19),px),0)*findNotEmpty::(get::(index::(${t.data},19),sz),0)),0)+if::(eq::(get::(index::(${t.data},20),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},20),px),0)*findNotEmpty::(get::(index::(${t.data},20),sz),0)),0)+if::(eq::(get::(index::(${t.data},21),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},21),px),0)*findNotEmpty::(get::(index::(${t.data},21),sz),0)),0)+if::(eq::(get::(index::(${t.data},22),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},22),px),0)*findNotEmpty::(get::(index::(${t.data},22),sz),0)),0)+if::(eq::(get::(index::(${t.data},23),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},23),px),0)*findNotEmpty::(get::(index::(${t.data},23),sz),0)),0)+if::(eq::(get::(index::(${t.data},24),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},24),px),0)*findNotEmpty::(get::(index::(${t.data},24),sz),0)),0)+if::(eq::(get::(index::(${t.data},25),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},25),px),0)*findNotEmpty::(get::(index::(${t.data},25),sz),0)),0)+if::(eq::(get::(index::(${t.data},26),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},26),px),0)*findNotEmpty::(get::(index::(${t.data},26),sz),0)),0)+if::(eq::(get::(index::(${t.data},27),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},27),px),0)*findNotEmpty::(get::(index::(${t.data},27),sz),0)),0)+if::(eq::(get::(index::(${t.data},28),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},28),px),0)*findNotEmpty::(get::(index::(${t.data},28),sz),0)),0)+if::(eq::(get::(index::(${t.data},29),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},29),px),0)*findNotEmpty::(get::(index::(${t.data},29),sz),0)),0)+if::(eq::(get::(index::(${t.data},30),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},30),px),0)*findNotEmpty::(get::(index::(${t.data},30),sz),0)),0)+if::(eq::(get::(index::(${t.data},31),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},31),px),0)*findNotEmpty::(get::(index::(${t.data},31),sz),0)),0)+if::(eq::(get::(index::(${t.data},32),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},32),px),0)*findNotEmpty::(get::(index::(${t.data},32),sz),0)),0)+if::(eq::(get::(index::(${t.data},33),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},33),px),0)*findNotEmpty::(get::(index::(${t.data},33),sz),0)),0)+if::(eq::(get::(index::(${t.data},34),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},34),px),0)*findNotEmpty::(get::(index::(${t.data},34),sz),0)),0)+if::(eq::(get::(index::(${t.data},35),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},35),px),0)*findNotEmpty::(get::(index::(${t.data},35),sz),0)),0)+if::(eq::(get::(index::(${t.data},36),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},36),px),0)*findNotEmpty::(get::(index::(${t.data},36),sz),0)),0)+if::(eq::(get::(index::(${t.data},37),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},37),px),0)*findNotEmpty::(get::(index::(${t.data},37),sz),0)),0)+if::(eq::(get::(index::(${t.data},38),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},38),px),0)*findNotEmpty::(get::(index::(${t.data},38),sz),0)),0)+if::(eq::(get::(index::(${t.data},39),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},39),px),0)*findNotEmpty::(get::(index::(${t.data},39),sz),0)),0)+if::(eq::(get::(index::(${t.data},40),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},40),px),0)*findNotEmpty::(get::(index::(${t.data},40),sz),0)),0)+if::(eq::(get::(index::(${t.data},41),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},41),px),0)*findNotEmpty::(get::(index::(${t.data},41),sz),0)),0)+if::(eq::(get::(index::(${t.data},42),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},42),px),0)*findNotEmpty::(get::(index::(${t.data},42),sz),0)),0)+if::(eq::(get::(index::(${t.data},43),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},43),px),0)*findNotEmpty::(get::(index::(${t.data},43),sz),0)),0)+if::(eq::(get::(index::(${t.data},44),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},44),px),0)*findNotEmpty::(get::(index::(${t.data},44),sz),0)),0)+if::(eq::(get::(index::(${t.data},45),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},45),px),0)*findNotEmpty::(get::(index::(${t.data},45),sz),0)),0)+if::(eq::(get::(index::(${t.data},46),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},46),px),0)*findNotEmpty::(get::(index::(${t.data},46),sz),0)),0)+if::(eq::(get::(index::(${t.data},47),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},47),px),0)*findNotEmpty::(get::(index::(${t.data},47),sz),0)),0)+if::(eq::(get::(index::(${t.data},48),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},48),px),0)*findNotEmpty::(get::(index::(${t.data},48),sz),0)),0)+if::(eq::(get::(index::(${t.data},49),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},49),px),0)*findNotEmpty::(get::(index::(${t.data},49),sz),0)),0)+if::(eq::(get::(index::(${t.data},50),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},50),px),0)*findNotEmpty::(get::(index::(${t.data},50),sz),0)),0)+if::(eq::(get::(index::(${t.data},51),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},51),px),0)*findNotEmpty::(get::(index::(${t.data},51),sz),0)),0)+if::(eq::(get::(index::(${t.data},52),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},52),px),0)*findNotEmpty::(get::(index::(${t.data},52),sz),0)),0)+if::(eq::(get::(index::(${t.data},53),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},53),px),0)*findNotEmpty::(get::(index::(${t.data},53),sz),0)),0)+if::(eq::(get::(index::(${t.data},54),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},54),px),0)*findNotEmpty::(get::(index::(${t.data},54),sz),0)),0)+if::(eq::(get::(index::(${t.data},55),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},55),px),0)*findNotEmpty::(get::(index::(${t.data},55),sz),0)),0)+if::(eq::(get::(index::(${t.data},56),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},56),px),0)*findNotEmpty::(get::(index::(${t.data},56),sz),0)),0)+if::(eq::(get::(index::(${t.data},57),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},57),px),0)*findNotEmpty::(get::(index::(${t.data},57),sz),0)),0)+if::(eq::(get::(index::(${t.data},58),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},58),px),0)*findNotEmpty::(get::(index::(${t.data},58),sz),0)),0)+if::(eq::(get::(index::(${t.data},59),side),buy),calc::(findNotEmpty::(get::(index::(${t.data},59),px),0)*findNotEmpty::(get::(index::(${t.data},59),sz),0)),0))]"
+      },
+      "_note": "⚠️ side 是字符串枚举,eq:: 对两个都不能数字化的串做的是字符串比较(实测安全)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tvA",
+        "value": "$[calc::(findNotEmpty::(get::(index::(${t.data},0),px),0)*findNotEmpty::(get::(index::(${t.data},0),sz),0)+findNotEmpty::(get::(index::(${t.data},1),px),0)*findNotEmpty::(get::(index::(${t.data},1),sz),0)+findNotEmpty::(get::(index::(${t.data},2),px),0)*findNotEmpty::(get::(index::(${t.data},2),sz),0)+findNotEmpty::(get::(index::(${t.data},3),px),0)*findNotEmpty::(get::(index::(${t.data},3),sz),0)+findNotEmpty::(get::(index::(${t.data},4),px),0)*findNotEmpty::(get::(index::(${t.data},4),sz),0)+findNotEmpty::(get::(index::(${t.data},5),px),0)*findNotEmpty::(get::(index::(${t.data},5),sz),0)+findNotEmpty::(get::(index::(${t.data},6),px),0)*findNotEmpty::(get::(index::(${t.data},6),sz),0)+findNotEmpty::(get::(index::(${t.data},7),px),0)*findNotEmpty::(get::(index::(${t.data},7),sz),0)+findNotEmpty::(get::(index::(${t.data},8),px),0)*findNotEmpty::(get::(index::(${t.data},8),sz),0)+findNotEmpty::(get::(index::(${t.data},9),px),0)*findNotEmpty::(get::(index::(${t.data},9),sz),0)+findNotEmpty::(get::(index::(${t.data},10),px),0)*findNotEmpty::(get::(index::(${t.data},10),sz),0)+findNotEmpty::(get::(index::(${t.data},11),px),0)*findNotEmpty::(get::(index::(${t.data},11),sz),0)+findNotEmpty::(get::(index::(${t.data},12),px),0)*findNotEmpty::(get::(index::(${t.data},12),sz),0)+findNotEmpty::(get::(index::(${t.data},13),px),0)*findNotEmpty::(get::(index::(${t.data},13),sz),0)+findNotEmpty::(get::(index::(${t.data},14),px),0)*findNotEmpty::(get::(index::(${t.data},14),sz),0)+findNotEmpty::(get::(index::(${t.data},15),px),0)*findNotEmpty::(get::(index::(${t.data},15),sz),0)+findNotEmpty::(get::(index::(${t.data},16),px),0)*findNotEmpty::(get::(index::(${t.data},16),sz),0)+findNotEmpty::(get::(index::(${t.data},17),px),0)*findNotEmpty::(get::(index::(${t.data},17),sz),0)+findNotEmpty::(get::(index::(${t.data},18),px),0)*findNotEmpty::(get::(index::(${t.data},18),sz),0)+findNotEmpty::(get::(index::(${t.data},19),px),0)*findNotEmpty::(get::(index::(${t.data},19),sz),0)+findNotEmpty::(get::(index::(${t.data},20),px),0)*findNotEmpty::(get::(index::(${t.data},20),sz),0)+findNotEmpty::(get::(index::(${t.data},21),px),0)*findNotEmpty::(get::(index::(${t.data},21),sz),0)+findNotEmpty::(get::(index::(${t.data},22),px),0)*findNotEmpty::(get::(index::(${t.data},22),sz),0)+findNotEmpty::(get::(index::(${t.data},23),px),0)*findNotEmpty::(get::(index::(${t.data},23),sz),0)+findNotEmpty::(get::(index::(${t.data},24),px),0)*findNotEmpty::(get::(index::(${t.data},24),sz),0)+findNotEmpty::(get::(index::(${t.data},25),px),0)*findNotEmpty::(get::(index::(${t.data},25),sz),0)+findNotEmpty::(get::(index::(${t.data},26),px),0)*findNotEmpty::(get::(index::(${t.data},26),sz),0)+findNotEmpty::(get::(index::(${t.data},27),px),0)*findNotEmpty::(get::(index::(${t.data},27),sz),0)+findNotEmpty::(get::(index::(${t.data},28),px),0)*findNotEmpty::(get::(index::(${t.data},28),sz),0)+findNotEmpty::(get::(index::(${t.data},29),px),0)*findNotEmpty::(get::(index::(${t.data},29),sz),0)+findNotEmpty::(get::(index::(${t.data},30),px),0)*findNotEmpty::(get::(index::(${t.data},30),sz),0)+findNotEmpty::(get::(index::(${t.data},31),px),0)*findNotEmpty::(get::(index::(${t.data},31),sz),0)+findNotEmpty::(get::(index::(${t.data},32),px),0)*findNotEmpty::(get::(index::(${t.data},32),sz),0)+findNotEmpty::(get::(index::(${t.data},33),px),0)*findNotEmpty::(get::(index::(${t.data},33),sz),0)+findNotEmpty::(get::(index::(${t.data},34),px),0)*findNotEmpty::(get::(index::(${t.data},34),sz),0)+findNotEmpty::(get::(index::(${t.data},35),px),0)*findNotEmpty::(get::(index::(${t.data},35),sz),0)+findNotEmpty::(get::(index::(${t.data},36),px),0)*findNotEmpty::(get::(index::(${t.data},36),sz),0)+findNotEmpty::(get::(index::(${t.data},37),px),0)*findNotEmpty::(get::(index::(${t.data},37),sz),0)+findNotEmpty::(get::(index::(${t.data},38),px),0)*findNotEmpty::(get::(index::(${t.data},38),sz),0)+findNotEmpty::(get::(index::(${t.data},39),px),0)*findNotEmpty::(get::(index::(${t.data},39),sz),0)+findNotEmpty::(get::(index::(${t.data},40),px),0)*findNotEmpty::(get::(index::(${t.data},40),sz),0)+findNotEmpty::(get::(index::(${t.data},41),px),0)*findNotEmpty::(get::(index::(${t.data},41),sz),0)+findNotEmpty::(get::(index::(${t.data},42),px),0)*findNotEmpty::(get::(index::(${t.data},42),sz),0)+findNotEmpty::(get::(index::(${t.data},43),px),0)*findNotEmpty::(get::(index::(${t.data},43),sz),0)+findNotEmpty::(get::(index::(${t.data},44),px),0)*findNotEmpty::(get::(index::(${t.data},44),sz),0)+findNotEmpty::(get::(index::(${t.data},45),px),0)*findNotEmpty::(get::(index::(${t.data},45),sz),0)+findNotEmpty::(get::(index::(${t.data},46),px),0)*findNotEmpty::(get::(index::(${t.data},46),sz),0)+findNotEmpty::(get::(index::(${t.data},47),px),0)*findNotEmpty::(get::(index::(${t.data},47),sz),0)+findNotEmpty::(get::(index::(${t.data},48),px),0)*findNotEmpty::(get::(index::(${t.data},48),sz),0)+findNotEmpty::(get::(index::(${t.data},49),px),0)*findNotEmpty::(get::(index::(${t.data},49),sz),0)+findNotEmpty::(get::(index::(${t.data},50),px),0)*findNotEmpty::(get::(index::(${t.data},50),sz),0)+findNotEmpty::(get::(index::(${t.data},51),px),0)*findNotEmpty::(get::(index::(${t.data},51),sz),0)+findNotEmpty::(get::(index::(${t.data},52),px),0)*findNotEmpty::(get::(index::(${t.data},52),sz),0)+findNotEmpty::(get::(index::(${t.data},53),px),0)*findNotEmpty::(get::(index::(${t.data},53),sz),0)+findNotEmpty::(get::(index::(${t.data},54),px),0)*findNotEmpty::(get::(index::(${t.data},54),sz),0)+findNotEmpty::(get::(index::(${t.data},55),px),0)*findNotEmpty::(get::(index::(${t.data},55),sz),0)+findNotEmpty::(get::(index::(${t.data},56),px),0)*findNotEmpty::(get::(index::(${t.data},56),sz),0)+findNotEmpty::(get::(index::(${t.data},57),px),0)*findNotEmpty::(get::(index::(${t.data},57),sz),0)+findNotEmpty::(get::(index::(${t.data},58),px),0)*findNotEmpty::(get::(index::(${t.data},58),sz),0)+findNotEmpty::(get::(index::(${t.data},59),px),0)*findNotEmpty::(get::(index::(${t.data},59),sz),0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tkB",
+        "value": "$[if::(gt::(${tvA},0),parseNumber::(calc::(${tvB}/${tvA}*100),0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tkUp",
+        "value": "$[if::(gt::(length::(${tkB}),0),if::(ge::(${tkB},50),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "span",
+        "value": "$[parseNumber::(max::(calc::((get::(index::(${t.data},0),ts)-get::(index::(${t.data},59),ts))/60000),1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "sym",
+          "bidR",
+          "bidUp",
+          "bxL",
+          "bxR",
+          "sprS",
+          "tkB",
+          "tkUp",
+          "span",
+          "at",
+          "bL",
+          "bR"
+        ]
+      }
+    }
+  ]
+}

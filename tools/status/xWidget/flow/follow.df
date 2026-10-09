@@ -1,0 +1,6600 @@
+{
+  "_note": "关注的服务(最多 6 个)此刻的状态与进行中事故 —— 看板 / 极简 / 事故三个组件读关注列表,单服务组件传 `ids` 只看一个。数据源:各服务官方 Atlassian Statuspage 公开 JSON(免 key)。\n· Statuspage 原生(sp):status.json(~200B,总体指示灯)+ incidents/unresolved.json(只含未结束事故,平时 ~160B)。⚠️ 不用 summary.json(DigitalOcean 84KB、Zoom 162KB)与 incidents.json(全量,多数 >100KB,越过标准 §3 第 5 条)。\n· incident.io 兼容层(io:OpenAI / Docker / Linear / Notion):status.json 照取,但它的 page.updated_at 长期不动、事故也常不挂服务分项(component) → 指示灯多半一直是 none;unresolved.json 直接 404。进行中事故改从 incidents.json(最新 25 条,30–40KB)的前 3 条里挑未结束的。\n· 每个服务的 URL 是字面量 host:网络白名单静态闭合,用户只能从内置目录里选,不能填任意地址。\n· 组件的 .df 不做缓存(G23 契约 5):刷新意图就是直取。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "idsIn",
+        "value": "$[findNotEmpty::(${ids},)]"
+      },
+      "_note": "入参落地(勿删):方法参数里的 ${} 看不见 flow 入参。`ids` 只有「单服务」组件会传(一个服务 id),其余三个组件不传 → 读用户在首页维护的关注列表。"
+    },
+    {
+      "id": "fl",
+      "action": "data.get",
+      "params": {
+        "key": "follow",
+        "default": [
+          "github",
+          "claude",
+          "openai",
+          "vercel"
+        ]
+      },
+      "_note": "关注列表:首页「管理关注」写入的服务 id 数组(最多 6 个,按关注顺序)。没存过时用默认四个 —— 装上就有东西看,首屏不空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0",
+        "value": "1"
+      },
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到它的结果。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flj",
+        "value": "$[if::(gt::(length::(${idsIn}),0),${idsIn},join::(${fl},~))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flk",
+        "value": "~${flj}~"
+      },
+      "_note": "两端补分隔符,下面用 contains::(…,~id~) 判「关注了没有」,不会把 `npm` 误配进别的 id。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "raw",
+        "value": "$[split::(${flj},~)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~github~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_github",
+          "action": "request",
+          "params": {
+            "url": "https://www.githubstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_github",
+          "action": "request",
+          "params": {
+            "url": "https://www.githubstatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~claude~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_claude",
+          "action": "request",
+          "params": {
+            "url": "https://status.claude.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_claude",
+          "action": "request",
+          "params": {
+            "url": "https://status.claude.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~openai~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_openai",
+          "action": "request",
+          "params": {
+            "url": "https://status.openai.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ih_openai",
+          "action": "request",
+          "params": {
+            "url": "https://status.openai.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "incident.io 兼容层:没有 unresolved.json(404),进行中事故从最新 25 条里挑未结束的。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~vercel~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_vercel",
+          "action": "request",
+          "params": {
+            "url": "https://www.vercel-status.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_vercel",
+          "action": "request",
+          "params": {
+            "url": "https://www.vercel-status.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~cursor~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_cursor",
+          "action": "request",
+          "params": {
+            "url": "https://status.cursor.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_cursor",
+          "action": "request",
+          "params": {
+            "url": "https://status.cursor.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~npm~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_npm",
+          "action": "request",
+          "params": {
+            "url": "https://status.npmjs.org/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_npm",
+          "action": "request",
+          "params": {
+            "url": "https://status.npmjs.org/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~docker~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_docker",
+          "action": "request",
+          "params": {
+            "url": "https://www.dockerstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ih_docker",
+          "action": "request",
+          "params": {
+            "url": "https://www.dockerstatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "incident.io 兼容层:没有 unresolved.json(404),进行中事故从最新 25 条里挑未结束的。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~bitbucket~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_bitbucket",
+          "action": "request",
+          "params": {
+            "url": "https://bitbucket.status.atlassian.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_bitbucket",
+          "action": "request",
+          "params": {
+            "url": "https://bitbucket.status.atlassian.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~circleci~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_circleci",
+          "action": "request",
+          "params": {
+            "url": "https://status.circleci.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_circleci",
+          "action": "request",
+          "params": {
+            "url": "https://status.circleci.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~netlify~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_netlify",
+          "action": "request",
+          "params": {
+            "url": "https://www.netlifystatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_netlify",
+          "action": "request",
+          "params": {
+            "url": "https://www.netlifystatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~supabase~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_supabase",
+          "action": "request",
+          "params": {
+            "url": "https://status.supabase.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_supabase",
+          "action": "request",
+          "params": {
+            "url": "https://status.supabase.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~render~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_render",
+          "action": "request",
+          "params": {
+            "url": "https://status.render.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_render",
+          "action": "request",
+          "params": {
+            "url": "https://status.render.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~digitalocean~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_digitalocean",
+          "action": "request",
+          "params": {
+            "url": "https://status.digitalocean.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_digitalocean",
+          "action": "request",
+          "params": {
+            "url": "https://status.digitalocean.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~mongodb~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_mongodb",
+          "action": "request",
+          "params": {
+            "url": "https://status.mongodb.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_mongodb",
+          "action": "request",
+          "params": {
+            "url": "https://status.mongodb.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~sentry~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_sentry",
+          "action": "request",
+          "params": {
+            "url": "https://status.sentry.io/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_sentry",
+          "action": "request",
+          "params": {
+            "url": "https://status.sentry.io/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~datadog~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_datadog",
+          "action": "request",
+          "params": {
+            "url": "https://status.datadoghq.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_datadog",
+          "action": "request",
+          "params": {
+            "url": "https://status.datadoghq.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~linear~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_linear",
+          "action": "request",
+          "params": {
+            "url": "https://linearstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ih_linear",
+          "action": "request",
+          "params": {
+            "url": "https://linearstatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "incident.io 兼容层:没有 unresolved.json(404),进行中事故从最新 25 条里挑未结束的。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~notion~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_notion",
+          "action": "request",
+          "params": {
+            "url": "https://www.notion-status.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ih_notion",
+          "action": "request",
+          "params": {
+            "url": "https://www.notion-status.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          },
+          "_note": "incident.io 兼容层:没有 unresolved.json(404),进行中事故从最新 25 条里挑未结束的。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~figma~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_figma",
+          "action": "request",
+          "params": {
+            "url": "https://status.figma.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_figma",
+          "action": "request",
+          "params": {
+            "url": "https://status.figma.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~postman~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_postman",
+          "action": "request",
+          "params": {
+            "url": "https://status.postman.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_postman",
+          "action": "request",
+          "params": {
+            "url": "https://status.postman.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~discord~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_discord",
+          "action": "request",
+          "params": {
+            "url": "https://discordstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_discord",
+          "action": "request",
+          "params": {
+            "url": "https://discordstatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~reddit~),1,0)]"
+      },
+      "items": [
+        {
+          "id": "st_reddit",
+          "action": "request",
+          "params": {
+            "url": "https://www.redditstatus.com/api/v2/status.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        },
+        {
+          "id": "ur_reddit",
+          "action": "request",
+          "params": {
+            "url": "https://www.redditstatus.com/api/v2/incidents/unresolved.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1",
+        "value": "1"
+      },
+      "_note": "请求屏障(勿删):request 之后紧邻的节点读不到响应(晚一拍)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~github~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_github",
+            "value": "${st_github.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_github",
+            "value": "$[if::(eq::(${ind_github},none),0,if::(eq::(${ind_github},maintenance),1,if::(eq::(${ind_github},minor),2,if::(eq::(${ind_github},major),3,if::(eq::(${ind_github},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_github",
+            "value": "$[length::(${ur_github.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_github",
+            "value": "${ur_github.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_github",
+            "value": "${ur_github.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_github",
+            "value": "${ur_github.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_github",
+            "value": "$[findNotEmpty::(${ur_github.incidents[0].started_at},${ur_github.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_github",
+            "value": "${ur_github.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_github",
+            "value": "$[if::(gt::(${no_github},0),if::(eq::(${ti_github},critical),4,if::(eq::(${ti_github},major),3,if::(eq::(${ti_github},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_github",
+            "value": "$[if::(lt::(${lvs_github},0),-1,max::(${lvs_github},${tl_github}))]"
+          },
+          "_note": "状态档 = max(总体指示灯, 最新进行中事故的影响)。取不到总体状态(请求失败)就是 -1「状态未知」,绝不默认成「正常」—— 编一个「一切正常」是骗人。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~claude~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_claude",
+            "value": "${st_claude.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_claude",
+            "value": "$[if::(eq::(${ind_claude},none),0,if::(eq::(${ind_claude},maintenance),1,if::(eq::(${ind_claude},minor),2,if::(eq::(${ind_claude},major),3,if::(eq::(${ind_claude},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_claude",
+            "value": "$[length::(${ur_claude.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_claude",
+            "value": "${ur_claude.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_claude",
+            "value": "${ur_claude.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_claude",
+            "value": "${ur_claude.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_claude",
+            "value": "$[findNotEmpty::(${ur_claude.incidents[0].started_at},${ur_claude.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_claude",
+            "value": "${ur_claude.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_claude",
+            "value": "$[if::(gt::(${no_claude},0),if::(eq::(${ti_claude},critical),4,if::(eq::(${ti_claude},major),3,if::(eq::(${ti_claude},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_claude",
+            "value": "$[if::(lt::(${lvs_claude},0),-1,max::(${lvs_claude},${tl_claude}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~openai~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_openai",
+            "value": "${st_openai.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_openai",
+            "value": "$[if::(eq::(${ind_openai},none),0,if::(eq::(${ind_openai},maintenance),1,if::(eq::(${ind_openai},minor),2,if::(eq::(${ind_openai},major),3,if::(eq::(${ind_openai},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0_openai",
+            "value": "$[findNotEmpty::(${ih_openai.incidents[0].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u0_openai",
+            "value": "$[if::(or::(eq::(${q0_openai},resolved),eq::(${q0_openai},postmortem),eq::(${q0_openai},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1_openai",
+            "value": "$[findNotEmpty::(${ih_openai.incidents[1].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u1_openai",
+            "value": "$[if::(or::(eq::(${q1_openai},resolved),eq::(${q1_openai},postmortem),eq::(${q1_openai},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2_openai",
+            "value": "$[findNotEmpty::(${ih_openai.incidents[2].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u2_openai",
+            "value": "$[if::(or::(eq::(${q2_openai},resolved),eq::(${q2_openai},postmortem),eq::(${q2_openai},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_openai",
+            "value": "$[calc::(${u0_openai}+${u1_openai}+${u2_openai})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "p_openai",
+            "value": "$[if::(eq::(${u0_openai},1),0,if::(eq::(${u1_openai},1),1,if::(eq::(${u2_openai},1),2,-1)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_openai",
+            "value": "$[if::(eq::(${p_openai},0),${ih_openai.incidents[0].name},if::(eq::(${p_openai},1),${ih_openai.incidents[1].name},if::(eq::(${p_openai},2),${ih_openai.incidents[2].name},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_openai",
+            "value": "$[if::(eq::(${p_openai},0),${ih_openai.incidents[0].impact},if::(eq::(${p_openai},1),${ih_openai.incidents[1].impact},if::(eq::(${p_openai},2),${ih_openai.incidents[2].impact},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_openai",
+            "value": "$[if::(eq::(${p_openai},0),${ih_openai.incidents[0].status},if::(eq::(${p_openai},1),${ih_openai.incidents[1].status},if::(eq::(${p_openai},2),${ih_openai.incidents[2].status},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_openai",
+            "value": "$[if::(eq::(${p_openai},0),${ih_openai.incidents[0].created_at},if::(eq::(${p_openai},1),${ih_openai.incidents[1].created_at},if::(eq::(${p_openai},2),${ih_openai.incidents[2].created_at},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_openai",
+            "value": "$[if::(eq::(${p_openai},0),${ih_openai.incidents[0].id},if::(eq::(${p_openai},1),${ih_openai.incidents[1].id},if::(eq::(${p_openai},2),${ih_openai.incidents[2].id},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_openai",
+            "value": "$[if::(gt::(${no_openai},0),if::(eq::(${ti_openai},critical),4,if::(eq::(${ti_openai},major),3,if::(eq::(${ti_openai},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_openai",
+            "value": "$[if::(lt::(${lvs_openai},0),-1,max::(${lvs_openai},${tl_openai}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~vercel~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_vercel",
+            "value": "${st_vercel.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_vercel",
+            "value": "$[if::(eq::(${ind_vercel},none),0,if::(eq::(${ind_vercel},maintenance),1,if::(eq::(${ind_vercel},minor),2,if::(eq::(${ind_vercel},major),3,if::(eq::(${ind_vercel},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_vercel",
+            "value": "$[length::(${ur_vercel.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_vercel",
+            "value": "${ur_vercel.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_vercel",
+            "value": "${ur_vercel.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_vercel",
+            "value": "${ur_vercel.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_vercel",
+            "value": "$[findNotEmpty::(${ur_vercel.incidents[0].started_at},${ur_vercel.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_vercel",
+            "value": "${ur_vercel.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_vercel",
+            "value": "$[if::(gt::(${no_vercel},0),if::(eq::(${ti_vercel},critical),4,if::(eq::(${ti_vercel},major),3,if::(eq::(${ti_vercel},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_vercel",
+            "value": "$[if::(lt::(${lvs_vercel},0),-1,max::(${lvs_vercel},${tl_vercel}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~cursor~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_cursor",
+            "value": "${st_cursor.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_cursor",
+            "value": "$[if::(eq::(${ind_cursor},none),0,if::(eq::(${ind_cursor},maintenance),1,if::(eq::(${ind_cursor},minor),2,if::(eq::(${ind_cursor},major),3,if::(eq::(${ind_cursor},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_cursor",
+            "value": "$[length::(${ur_cursor.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_cursor",
+            "value": "${ur_cursor.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_cursor",
+            "value": "${ur_cursor.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_cursor",
+            "value": "${ur_cursor.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_cursor",
+            "value": "$[findNotEmpty::(${ur_cursor.incidents[0].started_at},${ur_cursor.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_cursor",
+            "value": "${ur_cursor.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_cursor",
+            "value": "$[if::(gt::(${no_cursor},0),if::(eq::(${ti_cursor},critical),4,if::(eq::(${ti_cursor},major),3,if::(eq::(${ti_cursor},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_cursor",
+            "value": "$[if::(lt::(${lvs_cursor},0),-1,max::(${lvs_cursor},${tl_cursor}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~npm~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_npm",
+            "value": "${st_npm.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_npm",
+            "value": "$[if::(eq::(${ind_npm},none),0,if::(eq::(${ind_npm},maintenance),1,if::(eq::(${ind_npm},minor),2,if::(eq::(${ind_npm},major),3,if::(eq::(${ind_npm},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_npm",
+            "value": "$[length::(${ur_npm.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_npm",
+            "value": "${ur_npm.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_npm",
+            "value": "${ur_npm.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_npm",
+            "value": "${ur_npm.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_npm",
+            "value": "$[findNotEmpty::(${ur_npm.incidents[0].started_at},${ur_npm.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_npm",
+            "value": "${ur_npm.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_npm",
+            "value": "$[if::(gt::(${no_npm},0),if::(eq::(${ti_npm},critical),4,if::(eq::(${ti_npm},major),3,if::(eq::(${ti_npm},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_npm",
+            "value": "$[if::(lt::(${lvs_npm},0),-1,max::(${lvs_npm},${tl_npm}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~docker~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_docker",
+            "value": "${st_docker.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_docker",
+            "value": "$[if::(eq::(${ind_docker},none),0,if::(eq::(${ind_docker},maintenance),1,if::(eq::(${ind_docker},minor),2,if::(eq::(${ind_docker},major),3,if::(eq::(${ind_docker},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0_docker",
+            "value": "$[findNotEmpty::(${ih_docker.incidents[0].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u0_docker",
+            "value": "$[if::(or::(eq::(${q0_docker},resolved),eq::(${q0_docker},postmortem),eq::(${q0_docker},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1_docker",
+            "value": "$[findNotEmpty::(${ih_docker.incidents[1].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u1_docker",
+            "value": "$[if::(or::(eq::(${q1_docker},resolved),eq::(${q1_docker},postmortem),eq::(${q1_docker},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2_docker",
+            "value": "$[findNotEmpty::(${ih_docker.incidents[2].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u2_docker",
+            "value": "$[if::(or::(eq::(${q2_docker},resolved),eq::(${q2_docker},postmortem),eq::(${q2_docker},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_docker",
+            "value": "$[calc::(${u0_docker}+${u1_docker}+${u2_docker})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "p_docker",
+            "value": "$[if::(eq::(${u0_docker},1),0,if::(eq::(${u1_docker},1),1,if::(eq::(${u2_docker},1),2,-1)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_docker",
+            "value": "$[if::(eq::(${p_docker},0),${ih_docker.incidents[0].name},if::(eq::(${p_docker},1),${ih_docker.incidents[1].name},if::(eq::(${p_docker},2),${ih_docker.incidents[2].name},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_docker",
+            "value": "$[if::(eq::(${p_docker},0),${ih_docker.incidents[0].impact},if::(eq::(${p_docker},1),${ih_docker.incidents[1].impact},if::(eq::(${p_docker},2),${ih_docker.incidents[2].impact},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_docker",
+            "value": "$[if::(eq::(${p_docker},0),${ih_docker.incidents[0].status},if::(eq::(${p_docker},1),${ih_docker.incidents[1].status},if::(eq::(${p_docker},2),${ih_docker.incidents[2].status},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_docker",
+            "value": "$[if::(eq::(${p_docker},0),${ih_docker.incidents[0].created_at},if::(eq::(${p_docker},1),${ih_docker.incidents[1].created_at},if::(eq::(${p_docker},2),${ih_docker.incidents[2].created_at},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_docker",
+            "value": "$[if::(eq::(${p_docker},0),${ih_docker.incidents[0].id},if::(eq::(${p_docker},1),${ih_docker.incidents[1].id},if::(eq::(${p_docker},2),${ih_docker.incidents[2].id},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_docker",
+            "value": "$[if::(gt::(${no_docker},0),if::(eq::(${ti_docker},critical),4,if::(eq::(${ti_docker},major),3,if::(eq::(${ti_docker},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_docker",
+            "value": "$[if::(lt::(${lvs_docker},0),-1,max::(${lvs_docker},${tl_docker}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~bitbucket~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_bitbucket",
+            "value": "${st_bitbucket.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_bitbucket",
+            "value": "$[if::(eq::(${ind_bitbucket},none),0,if::(eq::(${ind_bitbucket},maintenance),1,if::(eq::(${ind_bitbucket},minor),2,if::(eq::(${ind_bitbucket},major),3,if::(eq::(${ind_bitbucket},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_bitbucket",
+            "value": "$[length::(${ur_bitbucket.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_bitbucket",
+            "value": "${ur_bitbucket.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_bitbucket",
+            "value": "${ur_bitbucket.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_bitbucket",
+            "value": "${ur_bitbucket.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_bitbucket",
+            "value": "$[findNotEmpty::(${ur_bitbucket.incidents[0].started_at},${ur_bitbucket.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_bitbucket",
+            "value": "${ur_bitbucket.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_bitbucket",
+            "value": "$[if::(gt::(${no_bitbucket},0),if::(eq::(${ti_bitbucket},critical),4,if::(eq::(${ti_bitbucket},major),3,if::(eq::(${ti_bitbucket},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_bitbucket",
+            "value": "$[if::(lt::(${lvs_bitbucket},0),-1,max::(${lvs_bitbucket},${tl_bitbucket}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~circleci~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_circleci",
+            "value": "${st_circleci.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_circleci",
+            "value": "$[if::(eq::(${ind_circleci},none),0,if::(eq::(${ind_circleci},maintenance),1,if::(eq::(${ind_circleci},minor),2,if::(eq::(${ind_circleci},major),3,if::(eq::(${ind_circleci},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_circleci",
+            "value": "$[length::(${ur_circleci.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_circleci",
+            "value": "${ur_circleci.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_circleci",
+            "value": "${ur_circleci.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_circleci",
+            "value": "${ur_circleci.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_circleci",
+            "value": "$[findNotEmpty::(${ur_circleci.incidents[0].started_at},${ur_circleci.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_circleci",
+            "value": "${ur_circleci.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_circleci",
+            "value": "$[if::(gt::(${no_circleci},0),if::(eq::(${ti_circleci},critical),4,if::(eq::(${ti_circleci},major),3,if::(eq::(${ti_circleci},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_circleci",
+            "value": "$[if::(lt::(${lvs_circleci},0),-1,max::(${lvs_circleci},${tl_circleci}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~netlify~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_netlify",
+            "value": "${st_netlify.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_netlify",
+            "value": "$[if::(eq::(${ind_netlify},none),0,if::(eq::(${ind_netlify},maintenance),1,if::(eq::(${ind_netlify},minor),2,if::(eq::(${ind_netlify},major),3,if::(eq::(${ind_netlify},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_netlify",
+            "value": "$[length::(${ur_netlify.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_netlify",
+            "value": "${ur_netlify.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_netlify",
+            "value": "${ur_netlify.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_netlify",
+            "value": "${ur_netlify.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_netlify",
+            "value": "$[findNotEmpty::(${ur_netlify.incidents[0].started_at},${ur_netlify.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_netlify",
+            "value": "${ur_netlify.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_netlify",
+            "value": "$[if::(gt::(${no_netlify},0),if::(eq::(${ti_netlify},critical),4,if::(eq::(${ti_netlify},major),3,if::(eq::(${ti_netlify},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_netlify",
+            "value": "$[if::(lt::(${lvs_netlify},0),-1,max::(${lvs_netlify},${tl_netlify}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~supabase~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_supabase",
+            "value": "${st_supabase.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_supabase",
+            "value": "$[if::(eq::(${ind_supabase},none),0,if::(eq::(${ind_supabase},maintenance),1,if::(eq::(${ind_supabase},minor),2,if::(eq::(${ind_supabase},major),3,if::(eq::(${ind_supabase},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_supabase",
+            "value": "$[length::(${ur_supabase.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_supabase",
+            "value": "${ur_supabase.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_supabase",
+            "value": "${ur_supabase.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_supabase",
+            "value": "${ur_supabase.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_supabase",
+            "value": "$[findNotEmpty::(${ur_supabase.incidents[0].started_at},${ur_supabase.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_supabase",
+            "value": "${ur_supabase.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_supabase",
+            "value": "$[if::(gt::(${no_supabase},0),if::(eq::(${ti_supabase},critical),4,if::(eq::(${ti_supabase},major),3,if::(eq::(${ti_supabase},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_supabase",
+            "value": "$[if::(lt::(${lvs_supabase},0),-1,max::(${lvs_supabase},${tl_supabase}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~render~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_render",
+            "value": "${st_render.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_render",
+            "value": "$[if::(eq::(${ind_render},none),0,if::(eq::(${ind_render},maintenance),1,if::(eq::(${ind_render},minor),2,if::(eq::(${ind_render},major),3,if::(eq::(${ind_render},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_render",
+            "value": "$[length::(${ur_render.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_render",
+            "value": "${ur_render.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_render",
+            "value": "${ur_render.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_render",
+            "value": "${ur_render.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_render",
+            "value": "$[findNotEmpty::(${ur_render.incidents[0].started_at},${ur_render.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_render",
+            "value": "${ur_render.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_render",
+            "value": "$[if::(gt::(${no_render},0),if::(eq::(${ti_render},critical),4,if::(eq::(${ti_render},major),3,if::(eq::(${ti_render},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_render",
+            "value": "$[if::(lt::(${lvs_render},0),-1,max::(${lvs_render},${tl_render}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~digitalocean~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_digitalocean",
+            "value": "${st_digitalocean.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_digitalocean",
+            "value": "$[if::(eq::(${ind_digitalocean},none),0,if::(eq::(${ind_digitalocean},maintenance),1,if::(eq::(${ind_digitalocean},minor),2,if::(eq::(${ind_digitalocean},major),3,if::(eq::(${ind_digitalocean},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_digitalocean",
+            "value": "$[length::(${ur_digitalocean.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_digitalocean",
+            "value": "${ur_digitalocean.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_digitalocean",
+            "value": "${ur_digitalocean.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_digitalocean",
+            "value": "${ur_digitalocean.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_digitalocean",
+            "value": "$[findNotEmpty::(${ur_digitalocean.incidents[0].started_at},${ur_digitalocean.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_digitalocean",
+            "value": "${ur_digitalocean.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_digitalocean",
+            "value": "$[if::(gt::(${no_digitalocean},0),if::(eq::(${ti_digitalocean},critical),4,if::(eq::(${ti_digitalocean},major),3,if::(eq::(${ti_digitalocean},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_digitalocean",
+            "value": "$[if::(lt::(${lvs_digitalocean},0),-1,max::(${lvs_digitalocean},${tl_digitalocean}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~mongodb~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_mongodb",
+            "value": "${st_mongodb.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_mongodb",
+            "value": "$[if::(eq::(${ind_mongodb},none),0,if::(eq::(${ind_mongodb},maintenance),1,if::(eq::(${ind_mongodb},minor),2,if::(eq::(${ind_mongodb},major),3,if::(eq::(${ind_mongodb},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_mongodb",
+            "value": "$[length::(${ur_mongodb.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_mongodb",
+            "value": "${ur_mongodb.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_mongodb",
+            "value": "${ur_mongodb.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_mongodb",
+            "value": "${ur_mongodb.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_mongodb",
+            "value": "$[findNotEmpty::(${ur_mongodb.incidents[0].started_at},${ur_mongodb.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_mongodb",
+            "value": "${ur_mongodb.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_mongodb",
+            "value": "$[if::(gt::(${no_mongodb},0),if::(eq::(${ti_mongodb},critical),4,if::(eq::(${ti_mongodb},major),3,if::(eq::(${ti_mongodb},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_mongodb",
+            "value": "$[if::(lt::(${lvs_mongodb},0),-1,max::(${lvs_mongodb},${tl_mongodb}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~sentry~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_sentry",
+            "value": "${st_sentry.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_sentry",
+            "value": "$[if::(eq::(${ind_sentry},none),0,if::(eq::(${ind_sentry},maintenance),1,if::(eq::(${ind_sentry},minor),2,if::(eq::(${ind_sentry},major),3,if::(eq::(${ind_sentry},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_sentry",
+            "value": "$[length::(${ur_sentry.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_sentry",
+            "value": "${ur_sentry.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_sentry",
+            "value": "${ur_sentry.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_sentry",
+            "value": "${ur_sentry.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_sentry",
+            "value": "$[findNotEmpty::(${ur_sentry.incidents[0].started_at},${ur_sentry.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_sentry",
+            "value": "${ur_sentry.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_sentry",
+            "value": "$[if::(gt::(${no_sentry},0),if::(eq::(${ti_sentry},critical),4,if::(eq::(${ti_sentry},major),3,if::(eq::(${ti_sentry},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_sentry",
+            "value": "$[if::(lt::(${lvs_sentry},0),-1,max::(${lvs_sentry},${tl_sentry}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~datadog~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_datadog",
+            "value": "${st_datadog.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_datadog",
+            "value": "$[if::(eq::(${ind_datadog},none),0,if::(eq::(${ind_datadog},maintenance),1,if::(eq::(${ind_datadog},minor),2,if::(eq::(${ind_datadog},major),3,if::(eq::(${ind_datadog},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_datadog",
+            "value": "$[length::(${ur_datadog.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_datadog",
+            "value": "${ur_datadog.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_datadog",
+            "value": "${ur_datadog.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_datadog",
+            "value": "${ur_datadog.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_datadog",
+            "value": "$[findNotEmpty::(${ur_datadog.incidents[0].started_at},${ur_datadog.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_datadog",
+            "value": "${ur_datadog.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_datadog",
+            "value": "$[if::(gt::(${no_datadog},0),if::(eq::(${ti_datadog},critical),4,if::(eq::(${ti_datadog},major),3,if::(eq::(${ti_datadog},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_datadog",
+            "value": "$[if::(lt::(${lvs_datadog},0),-1,max::(${lvs_datadog},${tl_datadog}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~linear~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_linear",
+            "value": "${st_linear.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_linear",
+            "value": "$[if::(eq::(${ind_linear},none),0,if::(eq::(${ind_linear},maintenance),1,if::(eq::(${ind_linear},minor),2,if::(eq::(${ind_linear},major),3,if::(eq::(${ind_linear},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0_linear",
+            "value": "$[findNotEmpty::(${ih_linear.incidents[0].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u0_linear",
+            "value": "$[if::(or::(eq::(${q0_linear},resolved),eq::(${q0_linear},postmortem),eq::(${q0_linear},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1_linear",
+            "value": "$[findNotEmpty::(${ih_linear.incidents[1].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u1_linear",
+            "value": "$[if::(or::(eq::(${q1_linear},resolved),eq::(${q1_linear},postmortem),eq::(${q1_linear},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2_linear",
+            "value": "$[findNotEmpty::(${ih_linear.incidents[2].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u2_linear",
+            "value": "$[if::(or::(eq::(${q2_linear},resolved),eq::(${q2_linear},postmortem),eq::(${q2_linear},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_linear",
+            "value": "$[calc::(${u0_linear}+${u1_linear}+${u2_linear})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "p_linear",
+            "value": "$[if::(eq::(${u0_linear},1),0,if::(eq::(${u1_linear},1),1,if::(eq::(${u2_linear},1),2,-1)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_linear",
+            "value": "$[if::(eq::(${p_linear},0),${ih_linear.incidents[0].name},if::(eq::(${p_linear},1),${ih_linear.incidents[1].name},if::(eq::(${p_linear},2),${ih_linear.incidents[2].name},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_linear",
+            "value": "$[if::(eq::(${p_linear},0),${ih_linear.incidents[0].impact},if::(eq::(${p_linear},1),${ih_linear.incidents[1].impact},if::(eq::(${p_linear},2),${ih_linear.incidents[2].impact},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_linear",
+            "value": "$[if::(eq::(${p_linear},0),${ih_linear.incidents[0].status},if::(eq::(${p_linear},1),${ih_linear.incidents[1].status},if::(eq::(${p_linear},2),${ih_linear.incidents[2].status},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_linear",
+            "value": "$[if::(eq::(${p_linear},0),${ih_linear.incidents[0].created_at},if::(eq::(${p_linear},1),${ih_linear.incidents[1].created_at},if::(eq::(${p_linear},2),${ih_linear.incidents[2].created_at},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_linear",
+            "value": "$[if::(eq::(${p_linear},0),${ih_linear.incidents[0].id},if::(eq::(${p_linear},1),${ih_linear.incidents[1].id},if::(eq::(${p_linear},2),${ih_linear.incidents[2].id},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_linear",
+            "value": "$[if::(gt::(${no_linear},0),if::(eq::(${ti_linear},critical),4,if::(eq::(${ti_linear},major),3,if::(eq::(${ti_linear},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_linear",
+            "value": "$[if::(lt::(${lvs_linear},0),-1,max::(${lvs_linear},${tl_linear}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~notion~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_notion",
+            "value": "${st_notion.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_notion",
+            "value": "$[if::(eq::(${ind_notion},none),0,if::(eq::(${ind_notion},maintenance),1,if::(eq::(${ind_notion},minor),2,if::(eq::(${ind_notion},major),3,if::(eq::(${ind_notion},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0_notion",
+            "value": "$[findNotEmpty::(${ih_notion.incidents[0].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u0_notion",
+            "value": "$[if::(or::(eq::(${q0_notion},resolved),eq::(${q0_notion},postmortem),eq::(${q0_notion},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1_notion",
+            "value": "$[findNotEmpty::(${ih_notion.incidents[1].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u1_notion",
+            "value": "$[if::(or::(eq::(${q1_notion},resolved),eq::(${q1_notion},postmortem),eq::(${q1_notion},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2_notion",
+            "value": "$[findNotEmpty::(${ih_notion.incidents[2].status},resolved)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u2_notion",
+            "value": "$[if::(or::(eq::(${q2_notion},resolved),eq::(${q2_notion},postmortem),eq::(${q2_notion},completed)),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_notion",
+            "value": "$[calc::(${u0_notion}+${u1_notion}+${u2_notion})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "p_notion",
+            "value": "$[if::(eq::(${u0_notion},1),0,if::(eq::(${u1_notion},1),1,if::(eq::(${u2_notion},1),2,-1)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_notion",
+            "value": "$[if::(eq::(${p_notion},0),${ih_notion.incidents[0].name},if::(eq::(${p_notion},1),${ih_notion.incidents[1].name},if::(eq::(${p_notion},2),${ih_notion.incidents[2].name},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_notion",
+            "value": "$[if::(eq::(${p_notion},0),${ih_notion.incidents[0].impact},if::(eq::(${p_notion},1),${ih_notion.incidents[1].impact},if::(eq::(${p_notion},2),${ih_notion.incidents[2].impact},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_notion",
+            "value": "$[if::(eq::(${p_notion},0),${ih_notion.incidents[0].status},if::(eq::(${p_notion},1),${ih_notion.incidents[1].status},if::(eq::(${p_notion},2),${ih_notion.incidents[2].status},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_notion",
+            "value": "$[if::(eq::(${p_notion},0),${ih_notion.incidents[0].created_at},if::(eq::(${p_notion},1),${ih_notion.incidents[1].created_at},if::(eq::(${p_notion},2),${ih_notion.incidents[2].created_at},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_notion",
+            "value": "$[if::(eq::(${p_notion},0),${ih_notion.incidents[0].id},if::(eq::(${p_notion},1),${ih_notion.incidents[1].id},if::(eq::(${p_notion},2),${ih_notion.incidents[2].id},)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_notion",
+            "value": "$[if::(gt::(${no_notion},0),if::(eq::(${ti_notion},critical),4,if::(eq::(${ti_notion},major),3,if::(eq::(${ti_notion},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_notion",
+            "value": "$[if::(lt::(${lvs_notion},0),-1,max::(${lvs_notion},${tl_notion}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~figma~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_figma",
+            "value": "${st_figma.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_figma",
+            "value": "$[if::(eq::(${ind_figma},none),0,if::(eq::(${ind_figma},maintenance),1,if::(eq::(${ind_figma},minor),2,if::(eq::(${ind_figma},major),3,if::(eq::(${ind_figma},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_figma",
+            "value": "$[length::(${ur_figma.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_figma",
+            "value": "${ur_figma.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_figma",
+            "value": "${ur_figma.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_figma",
+            "value": "${ur_figma.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_figma",
+            "value": "$[findNotEmpty::(${ur_figma.incidents[0].started_at},${ur_figma.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_figma",
+            "value": "${ur_figma.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_figma",
+            "value": "$[if::(gt::(${no_figma},0),if::(eq::(${ti_figma},critical),4,if::(eq::(${ti_figma},major),3,if::(eq::(${ti_figma},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_figma",
+            "value": "$[if::(lt::(${lvs_figma},0),-1,max::(${lvs_figma},${tl_figma}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~postman~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_postman",
+            "value": "${st_postman.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_postman",
+            "value": "$[if::(eq::(${ind_postman},none),0,if::(eq::(${ind_postman},maintenance),1,if::(eq::(${ind_postman},minor),2,if::(eq::(${ind_postman},major),3,if::(eq::(${ind_postman},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_postman",
+            "value": "$[length::(${ur_postman.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_postman",
+            "value": "${ur_postman.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_postman",
+            "value": "${ur_postman.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_postman",
+            "value": "${ur_postman.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_postman",
+            "value": "$[findNotEmpty::(${ur_postman.incidents[0].started_at},${ur_postman.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_postman",
+            "value": "${ur_postman.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_postman",
+            "value": "$[if::(gt::(${no_postman},0),if::(eq::(${ti_postman},critical),4,if::(eq::(${ti_postman},major),3,if::(eq::(${ti_postman},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_postman",
+            "value": "$[if::(lt::(${lvs_postman},0),-1,max::(${lvs_postman},${tl_postman}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~discord~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_discord",
+            "value": "${st_discord.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_discord",
+            "value": "$[if::(eq::(${ind_discord},none),0,if::(eq::(${ind_discord},maintenance),1,if::(eq::(${ind_discord},minor),2,if::(eq::(${ind_discord},major),3,if::(eq::(${ind_discord},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_discord",
+            "value": "$[length::(${ur_discord.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_discord",
+            "value": "${ur_discord.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_discord",
+            "value": "${ur_discord.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_discord",
+            "value": "${ur_discord.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_discord",
+            "value": "$[findNotEmpty::(${ur_discord.incidents[0].started_at},${ur_discord.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_discord",
+            "value": "${ur_discord.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_discord",
+            "value": "$[if::(gt::(${no_discord},0),if::(eq::(${ti_discord},critical),4,if::(eq::(${ti_discord},major),3,if::(eq::(${ti_discord},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_discord",
+            "value": "$[if::(lt::(${lvs_discord},0),-1,max::(${lvs_discord},${tl_discord}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(contains::(${flk},~reddit~),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "ind_reddit",
+            "value": "${st_reddit.status.indicator}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lvs_reddit",
+            "value": "$[if::(eq::(${ind_reddit},none),0,if::(eq::(${ind_reddit},maintenance),1,if::(eq::(${ind_reddit},minor),2,if::(eq::(${ind_reddit},major),3,if::(eq::(${ind_reddit},critical),4,-1)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "no_reddit",
+            "value": "$[length::(${ur_reddit.incidents})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tn_reddit",
+            "value": "${ur_reddit.incidents[0].name}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ti_reddit",
+            "value": "${ur_reddit.incidents[0].impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ts_reddit",
+            "value": "${ur_reddit.incidents[0].status}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tt_reddit",
+            "value": "$[findNotEmpty::(${ur_reddit.incidents[0].started_at},${ur_reddit.incidents[0].created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tid_reddit",
+            "value": "${ur_reddit.incidents[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tl_reddit",
+            "value": "$[if::(gt::(${no_reddit},0),if::(eq::(${ti_reddit},critical),4,if::(eq::(${ti_reddit},major),3,if::(eq::(${ti_reddit},maintenance),1,2))),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lv_reddit",
+            "value": "$[if::(lt::(${lvs_reddit},0),-1,max::(${lvs_reddit},${tl_reddit}))]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "LV",
+        "value": {
+          "github": "${lv_github}",
+          "claude": "${lv_claude}",
+          "openai": "${lv_openai}",
+          "vercel": "${lv_vercel}",
+          "cursor": "${lv_cursor}",
+          "npm": "${lv_npm}",
+          "docker": "${lv_docker}",
+          "bitbucket": "${lv_bitbucket}",
+          "circleci": "${lv_circleci}",
+          "netlify": "${lv_netlify}",
+          "supabase": "${lv_supabase}",
+          "render": "${lv_render}",
+          "digitalocean": "${lv_digitalocean}",
+          "mongodb": "${lv_mongodb}",
+          "sentry": "${lv_sentry}",
+          "datadog": "${lv_datadog}",
+          "linear": "${lv_linear}",
+          "notion": "${lv_notion}",
+          "figma": "${lv_figma}",
+          "postman": "${lv_postman}",
+          "discord": "${lv_discord}",
+          "reddit": "${lv_reddit}"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NO",
+        "value": {
+          "github": "${no_github}",
+          "claude": "${no_claude}",
+          "openai": "${no_openai}",
+          "vercel": "${no_vercel}",
+          "cursor": "${no_cursor}",
+          "npm": "${no_npm}",
+          "docker": "${no_docker}",
+          "bitbucket": "${no_bitbucket}",
+          "circleci": "${no_circleci}",
+          "netlify": "${no_netlify}",
+          "supabase": "${no_supabase}",
+          "render": "${no_render}",
+          "digitalocean": "${no_digitalocean}",
+          "mongodb": "${no_mongodb}",
+          "sentry": "${no_sentry}",
+          "datadog": "${no_datadog}",
+          "linear": "${no_linear}",
+          "notion": "${no_notion}",
+          "figma": "${no_figma}",
+          "postman": "${no_postman}",
+          "discord": "${no_discord}",
+          "reddit": "${no_reddit}"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "TN",
+        "value": {
+          "github": "${tn_github}",
+          "claude": "${tn_claude}",
+          "openai": "${tn_openai}",
+          "vercel": "${tn_vercel}",
+          "cursor": "${tn_cursor}",
+          "npm": "${tn_npm}",
+          "docker": "${tn_docker}",
+          "bitbucket": "${tn_bitbucket}",
+          "circleci": "${tn_circleci}",
+          "netlify": "${tn_netlify}",
+          "supabase": "${tn_supabase}",
+          "render": "${tn_render}",
+          "digitalocean": "${tn_digitalocean}",
+          "mongodb": "${tn_mongodb}",
+          "sentry": "${tn_sentry}",
+          "datadog": "${tn_datadog}",
+          "linear": "${tn_linear}",
+          "notion": "${tn_notion}",
+          "figma": "${tn_figma}",
+          "postman": "${tn_postman}",
+          "discord": "${tn_discord}",
+          "reddit": "${tn_reddit}"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "TL",
+        "value": {
+          "github": "${tl_github}",
+          "claude": "${tl_claude}",
+          "openai": "${tl_openai}",
+          "vercel": "${tl_vercel}",
+          "cursor": "${tl_cursor}",
+          "npm": "${tl_npm}",
+          "docker": "${tl_docker}",
+          "bitbucket": "${tl_bitbucket}",
+          "circleci": "${tl_circleci}",
+          "netlify": "${tl_netlify}",
+          "supabase": "${tl_supabase}",
+          "render": "${tl_render}",
+          "digitalocean": "${tl_digitalocean}",
+          "mongodb": "${tl_mongodb}",
+          "sentry": "${tl_sentry}",
+          "datadog": "${tl_datadog}",
+          "linear": "${tl_linear}",
+          "notion": "${tl_notion}",
+          "figma": "${tl_figma}",
+          "postman": "${tl_postman}",
+          "discord": "${tl_discord}",
+          "reddit": "${tl_reddit}"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "TS",
+        "value": {
+          "github": "${ts_github}",
+          "claude": "${ts_claude}",
+          "openai": "${ts_openai}",
+          "vercel": "${ts_vercel}",
+          "cursor": "${ts_cursor}",
+          "npm": "${ts_npm}",
+          "docker": "${ts_docker}",
+          "bitbucket": "${ts_bitbucket}",
+          "circleci": "${ts_circleci}",
+          "netlify": "${ts_netlify}",
+          "supabase": "${ts_supabase}",
+          "render": "${ts_render}",
+          "digitalocean": "${ts_digitalocean}",
+          "mongodb": "${ts_mongodb}",
+          "sentry": "${ts_sentry}",
+          "datadog": "${ts_datadog}",
+          "linear": "${ts_linear}",
+          "notion": "${ts_notion}",
+          "figma": "${ts_figma}",
+          "postman": "${ts_postman}",
+          "discord": "${ts_discord}",
+          "reddit": "${ts_reddit}"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "TT",
+        "value": {
+          "github": "${tt_github}",
+          "claude": "${tt_claude}",
+          "openai": "${tt_openai}",
+          "vercel": "${tt_vercel}",
+          "cursor": "${tt_cursor}",
+          "npm": "${tt_npm}",
+          "docker": "${tt_docker}",
+          "bitbucket": "${tt_bitbucket}",
+          "circleci": "${tt_circleci}",
+          "netlify": "${tt_netlify}",
+          "supabase": "${tt_supabase}",
+          "render": "${tt_render}",
+          "digitalocean": "${tt_digitalocean}",
+          "mongodb": "${tt_mongodb}",
+          "sentry": "${tt_sentry}",
+          "datadog": "${tt_datadog}",
+          "linear": "${tt_linear}",
+          "notion": "${tt_notion}",
+          "figma": "${tt_figma}",
+          "postman": "${tt_postman}",
+          "discord": "${tt_discord}",
+          "reddit": "${tt_reddit}"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "TID",
+        "value": {
+          "github": "${tid_github}",
+          "claude": "${tid_claude}",
+          "openai": "${tid_openai}",
+          "vercel": "${tid_vercel}",
+          "cursor": "${tid_cursor}",
+          "npm": "${tid_npm}",
+          "docker": "${tid_docker}",
+          "bitbucket": "${tid_bitbucket}",
+          "circleci": "${tid_circleci}",
+          "netlify": "${tid_netlify}",
+          "supabase": "${tid_supabase}",
+          "render": "${tid_render}",
+          "digitalocean": "${tid_digitalocean}",
+          "mongodb": "${tid_mongodb}",
+          "sentry": "${tid_sentry}",
+          "datadog": "${tid_datadog}",
+          "linear": "${tid_linear}",
+          "notion": "${tid_notion}",
+          "figma": "${tid_figma}",
+          "postman": "${tid_postman}",
+          "discord": "${tid_discord}",
+          "reddit": "${tid_reddit}"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NM",
+        "value": {
+          "github": "GitHub",
+          "claude": "Claude",
+          "openai": "OpenAI",
+          "vercel": "Vercel",
+          "cursor": "Cursor",
+          "npm": "npm",
+          "docker": "Docker",
+          "bitbucket": "Bitbucket",
+          "circleci": "CircleCI",
+          "netlify": "Netlify",
+          "supabase": "Supabase",
+          "render": "Render",
+          "digitalocean": "DigitalOcean",
+          "mongodb": "MongoDB Cloud",
+          "sentry": "Sentry",
+          "datadog": "Datadog",
+          "linear": "Linear",
+          "notion": "Notion",
+          "figma": "Figma",
+          "postman": "Postman",
+          "discord": "Discord",
+          "reddit": "Reddit"
+        }
+      },
+      "_note": "服务显示名(品牌名,中英同写)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_x",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid0",
+        "value": "$[findNotEmpty::(index::(${raw},0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv0",
+        "value": "$[if::(gt::(length::(${rid0}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid0}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_0",
+        "value": "${cl_x}~${rid0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_0",
+        "value": "$[if::(eq::(${rv0},1),if::(gt::(length::(${cl_x}),0),${cj_0},${rid0}),${cl_x})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid1",
+        "value": "$[findNotEmpty::(index::(${raw},1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv1",
+        "value": "$[if::(gt::(length::(${rid1}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid1}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_1",
+        "value": "${cl_0}~${rid1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_1",
+        "value": "$[if::(eq::(${rv1},1),if::(gt::(length::(${cl_0}),0),${cj_1},${rid1}),${cl_0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid2",
+        "value": "$[findNotEmpty::(index::(${raw},2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv2",
+        "value": "$[if::(gt::(length::(${rid2}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid2}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_2",
+        "value": "${cl_1}~${rid2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_2",
+        "value": "$[if::(eq::(${rv2},1),if::(gt::(length::(${cl_1}),0),${cj_2},${rid2}),${cl_1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid3",
+        "value": "$[findNotEmpty::(index::(${raw},3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv3",
+        "value": "$[if::(gt::(length::(${rid3}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid3}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_3",
+        "value": "${cl_2}~${rid3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_3",
+        "value": "$[if::(eq::(${rv3},1),if::(gt::(length::(${cl_2}),0),${cj_3},${rid3}),${cl_2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid4",
+        "value": "$[findNotEmpty::(index::(${raw},4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv4",
+        "value": "$[if::(gt::(length::(${rid4}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid4}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_4",
+        "value": "${cl_3}~${rid4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_4",
+        "value": "$[if::(eq::(${rv4},1),if::(gt::(length::(${cl_3}),0),${cj_4},${rid4}),${cl_3})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid5",
+        "value": "$[findNotEmpty::(index::(${raw},5),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv5",
+        "value": "$[if::(gt::(length::(${rid5}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid5}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_5",
+        "value": "${cl_4}~${rid5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_5",
+        "value": "$[if::(eq::(${rv5},1),if::(gt::(length::(${cl_4}),0),${cj_5},${rid5}),${cl_4})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "parts",
+        "value": "$[split::(${cl_5},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "MONE",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      },
+      "_note": "事故开始时刻跨天时的月日:中文「9月25日 14:05」/ 英文「Sep 25 14:05」(doc/overseas-first.md §5)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0id",
+        "value": "$[findNotEmpty::(index::(${parts},0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0n",
+        "value": "$[if::(gt::(length::(${k0id}),0),findNotEmpty::(get::(${NM},${k0id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0v",
+        "value": "$[if::(gt::(length::(${k0n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0l",
+        "value": "$[if::(eq::(${k0v},1),findNotEmpty::(get::(${LV},${k0id}),-1),-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0o",
+        "value": "$[if::(eq::(${k0v},1),findNotEmpty::(get::(${NO},${k0id}),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0t",
+        "value": "$[if::(gt::(${k0o},0),findNotEmpty::(get::(${TN},${k0id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0il",
+        "value": "$[if::(gt::(${k0o},0),findNotEmpty::(get::(${TL},${k0id}),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0rs",
+        "value": "$[if::(gt::(${k0o},0),findNotEmpty::(get::(${TS},${k0id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0iid",
+        "value": "$[if::(gt::(${k0o},0),findNotEmpty::(get::(${TID},${k0id}),),)]"
+      },
+      "_note": "最新一起进行中事故的 id(提醒按它去重:同一起事故只报一次)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0sc",
+        "value": "$[if::(eq::(${k0rs},investigating),1,if::(eq::(${k0rs},identified),2,if::(eq::(${k0rs},monitoring),3,0)))]"
+      },
+      "_note": "事故进度码:1 调查中 · 2 已定位 · 3 观察恢复中 · 0 其它(处理中)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tiso",
+        "value": "$[findNotEmpty::(get::(${TT},${k0id}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Thas",
+        "value": "$[if::(gt::(length::(${k0Tiso}),18),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Ty",
+        "value": "$[subString::(${k0Tiso},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tmo",
+        "value": "$[subString::(${k0Tiso},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Td",
+        "value": "$[subString::(${k0Tiso},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Thh",
+        "value": "$[subString::(${k0Tiso},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tmi",
+        "value": "$[subString::(${k0Tiso},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tss",
+        "value": "$[subString::(${k0Tiso},17,19)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0TL",
+        "value": "$[length::(${k0Tiso})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tz",
+        "value": "$[if::(endsWith::(${k0Tiso},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tsg",
+        "value": "$[if::(eq::(${k0Tz},1),+,subString::(${k0Tiso},calc::(${k0TL}-6),calc::(${k0TL}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Toh",
+        "value": "$[if::(eq::(${k0Tz},1),0,subString::(${k0Tiso},calc::(${k0TL}-5),calc::(${k0TL}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tom",
+        "value": "$[if::(eq::(${k0Tz},1),0,subString::(${k0Tiso},calc::(${k0TL}-2),${k0TL}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tsgn",
+        "value": "$[if::(eq::(${k0Tsg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tadj",
+        "value": "$[if::(le::(${k0Tmo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tyoe",
+        "value": "$[calc::(${k0Ty}-2000-${k0Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tmp",
+        "value": "$[calc::(${k0Tmo}-3+12*${k0Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tdb",
+        "value": "$[floor::(calc::((153*${k0Tmp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tq4",
+        "value": "$[floor::(calc::(${k0Tyoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tdays",
+        "value": "$[calc::(11017+${k0Tyoe}*365+${k0Tq4}+${k0Tdb}+${k0Td}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Tms",
+        "value": "$[calc::(${k0Tdays}*86400000+${k0Thh}*3600000+${k0Tmi}*60000+${k0Tss}*1000-${k0Tsgn}*(${k0Toh}*60+${k0Tom})*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0el",
+        "value": "$[max::(calc::((${nowMs}-${k0Tms})/60000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0mn",
+        "value": "$[parseNumber::(${k0el},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0hh",
+        "value": "$[parseNumber::(calc::(${k0mn}/60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0mm",
+        "value": "$[parseNumber::(calc::(${k0mn}-${k0hh}*60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0dd",
+        "value": "$[parseNumber::(calc::(${k0mn}/1440),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0dh",
+        "value": "$[parseNumber::(calc::(${k0hh}-${k0dd}*24),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0f",
+        "value": "$[if::(and::(eq::(${k0Thas},1),gt::(${k0o},0)),if::(lt::(${k0mn},60),1,if::(lt::(${k0mn},1440),2,3)),0)]"
+      },
+      "_note": "已持续时长的格式:1 = N 分钟 · 2 = N 小时 M 分钟 · 3 = N 天 M 小时 · 0 = 无事故。两段数在 A / B。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0A",
+        "value": "$[if::(eq::(${k0f},1),${k0mn},if::(eq::(${k0f},2),${k0hh},if::(eq::(${k0f},3),${k0dd},)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0B",
+        "value": "$[if::(eq::(${k0f},2),${k0mm},if::(eq::(${k0f},3),${k0dh},0))]"
+      },
+      "_note": "第二段数;为 0 时组件上不显示第二个单位(「2 小时」而不是「2 小时 0 分钟」)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0same",
+        "value": "$[if::(eq::(formatDate::(${k0Tms},yyyyMMdd),formatDate::(${nowMs},yyyyMMdd)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Mo",
+        "value": "$[parseNumber::(formatDate::(${k0Tms},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Dy",
+        "value": "$[parseNumber::(formatDate::(${k0Tms},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Me",
+        "value": "$[index::(${MONE},calc::(${k0Mo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0Hm",
+        "value": "$[formatDate::(${k0Tms},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0DZ",
+        "value": "${k0Mo}月${k0Dy}日 ${k0Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0DE",
+        "value": "${k0Me} ${k0Dy} ${k0Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0a",
+        "value": "$[if::(and::(eq::(${k0Thas},1),gt::(${k0o},0)),if::(eq::(${k0same},1),${k0Hm},if::(startsWith::(${@app.language},zh),${k0DZ},${k0DE})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0ok",
+        "value": "$[if::(and::(eq::(${k0v},1),eq::(${k0l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0fe",
+        "value": "$[if::(and::(eq::(${k0v},1),ge::(${k0l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0b",
+        "value": "$[if::(and::(eq::(${k0v},1),ge::(${k0l},2)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0m",
+        "value": "$[if::(and::(eq::(${k0v},1),eq::(${k0l},1)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0u",
+        "value": "$[if::(and::(eq::(${k0v},1),lt::(${k0l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0h",
+        "value": "$[if::(and::(eq::(${k0v},1),gt::(${k0o},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0oc",
+        "value": "$[if::(eq::(${k0v},1),${k0o},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1id",
+        "value": "$[findNotEmpty::(index::(${parts},1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1n",
+        "value": "$[if::(gt::(length::(${k1id}),0),findNotEmpty::(get::(${NM},${k1id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1v",
+        "value": "$[if::(gt::(length::(${k1n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1l",
+        "value": "$[if::(eq::(${k1v},1),findNotEmpty::(get::(${LV},${k1id}),-1),-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1o",
+        "value": "$[if::(eq::(${k1v},1),findNotEmpty::(get::(${NO},${k1id}),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1t",
+        "value": "$[if::(gt::(${k1o},0),findNotEmpty::(get::(${TN},${k1id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1il",
+        "value": "$[if::(gt::(${k1o},0),findNotEmpty::(get::(${TL},${k1id}),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1rs",
+        "value": "$[if::(gt::(${k1o},0),findNotEmpty::(get::(${TS},${k1id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1iid",
+        "value": "$[if::(gt::(${k1o},0),findNotEmpty::(get::(${TID},${k1id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1sc",
+        "value": "$[if::(eq::(${k1rs},investigating),1,if::(eq::(${k1rs},identified),2,if::(eq::(${k1rs},monitoring),3,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tiso",
+        "value": "$[findNotEmpty::(get::(${TT},${k1id}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Thas",
+        "value": "$[if::(gt::(length::(${k1Tiso}),18),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Ty",
+        "value": "$[subString::(${k1Tiso},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tmo",
+        "value": "$[subString::(${k1Tiso},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Td",
+        "value": "$[subString::(${k1Tiso},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Thh",
+        "value": "$[subString::(${k1Tiso},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tmi",
+        "value": "$[subString::(${k1Tiso},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tss",
+        "value": "$[subString::(${k1Tiso},17,19)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1TL",
+        "value": "$[length::(${k1Tiso})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tz",
+        "value": "$[if::(endsWith::(${k1Tiso},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tsg",
+        "value": "$[if::(eq::(${k1Tz},1),+,subString::(${k1Tiso},calc::(${k1TL}-6),calc::(${k1TL}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Toh",
+        "value": "$[if::(eq::(${k1Tz},1),0,subString::(${k1Tiso},calc::(${k1TL}-5),calc::(${k1TL}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tom",
+        "value": "$[if::(eq::(${k1Tz},1),0,subString::(${k1Tiso},calc::(${k1TL}-2),${k1TL}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tsgn",
+        "value": "$[if::(eq::(${k1Tsg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tadj",
+        "value": "$[if::(le::(${k1Tmo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tyoe",
+        "value": "$[calc::(${k1Ty}-2000-${k1Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tmp",
+        "value": "$[calc::(${k1Tmo}-3+12*${k1Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tdb",
+        "value": "$[floor::(calc::((153*${k1Tmp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tq4",
+        "value": "$[floor::(calc::(${k1Tyoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tdays",
+        "value": "$[calc::(11017+${k1Tyoe}*365+${k1Tq4}+${k1Tdb}+${k1Td}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Tms",
+        "value": "$[calc::(${k1Tdays}*86400000+${k1Thh}*3600000+${k1Tmi}*60000+${k1Tss}*1000-${k1Tsgn}*(${k1Toh}*60+${k1Tom})*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1el",
+        "value": "$[max::(calc::((${nowMs}-${k1Tms})/60000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1mn",
+        "value": "$[parseNumber::(${k1el},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1hh",
+        "value": "$[parseNumber::(calc::(${k1mn}/60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1mm",
+        "value": "$[parseNumber::(calc::(${k1mn}-${k1hh}*60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1dd",
+        "value": "$[parseNumber::(calc::(${k1mn}/1440),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1dh",
+        "value": "$[parseNumber::(calc::(${k1hh}-${k1dd}*24),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1f",
+        "value": "$[if::(and::(eq::(${k1Thas},1),gt::(${k1o},0)),if::(lt::(${k1mn},60),1,if::(lt::(${k1mn},1440),2,3)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1A",
+        "value": "$[if::(eq::(${k1f},1),${k1mn},if::(eq::(${k1f},2),${k1hh},if::(eq::(${k1f},3),${k1dd},)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1B",
+        "value": "$[if::(eq::(${k1f},2),${k1mm},if::(eq::(${k1f},3),${k1dh},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1same",
+        "value": "$[if::(eq::(formatDate::(${k1Tms},yyyyMMdd),formatDate::(${nowMs},yyyyMMdd)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Mo",
+        "value": "$[parseNumber::(formatDate::(${k1Tms},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Dy",
+        "value": "$[parseNumber::(formatDate::(${k1Tms},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Me",
+        "value": "$[index::(${MONE},calc::(${k1Mo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1Hm",
+        "value": "$[formatDate::(${k1Tms},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1DZ",
+        "value": "${k1Mo}月${k1Dy}日 ${k1Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1DE",
+        "value": "${k1Me} ${k1Dy} ${k1Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1a",
+        "value": "$[if::(and::(eq::(${k1Thas},1),gt::(${k1o},0)),if::(eq::(${k1same},1),${k1Hm},if::(startsWith::(${@app.language},zh),${k1DZ},${k1DE})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1ok",
+        "value": "$[if::(and::(eq::(${k1v},1),eq::(${k1l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1fe",
+        "value": "$[if::(and::(eq::(${k1v},1),ge::(${k1l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1b",
+        "value": "$[if::(and::(eq::(${k1v},1),ge::(${k1l},2)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1m",
+        "value": "$[if::(and::(eq::(${k1v},1),eq::(${k1l},1)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1u",
+        "value": "$[if::(and::(eq::(${k1v},1),lt::(${k1l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1h",
+        "value": "$[if::(and::(eq::(${k1v},1),gt::(${k1o},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1oc",
+        "value": "$[if::(eq::(${k1v},1),${k1o},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2id",
+        "value": "$[findNotEmpty::(index::(${parts},2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2n",
+        "value": "$[if::(gt::(length::(${k2id}),0),findNotEmpty::(get::(${NM},${k2id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2v",
+        "value": "$[if::(gt::(length::(${k2n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2l",
+        "value": "$[if::(eq::(${k2v},1),findNotEmpty::(get::(${LV},${k2id}),-1),-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2o",
+        "value": "$[if::(eq::(${k2v},1),findNotEmpty::(get::(${NO},${k2id}),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2t",
+        "value": "$[if::(gt::(${k2o},0),findNotEmpty::(get::(${TN},${k2id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2il",
+        "value": "$[if::(gt::(${k2o},0),findNotEmpty::(get::(${TL},${k2id}),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2rs",
+        "value": "$[if::(gt::(${k2o},0),findNotEmpty::(get::(${TS},${k2id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2iid",
+        "value": "$[if::(gt::(${k2o},0),findNotEmpty::(get::(${TID},${k2id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2sc",
+        "value": "$[if::(eq::(${k2rs},investigating),1,if::(eq::(${k2rs},identified),2,if::(eq::(${k2rs},monitoring),3,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tiso",
+        "value": "$[findNotEmpty::(get::(${TT},${k2id}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Thas",
+        "value": "$[if::(gt::(length::(${k2Tiso}),18),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Ty",
+        "value": "$[subString::(${k2Tiso},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tmo",
+        "value": "$[subString::(${k2Tiso},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Td",
+        "value": "$[subString::(${k2Tiso},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Thh",
+        "value": "$[subString::(${k2Tiso},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tmi",
+        "value": "$[subString::(${k2Tiso},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tss",
+        "value": "$[subString::(${k2Tiso},17,19)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2TL",
+        "value": "$[length::(${k2Tiso})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tz",
+        "value": "$[if::(endsWith::(${k2Tiso},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tsg",
+        "value": "$[if::(eq::(${k2Tz},1),+,subString::(${k2Tiso},calc::(${k2TL}-6),calc::(${k2TL}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Toh",
+        "value": "$[if::(eq::(${k2Tz},1),0,subString::(${k2Tiso},calc::(${k2TL}-5),calc::(${k2TL}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tom",
+        "value": "$[if::(eq::(${k2Tz},1),0,subString::(${k2Tiso},calc::(${k2TL}-2),${k2TL}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tsgn",
+        "value": "$[if::(eq::(${k2Tsg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tadj",
+        "value": "$[if::(le::(${k2Tmo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tyoe",
+        "value": "$[calc::(${k2Ty}-2000-${k2Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tmp",
+        "value": "$[calc::(${k2Tmo}-3+12*${k2Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tdb",
+        "value": "$[floor::(calc::((153*${k2Tmp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tq4",
+        "value": "$[floor::(calc::(${k2Tyoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tdays",
+        "value": "$[calc::(11017+${k2Tyoe}*365+${k2Tq4}+${k2Tdb}+${k2Td}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Tms",
+        "value": "$[calc::(${k2Tdays}*86400000+${k2Thh}*3600000+${k2Tmi}*60000+${k2Tss}*1000-${k2Tsgn}*(${k2Toh}*60+${k2Tom})*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2el",
+        "value": "$[max::(calc::((${nowMs}-${k2Tms})/60000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2mn",
+        "value": "$[parseNumber::(${k2el},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2hh",
+        "value": "$[parseNumber::(calc::(${k2mn}/60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2mm",
+        "value": "$[parseNumber::(calc::(${k2mn}-${k2hh}*60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2dd",
+        "value": "$[parseNumber::(calc::(${k2mn}/1440),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2dh",
+        "value": "$[parseNumber::(calc::(${k2hh}-${k2dd}*24),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2f",
+        "value": "$[if::(and::(eq::(${k2Thas},1),gt::(${k2o},0)),if::(lt::(${k2mn},60),1,if::(lt::(${k2mn},1440),2,3)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2A",
+        "value": "$[if::(eq::(${k2f},1),${k2mn},if::(eq::(${k2f},2),${k2hh},if::(eq::(${k2f},3),${k2dd},)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2B",
+        "value": "$[if::(eq::(${k2f},2),${k2mm},if::(eq::(${k2f},3),${k2dh},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2same",
+        "value": "$[if::(eq::(formatDate::(${k2Tms},yyyyMMdd),formatDate::(${nowMs},yyyyMMdd)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Mo",
+        "value": "$[parseNumber::(formatDate::(${k2Tms},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Dy",
+        "value": "$[parseNumber::(formatDate::(${k2Tms},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Me",
+        "value": "$[index::(${MONE},calc::(${k2Mo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2Hm",
+        "value": "$[formatDate::(${k2Tms},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2DZ",
+        "value": "${k2Mo}月${k2Dy}日 ${k2Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2DE",
+        "value": "${k2Me} ${k2Dy} ${k2Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2a",
+        "value": "$[if::(and::(eq::(${k2Thas},1),gt::(${k2o},0)),if::(eq::(${k2same},1),${k2Hm},if::(startsWith::(${@app.language},zh),${k2DZ},${k2DE})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2ok",
+        "value": "$[if::(and::(eq::(${k2v},1),eq::(${k2l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2fe",
+        "value": "$[if::(and::(eq::(${k2v},1),ge::(${k2l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2b",
+        "value": "$[if::(and::(eq::(${k2v},1),ge::(${k2l},2)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2m",
+        "value": "$[if::(and::(eq::(${k2v},1),eq::(${k2l},1)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2u",
+        "value": "$[if::(and::(eq::(${k2v},1),lt::(${k2l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2h",
+        "value": "$[if::(and::(eq::(${k2v},1),gt::(${k2o},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2oc",
+        "value": "$[if::(eq::(${k2v},1),${k2o},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3id",
+        "value": "$[findNotEmpty::(index::(${parts},3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3n",
+        "value": "$[if::(gt::(length::(${k3id}),0),findNotEmpty::(get::(${NM},${k3id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3v",
+        "value": "$[if::(gt::(length::(${k3n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3l",
+        "value": "$[if::(eq::(${k3v},1),findNotEmpty::(get::(${LV},${k3id}),-1),-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3o",
+        "value": "$[if::(eq::(${k3v},1),findNotEmpty::(get::(${NO},${k3id}),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3t",
+        "value": "$[if::(gt::(${k3o},0),findNotEmpty::(get::(${TN},${k3id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3il",
+        "value": "$[if::(gt::(${k3o},0),findNotEmpty::(get::(${TL},${k3id}),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3rs",
+        "value": "$[if::(gt::(${k3o},0),findNotEmpty::(get::(${TS},${k3id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3iid",
+        "value": "$[if::(gt::(${k3o},0),findNotEmpty::(get::(${TID},${k3id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3sc",
+        "value": "$[if::(eq::(${k3rs},investigating),1,if::(eq::(${k3rs},identified),2,if::(eq::(${k3rs},monitoring),3,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tiso",
+        "value": "$[findNotEmpty::(get::(${TT},${k3id}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Thas",
+        "value": "$[if::(gt::(length::(${k3Tiso}),18),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Ty",
+        "value": "$[subString::(${k3Tiso},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tmo",
+        "value": "$[subString::(${k3Tiso},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Td",
+        "value": "$[subString::(${k3Tiso},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Thh",
+        "value": "$[subString::(${k3Tiso},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tmi",
+        "value": "$[subString::(${k3Tiso},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tss",
+        "value": "$[subString::(${k3Tiso},17,19)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3TL",
+        "value": "$[length::(${k3Tiso})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tz",
+        "value": "$[if::(endsWith::(${k3Tiso},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tsg",
+        "value": "$[if::(eq::(${k3Tz},1),+,subString::(${k3Tiso},calc::(${k3TL}-6),calc::(${k3TL}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Toh",
+        "value": "$[if::(eq::(${k3Tz},1),0,subString::(${k3Tiso},calc::(${k3TL}-5),calc::(${k3TL}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tom",
+        "value": "$[if::(eq::(${k3Tz},1),0,subString::(${k3Tiso},calc::(${k3TL}-2),${k3TL}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tsgn",
+        "value": "$[if::(eq::(${k3Tsg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tadj",
+        "value": "$[if::(le::(${k3Tmo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tyoe",
+        "value": "$[calc::(${k3Ty}-2000-${k3Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tmp",
+        "value": "$[calc::(${k3Tmo}-3+12*${k3Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tdb",
+        "value": "$[floor::(calc::((153*${k3Tmp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tq4",
+        "value": "$[floor::(calc::(${k3Tyoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tdays",
+        "value": "$[calc::(11017+${k3Tyoe}*365+${k3Tq4}+${k3Tdb}+${k3Td}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Tms",
+        "value": "$[calc::(${k3Tdays}*86400000+${k3Thh}*3600000+${k3Tmi}*60000+${k3Tss}*1000-${k3Tsgn}*(${k3Toh}*60+${k3Tom})*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3el",
+        "value": "$[max::(calc::((${nowMs}-${k3Tms})/60000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3mn",
+        "value": "$[parseNumber::(${k3el},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3hh",
+        "value": "$[parseNumber::(calc::(${k3mn}/60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3mm",
+        "value": "$[parseNumber::(calc::(${k3mn}-${k3hh}*60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3dd",
+        "value": "$[parseNumber::(calc::(${k3mn}/1440),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3dh",
+        "value": "$[parseNumber::(calc::(${k3hh}-${k3dd}*24),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3f",
+        "value": "$[if::(and::(eq::(${k3Thas},1),gt::(${k3o},0)),if::(lt::(${k3mn},60),1,if::(lt::(${k3mn},1440),2,3)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3A",
+        "value": "$[if::(eq::(${k3f},1),${k3mn},if::(eq::(${k3f},2),${k3hh},if::(eq::(${k3f},3),${k3dd},)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3B",
+        "value": "$[if::(eq::(${k3f},2),${k3mm},if::(eq::(${k3f},3),${k3dh},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3same",
+        "value": "$[if::(eq::(formatDate::(${k3Tms},yyyyMMdd),formatDate::(${nowMs},yyyyMMdd)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Mo",
+        "value": "$[parseNumber::(formatDate::(${k3Tms},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Dy",
+        "value": "$[parseNumber::(formatDate::(${k3Tms},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Me",
+        "value": "$[index::(${MONE},calc::(${k3Mo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3Hm",
+        "value": "$[formatDate::(${k3Tms},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3DZ",
+        "value": "${k3Mo}月${k3Dy}日 ${k3Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3DE",
+        "value": "${k3Me} ${k3Dy} ${k3Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3a",
+        "value": "$[if::(and::(eq::(${k3Thas},1),gt::(${k3o},0)),if::(eq::(${k3same},1),${k3Hm},if::(startsWith::(${@app.language},zh),${k3DZ},${k3DE})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3ok",
+        "value": "$[if::(and::(eq::(${k3v},1),eq::(${k3l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3fe",
+        "value": "$[if::(and::(eq::(${k3v},1),ge::(${k3l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3b",
+        "value": "$[if::(and::(eq::(${k3v},1),ge::(${k3l},2)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3m",
+        "value": "$[if::(and::(eq::(${k3v},1),eq::(${k3l},1)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3u",
+        "value": "$[if::(and::(eq::(${k3v},1),lt::(${k3l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3h",
+        "value": "$[if::(and::(eq::(${k3v},1),gt::(${k3o},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3oc",
+        "value": "$[if::(eq::(${k3v},1),${k3o},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4id",
+        "value": "$[findNotEmpty::(index::(${parts},4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4n",
+        "value": "$[if::(gt::(length::(${k4id}),0),findNotEmpty::(get::(${NM},${k4id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4v",
+        "value": "$[if::(gt::(length::(${k4n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4l",
+        "value": "$[if::(eq::(${k4v},1),findNotEmpty::(get::(${LV},${k4id}),-1),-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4o",
+        "value": "$[if::(eq::(${k4v},1),findNotEmpty::(get::(${NO},${k4id}),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4t",
+        "value": "$[if::(gt::(${k4o},0),findNotEmpty::(get::(${TN},${k4id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4il",
+        "value": "$[if::(gt::(${k4o},0),findNotEmpty::(get::(${TL},${k4id}),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4rs",
+        "value": "$[if::(gt::(${k4o},0),findNotEmpty::(get::(${TS},${k4id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4iid",
+        "value": "$[if::(gt::(${k4o},0),findNotEmpty::(get::(${TID},${k4id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4sc",
+        "value": "$[if::(eq::(${k4rs},investigating),1,if::(eq::(${k4rs},identified),2,if::(eq::(${k4rs},monitoring),3,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tiso",
+        "value": "$[findNotEmpty::(get::(${TT},${k4id}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Thas",
+        "value": "$[if::(gt::(length::(${k4Tiso}),18),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Ty",
+        "value": "$[subString::(${k4Tiso},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tmo",
+        "value": "$[subString::(${k4Tiso},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Td",
+        "value": "$[subString::(${k4Tiso},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Thh",
+        "value": "$[subString::(${k4Tiso},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tmi",
+        "value": "$[subString::(${k4Tiso},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tss",
+        "value": "$[subString::(${k4Tiso},17,19)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4TL",
+        "value": "$[length::(${k4Tiso})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tz",
+        "value": "$[if::(endsWith::(${k4Tiso},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tsg",
+        "value": "$[if::(eq::(${k4Tz},1),+,subString::(${k4Tiso},calc::(${k4TL}-6),calc::(${k4TL}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Toh",
+        "value": "$[if::(eq::(${k4Tz},1),0,subString::(${k4Tiso},calc::(${k4TL}-5),calc::(${k4TL}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tom",
+        "value": "$[if::(eq::(${k4Tz},1),0,subString::(${k4Tiso},calc::(${k4TL}-2),${k4TL}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tsgn",
+        "value": "$[if::(eq::(${k4Tsg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tadj",
+        "value": "$[if::(le::(${k4Tmo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tyoe",
+        "value": "$[calc::(${k4Ty}-2000-${k4Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tmp",
+        "value": "$[calc::(${k4Tmo}-3+12*${k4Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tdb",
+        "value": "$[floor::(calc::((153*${k4Tmp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tq4",
+        "value": "$[floor::(calc::(${k4Tyoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tdays",
+        "value": "$[calc::(11017+${k4Tyoe}*365+${k4Tq4}+${k4Tdb}+${k4Td}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Tms",
+        "value": "$[calc::(${k4Tdays}*86400000+${k4Thh}*3600000+${k4Tmi}*60000+${k4Tss}*1000-${k4Tsgn}*(${k4Toh}*60+${k4Tom})*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4el",
+        "value": "$[max::(calc::((${nowMs}-${k4Tms})/60000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4mn",
+        "value": "$[parseNumber::(${k4el},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4hh",
+        "value": "$[parseNumber::(calc::(${k4mn}/60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4mm",
+        "value": "$[parseNumber::(calc::(${k4mn}-${k4hh}*60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4dd",
+        "value": "$[parseNumber::(calc::(${k4mn}/1440),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4dh",
+        "value": "$[parseNumber::(calc::(${k4hh}-${k4dd}*24),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4f",
+        "value": "$[if::(and::(eq::(${k4Thas},1),gt::(${k4o},0)),if::(lt::(${k4mn},60),1,if::(lt::(${k4mn},1440),2,3)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4A",
+        "value": "$[if::(eq::(${k4f},1),${k4mn},if::(eq::(${k4f},2),${k4hh},if::(eq::(${k4f},3),${k4dd},)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4B",
+        "value": "$[if::(eq::(${k4f},2),${k4mm},if::(eq::(${k4f},3),${k4dh},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4same",
+        "value": "$[if::(eq::(formatDate::(${k4Tms},yyyyMMdd),formatDate::(${nowMs},yyyyMMdd)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Mo",
+        "value": "$[parseNumber::(formatDate::(${k4Tms},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Dy",
+        "value": "$[parseNumber::(formatDate::(${k4Tms},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Me",
+        "value": "$[index::(${MONE},calc::(${k4Mo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4Hm",
+        "value": "$[formatDate::(${k4Tms},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4DZ",
+        "value": "${k4Mo}月${k4Dy}日 ${k4Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4DE",
+        "value": "${k4Me} ${k4Dy} ${k4Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4a",
+        "value": "$[if::(and::(eq::(${k4Thas},1),gt::(${k4o},0)),if::(eq::(${k4same},1),${k4Hm},if::(startsWith::(${@app.language},zh),${k4DZ},${k4DE})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4ok",
+        "value": "$[if::(and::(eq::(${k4v},1),eq::(${k4l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4fe",
+        "value": "$[if::(and::(eq::(${k4v},1),ge::(${k4l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4b",
+        "value": "$[if::(and::(eq::(${k4v},1),ge::(${k4l},2)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4m",
+        "value": "$[if::(and::(eq::(${k4v},1),eq::(${k4l},1)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4u",
+        "value": "$[if::(and::(eq::(${k4v},1),lt::(${k4l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4h",
+        "value": "$[if::(and::(eq::(${k4v},1),gt::(${k4o},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4oc",
+        "value": "$[if::(eq::(${k4v},1),${k4o},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5id",
+        "value": "$[findNotEmpty::(index::(${parts},5),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5n",
+        "value": "$[if::(gt::(length::(${k5id}),0),findNotEmpty::(get::(${NM},${k5id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5v",
+        "value": "$[if::(gt::(length::(${k5n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5l",
+        "value": "$[if::(eq::(${k5v},1),findNotEmpty::(get::(${LV},${k5id}),-1),-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5o",
+        "value": "$[if::(eq::(${k5v},1),findNotEmpty::(get::(${NO},${k5id}),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5t",
+        "value": "$[if::(gt::(${k5o},0),findNotEmpty::(get::(${TN},${k5id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5il",
+        "value": "$[if::(gt::(${k5o},0),findNotEmpty::(get::(${TL},${k5id}),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5rs",
+        "value": "$[if::(gt::(${k5o},0),findNotEmpty::(get::(${TS},${k5id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5iid",
+        "value": "$[if::(gt::(${k5o},0),findNotEmpty::(get::(${TID},${k5id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5sc",
+        "value": "$[if::(eq::(${k5rs},investigating),1,if::(eq::(${k5rs},identified),2,if::(eq::(${k5rs},monitoring),3,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tiso",
+        "value": "$[findNotEmpty::(get::(${TT},${k5id}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Thas",
+        "value": "$[if::(gt::(length::(${k5Tiso}),18),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Ty",
+        "value": "$[subString::(${k5Tiso},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tmo",
+        "value": "$[subString::(${k5Tiso},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Td",
+        "value": "$[subString::(${k5Tiso},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Thh",
+        "value": "$[subString::(${k5Tiso},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tmi",
+        "value": "$[subString::(${k5Tiso},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tss",
+        "value": "$[subString::(${k5Tiso},17,19)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5TL",
+        "value": "$[length::(${k5Tiso})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tz",
+        "value": "$[if::(endsWith::(${k5Tiso},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tsg",
+        "value": "$[if::(eq::(${k5Tz},1),+,subString::(${k5Tiso},calc::(${k5TL}-6),calc::(${k5TL}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Toh",
+        "value": "$[if::(eq::(${k5Tz},1),0,subString::(${k5Tiso},calc::(${k5TL}-5),calc::(${k5TL}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tom",
+        "value": "$[if::(eq::(${k5Tz},1),0,subString::(${k5Tiso},calc::(${k5TL}-2),${k5TL}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tsgn",
+        "value": "$[if::(eq::(${k5Tsg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tadj",
+        "value": "$[if::(le::(${k5Tmo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tyoe",
+        "value": "$[calc::(${k5Ty}-2000-${k5Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tmp",
+        "value": "$[calc::(${k5Tmo}-3+12*${k5Tadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tdb",
+        "value": "$[floor::(calc::((153*${k5Tmp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tq4",
+        "value": "$[floor::(calc::(${k5Tyoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tdays",
+        "value": "$[calc::(11017+${k5Tyoe}*365+${k5Tq4}+${k5Tdb}+${k5Td}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Tms",
+        "value": "$[calc::(${k5Tdays}*86400000+${k5Thh}*3600000+${k5Tmi}*60000+${k5Tss}*1000-${k5Tsgn}*(${k5Toh}*60+${k5Tom})*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5el",
+        "value": "$[max::(calc::((${nowMs}-${k5Tms})/60000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5mn",
+        "value": "$[parseNumber::(${k5el},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5hh",
+        "value": "$[parseNumber::(calc::(${k5mn}/60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5mm",
+        "value": "$[parseNumber::(calc::(${k5mn}-${k5hh}*60),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5dd",
+        "value": "$[parseNumber::(calc::(${k5mn}/1440),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5dh",
+        "value": "$[parseNumber::(calc::(${k5hh}-${k5dd}*24),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5f",
+        "value": "$[if::(and::(eq::(${k5Thas},1),gt::(${k5o},0)),if::(lt::(${k5mn},60),1,if::(lt::(${k5mn},1440),2,3)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5A",
+        "value": "$[if::(eq::(${k5f},1),${k5mn},if::(eq::(${k5f},2),${k5hh},if::(eq::(${k5f},3),${k5dd},)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5B",
+        "value": "$[if::(eq::(${k5f},2),${k5mm},if::(eq::(${k5f},3),${k5dh},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5same",
+        "value": "$[if::(eq::(formatDate::(${k5Tms},yyyyMMdd),formatDate::(${nowMs},yyyyMMdd)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Mo",
+        "value": "$[parseNumber::(formatDate::(${k5Tms},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Dy",
+        "value": "$[parseNumber::(formatDate::(${k5Tms},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Me",
+        "value": "$[index::(${MONE},calc::(${k5Mo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5Hm",
+        "value": "$[formatDate::(${k5Tms},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5DZ",
+        "value": "${k5Mo}月${k5Dy}日 ${k5Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5DE",
+        "value": "${k5Me} ${k5Dy} ${k5Hm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5a",
+        "value": "$[if::(and::(eq::(${k5Thas},1),gt::(${k5o},0)),if::(eq::(${k5same},1),${k5Hm},if::(startsWith::(${@app.language},zh),${k5DZ},${k5DE})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5ok",
+        "value": "$[if::(and::(eq::(${k5v},1),eq::(${k5l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5fe",
+        "value": "$[if::(and::(eq::(${k5v},1),ge::(${k5l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5b",
+        "value": "$[if::(and::(eq::(${k5v},1),ge::(${k5l},2)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5m",
+        "value": "$[if::(and::(eq::(${k5v},1),eq::(${k5l},1)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5u",
+        "value": "$[if::(and::(eq::(${k5v},1),lt::(${k5l},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5h",
+        "value": "$[if::(and::(eq::(${k5v},1),gt::(${k5o},0)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5oc",
+        "value": "$[if::(eq::(${k5v},1),${k5o},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[parseNumber::(calc::(${k0v}+${k1v}+${k2v}+${k3v}+${k4v}+${k5v}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "okc",
+        "value": "$[parseNumber::(calc::(${k0fe}+${k1fe}+${k2fe}+${k3fe}+${k4fe}+${k5fe}),0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(gt::(${n},0),eq::(${okc},0)),1,0)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "all status pages unreachable"
+          }
+        }
+      ],
+      "_note": "主干 = 「至少一个关注的服务拿到了总体状态」。一个都没拿到 = 这次取数失败,抛错让平台回落上次成功的数据(G26 / §7.2)。部分服务挂了不抛:那几个服务显示「状态未知」,其余照常。关注列表为空是成功(组件上渲引导)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nOk",
+        "value": "$[parseNumber::(calc::(${k0ok}+${k1ok}+${k2ok}+${k3ok}+${k4ok}+${k5ok}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nBad",
+        "value": "$[parseNumber::(calc::(${k0b}+${k1b}+${k2b}+${k3b}+${k4b}+${k5b}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nMaint",
+        "value": "$[parseNumber::(calc::(${k0m}+${k1m}+${k2m}+${k3m}+${k4m}+${k5m}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nUnk",
+        "value": "$[parseNumber::(calc::(${k0u}+${k1u}+${k2u}+${k3u}+${k4u}+${k5u}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nIncSvc",
+        "value": "$[parseNumber::(calc::(${k0h}+${k1h}+${k2h}+${k3h}+${k4h}+${k5h}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nInc",
+        "value": "$[parseNumber::(calc::(${k0oc}+${k1oc}+${k2oc}+${k3oc}+${k4oc}+${k5oc}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nRows",
+        "value": "$[parseNumber::(min::(${nIncSvc},4),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cbl",
+        "value": "$[parseNumber::(calc::(58+${nRows}*72+10),0)]"
+      },
+      "_note": "「全部关注」小标题:离上面的事故行 16、离下面的列表 / 格子 11 —— 标题靠近它标注的东西(v3 是 +6:离上 12、离下 15,贴着上面)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cb",
+        "value": "$[parseNumber::(calc::(58+${nRows}*72+30),0)]"
+      },
+      "_note": "事故组件:事故行下面还有空地时(≤2 行),接着画「全部关注」的状态格,起点 = 事故行底 + 标题行。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nIss",
+        "value": "$[parseNumber::(calc::(${nBad}+${nMaint}+${nUnk}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "headLv",
+        "value": "$[max::(${k0l},${k1l},${k2l},${k3l},${k4l},${k5l})]"
+      },
+      "_note": "关注的服务里最差的那一档(-1 未知不参与比较 —— 全未知时才是 -1)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${nowMs},HH:mm)]"
+      },
+      "_note": "时间锚 = 这次检查的时刻。状态页的 page.updated_at 是「上次状态变化」,incident.io 那几家停在几个月前,拿它当锚会把「现在是好的」说成「两个月没更新」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc_x",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bac_x",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ca_0",
+        "value": "${acc_x} · ${k0n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc_0",
+        "value": "$[if::(eq::(${k0v},1),if::(gt::(length::(${acc_x}),0),${ca_0},${k0n}),${acc_x})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cb_0",
+        "value": "${bac_x} · ${k0n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bac_0",
+        "value": "$[if::(and::(eq::(${k0v},1),ne::(${k0l},0)),if::(gt::(length::(${bac_x}),0),${cb_0},${k0n}),${bac_x})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ca_1",
+        "value": "${acc_0} · ${k1n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc_1",
+        "value": "$[if::(eq::(${k1v},1),if::(gt::(length::(${acc_0}),0),${ca_1},${k1n}),${acc_0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cb_1",
+        "value": "${bac_0} · ${k1n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bac_1",
+        "value": "$[if::(and::(eq::(${k1v},1),ne::(${k1l},0)),if::(gt::(length::(${bac_0}),0),${cb_1},${k1n}),${bac_0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ca_2",
+        "value": "${acc_1} · ${k2n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc_2",
+        "value": "$[if::(eq::(${k2v},1),if::(gt::(length::(${acc_1}),0),${ca_2},${k2n}),${acc_1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cb_2",
+        "value": "${bac_1} · ${k2n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bac_2",
+        "value": "$[if::(and::(eq::(${k2v},1),ne::(${k2l},0)),if::(gt::(length::(${bac_1}),0),${cb_2},${k2n}),${bac_1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ca_3",
+        "value": "${acc_2} · ${k3n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc_3",
+        "value": "$[if::(eq::(${k3v},1),if::(gt::(length::(${acc_2}),0),${ca_3},${k3n}),${acc_2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cb_3",
+        "value": "${bac_2} · ${k3n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bac_3",
+        "value": "$[if::(and::(eq::(${k3v},1),ne::(${k3l},0)),if::(gt::(length::(${bac_2}),0),${cb_3},${k3n}),${bac_2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ca_4",
+        "value": "${acc_3} · ${k4n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc_4",
+        "value": "$[if::(eq::(${k4v},1),if::(gt::(length::(${acc_3}),0),${ca_4},${k4n}),${acc_3})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cb_4",
+        "value": "${bac_3} · ${k4n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bac_4",
+        "value": "$[if::(and::(eq::(${k4v},1),ne::(${k4l},0)),if::(gt::(length::(${bac_3}),0),${cb_4},${k4n}),${bac_3})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ca_5",
+        "value": "${acc_4} · ${k5n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc_5",
+        "value": "$[if::(eq::(${k5v},1),if::(gt::(length::(${acc_4}),0),${ca_5},${k5n}),${acc_4})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cb_5",
+        "value": "${bac_4} · ${k5n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bac_5",
+        "value": "$[if::(and::(eq::(${k5v},1),ne::(${k5l},0)),if::(gt::(length::(${bac_4}),0),${cb_5},${k5n}),${bac_4})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "names",
+        "value": "${acc_5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "badNames",
+        "value": "${bac_5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "two",
+        "value": "$[if::(le::(${n},4),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "coR",
+        "value": "$[if::(eq::(${two},1),calc::((190-${n}*36)/2),calc::((190-${n}*30)/2))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "co",
+        "value": "$[max::(parseNumber::(${coR},0),0)]"
+      },
+      "_note": "事故组件「都没事」态的纵向偏移:对勾 + 两行字 + 列表这一整块在 y 52..340 里垂直居中。v3 恒从 52 起,关注 4 个时底下空 60pt、1 个时空 168pt。纯版式量,只给 incidents.rcn 用。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bw",
+        "value": "$[if::(eq::(${two},1),152,99.3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bwn",
+        "value": "$[if::(eq::(${two},1),122,69.3)]"
+      },
+      "_note": "看板格内文字宽 = 格宽 − 30(左 22 + 右 8);在这里算好,坐标里不写减法。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nn",
+        "value": "$[max::(${n},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gw",
+        "value": "$[findNotEmpty::(calc::((134-(${nn}-1)*4)/${nn}),134)]"
+      },
+      "_note": "极简组件底部状态条:n 段等分 134pt 宽(段距 4)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0bx",
+        "value": "$[if::(eq::(${two},1),14,14.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0by",
+        "value": "$[if::(eq::(${two},1),58,58)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0gx",
+        "value": "$[findNotEmpty::(calc::(12+0*(${gw}+4)),12)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0ty",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+0),calc::(${cb}+0))]"
+      },
+      "_note": "事故组件:事故只有两行时,下面接看板同款状态格(两行放得下 6 个)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0ly",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+0),calc::(${cb}+0))]"
+      },
+      "_note": "事故组件:事故只有一行时,下面接「全部关注」列表(每个服务一行:名字 + 状态词)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0cy",
+        "value": "$[if::(eq::(${two},1),calc::(150+${co}+0),calc::(150+${co}+0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1bx",
+        "value": "$[if::(eq::(${two},1),172,119.35)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1by",
+        "value": "$[if::(eq::(${two},1),58,58)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1gx",
+        "value": "$[findNotEmpty::(calc::(12+1*(${gw}+4)),12)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1ty",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+0),calc::(${cb}+0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1ly",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+36),calc::(${cb}+30))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1cy",
+        "value": "$[if::(eq::(${two},1),calc::(150+${co}+36),calc::(150+${co}+30))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2bx",
+        "value": "$[if::(eq::(${two},1),14,224.7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2by",
+        "value": "$[if::(eq::(${two},1),104,58)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2gx",
+        "value": "$[findNotEmpty::(calc::(12+2*(${gw}+4)),12)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2ty",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+46),calc::(${cb}+0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2ly",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+72),calc::(${cb}+60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2cy",
+        "value": "$[if::(eq::(${two},1),calc::(150+${co}+72),calc::(150+${co}+60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3bx",
+        "value": "$[if::(eq::(${two},1),172,14.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3by",
+        "value": "$[if::(eq::(${two},1),104,104)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3gx",
+        "value": "$[findNotEmpty::(calc::(12+3*(${gw}+4)),12)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3ty",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+46),calc::(${cb}+46))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3ly",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+108),calc::(${cb}+90))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3cy",
+        "value": "$[if::(eq::(${two},1),calc::(150+${co}+108),calc::(150+${co}+90))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4bx",
+        "value": "$[if::(eq::(${two},1),14,119.35)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4by",
+        "value": "$[if::(eq::(${two},1),150,104)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4gx",
+        "value": "$[findNotEmpty::(calc::(12+4*(${gw}+4)),12)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4ty",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+92),calc::(${cb}+46))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4ly",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+144),calc::(${cb}+120))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4cy",
+        "value": "$[if::(eq::(${two},1),calc::(150+${co}+144),calc::(150+${co}+120))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5bx",
+        "value": "$[if::(eq::(${two},1),172,224.7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5by",
+        "value": "$[if::(eq::(${two},1),150,104)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5gx",
+        "value": "$[findNotEmpty::(calc::(12+5*(${gw}+4)),12)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5ty",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+92),calc::(${cb}+46))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5ly",
+        "value": "$[if::(eq::(${two},1),calc::(${cb}+180),calc::(${cb}+150))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5cy",
+        "value": "$[if::(eq::(${two},1),calc::(150+${co}+180),calc::(150+${co}+150))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lh",
+        "value": "$[if::(eq::(${two},1),36,30)]"
+      },
+      "_note": "事故组件「全部关注」列表行高:≤4 个服务 36、5~6 个 30(都放得下)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lhd",
+        "value": "$[if::(eq::(${two},1),14.5,11.5)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lph",
+        "value": "$[if::(eq::(${two},1),calc::(${n}*36),calc::(${n}*30))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "svcs",
+        "value": [
+          {
+            "n": "${k0n}",
+            "l": "${k0l}",
+            "o": "${k0o}",
+            "x": "${k0bx}",
+            "y": "${k0by}",
+            "gx": "${k0gx}",
+            "ty": "${k0ty}",
+            "ly": "${k0ly}",
+            "cy": "${k0cy}"
+          },
+          {
+            "n": "${k1n}",
+            "l": "${k1l}",
+            "o": "${k1o}",
+            "x": "${k1bx}",
+            "y": "${k1by}",
+            "gx": "${k1gx}",
+            "ty": "${k1ty}",
+            "ly": "${k1ly}",
+            "cy": "${k1cy}"
+          },
+          {
+            "n": "${k2n}",
+            "l": "${k2l}",
+            "o": "${k2o}",
+            "x": "${k2bx}",
+            "y": "${k2by}",
+            "gx": "${k2gx}",
+            "ty": "${k2ty}",
+            "ly": "${k2ly}",
+            "cy": "${k2cy}"
+          },
+          {
+            "n": "${k3n}",
+            "l": "${k3l}",
+            "o": "${k3o}",
+            "x": "${k3bx}",
+            "y": "${k3by}",
+            "gx": "${k3gx}",
+            "ty": "${k3ty}",
+            "ly": "${k3ly}",
+            "cy": "${k3cy}"
+          },
+          {
+            "n": "${k4n}",
+            "l": "${k4l}",
+            "o": "${k4o}",
+            "x": "${k4bx}",
+            "y": "${k4by}",
+            "gx": "${k4gx}",
+            "ty": "${k4ty}",
+            "ly": "${k4ly}",
+            "cy": "${k4cy}"
+          },
+          {
+            "n": "${k5n}",
+            "l": "${k5l}",
+            "o": "${k5o}",
+            "x": "${k5bx}",
+            "y": "${k5by}",
+            "gx": "${k5gx}",
+            "ty": "${k5ty}",
+            "ly": "${k5ly}",
+            "cy": "${k5cy}"
+          }
+        ]
+      },
+      "_note": "看板 / 极简两个组件逐行画:前 n 个是有效槽(关注列表恒紧凑,首页写入时已去空)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_0",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_1",
+        "value": "$[calc::(${k0h})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_2",
+        "value": "$[calc::(${k0h}+${k1h})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_3",
+        "value": "$[calc::(${k0h}+${k1h}+${k2h})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_4",
+        "value": "$[calc::(${k0h}+${k1h}+${k2h}+${k3h})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r_5",
+        "value": "$[calc::(${k0h}+${k1h}+${k2h}+${k3h}+${k4h})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0n",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0n},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1n},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2n},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3n},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4n},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5n},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0t",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0t},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1t},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2t},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3t},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4t},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5t},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0l",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0il},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1il},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2il},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3il},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4il},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5il},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0s",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0sc},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1sc},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2sc},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3sc},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4sc},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5sc},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0f",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0f},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1f},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2f},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3f},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4f},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5f},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0A",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0A},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1A},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2A},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3A},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4A},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5A},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0B",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0B},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1B},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2B},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3B},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4B},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5B},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0a",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0a},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1a},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2a},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3a},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4a},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5a},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0o",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},0)),${k0o},if::(and::(eq::(${k1h},1),eq::(${r_1},0)),${k1o},if::(and::(eq::(${k2h},1),eq::(${r_2},0)),${k2o},if::(and::(eq::(${k3h},1),eq::(${r_3},0)),${k3o},if::(and::(eq::(${k4h},1),eq::(${r_4},0)),${k4o},if::(and::(eq::(${k5h},1),eq::(${r_5},0)),${k5o},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1n",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0n},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1n},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2n},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3n},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4n},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5n},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1t",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0t},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1t},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2t},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3t},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4t},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5t},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1l",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0il},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1il},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2il},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3il},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4il},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5il},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1s",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0sc},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1sc},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2sc},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3sc},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4sc},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5sc},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1f",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0f},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1f},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2f},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3f},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4f},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5f},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1A",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0A},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1A},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2A},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3A},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4A},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5A},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1B",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0B},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1B},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2B},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3B},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4B},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5B},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1a",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0a},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1a},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2a},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3a},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4a},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5a},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1o",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},1)),${k0o},if::(and::(eq::(${k1h},1),eq::(${r_1},1)),${k1o},if::(and::(eq::(${k2h},1),eq::(${r_2},1)),${k2o},if::(and::(eq::(${k3h},1),eq::(${r_3},1)),${k3o},if::(and::(eq::(${k4h},1),eq::(${r_4},1)),${k4o},if::(and::(eq::(${k5h},1),eq::(${r_5},1)),${k5o},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2n",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0n},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1n},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2n},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3n},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4n},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5n},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2t",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0t},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1t},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2t},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3t},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4t},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5t},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2l",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0il},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1il},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2il},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3il},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4il},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5il},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2s",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0sc},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1sc},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2sc},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3sc},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4sc},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5sc},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2f",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0f},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1f},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2f},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3f},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4f},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5f},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2A",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0A},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1A},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2A},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3A},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4A},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5A},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2B",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0B},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1B},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2B},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3B},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4B},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5B},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2a",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0a},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1a},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2a},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3a},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4a},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5a},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2o",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},2)),${k0o},if::(and::(eq::(${k1h},1),eq::(${r_1},2)),${k1o},if::(and::(eq::(${k2h},1),eq::(${r_2},2)),${k2o},if::(and::(eq::(${k3h},1),eq::(${r_3},2)),${k3o},if::(and::(eq::(${k4h},1),eq::(${r_4},2)),${k4o},if::(and::(eq::(${k5h},1),eq::(${r_5},2)),${k5o},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3n",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0n},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1n},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2n},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3n},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4n},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5n},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3t",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0t},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1t},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2t},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3t},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4t},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5t},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3l",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0il},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1il},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2il},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3il},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4il},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5il},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3s",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0sc},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1sc},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2sc},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3sc},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4sc},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5sc},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3f",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0f},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1f},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2f},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3f},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4f},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5f},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3A",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0A},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1A},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2A},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3A},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4A},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5A},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3B",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0B},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1B},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2B},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3B},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4B},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5B},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3a",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0a},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1a},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2a},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3a},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4a},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5a},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3o",
+        "value": "$[if::(and::(eq::(${k0h},1),eq::(${r_0},3)),${k0o},if::(and::(eq::(${k1h},1),eq::(${r_1},3)),${k1o},if::(and::(eq::(${k2h},1),eq::(${r_2},3)),${k2o},if::(and::(eq::(${k3h},1),eq::(${r_3},3)),${k3o},if::(and::(eq::(${k4h},1),eq::(${r_4},3)),${k4o},if::(and::(eq::(${k5h},1),eq::(${r_5},3)),${k5o},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "incs",
+        "value": [
+          {
+            "n": "${i0n}",
+            "t": "${i0t}",
+            "l": "${i0l}",
+            "s": "${i0s}",
+            "f": "${i0f}",
+            "A": "${i0A}",
+            "B": "${i0B}",
+            "a": "${i0a}",
+            "o": "${i0o}"
+          },
+          {
+            "n": "${i1n}",
+            "t": "${i1t}",
+            "l": "${i1l}",
+            "s": "${i1s}",
+            "f": "${i1f}",
+            "A": "${i1A}",
+            "B": "${i1B}",
+            "a": "${i1a}",
+            "o": "${i1o}"
+          },
+          {
+            "n": "${i2n}",
+            "t": "${i2t}",
+            "l": "${i2l}",
+            "s": "${i2s}",
+            "f": "${i2f}",
+            "A": "${i2A}",
+            "B": "${i2B}",
+            "a": "${i2a}",
+            "o": "${i2o}"
+          },
+          {
+            "n": "${i3n}",
+            "t": "${i3t}",
+            "l": "${i3l}",
+            "s": "${i3s}",
+            "f": "${i3f}",
+            "A": "${i3A}",
+            "B": "${i3B}",
+            "a": "${i3a}",
+            "o": "${i3o}"
+          }
+        ]
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "n",
+          "nOk",
+          "nBad",
+          "nMaint",
+          "nUnk",
+          "nIss",
+          "nInc",
+          "nIncSvc",
+          "nRows",
+          "cb",
+          "cbl",
+          "headLv",
+          "names",
+          "badNames",
+          "bw",
+          "bwn",
+          "gw",
+          "lh",
+          "lhd",
+          "lph",
+          "co",
+          "svcs",
+          "incs",
+          "k0n",
+          "k0l",
+          "k0o",
+          "k0t",
+          "k0sc",
+          "k0f",
+          "k0A",
+          "k0B",
+          "k0a",
+          "k0il",
+          "k0iid"
+        ]
+      }
+    }
+  ]
+}

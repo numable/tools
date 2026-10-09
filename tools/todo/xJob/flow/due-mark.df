@@ -1,0 +1,36 @@
+{
+  "_note": "到点提醒的判定段(then):把本轮的评估时刻记成 rqLast,下一轮只看这之后到点的。\n判空守卫:now 取不到(理论上不会)就一个字节都不写 —— 写个空进去,下一轮会被当成「首轮」只建基线,吞掉一次提醒。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(gt::(findNotEmpty::(${now},0),0),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${ok},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "rqLast",
+            "value": "${now}"
+          }
+        }
+      ]
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ok"
+        ]
+      }
+    }
+  ]
+}

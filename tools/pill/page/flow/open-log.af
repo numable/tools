@@ -1,0 +1,22 @@
+{
+  "_note": "打开补录页,日期默认今天。\n`d` 由按钮的 cell events 带进来(环境值 `${todayStr}`,已真机验证可传)。\n\n⚠️ 值走 `params` 字段而不是 URL query —— 理由同 open-setup.af:\n`nav.openForResult` 在 iOS 落到 `presentForResult`,它拿**入参 params** 当 routeParams,\nURL 只用来定位文件、query 不解析。拼进 query 的话表单一个值都收不到,且不报错。\n\n用 openForResult 而不是 open:要的是「等它关掉」这个时机 —— 回来必须重跑 depends,\n否则点阵还渲着补录前的旧状态。回传值本身不消费(状态由 log-save.af 自己写盘)。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "⚠️ actions[0] 恒为 ui.haptic(G22):RCN 没有动画能力,点击到浮层出现之间 ~250ms 全无反馈,用户会以为没点上、再点一次 —— 而第二下会再开一个浮层。",
+      "action": "ui.haptic"
+    },
+    {
+      "action": "nav.openForResult",
+      "params": {
+        "url": "numable://self/page/log",
+        "params": {
+          "d": "${d}"
+        }
+      }
+    },
+    {
+      "action": "xpage.reloadPage"
+    }
+  ]
+}

@@ -1,0 +1,6599 @@
+{
+  "_note": "「近 7 天稳定性」组件:关注的前 4 个服务,各自近 7 天(按设备时区的自然日)每天最重的事故影响、7 天事故数。只出码与数(w<槽>_<距今天数> = 0 无 · 2 轻微 · 3 部分中断 · 4 重大中断),文案在 .rcn 的 rc.i18n。\n近期事故数据源(2026-09-25 实测后选定,v2):\n· Statuspage 原生(sp):`/history.json` —— 本季度逐月的全部事故,**带 impact 与开始时刻**,7–114KB(未压缩;线上走 gzip 约 3–27KB)。没有更轻的端点:`incidents.json` 全量 140–290KB、`?limit=` / `?per_page=` 均被忽略;`history.rss` 30–77KB 且**没有 impact**(按当日最重影响着色做不到)。\n  ⚠️ 它只覆盖**当前季度**(start_time = 季初):窗口跨进上一季度时另取 `?page=2`。\n  ⚠️ timestamp 是展示串「Sep <var…>24</var>, <var…>16:51</var> - … UTC」,时区按页面(EDT / PDT 也有),偏移从 start_time 取;**月份取 timestamp 开头的缩写**(跨月事故挂在结束月的块下),年取月块。\n· incident.io 兼容层(io):`incidents.json` 最新 25 条(29–41KB),created_at 是 ISO 串,impact 同名。\n· 计划维护(impact = maintenance)不算事故;impact = none 的公告按「轻微异常」计(与页面同一判据)。\n刷新 1 小时一次:它回答的是「这周稳不稳」,不需要 2 分钟一查。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "idsIn",
+        "value": "$[findNotEmpty::(${ids},)]"
+      },
+      "_note": "入参落地(勿删)。`ids` 只有「单个服务」22 档会传(一个服务 id,画它的近 7 天方格);「近 7 天稳定性」组件不传 → 读关注列表。"
+    },
+    {
+      "id": "fl",
+      "action": "data.get",
+      "params": {
+        "key": "follow",
+        "default": [
+          "github",
+          "claude",
+          "openai",
+          "vercel"
+        ]
+      },
+      "_note": "关注列表(首页「管理关注」写入);没存过时用默认四个。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0",
+        "value": "1"
+      },
+      "_note": "读取屏障(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flj",
+        "value": "$[if::(gt::(length::(${idsIn}),0),${idsIn},join::(${fl},~))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "raw",
+        "value": "$[split::(${flj},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NM",
+        "value": {
+          "github": "GitHub",
+          "claude": "Claude",
+          "openai": "OpenAI",
+          "vercel": "Vercel",
+          "cursor": "Cursor",
+          "npm": "npm",
+          "docker": "Docker",
+          "bitbucket": "Bitbucket",
+          "circleci": "CircleCI",
+          "netlify": "Netlify",
+          "supabase": "Supabase",
+          "render": "Render",
+          "digitalocean": "DigitalOcean",
+          "mongodb": "MongoDB Cloud",
+          "sentry": "Sentry",
+          "datadog": "Datadog",
+          "linear": "Linear",
+          "notion": "Notion",
+          "figma": "Figma",
+          "postman": "Postman",
+          "discord": "Discord",
+          "reddit": "Reddit"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "MN",
+        "value": {
+          "January": "1",
+          "February": "2",
+          "March": "3",
+          "April": "4",
+          "May": "5",
+          "June": "6",
+          "July": "7",
+          "August": "8",
+          "September": "9",
+          "October": "10",
+          "November": "11",
+          "December": "12"
+        }
+      },
+      "_note": "history.json 月块的英文月名 → 月份数。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M3",
+        "value": {
+          "Jan": "1",
+          "Feb": "2",
+          "Mar": "3",
+          "Apr": "4",
+          "May": "5",
+          "Jun": "6",
+          "Jul": "7",
+          "Aug": "8",
+          "Sep": "9",
+          "Oct": "10",
+          "Nov": "11",
+          "Dec": "12"
+        }
+      },
+      "_note": "timestamp 开头的月份缩写 → 月份数。⚠️ 事故的开始月要从 timestamp 读,不能用所在月块:跨月的事故挂在**结束**那个月块下(supabase「Aug 19, 15:52 - Sep 15」在 September 块里)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_x",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid0",
+        "value": "$[findNotEmpty::(index::(${raw},0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv0",
+        "value": "$[if::(gt::(length::(${rid0}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid0}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_0",
+        "value": "${cl_x}~${rid0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_0",
+        "value": "$[if::(eq::(${rv0},1),if::(gt::(length::(${cl_x}),0),${cj_0},${rid0}),${cl_x})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid1",
+        "value": "$[findNotEmpty::(index::(${raw},1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv1",
+        "value": "$[if::(gt::(length::(${rid1}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid1}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_1",
+        "value": "${cl_0}~${rid1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_1",
+        "value": "$[if::(eq::(${rv1},1),if::(gt::(length::(${cl_0}),0),${cj_1},${rid1}),${cl_0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid2",
+        "value": "$[findNotEmpty::(index::(${raw},2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv2",
+        "value": "$[if::(gt::(length::(${rid2}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid2}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_2",
+        "value": "${cl_1}~${rid2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_2",
+        "value": "$[if::(eq::(${rv2},1),if::(gt::(length::(${cl_1}),0),${cj_2},${rid2}),${cl_1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid3",
+        "value": "$[findNotEmpty::(index::(${raw},3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv3",
+        "value": "$[if::(gt::(length::(${rid3}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid3}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_3",
+        "value": "${cl_2}~${rid3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_3",
+        "value": "$[if::(eq::(${rv3},1),if::(gt::(length::(${cl_2}),0),${cj_3},${rid3}),${cl_2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid4",
+        "value": "$[findNotEmpty::(index::(${raw},4),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv4",
+        "value": "$[if::(gt::(length::(${rid4}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid4}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_4",
+        "value": "${cl_3}~${rid4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_4",
+        "value": "$[if::(eq::(${rv4},1),if::(gt::(length::(${cl_3}),0),${cj_4},${rid4}),${cl_3})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rid5",
+        "value": "$[findNotEmpty::(index::(${raw},5),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rv5",
+        "value": "$[if::(gt::(length::(${rid5}),0),if::(gt::(length::(findNotEmpty::(get::(${NM},${rid5}),)),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cj_5",
+        "value": "${cl_4}~${rid5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cl_5",
+        "value": "$[if::(eq::(${rv5},1),if::(gt::(length::(${cl_4}),0),${cj_5},${rid5}),${cl_4})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "parts",
+        "value": "$[split::(${cl_5},~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nall",
+        "value": "$[parseNumber::(calc::(${rv0}+${rv1}+${rv2}+${rv3}+${rv4}+${rv5}),0)]"
+      },
+      "_note": "关注总数(组件只画前 4 个,多出来的在左下角写「另 N 个」)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0id",
+        "value": "$[findNotEmpty::(index::(${parts},0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0n",
+        "value": "$[if::(gt::(length::(${k0id}),0),findNotEmpty::(get::(${NM},${k0id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0v",
+        "value": "$[if::(gt::(length::(${k0n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1id",
+        "value": "$[findNotEmpty::(index::(${parts},1),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1n",
+        "value": "$[if::(gt::(length::(${k1id}),0),findNotEmpty::(get::(${NM},${k1id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1v",
+        "value": "$[if::(gt::(length::(${k1n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2id",
+        "value": "$[findNotEmpty::(index::(${parts},2),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2n",
+        "value": "$[if::(gt::(length::(${k2id}),0),findNotEmpty::(get::(${NM},${k2id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2v",
+        "value": "$[if::(gt::(length::(${k2n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3id",
+        "value": "$[findNotEmpty::(index::(${parts},3),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3n",
+        "value": "$[if::(gt::(length::(${k3id}),0),findNotEmpty::(get::(${NM},${k3id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3v",
+        "value": "$[if::(gt::(length::(${k3n}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tH",
+        "value": "$[formatDate::(${nowMs},HH)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tM",
+        "value": "$[formatDate::(${nowMs},mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tS",
+        "value": "$[formatDate::(${nowMs},ss)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tod",
+        "value": "$[calc::(${tH}*3600000+${tM}*60000+${tS}*1000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[calc::(${nowMs}-${tod})]"
+      },
+      "_note": "今天 0 点(设备时区)。日格按用户自己的自然日切,不按 UTC。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wsM",
+        "value": "$[formatDate::(calc::(${t0}-7*86400000),MM)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nM",
+        "value": "$[formatDate::(${nowMs},MM)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wsQ",
+        "value": "$[floor::(calc::((${wsM}-1)/3))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nQ",
+        "value": "$[floor::(calc::((${nM}-1)/3))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p2",
+        "value": "$[if::(eq::(${wsQ},${nQ}),0,1)]"
+      },
+      "_note": "7 天窗口(多留一天余量,吸收页面时区)跨进上一季度 → 另取 history.json?page=2。一年只有 4×8 天会走到。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tY",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tMo",
+        "value": "$[parseNumber::(formatDate::(${nowMs},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tD",
+        "value": "$[parseNumber::(formatDate::(${nowMs},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdadj",
+        "value": "$[if::(le::(${tMo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdyoe",
+        "value": "$[calc::(${tY}-2000-${tdadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdmp",
+        "value": "$[calc::(${tMo}-3+12*${tdadj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tddb",
+        "value": "$[floor::(calc::((153*${tdmp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdq4",
+        "value": "$[floor::(calc::(${tdyoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tddays",
+        "value": "$[calc::(11017+${tdyoe}*365+${tdq4}+${tddb}+${tD}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdms",
+        "value": "$[calc::(${tddays}*86400000+0*3600000+0*60000-(0)*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdq",
+        "value": "$[floor::(calc::((${tddays}+4)/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdw",
+        "value": "$[calc::(${tddays}+4-${tdq}*7)]"
+      },
+      "_note": "今天星期几(0 = 周日):1970-01-01 是周四。日期轴写星期,不写裸「几号」—— 「2 3 4」读不出是几月几号还是周几。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wq0",
+        "value": "$[floor::(calc::((${tdw}+7-0)/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wd0",
+        "value": "$[parseNumber::(calc::(${tdw}+7-0-${wq0}*7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wq1",
+        "value": "$[floor::(calc::((${tdw}+7-1)/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wd1",
+        "value": "$[parseNumber::(calc::(${tdw}+7-1-${wq1}*7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wq2",
+        "value": "$[floor::(calc::((${tdw}+7-2)/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wd2",
+        "value": "$[parseNumber::(calc::(${tdw}+7-2-${wq2}*7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wq3",
+        "value": "$[floor::(calc::((${tdw}+7-3)/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wd3",
+        "value": "$[parseNumber::(calc::(${tdw}+7-3-${wq3}*7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wq4",
+        "value": "$[floor::(calc::((${tdw}+7-4)/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wd4",
+        "value": "$[parseNumber::(calc::(${tdw}+7-4-${wq4}*7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wq5",
+        "value": "$[floor::(calc::((${tdw}+7-5)/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wd5",
+        "value": "$[parseNumber::(calc::(${tdw}+7-5-${wq5}*7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wq6",
+        "value": "$[floor::(calc::((${tdw}+7-6)/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wd6",
+        "value": "$[parseNumber::(calc::(${tdw}+7-6-${wq6}*7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dl0",
+        "value": "$[parseNumber::(formatDate::(calc::(${t0}-0*86400000+43200000),dd),0)]"
+      },
+      "_note": "日期轴:距今 g 天那一天的「几号」(取当天正午,避开夏令时切换那一小时)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dl1",
+        "value": "$[parseNumber::(formatDate::(calc::(${t0}-1*86400000+43200000),dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dl2",
+        "value": "$[parseNumber::(formatDate::(calc::(${t0}-2*86400000+43200000),dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dl3",
+        "value": "$[parseNumber::(formatDate::(calc::(${t0}-3*86400000+43200000),dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dl4",
+        "value": "$[parseNumber::(formatDate::(calc::(${t0}-4*86400000+43200000),dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dl5",
+        "value": "$[parseNumber::(formatDate::(calc::(${t0}-5*86400000+43200000),dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dl6",
+        "value": "$[parseNumber::(formatDate::(calc::(${t0}-6*86400000+43200000),dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "HU",
+        "value": {
+          "github": "https://www.githubstatus.com/history.json",
+          "claude": "https://status.claude.com/history.json",
+          "openai": "https://status.openai.com/api/v2/incidents.json",
+          "vercel": "https://www.vercel-status.com/history.json",
+          "cursor": "https://status.cursor.com/history.json",
+          "npm": "https://status.npmjs.org/history.json",
+          "docker": "https://www.dockerstatus.com/api/v2/incidents.json",
+          "bitbucket": "https://bitbucket.status.atlassian.com/history.json",
+          "circleci": "https://status.circleci.com/history.json",
+          "netlify": "https://www.netlifystatus.com/history.json",
+          "supabase": "https://status.supabase.com/history.json",
+          "render": "https://status.render.com/history.json",
+          "digitalocean": "https://status.digitalocean.com/history.json",
+          "mongodb": "https://status.mongodb.com/history.json",
+          "sentry": "https://status.sentry.io/history.json",
+          "datadog": "https://status.datadoghq.com/history.json",
+          "linear": "https://linearstatus.com/api/v2/incidents.json",
+          "notion": "https://www.notion-status.com/api/v2/incidents.json",
+          "figma": "https://status.figma.com/history.json",
+          "postman": "https://status.postman.com/history.json",
+          "discord": "https://discordstatus.com/history.json",
+          "reddit": "https://www.redditstatus.com/history.json"
+        }
+      },
+      "_note": "每个服务的事故历史地址(sp = history.json,io = incidents.json)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "HU2",
+        "value": {
+          "github": "https://www.githubstatus.com/history.json?page=2",
+          "claude": "https://status.claude.com/history.json?page=2",
+          "vercel": "https://www.vercel-status.com/history.json?page=2",
+          "cursor": "https://status.cursor.com/history.json?page=2",
+          "npm": "https://status.npmjs.org/history.json?page=2",
+          "bitbucket": "https://bitbucket.status.atlassian.com/history.json?page=2",
+          "circleci": "https://status.circleci.com/history.json?page=2",
+          "netlify": "https://www.netlifystatus.com/history.json?page=2",
+          "supabase": "https://status.supabase.com/history.json?page=2",
+          "render": "https://status.render.com/history.json?page=2",
+          "digitalocean": "https://status.digitalocean.com/history.json?page=2",
+          "mongodb": "https://status.mongodb.com/history.json?page=2",
+          "sentry": "https://status.sentry.io/history.json?page=2",
+          "datadog": "https://status.datadoghq.com/history.json?page=2",
+          "figma": "https://status.figma.com/history.json?page=2",
+          "postman": "https://status.postman.com/history.json?page=2",
+          "discord": "https://discordstatus.com/history.json?page=2",
+          "reddit": "https://www.redditstatus.com/history.json?page=2"
+        }
+      },
+      "_note": "上一季度那一页(只有 sp 有;窗口跨季时才取)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u0",
+        "value": "$[if::(eq::(${k0v},1),findNotEmpty::(get::(${HU},${k0id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v0",
+        "value": "$[if::(and::(eq::(${k0v},1),eq::(${p2},1)),findNotEmpty::(get::(${HU2},${k0id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u1",
+        "value": "$[if::(eq::(${k1v},1),findNotEmpty::(get::(${HU},${k1id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v1",
+        "value": "$[if::(and::(eq::(${k1v},1),eq::(${p2},1)),findNotEmpty::(get::(${HU2},${k1id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u2",
+        "value": "$[if::(eq::(${k2v},1),findNotEmpty::(get::(${HU},${k2id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v2",
+        "value": "$[if::(and::(eq::(${k2v},1),eq::(${p2},1)),findNotEmpty::(get::(${HU2},${k2id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u3",
+        "value": "$[if::(eq::(${k3v},1),findNotEmpty::(get::(${HU},${k3id}),),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v3",
+        "value": "$[if::(and::(eq::(${k3v},1),eq::(${p2},1)),findNotEmpty::(get::(${HU2},${k3id}),),)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${u0}),0),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h0",
+          "action": "request",
+          "params": {
+            "url": "${u0}",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${v0}),0),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g0",
+          "action": "request",
+          "params": {
+            "url": "${v0}",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${u1}),0),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h1",
+          "action": "request",
+          "params": {
+            "url": "${u1}",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${v1}),0),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g1",
+          "action": "request",
+          "params": {
+            "url": "${v1}",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${u2}),0),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h2",
+          "action": "request",
+          "params": {
+            "url": "${u2}",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${v2}),0),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g2",
+          "action": "request",
+          "params": {
+            "url": "${v2}",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${u3}),0),1,0)]"
+      },
+      "items": [
+        {
+          "id": "h3",
+          "action": "request",
+          "params": {
+            "url": "${u3}",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${v3}),0),1,0)]"
+      },
+      "items": [
+        {
+          "id": "g3",
+          "action": "request",
+          "params": {
+            "url": "${v3}",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "Accept": "application/json"
+            },
+            "timeout": "8000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1",
+        "value": "1"
+      },
+      "_note": "请求屏障(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok0",
+        "value": "$[if::(eq::(${k0v},1),if::(or::(gt::(length::(${h0.months}),0),gt::(length::(${h0.incidents}),0)),1,0),0)]"
+      },
+      "_note": "这个服务的历史取到了没有(sp 看 months、io 看 incidents)。取不到 = 这一行画「--」,不画成「无事故」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0_0",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0_1",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0_2",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0_3",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0_4",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0_5",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0_6",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la0",
+        "value": "999"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0s",
+        "value": "$[findNotEmpty::(${h0.start_time},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0L",
+        "value": "$[length::(${o0s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0z",
+        "value": "$[if::(endsWith::(${o0s},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0sg",
+        "value": "$[if::(eq::(${o0z},1),+,subString::(${o0s},calc::(${o0L}-6),calc::(${o0L}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0h",
+        "value": "$[if::(eq::(${o0z},1),0,subString::(${o0s},calc::(${o0L}-5),calc::(${o0L}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0m",
+        "value": "$[if::(eq::(${o0z},1),0,subString::(${o0s},calc::(${o0L}-2),${o0L}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0n",
+        "value": "$[if::(eq::(${o0sg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0off",
+        "value": "$[parseNumber::(calc::(${o0n}*(${o0h}*60+${o0m})),0)]"
+      },
+      "_note": "页面时区相对 UTC 的分钟数(EDT = −240);history.json 的时刻都是这个时区的墙钟。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b00y",
+        "value": "$[findNotEmpty::(${h0.months[0].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b00m",
+        "value": "$[findNotEmpty::(get::(${MN},${h0.months[0].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h0.months[0].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e0_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_yy",
+            "value": "$[if::(gt::(${e0_mo},${b00m}),calc::(${b00y}-1),${b00y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e0_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e0_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_hh",
+            "value": "$[subString::(${e0_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mi",
+            "value": "$[subString::(${e0_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_lv",
+            "value": "$[if::(eq::(${e0_im},critical),4,if::(eq::(${e0_im},major),3,if::(eq::(${e0_im},maintenance),0,if::(gt::(length::(${e0_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_adj",
+            "value": "$[if::(le::(${e0_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_yoe",
+            "value": "$[calc::(${e0_yy}-2000-${e0_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mp",
+            "value": "$[calc::(${e0_mo}-3+12*${e0_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_db",
+            "value": "$[floor::(calc::((153*${e0_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_q4",
+            "value": "$[floor::(calc::(${e0_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_days",
+            "value": "$[calc::(11017+${e0_yoe}*365+${e0_q4}+${e0_db}+${e0_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ms",
+            "value": "$[calc::(${e0_days}*86400000+${e0_hh}*3600000+${e0_mi}*60000-(${o0off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ok",
+            "value": "$[if::(and::(gt::(${e0_ms},1000000000000),gt::(${e0_lv},0),le::(${e0_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_raw",
+            "value": "$[floor::(calc::((${t0}-${e0_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ago",
+            "value": "$[if::(ge::(${e0_ms},${t0}),0,calc::(${e0_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_in",
+            "value": "$[if::(and::(eq::(${e0_ok},1),le::(${e0_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_0",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},0),gt::(${e0_lv},${w0_0})),${e0_lv},${w0_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_1",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},1),gt::(${e0_lv},${w0_1})),${e0_lv},${w0_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_2",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},2),gt::(${e0_lv},${w0_2})),${e0_lv},${w0_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_3",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},3),gt::(${e0_lv},${w0_3})),${e0_lv},${w0_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_4",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},4),gt::(${e0_lv},${w0_4})),${e0_lv},${w0_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_5",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},5),gt::(${e0_lv},${w0_5})),${e0_lv},${w0_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_6",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},6),gt::(${e0_lv},${w0_6})),${e0_lv},${w0_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c0",
+            "value": "$[calc::(${c0}+${e0_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la0",
+            "value": "$[if::(and::(eq::(${e0_ok},1),lt::(${e0_ago},${la0})),${e0_ago},${la0})]"
+          }
+        }
+      ],
+      "_note": "sp:逐月块逐条事故(本季度 3 个月块 + 跨季时上一页的最新月块)。io 的响应里没有 months → 这几个循环一轮都不跑。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b01y",
+        "value": "$[findNotEmpty::(${h0.months[1].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b01m",
+        "value": "$[findNotEmpty::(get::(${MN},${h0.months[1].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h0.months[1].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e0_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_yy",
+            "value": "$[if::(gt::(${e0_mo},${b01m}),calc::(${b01y}-1),${b01y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e0_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e0_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_hh",
+            "value": "$[subString::(${e0_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mi",
+            "value": "$[subString::(${e0_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_lv",
+            "value": "$[if::(eq::(${e0_im},critical),4,if::(eq::(${e0_im},major),3,if::(eq::(${e0_im},maintenance),0,if::(gt::(length::(${e0_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_adj",
+            "value": "$[if::(le::(${e0_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_yoe",
+            "value": "$[calc::(${e0_yy}-2000-${e0_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mp",
+            "value": "$[calc::(${e0_mo}-3+12*${e0_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_db",
+            "value": "$[floor::(calc::((153*${e0_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_q4",
+            "value": "$[floor::(calc::(${e0_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_days",
+            "value": "$[calc::(11017+${e0_yoe}*365+${e0_q4}+${e0_db}+${e0_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ms",
+            "value": "$[calc::(${e0_days}*86400000+${e0_hh}*3600000+${e0_mi}*60000-(${o0off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ok",
+            "value": "$[if::(and::(gt::(${e0_ms},1000000000000),gt::(${e0_lv},0),le::(${e0_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_raw",
+            "value": "$[floor::(calc::((${t0}-${e0_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ago",
+            "value": "$[if::(ge::(${e0_ms},${t0}),0,calc::(${e0_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_in",
+            "value": "$[if::(and::(eq::(${e0_ok},1),le::(${e0_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_0",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},0),gt::(${e0_lv},${w0_0})),${e0_lv},${w0_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_1",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},1),gt::(${e0_lv},${w0_1})),${e0_lv},${w0_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_2",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},2),gt::(${e0_lv},${w0_2})),${e0_lv},${w0_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_3",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},3),gt::(${e0_lv},${w0_3})),${e0_lv},${w0_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_4",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},4),gt::(${e0_lv},${w0_4})),${e0_lv},${w0_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_5",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},5),gt::(${e0_lv},${w0_5})),${e0_lv},${w0_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_6",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},6),gt::(${e0_lv},${w0_6})),${e0_lv},${w0_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c0",
+            "value": "$[calc::(${c0}+${e0_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la0",
+            "value": "$[if::(and::(eq::(${e0_ok},1),lt::(${e0_ago},${la0})),${e0_ago},${la0})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b02y",
+        "value": "$[findNotEmpty::(${h0.months[2].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b02m",
+        "value": "$[findNotEmpty::(get::(${MN},${h0.months[2].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h0.months[2].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e0_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_yy",
+            "value": "$[if::(gt::(${e0_mo},${b02m}),calc::(${b02y}-1),${b02y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e0_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e0_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_hh",
+            "value": "$[subString::(${e0_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mi",
+            "value": "$[subString::(${e0_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_lv",
+            "value": "$[if::(eq::(${e0_im},critical),4,if::(eq::(${e0_im},major),3,if::(eq::(${e0_im},maintenance),0,if::(gt::(length::(${e0_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_adj",
+            "value": "$[if::(le::(${e0_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_yoe",
+            "value": "$[calc::(${e0_yy}-2000-${e0_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mp",
+            "value": "$[calc::(${e0_mo}-3+12*${e0_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_db",
+            "value": "$[floor::(calc::((153*${e0_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_q4",
+            "value": "$[floor::(calc::(${e0_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_days",
+            "value": "$[calc::(11017+${e0_yoe}*365+${e0_q4}+${e0_db}+${e0_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ms",
+            "value": "$[calc::(${e0_days}*86400000+${e0_hh}*3600000+${e0_mi}*60000-(${o0off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ok",
+            "value": "$[if::(and::(gt::(${e0_ms},1000000000000),gt::(${e0_lv},0),le::(${e0_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_raw",
+            "value": "$[floor::(calc::((${t0}-${e0_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ago",
+            "value": "$[if::(ge::(${e0_ms},${t0}),0,calc::(${e0_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_in",
+            "value": "$[if::(and::(eq::(${e0_ok},1),le::(${e0_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_0",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},0),gt::(${e0_lv},${w0_0})),${e0_lv},${w0_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_1",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},1),gt::(${e0_lv},${w0_1})),${e0_lv},${w0_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_2",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},2),gt::(${e0_lv},${w0_2})),${e0_lv},${w0_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_3",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},3),gt::(${e0_lv},${w0_3})),${e0_lv},${w0_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_4",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},4),gt::(${e0_lv},${w0_4})),${e0_lv},${w0_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_5",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},5),gt::(${e0_lv},${w0_5})),${e0_lv},${w0_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_6",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},6),gt::(${e0_lv},${w0_6})),${e0_lv},${w0_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c0",
+            "value": "$[calc::(${c0}+${e0_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la0",
+            "value": "$[if::(and::(eq::(${e0_ok},1),lt::(${e0_ago},${la0})),${e0_ago},${la0})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b03y",
+        "value": "$[findNotEmpty::(${g0.months[0].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b03m",
+        "value": "$[findNotEmpty::(get::(${MN},${g0.months[0].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${g0.months[0].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e0_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_yy",
+            "value": "$[if::(gt::(${e0_mo},${b03m}),calc::(${b03y}-1),${b03y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e0_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e0_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_hh",
+            "value": "$[subString::(${e0_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mi",
+            "value": "$[subString::(${e0_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_lv",
+            "value": "$[if::(eq::(${e0_im},critical),4,if::(eq::(${e0_im},major),3,if::(eq::(${e0_im},maintenance),0,if::(gt::(length::(${e0_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_adj",
+            "value": "$[if::(le::(${e0_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_yoe",
+            "value": "$[calc::(${e0_yy}-2000-${e0_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_mp",
+            "value": "$[calc::(${e0_mo}-3+12*${e0_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_db",
+            "value": "$[floor::(calc::((153*${e0_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_q4",
+            "value": "$[floor::(calc::(${e0_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_days",
+            "value": "$[calc::(11017+${e0_yoe}*365+${e0_q4}+${e0_db}+${e0_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ms",
+            "value": "$[calc::(${e0_days}*86400000+${e0_hh}*3600000+${e0_mi}*60000-(${o0off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ok",
+            "value": "$[if::(and::(gt::(${e0_ms},1000000000000),gt::(${e0_lv},0),le::(${e0_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_raw",
+            "value": "$[floor::(calc::((${t0}-${e0_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_ago",
+            "value": "$[if::(ge::(${e0_ms},${t0}),0,calc::(${e0_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e0_in",
+            "value": "$[if::(and::(eq::(${e0_ok},1),le::(${e0_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_0",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},0),gt::(${e0_lv},${w0_0})),${e0_lv},${w0_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_1",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},1),gt::(${e0_lv},${w0_1})),${e0_lv},${w0_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_2",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},2),gt::(${e0_lv},${w0_2})),${e0_lv},${w0_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_3",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},3),gt::(${e0_lv},${w0_3})),${e0_lv},${w0_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_4",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},4),gt::(${e0_lv},${w0_4})),${e0_lv},${w0_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_5",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},5),gt::(${e0_lv},${w0_5})),${e0_lv},${w0_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_6",
+            "value": "$[if::(and::(eq::(${e0_in},1),eq::(${e0_ago},6),gt::(${e0_lv},${w0_6})),${e0_lv},${w0_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c0",
+            "value": "$[calc::(${c0}+${e0_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la0",
+            "value": "$[if::(and::(eq::(${e0_ok},1),lt::(${e0_ago},${la0})),${e0_ago},${la0})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h0.incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_cr",
+            "value": "$[findNotEmpty::(${it.started_at},${it.created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_lv",
+            "value": "$[if::(eq::(${f0_im},critical),4,if::(eq::(${f0_im},major),3,if::(eq::(${f0_im},maintenance),0,if::(gt::(length::(${f0_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tiso",
+            "value": "$[findNotEmpty::(${f0_cr},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Thas",
+            "value": "$[if::(gt::(length::(${f0_Tiso}),18),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Ty",
+            "value": "$[subString::(${f0_Tiso},0,4)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tmo",
+            "value": "$[subString::(${f0_Tiso},5,7)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Td",
+            "value": "$[subString::(${f0_Tiso},8,10)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Thh",
+            "value": "$[subString::(${f0_Tiso},11,13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tmi",
+            "value": "$[subString::(${f0_Tiso},14,16)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tss",
+            "value": "$[subString::(${f0_Tiso},17,19)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_TL",
+            "value": "$[length::(${f0_Tiso})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tz",
+            "value": "$[if::(endsWith::(${f0_Tiso},Z),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tsg",
+            "value": "$[if::(eq::(${f0_Tz},1),+,subString::(${f0_Tiso},calc::(${f0_TL}-6),calc::(${f0_TL}-5)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Toh",
+            "value": "$[if::(eq::(${f0_Tz},1),0,subString::(${f0_Tiso},calc::(${f0_TL}-5),calc::(${f0_TL}-3)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tom",
+            "value": "$[if::(eq::(${f0_Tz},1),0,subString::(${f0_Tiso},calc::(${f0_TL}-2),${f0_TL}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tsgn",
+            "value": "$[if::(eq::(${f0_Tsg},-),-1,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tadj",
+            "value": "$[if::(le::(${f0_Tmo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tyoe",
+            "value": "$[calc::(${f0_Ty}-2000-${f0_Tadj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tmp",
+            "value": "$[calc::(${f0_Tmo}-3+12*${f0_Tadj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tdb",
+            "value": "$[floor::(calc::((153*${f0_Tmp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tq4",
+            "value": "$[floor::(calc::(${f0_Tyoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tdays",
+            "value": "$[calc::(11017+${f0_Tyoe}*365+${f0_Tq4}+${f0_Tdb}+${f0_Td}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_Tms",
+            "value": "$[calc::(${f0_Tdays}*86400000+${f0_Thh}*3600000+${f0_Tmi}*60000+${f0_Tss}*1000-${f0_Tsgn}*(${f0_Toh}*60+${f0_Tom})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_ms",
+            "value": "$[if::(eq::(${f0_Thas},1),${f0_Tms},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_ok",
+            "value": "$[if::(and::(gt::(${f0_ms},1000000000000),gt::(${f0_lv},0),le::(${f0_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_raw",
+            "value": "$[floor::(calc::((${t0}-${f0_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_ago",
+            "value": "$[if::(ge::(${f0_ms},${t0}),0,calc::(${f0_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f0_in",
+            "value": "$[if::(and::(eq::(${f0_ok},1),le::(${f0_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_0",
+            "value": "$[if::(and::(eq::(${f0_in},1),eq::(${f0_ago},0),gt::(${f0_lv},${w0_0})),${f0_lv},${w0_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_1",
+            "value": "$[if::(and::(eq::(${f0_in},1),eq::(${f0_ago},1),gt::(${f0_lv},${w0_1})),${f0_lv},${w0_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_2",
+            "value": "$[if::(and::(eq::(${f0_in},1),eq::(${f0_ago},2),gt::(${f0_lv},${w0_2})),${f0_lv},${w0_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_3",
+            "value": "$[if::(and::(eq::(${f0_in},1),eq::(${f0_ago},3),gt::(${f0_lv},${w0_3})),${f0_lv},${w0_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_4",
+            "value": "$[if::(and::(eq::(${f0_in},1),eq::(${f0_ago},4),gt::(${f0_lv},${w0_4})),${f0_lv},${w0_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_5",
+            "value": "$[if::(and::(eq::(${f0_in},1),eq::(${f0_ago},5),gt::(${f0_lv},${w0_5})),${f0_lv},${w0_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0_6",
+            "value": "$[if::(and::(eq::(${f0_in},1),eq::(${f0_ago},6),gt::(${f0_lv},${w0_6})),${f0_lv},${w0_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c0",
+            "value": "$[calc::(${c0}+${f0_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la0",
+            "value": "$[if::(and::(eq::(${f0_ok},1),lt::(${f0_ago},${la0})),${f0_ago},${la0})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok1",
+        "value": "$[if::(eq::(${k1v},1),if::(or::(gt::(length::(${h1.months}),0),gt::(length::(${h1.incidents}),0)),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1_0",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1_1",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1_2",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1_3",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1_4",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1_5",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1_6",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la1",
+        "value": "999"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o1s",
+        "value": "$[findNotEmpty::(${h1.start_time},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o1L",
+        "value": "$[length::(${o1s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o1z",
+        "value": "$[if::(endsWith::(${o1s},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o1sg",
+        "value": "$[if::(eq::(${o1z},1),+,subString::(${o1s},calc::(${o1L}-6),calc::(${o1L}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o1h",
+        "value": "$[if::(eq::(${o1z},1),0,subString::(${o1s},calc::(${o1L}-5),calc::(${o1L}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o1m",
+        "value": "$[if::(eq::(${o1z},1),0,subString::(${o1s},calc::(${o1L}-2),${o1L}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o1n",
+        "value": "$[if::(eq::(${o1sg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o1off",
+        "value": "$[parseNumber::(calc::(${o1n}*(${o1h}*60+${o1m})),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b10y",
+        "value": "$[findNotEmpty::(${h1.months[0].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b10m",
+        "value": "$[findNotEmpty::(get::(${MN},${h1.months[0].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h1.months[0].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e1_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_yy",
+            "value": "$[if::(gt::(${e1_mo},${b10m}),calc::(${b10y}-1),${b10y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e1_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e1_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_hh",
+            "value": "$[subString::(${e1_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mi",
+            "value": "$[subString::(${e1_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_lv",
+            "value": "$[if::(eq::(${e1_im},critical),4,if::(eq::(${e1_im},major),3,if::(eq::(${e1_im},maintenance),0,if::(gt::(length::(${e1_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_adj",
+            "value": "$[if::(le::(${e1_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_yoe",
+            "value": "$[calc::(${e1_yy}-2000-${e1_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mp",
+            "value": "$[calc::(${e1_mo}-3+12*${e1_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_db",
+            "value": "$[floor::(calc::((153*${e1_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_q4",
+            "value": "$[floor::(calc::(${e1_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_days",
+            "value": "$[calc::(11017+${e1_yoe}*365+${e1_q4}+${e1_db}+${e1_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ms",
+            "value": "$[calc::(${e1_days}*86400000+${e1_hh}*3600000+${e1_mi}*60000-(${o1off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ok",
+            "value": "$[if::(and::(gt::(${e1_ms},1000000000000),gt::(${e1_lv},0),le::(${e1_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_raw",
+            "value": "$[floor::(calc::((${t0}-${e1_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ago",
+            "value": "$[if::(ge::(${e1_ms},${t0}),0,calc::(${e1_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_in",
+            "value": "$[if::(and::(eq::(${e1_ok},1),le::(${e1_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_0",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},0),gt::(${e1_lv},${w1_0})),${e1_lv},${w1_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_1",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},1),gt::(${e1_lv},${w1_1})),${e1_lv},${w1_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_2",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},2),gt::(${e1_lv},${w1_2})),${e1_lv},${w1_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_3",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},3),gt::(${e1_lv},${w1_3})),${e1_lv},${w1_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_4",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},4),gt::(${e1_lv},${w1_4})),${e1_lv},${w1_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_5",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},5),gt::(${e1_lv},${w1_5})),${e1_lv},${w1_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_6",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},6),gt::(${e1_lv},${w1_6})),${e1_lv},${w1_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c1",
+            "value": "$[calc::(${c1}+${e1_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la1",
+            "value": "$[if::(and::(eq::(${e1_ok},1),lt::(${e1_ago},${la1})),${e1_ago},${la1})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b11y",
+        "value": "$[findNotEmpty::(${h1.months[1].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b11m",
+        "value": "$[findNotEmpty::(get::(${MN},${h1.months[1].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h1.months[1].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e1_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_yy",
+            "value": "$[if::(gt::(${e1_mo},${b11m}),calc::(${b11y}-1),${b11y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e1_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e1_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_hh",
+            "value": "$[subString::(${e1_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mi",
+            "value": "$[subString::(${e1_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_lv",
+            "value": "$[if::(eq::(${e1_im},critical),4,if::(eq::(${e1_im},major),3,if::(eq::(${e1_im},maintenance),0,if::(gt::(length::(${e1_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_adj",
+            "value": "$[if::(le::(${e1_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_yoe",
+            "value": "$[calc::(${e1_yy}-2000-${e1_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mp",
+            "value": "$[calc::(${e1_mo}-3+12*${e1_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_db",
+            "value": "$[floor::(calc::((153*${e1_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_q4",
+            "value": "$[floor::(calc::(${e1_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_days",
+            "value": "$[calc::(11017+${e1_yoe}*365+${e1_q4}+${e1_db}+${e1_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ms",
+            "value": "$[calc::(${e1_days}*86400000+${e1_hh}*3600000+${e1_mi}*60000-(${o1off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ok",
+            "value": "$[if::(and::(gt::(${e1_ms},1000000000000),gt::(${e1_lv},0),le::(${e1_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_raw",
+            "value": "$[floor::(calc::((${t0}-${e1_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ago",
+            "value": "$[if::(ge::(${e1_ms},${t0}),0,calc::(${e1_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_in",
+            "value": "$[if::(and::(eq::(${e1_ok},1),le::(${e1_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_0",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},0),gt::(${e1_lv},${w1_0})),${e1_lv},${w1_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_1",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},1),gt::(${e1_lv},${w1_1})),${e1_lv},${w1_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_2",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},2),gt::(${e1_lv},${w1_2})),${e1_lv},${w1_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_3",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},3),gt::(${e1_lv},${w1_3})),${e1_lv},${w1_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_4",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},4),gt::(${e1_lv},${w1_4})),${e1_lv},${w1_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_5",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},5),gt::(${e1_lv},${w1_5})),${e1_lv},${w1_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_6",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},6),gt::(${e1_lv},${w1_6})),${e1_lv},${w1_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c1",
+            "value": "$[calc::(${c1}+${e1_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la1",
+            "value": "$[if::(and::(eq::(${e1_ok},1),lt::(${e1_ago},${la1})),${e1_ago},${la1})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b12y",
+        "value": "$[findNotEmpty::(${h1.months[2].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b12m",
+        "value": "$[findNotEmpty::(get::(${MN},${h1.months[2].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h1.months[2].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e1_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_yy",
+            "value": "$[if::(gt::(${e1_mo},${b12m}),calc::(${b12y}-1),${b12y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e1_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e1_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_hh",
+            "value": "$[subString::(${e1_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mi",
+            "value": "$[subString::(${e1_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_lv",
+            "value": "$[if::(eq::(${e1_im},critical),4,if::(eq::(${e1_im},major),3,if::(eq::(${e1_im},maintenance),0,if::(gt::(length::(${e1_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_adj",
+            "value": "$[if::(le::(${e1_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_yoe",
+            "value": "$[calc::(${e1_yy}-2000-${e1_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mp",
+            "value": "$[calc::(${e1_mo}-3+12*${e1_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_db",
+            "value": "$[floor::(calc::((153*${e1_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_q4",
+            "value": "$[floor::(calc::(${e1_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_days",
+            "value": "$[calc::(11017+${e1_yoe}*365+${e1_q4}+${e1_db}+${e1_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ms",
+            "value": "$[calc::(${e1_days}*86400000+${e1_hh}*3600000+${e1_mi}*60000-(${o1off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ok",
+            "value": "$[if::(and::(gt::(${e1_ms},1000000000000),gt::(${e1_lv},0),le::(${e1_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_raw",
+            "value": "$[floor::(calc::((${t0}-${e1_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ago",
+            "value": "$[if::(ge::(${e1_ms},${t0}),0,calc::(${e1_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_in",
+            "value": "$[if::(and::(eq::(${e1_ok},1),le::(${e1_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_0",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},0),gt::(${e1_lv},${w1_0})),${e1_lv},${w1_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_1",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},1),gt::(${e1_lv},${w1_1})),${e1_lv},${w1_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_2",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},2),gt::(${e1_lv},${w1_2})),${e1_lv},${w1_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_3",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},3),gt::(${e1_lv},${w1_3})),${e1_lv},${w1_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_4",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},4),gt::(${e1_lv},${w1_4})),${e1_lv},${w1_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_5",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},5),gt::(${e1_lv},${w1_5})),${e1_lv},${w1_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_6",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},6),gt::(${e1_lv},${w1_6})),${e1_lv},${w1_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c1",
+            "value": "$[calc::(${c1}+${e1_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la1",
+            "value": "$[if::(and::(eq::(${e1_ok},1),lt::(${e1_ago},${la1})),${e1_ago},${la1})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b13y",
+        "value": "$[findNotEmpty::(${g1.months[0].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b13m",
+        "value": "$[findNotEmpty::(get::(${MN},${g1.months[0].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${g1.months[0].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e1_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_yy",
+            "value": "$[if::(gt::(${e1_mo},${b13m}),calc::(${b13y}-1),${b13y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e1_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e1_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_hh",
+            "value": "$[subString::(${e1_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mi",
+            "value": "$[subString::(${e1_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_lv",
+            "value": "$[if::(eq::(${e1_im},critical),4,if::(eq::(${e1_im},major),3,if::(eq::(${e1_im},maintenance),0,if::(gt::(length::(${e1_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_adj",
+            "value": "$[if::(le::(${e1_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_yoe",
+            "value": "$[calc::(${e1_yy}-2000-${e1_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_mp",
+            "value": "$[calc::(${e1_mo}-3+12*${e1_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_db",
+            "value": "$[floor::(calc::((153*${e1_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_q4",
+            "value": "$[floor::(calc::(${e1_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_days",
+            "value": "$[calc::(11017+${e1_yoe}*365+${e1_q4}+${e1_db}+${e1_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ms",
+            "value": "$[calc::(${e1_days}*86400000+${e1_hh}*3600000+${e1_mi}*60000-(${o1off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ok",
+            "value": "$[if::(and::(gt::(${e1_ms},1000000000000),gt::(${e1_lv},0),le::(${e1_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_raw",
+            "value": "$[floor::(calc::((${t0}-${e1_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_ago",
+            "value": "$[if::(ge::(${e1_ms},${t0}),0,calc::(${e1_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e1_in",
+            "value": "$[if::(and::(eq::(${e1_ok},1),le::(${e1_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_0",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},0),gt::(${e1_lv},${w1_0})),${e1_lv},${w1_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_1",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},1),gt::(${e1_lv},${w1_1})),${e1_lv},${w1_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_2",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},2),gt::(${e1_lv},${w1_2})),${e1_lv},${w1_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_3",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},3),gt::(${e1_lv},${w1_3})),${e1_lv},${w1_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_4",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},4),gt::(${e1_lv},${w1_4})),${e1_lv},${w1_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_5",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},5),gt::(${e1_lv},${w1_5})),${e1_lv},${w1_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_6",
+            "value": "$[if::(and::(eq::(${e1_in},1),eq::(${e1_ago},6),gt::(${e1_lv},${w1_6})),${e1_lv},${w1_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c1",
+            "value": "$[calc::(${c1}+${e1_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la1",
+            "value": "$[if::(and::(eq::(${e1_ok},1),lt::(${e1_ago},${la1})),${e1_ago},${la1})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h1.incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_cr",
+            "value": "$[findNotEmpty::(${it.started_at},${it.created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_lv",
+            "value": "$[if::(eq::(${f1_im},critical),4,if::(eq::(${f1_im},major),3,if::(eq::(${f1_im},maintenance),0,if::(gt::(length::(${f1_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tiso",
+            "value": "$[findNotEmpty::(${f1_cr},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Thas",
+            "value": "$[if::(gt::(length::(${f1_Tiso}),18),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Ty",
+            "value": "$[subString::(${f1_Tiso},0,4)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tmo",
+            "value": "$[subString::(${f1_Tiso},5,7)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Td",
+            "value": "$[subString::(${f1_Tiso},8,10)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Thh",
+            "value": "$[subString::(${f1_Tiso},11,13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tmi",
+            "value": "$[subString::(${f1_Tiso},14,16)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tss",
+            "value": "$[subString::(${f1_Tiso},17,19)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_TL",
+            "value": "$[length::(${f1_Tiso})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tz",
+            "value": "$[if::(endsWith::(${f1_Tiso},Z),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tsg",
+            "value": "$[if::(eq::(${f1_Tz},1),+,subString::(${f1_Tiso},calc::(${f1_TL}-6),calc::(${f1_TL}-5)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Toh",
+            "value": "$[if::(eq::(${f1_Tz},1),0,subString::(${f1_Tiso},calc::(${f1_TL}-5),calc::(${f1_TL}-3)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tom",
+            "value": "$[if::(eq::(${f1_Tz},1),0,subString::(${f1_Tiso},calc::(${f1_TL}-2),${f1_TL}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tsgn",
+            "value": "$[if::(eq::(${f1_Tsg},-),-1,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tadj",
+            "value": "$[if::(le::(${f1_Tmo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tyoe",
+            "value": "$[calc::(${f1_Ty}-2000-${f1_Tadj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tmp",
+            "value": "$[calc::(${f1_Tmo}-3+12*${f1_Tadj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tdb",
+            "value": "$[floor::(calc::((153*${f1_Tmp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tq4",
+            "value": "$[floor::(calc::(${f1_Tyoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tdays",
+            "value": "$[calc::(11017+${f1_Tyoe}*365+${f1_Tq4}+${f1_Tdb}+${f1_Td}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_Tms",
+            "value": "$[calc::(${f1_Tdays}*86400000+${f1_Thh}*3600000+${f1_Tmi}*60000+${f1_Tss}*1000-${f1_Tsgn}*(${f1_Toh}*60+${f1_Tom})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_ms",
+            "value": "$[if::(eq::(${f1_Thas},1),${f1_Tms},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_ok",
+            "value": "$[if::(and::(gt::(${f1_ms},1000000000000),gt::(${f1_lv},0),le::(${f1_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_raw",
+            "value": "$[floor::(calc::((${t0}-${f1_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_ago",
+            "value": "$[if::(ge::(${f1_ms},${t0}),0,calc::(${f1_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f1_in",
+            "value": "$[if::(and::(eq::(${f1_ok},1),le::(${f1_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_0",
+            "value": "$[if::(and::(eq::(${f1_in},1),eq::(${f1_ago},0),gt::(${f1_lv},${w1_0})),${f1_lv},${w1_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_1",
+            "value": "$[if::(and::(eq::(${f1_in},1),eq::(${f1_ago},1),gt::(${f1_lv},${w1_1})),${f1_lv},${w1_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_2",
+            "value": "$[if::(and::(eq::(${f1_in},1),eq::(${f1_ago},2),gt::(${f1_lv},${w1_2})),${f1_lv},${w1_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_3",
+            "value": "$[if::(and::(eq::(${f1_in},1),eq::(${f1_ago},3),gt::(${f1_lv},${w1_3})),${f1_lv},${w1_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_4",
+            "value": "$[if::(and::(eq::(${f1_in},1),eq::(${f1_ago},4),gt::(${f1_lv},${w1_4})),${f1_lv},${w1_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_5",
+            "value": "$[if::(and::(eq::(${f1_in},1),eq::(${f1_ago},5),gt::(${f1_lv},${w1_5})),${f1_lv},${w1_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1_6",
+            "value": "$[if::(and::(eq::(${f1_in},1),eq::(${f1_ago},6),gt::(${f1_lv},${w1_6})),${f1_lv},${w1_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c1",
+            "value": "$[calc::(${c1}+${f1_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la1",
+            "value": "$[if::(and::(eq::(${f1_ok},1),lt::(${f1_ago},${la1})),${f1_ago},${la1})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok2",
+        "value": "$[if::(eq::(${k2v},1),if::(or::(gt::(length::(${h2.months}),0),gt::(length::(${h2.incidents}),0)),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2_0",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2_1",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2_2",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2_3",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2_4",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2_5",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2_6",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la2",
+        "value": "999"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o2s",
+        "value": "$[findNotEmpty::(${h2.start_time},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o2L",
+        "value": "$[length::(${o2s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o2z",
+        "value": "$[if::(endsWith::(${o2s},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o2sg",
+        "value": "$[if::(eq::(${o2z},1),+,subString::(${o2s},calc::(${o2L}-6),calc::(${o2L}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o2h",
+        "value": "$[if::(eq::(${o2z},1),0,subString::(${o2s},calc::(${o2L}-5),calc::(${o2L}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o2m",
+        "value": "$[if::(eq::(${o2z},1),0,subString::(${o2s},calc::(${o2L}-2),${o2L}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o2n",
+        "value": "$[if::(eq::(${o2sg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o2off",
+        "value": "$[parseNumber::(calc::(${o2n}*(${o2h}*60+${o2m})),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b20y",
+        "value": "$[findNotEmpty::(${h2.months[0].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b20m",
+        "value": "$[findNotEmpty::(get::(${MN},${h2.months[0].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h2.months[0].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e2_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_yy",
+            "value": "$[if::(gt::(${e2_mo},${b20m}),calc::(${b20y}-1),${b20y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e2_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e2_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_hh",
+            "value": "$[subString::(${e2_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mi",
+            "value": "$[subString::(${e2_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_lv",
+            "value": "$[if::(eq::(${e2_im},critical),4,if::(eq::(${e2_im},major),3,if::(eq::(${e2_im},maintenance),0,if::(gt::(length::(${e2_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_adj",
+            "value": "$[if::(le::(${e2_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_yoe",
+            "value": "$[calc::(${e2_yy}-2000-${e2_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mp",
+            "value": "$[calc::(${e2_mo}-3+12*${e2_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_db",
+            "value": "$[floor::(calc::((153*${e2_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_q4",
+            "value": "$[floor::(calc::(${e2_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_days",
+            "value": "$[calc::(11017+${e2_yoe}*365+${e2_q4}+${e2_db}+${e2_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ms",
+            "value": "$[calc::(${e2_days}*86400000+${e2_hh}*3600000+${e2_mi}*60000-(${o2off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ok",
+            "value": "$[if::(and::(gt::(${e2_ms},1000000000000),gt::(${e2_lv},0),le::(${e2_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_raw",
+            "value": "$[floor::(calc::((${t0}-${e2_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ago",
+            "value": "$[if::(ge::(${e2_ms},${t0}),0,calc::(${e2_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_in",
+            "value": "$[if::(and::(eq::(${e2_ok},1),le::(${e2_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_0",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},0),gt::(${e2_lv},${w2_0})),${e2_lv},${w2_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_1",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},1),gt::(${e2_lv},${w2_1})),${e2_lv},${w2_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_2",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},2),gt::(${e2_lv},${w2_2})),${e2_lv},${w2_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_3",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},3),gt::(${e2_lv},${w2_3})),${e2_lv},${w2_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_4",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},4),gt::(${e2_lv},${w2_4})),${e2_lv},${w2_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_5",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},5),gt::(${e2_lv},${w2_5})),${e2_lv},${w2_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_6",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},6),gt::(${e2_lv},${w2_6})),${e2_lv},${w2_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c2",
+            "value": "$[calc::(${c2}+${e2_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la2",
+            "value": "$[if::(and::(eq::(${e2_ok},1),lt::(${e2_ago},${la2})),${e2_ago},${la2})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b21y",
+        "value": "$[findNotEmpty::(${h2.months[1].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b21m",
+        "value": "$[findNotEmpty::(get::(${MN},${h2.months[1].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h2.months[1].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e2_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_yy",
+            "value": "$[if::(gt::(${e2_mo},${b21m}),calc::(${b21y}-1),${b21y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e2_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e2_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_hh",
+            "value": "$[subString::(${e2_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mi",
+            "value": "$[subString::(${e2_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_lv",
+            "value": "$[if::(eq::(${e2_im},critical),4,if::(eq::(${e2_im},major),3,if::(eq::(${e2_im},maintenance),0,if::(gt::(length::(${e2_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_adj",
+            "value": "$[if::(le::(${e2_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_yoe",
+            "value": "$[calc::(${e2_yy}-2000-${e2_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mp",
+            "value": "$[calc::(${e2_mo}-3+12*${e2_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_db",
+            "value": "$[floor::(calc::((153*${e2_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_q4",
+            "value": "$[floor::(calc::(${e2_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_days",
+            "value": "$[calc::(11017+${e2_yoe}*365+${e2_q4}+${e2_db}+${e2_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ms",
+            "value": "$[calc::(${e2_days}*86400000+${e2_hh}*3600000+${e2_mi}*60000-(${o2off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ok",
+            "value": "$[if::(and::(gt::(${e2_ms},1000000000000),gt::(${e2_lv},0),le::(${e2_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_raw",
+            "value": "$[floor::(calc::((${t0}-${e2_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ago",
+            "value": "$[if::(ge::(${e2_ms},${t0}),0,calc::(${e2_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_in",
+            "value": "$[if::(and::(eq::(${e2_ok},1),le::(${e2_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_0",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},0),gt::(${e2_lv},${w2_0})),${e2_lv},${w2_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_1",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},1),gt::(${e2_lv},${w2_1})),${e2_lv},${w2_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_2",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},2),gt::(${e2_lv},${w2_2})),${e2_lv},${w2_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_3",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},3),gt::(${e2_lv},${w2_3})),${e2_lv},${w2_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_4",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},4),gt::(${e2_lv},${w2_4})),${e2_lv},${w2_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_5",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},5),gt::(${e2_lv},${w2_5})),${e2_lv},${w2_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_6",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},6),gt::(${e2_lv},${w2_6})),${e2_lv},${w2_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c2",
+            "value": "$[calc::(${c2}+${e2_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la2",
+            "value": "$[if::(and::(eq::(${e2_ok},1),lt::(${e2_ago},${la2})),${e2_ago},${la2})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b22y",
+        "value": "$[findNotEmpty::(${h2.months[2].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b22m",
+        "value": "$[findNotEmpty::(get::(${MN},${h2.months[2].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h2.months[2].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e2_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_yy",
+            "value": "$[if::(gt::(${e2_mo},${b22m}),calc::(${b22y}-1),${b22y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e2_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e2_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_hh",
+            "value": "$[subString::(${e2_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mi",
+            "value": "$[subString::(${e2_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_lv",
+            "value": "$[if::(eq::(${e2_im},critical),4,if::(eq::(${e2_im},major),3,if::(eq::(${e2_im},maintenance),0,if::(gt::(length::(${e2_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_adj",
+            "value": "$[if::(le::(${e2_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_yoe",
+            "value": "$[calc::(${e2_yy}-2000-${e2_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mp",
+            "value": "$[calc::(${e2_mo}-3+12*${e2_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_db",
+            "value": "$[floor::(calc::((153*${e2_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_q4",
+            "value": "$[floor::(calc::(${e2_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_days",
+            "value": "$[calc::(11017+${e2_yoe}*365+${e2_q4}+${e2_db}+${e2_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ms",
+            "value": "$[calc::(${e2_days}*86400000+${e2_hh}*3600000+${e2_mi}*60000-(${o2off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ok",
+            "value": "$[if::(and::(gt::(${e2_ms},1000000000000),gt::(${e2_lv},0),le::(${e2_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_raw",
+            "value": "$[floor::(calc::((${t0}-${e2_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ago",
+            "value": "$[if::(ge::(${e2_ms},${t0}),0,calc::(${e2_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_in",
+            "value": "$[if::(and::(eq::(${e2_ok},1),le::(${e2_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_0",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},0),gt::(${e2_lv},${w2_0})),${e2_lv},${w2_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_1",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},1),gt::(${e2_lv},${w2_1})),${e2_lv},${w2_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_2",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},2),gt::(${e2_lv},${w2_2})),${e2_lv},${w2_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_3",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},3),gt::(${e2_lv},${w2_3})),${e2_lv},${w2_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_4",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},4),gt::(${e2_lv},${w2_4})),${e2_lv},${w2_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_5",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},5),gt::(${e2_lv},${w2_5})),${e2_lv},${w2_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_6",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},6),gt::(${e2_lv},${w2_6})),${e2_lv},${w2_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c2",
+            "value": "$[calc::(${c2}+${e2_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la2",
+            "value": "$[if::(and::(eq::(${e2_ok},1),lt::(${e2_ago},${la2})),${e2_ago},${la2})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b23y",
+        "value": "$[findNotEmpty::(${g2.months[0].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b23m",
+        "value": "$[findNotEmpty::(get::(${MN},${g2.months[0].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${g2.months[0].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e2_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_yy",
+            "value": "$[if::(gt::(${e2_mo},${b23m}),calc::(${b23y}-1),${b23y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e2_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e2_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_hh",
+            "value": "$[subString::(${e2_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mi",
+            "value": "$[subString::(${e2_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_lv",
+            "value": "$[if::(eq::(${e2_im},critical),4,if::(eq::(${e2_im},major),3,if::(eq::(${e2_im},maintenance),0,if::(gt::(length::(${e2_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_adj",
+            "value": "$[if::(le::(${e2_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_yoe",
+            "value": "$[calc::(${e2_yy}-2000-${e2_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_mp",
+            "value": "$[calc::(${e2_mo}-3+12*${e2_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_db",
+            "value": "$[floor::(calc::((153*${e2_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_q4",
+            "value": "$[floor::(calc::(${e2_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_days",
+            "value": "$[calc::(11017+${e2_yoe}*365+${e2_q4}+${e2_db}+${e2_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ms",
+            "value": "$[calc::(${e2_days}*86400000+${e2_hh}*3600000+${e2_mi}*60000-(${o2off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ok",
+            "value": "$[if::(and::(gt::(${e2_ms},1000000000000),gt::(${e2_lv},0),le::(${e2_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_raw",
+            "value": "$[floor::(calc::((${t0}-${e2_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_ago",
+            "value": "$[if::(ge::(${e2_ms},${t0}),0,calc::(${e2_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e2_in",
+            "value": "$[if::(and::(eq::(${e2_ok},1),le::(${e2_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_0",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},0),gt::(${e2_lv},${w2_0})),${e2_lv},${w2_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_1",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},1),gt::(${e2_lv},${w2_1})),${e2_lv},${w2_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_2",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},2),gt::(${e2_lv},${w2_2})),${e2_lv},${w2_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_3",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},3),gt::(${e2_lv},${w2_3})),${e2_lv},${w2_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_4",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},4),gt::(${e2_lv},${w2_4})),${e2_lv},${w2_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_5",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},5),gt::(${e2_lv},${w2_5})),${e2_lv},${w2_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_6",
+            "value": "$[if::(and::(eq::(${e2_in},1),eq::(${e2_ago},6),gt::(${e2_lv},${w2_6})),${e2_lv},${w2_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c2",
+            "value": "$[calc::(${c2}+${e2_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la2",
+            "value": "$[if::(and::(eq::(${e2_ok},1),lt::(${e2_ago},${la2})),${e2_ago},${la2})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h2.incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_cr",
+            "value": "$[findNotEmpty::(${it.started_at},${it.created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_lv",
+            "value": "$[if::(eq::(${f2_im},critical),4,if::(eq::(${f2_im},major),3,if::(eq::(${f2_im},maintenance),0,if::(gt::(length::(${f2_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tiso",
+            "value": "$[findNotEmpty::(${f2_cr},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Thas",
+            "value": "$[if::(gt::(length::(${f2_Tiso}),18),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Ty",
+            "value": "$[subString::(${f2_Tiso},0,4)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tmo",
+            "value": "$[subString::(${f2_Tiso},5,7)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Td",
+            "value": "$[subString::(${f2_Tiso},8,10)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Thh",
+            "value": "$[subString::(${f2_Tiso},11,13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tmi",
+            "value": "$[subString::(${f2_Tiso},14,16)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tss",
+            "value": "$[subString::(${f2_Tiso},17,19)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_TL",
+            "value": "$[length::(${f2_Tiso})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tz",
+            "value": "$[if::(endsWith::(${f2_Tiso},Z),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tsg",
+            "value": "$[if::(eq::(${f2_Tz},1),+,subString::(${f2_Tiso},calc::(${f2_TL}-6),calc::(${f2_TL}-5)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Toh",
+            "value": "$[if::(eq::(${f2_Tz},1),0,subString::(${f2_Tiso},calc::(${f2_TL}-5),calc::(${f2_TL}-3)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tom",
+            "value": "$[if::(eq::(${f2_Tz},1),0,subString::(${f2_Tiso},calc::(${f2_TL}-2),${f2_TL}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tsgn",
+            "value": "$[if::(eq::(${f2_Tsg},-),-1,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tadj",
+            "value": "$[if::(le::(${f2_Tmo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tyoe",
+            "value": "$[calc::(${f2_Ty}-2000-${f2_Tadj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tmp",
+            "value": "$[calc::(${f2_Tmo}-3+12*${f2_Tadj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tdb",
+            "value": "$[floor::(calc::((153*${f2_Tmp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tq4",
+            "value": "$[floor::(calc::(${f2_Tyoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tdays",
+            "value": "$[calc::(11017+${f2_Tyoe}*365+${f2_Tq4}+${f2_Tdb}+${f2_Td}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_Tms",
+            "value": "$[calc::(${f2_Tdays}*86400000+${f2_Thh}*3600000+${f2_Tmi}*60000+${f2_Tss}*1000-${f2_Tsgn}*(${f2_Toh}*60+${f2_Tom})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_ms",
+            "value": "$[if::(eq::(${f2_Thas},1),${f2_Tms},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_ok",
+            "value": "$[if::(and::(gt::(${f2_ms},1000000000000),gt::(${f2_lv},0),le::(${f2_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_raw",
+            "value": "$[floor::(calc::((${t0}-${f2_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_ago",
+            "value": "$[if::(ge::(${f2_ms},${t0}),0,calc::(${f2_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f2_in",
+            "value": "$[if::(and::(eq::(${f2_ok},1),le::(${f2_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_0",
+            "value": "$[if::(and::(eq::(${f2_in},1),eq::(${f2_ago},0),gt::(${f2_lv},${w2_0})),${f2_lv},${w2_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_1",
+            "value": "$[if::(and::(eq::(${f2_in},1),eq::(${f2_ago},1),gt::(${f2_lv},${w2_1})),${f2_lv},${w2_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_2",
+            "value": "$[if::(and::(eq::(${f2_in},1),eq::(${f2_ago},2),gt::(${f2_lv},${w2_2})),${f2_lv},${w2_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_3",
+            "value": "$[if::(and::(eq::(${f2_in},1),eq::(${f2_ago},3),gt::(${f2_lv},${w2_3})),${f2_lv},${w2_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_4",
+            "value": "$[if::(and::(eq::(${f2_in},1),eq::(${f2_ago},4),gt::(${f2_lv},${w2_4})),${f2_lv},${w2_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_5",
+            "value": "$[if::(and::(eq::(${f2_in},1),eq::(${f2_ago},5),gt::(${f2_lv},${w2_5})),${f2_lv},${w2_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2_6",
+            "value": "$[if::(and::(eq::(${f2_in},1),eq::(${f2_ago},6),gt::(${f2_lv},${w2_6})),${f2_lv},${w2_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c2",
+            "value": "$[calc::(${c2}+${f2_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la2",
+            "value": "$[if::(and::(eq::(${f2_ok},1),lt::(${f2_ago},${la2})),${f2_ago},${la2})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok3",
+        "value": "$[if::(eq::(${k3v},1),if::(or::(gt::(length::(${h3.months}),0),gt::(length::(${h3.incidents}),0)),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3_0",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3_1",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3_2",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3_3",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3_4",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3_5",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3_6",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "0"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "la3",
+        "value": "999"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o3s",
+        "value": "$[findNotEmpty::(${h3.start_time},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o3L",
+        "value": "$[length::(${o3s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o3z",
+        "value": "$[if::(endsWith::(${o3s},Z),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o3sg",
+        "value": "$[if::(eq::(${o3z},1),+,subString::(${o3s},calc::(${o3L}-6),calc::(${o3L}-5)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o3h",
+        "value": "$[if::(eq::(${o3z},1),0,subString::(${o3s},calc::(${o3L}-5),calc::(${o3L}-3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o3m",
+        "value": "$[if::(eq::(${o3z},1),0,subString::(${o3s},calc::(${o3L}-2),${o3L}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o3n",
+        "value": "$[if::(eq::(${o3sg},-),-1,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o3off",
+        "value": "$[parseNumber::(calc::(${o3n}*(${o3h}*60+${o3m})),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b30y",
+        "value": "$[findNotEmpty::(${h3.months[0].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b30m",
+        "value": "$[findNotEmpty::(get::(${MN},${h3.months[0].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h3.months[0].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e3_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_yy",
+            "value": "$[if::(gt::(${e3_mo},${b30m}),calc::(${b30y}-1),${b30y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e3_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e3_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_hh",
+            "value": "$[subString::(${e3_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mi",
+            "value": "$[subString::(${e3_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_lv",
+            "value": "$[if::(eq::(${e3_im},critical),4,if::(eq::(${e3_im},major),3,if::(eq::(${e3_im},maintenance),0,if::(gt::(length::(${e3_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_adj",
+            "value": "$[if::(le::(${e3_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_yoe",
+            "value": "$[calc::(${e3_yy}-2000-${e3_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mp",
+            "value": "$[calc::(${e3_mo}-3+12*${e3_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_db",
+            "value": "$[floor::(calc::((153*${e3_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_q4",
+            "value": "$[floor::(calc::(${e3_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_days",
+            "value": "$[calc::(11017+${e3_yoe}*365+${e3_q4}+${e3_db}+${e3_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ms",
+            "value": "$[calc::(${e3_days}*86400000+${e3_hh}*3600000+${e3_mi}*60000-(${o3off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ok",
+            "value": "$[if::(and::(gt::(${e3_ms},1000000000000),gt::(${e3_lv},0),le::(${e3_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_raw",
+            "value": "$[floor::(calc::((${t0}-${e3_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ago",
+            "value": "$[if::(ge::(${e3_ms},${t0}),0,calc::(${e3_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_in",
+            "value": "$[if::(and::(eq::(${e3_ok},1),le::(${e3_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_0",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},0),gt::(${e3_lv},${w3_0})),${e3_lv},${w3_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_1",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},1),gt::(${e3_lv},${w3_1})),${e3_lv},${w3_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_2",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},2),gt::(${e3_lv},${w3_2})),${e3_lv},${w3_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_3",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},3),gt::(${e3_lv},${w3_3})),${e3_lv},${w3_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_4",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},4),gt::(${e3_lv},${w3_4})),${e3_lv},${w3_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_5",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},5),gt::(${e3_lv},${w3_5})),${e3_lv},${w3_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_6",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},6),gt::(${e3_lv},${w3_6})),${e3_lv},${w3_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c3",
+            "value": "$[calc::(${c3}+${e3_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la3",
+            "value": "$[if::(and::(eq::(${e3_ok},1),lt::(${e3_ago},${la3})),${e3_ago},${la3})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b31y",
+        "value": "$[findNotEmpty::(${h3.months[1].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b31m",
+        "value": "$[findNotEmpty::(get::(${MN},${h3.months[1].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h3.months[1].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e3_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_yy",
+            "value": "$[if::(gt::(${e3_mo},${b31m}),calc::(${b31y}-1),${b31y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e3_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e3_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_hh",
+            "value": "$[subString::(${e3_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mi",
+            "value": "$[subString::(${e3_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_lv",
+            "value": "$[if::(eq::(${e3_im},critical),4,if::(eq::(${e3_im},major),3,if::(eq::(${e3_im},maintenance),0,if::(gt::(length::(${e3_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_adj",
+            "value": "$[if::(le::(${e3_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_yoe",
+            "value": "$[calc::(${e3_yy}-2000-${e3_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mp",
+            "value": "$[calc::(${e3_mo}-3+12*${e3_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_db",
+            "value": "$[floor::(calc::((153*${e3_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_q4",
+            "value": "$[floor::(calc::(${e3_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_days",
+            "value": "$[calc::(11017+${e3_yoe}*365+${e3_q4}+${e3_db}+${e3_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ms",
+            "value": "$[calc::(${e3_days}*86400000+${e3_hh}*3600000+${e3_mi}*60000-(${o3off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ok",
+            "value": "$[if::(and::(gt::(${e3_ms},1000000000000),gt::(${e3_lv},0),le::(${e3_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_raw",
+            "value": "$[floor::(calc::((${t0}-${e3_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ago",
+            "value": "$[if::(ge::(${e3_ms},${t0}),0,calc::(${e3_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_in",
+            "value": "$[if::(and::(eq::(${e3_ok},1),le::(${e3_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_0",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},0),gt::(${e3_lv},${w3_0})),${e3_lv},${w3_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_1",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},1),gt::(${e3_lv},${w3_1})),${e3_lv},${w3_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_2",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},2),gt::(${e3_lv},${w3_2})),${e3_lv},${w3_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_3",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},3),gt::(${e3_lv},${w3_3})),${e3_lv},${w3_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_4",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},4),gt::(${e3_lv},${w3_4})),${e3_lv},${w3_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_5",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},5),gt::(${e3_lv},${w3_5})),${e3_lv},${w3_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_6",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},6),gt::(${e3_lv},${w3_6})),${e3_lv},${w3_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c3",
+            "value": "$[calc::(${c3}+${e3_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la3",
+            "value": "$[if::(and::(eq::(${e3_ok},1),lt::(${e3_ago},${la3})),${e3_ago},${la3})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b32y",
+        "value": "$[findNotEmpty::(${h3.months[2].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b32m",
+        "value": "$[findNotEmpty::(get::(${MN},${h3.months[2].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h3.months[2].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e3_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_yy",
+            "value": "$[if::(gt::(${e3_mo},${b32m}),calc::(${b32y}-1),${b32y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e3_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e3_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_hh",
+            "value": "$[subString::(${e3_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mi",
+            "value": "$[subString::(${e3_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_lv",
+            "value": "$[if::(eq::(${e3_im},critical),4,if::(eq::(${e3_im},major),3,if::(eq::(${e3_im},maintenance),0,if::(gt::(length::(${e3_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_adj",
+            "value": "$[if::(le::(${e3_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_yoe",
+            "value": "$[calc::(${e3_yy}-2000-${e3_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mp",
+            "value": "$[calc::(${e3_mo}-3+12*${e3_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_db",
+            "value": "$[floor::(calc::((153*${e3_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_q4",
+            "value": "$[floor::(calc::(${e3_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_days",
+            "value": "$[calc::(11017+${e3_yoe}*365+${e3_q4}+${e3_db}+${e3_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ms",
+            "value": "$[calc::(${e3_days}*86400000+${e3_hh}*3600000+${e3_mi}*60000-(${o3off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ok",
+            "value": "$[if::(and::(gt::(${e3_ms},1000000000000),gt::(${e3_lv},0),le::(${e3_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_raw",
+            "value": "$[floor::(calc::((${t0}-${e3_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ago",
+            "value": "$[if::(ge::(${e3_ms},${t0}),0,calc::(${e3_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_in",
+            "value": "$[if::(and::(eq::(${e3_ok},1),le::(${e3_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_0",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},0),gt::(${e3_lv},${w3_0})),${e3_lv},${w3_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_1",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},1),gt::(${e3_lv},${w3_1})),${e3_lv},${w3_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_2",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},2),gt::(${e3_lv},${w3_2})),${e3_lv},${w3_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_3",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},3),gt::(${e3_lv},${w3_3})),${e3_lv},${w3_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_4",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},4),gt::(${e3_lv},${w3_4})),${e3_lv},${w3_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_5",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},5),gt::(${e3_lv},${w3_5})),${e3_lv},${w3_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_6",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},6),gt::(${e3_lv},${w3_6})),${e3_lv},${w3_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c3",
+            "value": "$[calc::(${c3}+${e3_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la3",
+            "value": "$[if::(and::(eq::(${e3_ok},1),lt::(${e3_ago},${la3})),${e3_ago},${la3})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b33y",
+        "value": "$[findNotEmpty::(${g3.months[0].year},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b33m",
+        "value": "$[findNotEmpty::(get::(${MN},${g3.months[0].name}),0)]"
+      }
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${g3.months[0].incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ts",
+            "value": "${it.timestamp}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mo",
+            "value": "$[findNotEmpty::(get::(${M3},subString::(${e3_ts},0,3)),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_yy",
+            "value": "$[if::(gt::(${e3_mo},${b33m}),calc::(${b33y}-1),${b33y})]"
+          },
+          "_note": "月块是一月、事故却从十二月开始 → 年份减一。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_dd",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e3_ts},date.>),1),<),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_tm",
+            "value": "$[findNotEmpty::(index::(split::(index::(split::(${e3_ts},time.>),1),<),0),00:00)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_hh",
+            "value": "$[subString::(${e3_tm},0,2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mi",
+            "value": "$[subString::(${e3_tm},3,5)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_lv",
+            "value": "$[if::(eq::(${e3_im},critical),4,if::(eq::(${e3_im},major),3,if::(eq::(${e3_im},maintenance),0,if::(gt::(length::(${e3_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_adj",
+            "value": "$[if::(le::(${e3_mo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_yoe",
+            "value": "$[calc::(${e3_yy}-2000-${e3_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_mp",
+            "value": "$[calc::(${e3_mo}-3+12*${e3_adj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_db",
+            "value": "$[floor::(calc::((153*${e3_mp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_q4",
+            "value": "$[floor::(calc::(${e3_yoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_days",
+            "value": "$[calc::(11017+${e3_yoe}*365+${e3_q4}+${e3_db}+${e3_dd}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ms",
+            "value": "$[calc::(${e3_days}*86400000+${e3_hh}*3600000+${e3_mi}*60000-(${o3off})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ok",
+            "value": "$[if::(and::(gt::(${e3_ms},1000000000000),gt::(${e3_lv},0),le::(${e3_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_raw",
+            "value": "$[floor::(calc::((${t0}-${e3_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_ago",
+            "value": "$[if::(ge::(${e3_ms},${t0}),0,calc::(${e3_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "e3_in",
+            "value": "$[if::(and::(eq::(${e3_ok},1),le::(${e3_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_0",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},0),gt::(${e3_lv},${w3_0})),${e3_lv},${w3_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_1",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},1),gt::(${e3_lv},${w3_1})),${e3_lv},${w3_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_2",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},2),gt::(${e3_lv},${w3_2})),${e3_lv},${w3_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_3",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},3),gt::(${e3_lv},${w3_3})),${e3_lv},${w3_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_4",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},4),gt::(${e3_lv},${w3_4})),${e3_lv},${w3_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_5",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},5),gt::(${e3_lv},${w3_5})),${e3_lv},${w3_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_6",
+            "value": "$[if::(and::(eq::(${e3_in},1),eq::(${e3_ago},6),gt::(${e3_lv},${w3_6})),${e3_lv},${w3_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c3",
+            "value": "$[calc::(${c3}+${e3_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la3",
+            "value": "$[if::(and::(eq::(${e3_ok},1),lt::(${e3_ago},${la3})),${e3_ago},${la3})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${h3.incidents}",
+        "key": "it",
+        "index": "i"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          },
+          "_note": "循环屏障(勿删)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_cr",
+            "value": "$[findNotEmpty::(${it.started_at},${it.created_at})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_im",
+            "value": "${it.impact}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_lv",
+            "value": "$[if::(eq::(${f3_im},critical),4,if::(eq::(${f3_im},major),3,if::(eq::(${f3_im},maintenance),0,if::(gt::(length::(${f3_im}),0),2,0))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tiso",
+            "value": "$[findNotEmpty::(${f3_cr},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Thas",
+            "value": "$[if::(gt::(length::(${f3_Tiso}),18),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Ty",
+            "value": "$[subString::(${f3_Tiso},0,4)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tmo",
+            "value": "$[subString::(${f3_Tiso},5,7)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Td",
+            "value": "$[subString::(${f3_Tiso},8,10)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Thh",
+            "value": "$[subString::(${f3_Tiso},11,13)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tmi",
+            "value": "$[subString::(${f3_Tiso},14,16)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tss",
+            "value": "$[subString::(${f3_Tiso},17,19)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_TL",
+            "value": "$[length::(${f3_Tiso})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tz",
+            "value": "$[if::(endsWith::(${f3_Tiso},Z),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tsg",
+            "value": "$[if::(eq::(${f3_Tz},1),+,subString::(${f3_Tiso},calc::(${f3_TL}-6),calc::(${f3_TL}-5)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Toh",
+            "value": "$[if::(eq::(${f3_Tz},1),0,subString::(${f3_Tiso},calc::(${f3_TL}-5),calc::(${f3_TL}-3)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tom",
+            "value": "$[if::(eq::(${f3_Tz},1),0,subString::(${f3_Tiso},calc::(${f3_TL}-2),${f3_TL}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tsgn",
+            "value": "$[if::(eq::(${f3_Tsg},-),-1,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tadj",
+            "value": "$[if::(le::(${f3_Tmo},2),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tyoe",
+            "value": "$[calc::(${f3_Ty}-2000-${f3_Tadj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tmp",
+            "value": "$[calc::(${f3_Tmo}-3+12*${f3_Tadj})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tdb",
+            "value": "$[floor::(calc::((153*${f3_Tmp}+2)/5))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tq4",
+            "value": "$[floor::(calc::(${f3_Tyoe}/4))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tdays",
+            "value": "$[calc::(11017+${f3_Tyoe}*365+${f3_Tq4}+${f3_Tdb}+${f3_Td}-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_Tms",
+            "value": "$[calc::(${f3_Tdays}*86400000+${f3_Thh}*3600000+${f3_Tmi}*60000+${f3_Tss}*1000-${f3_Tsgn}*(${f3_Toh}*60+${f3_Tom})*60000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_ms",
+            "value": "$[if::(eq::(${f3_Thas},1),${f3_Tms},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_ok",
+            "value": "$[if::(and::(gt::(${f3_ms},1000000000000),gt::(${f3_lv},0),le::(${f3_ms},${nowMs})),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_raw",
+            "value": "$[floor::(calc::((${t0}-${f3_ms})/86400000))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_ago",
+            "value": "$[if::(ge::(${f3_ms},${t0}),0,calc::(${f3_raw}+1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "f3_in",
+            "value": "$[if::(and::(eq::(${f3_ok},1),le::(${f3_ago},6)),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_0",
+            "value": "$[if::(and::(eq::(${f3_in},1),eq::(${f3_ago},0),gt::(${f3_lv},${w3_0})),${f3_lv},${w3_0})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_1",
+            "value": "$[if::(and::(eq::(${f3_in},1),eq::(${f3_ago},1),gt::(${f3_lv},${w3_1})),${f3_lv},${w3_1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_2",
+            "value": "$[if::(and::(eq::(${f3_in},1),eq::(${f3_ago},2),gt::(${f3_lv},${w3_2})),${f3_lv},${w3_2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_3",
+            "value": "$[if::(and::(eq::(${f3_in},1),eq::(${f3_ago},3),gt::(${f3_lv},${w3_3})),${f3_lv},${w3_3})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_4",
+            "value": "$[if::(and::(eq::(${f3_in},1),eq::(${f3_ago},4),gt::(${f3_lv},${w3_4})),${f3_lv},${w3_4})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_5",
+            "value": "$[if::(and::(eq::(${f3_in},1),eq::(${f3_ago},5),gt::(${f3_lv},${w3_5})),${f3_lv},${w3_5})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3_6",
+            "value": "$[if::(and::(eq::(${f3_in},1),eq::(${f3_ago},6),gt::(${f3_lv},${w3_6})),${f3_lv},${w3_6})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c3",
+            "value": "$[calc::(${c3}+${f3_in})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "la3",
+            "value": "$[if::(and::(eq::(${f3_ok},1),lt::(${f3_ago},${la3})),${f3_ago},${la3})]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[parseNumber::(calc::(${k0v}+${k1v}+${k2v}+${k3v}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nok",
+        "value": "$[parseNumber::(calc::(${ok0}+${ok1}+${ok2}+${ok3}),0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(and::(gt::(${n},0),eq::(${nok},0),eq::(length::(${idsIn}),0)),1,0)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "no history reachable"
+          }
+        }
+      ],
+      "_note": "一个服务的历史都没取到 = 这次取数失败,抛错让平台回落上次成功的数据。部分失败不抛(那几行画「--」)。「单个服务」组件传了 ids 时不抛:历史只是它的附属方格,取不到画灰格,不能连累此刻状态。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "more",
+        "value": "$[parseNumber::(max::(calc::(${nall}-4),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tot",
+        "value": "$[parseNumber::(calc::(${c0}+${c1}+${c2}+${c3}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lam",
+        "value": "$[parseNumber::(min::(if::(eq::(${ok0},1),${la0},999),if::(eq::(${ok1},1),${la1},999),if::(eq::(${ok2},1),${la2},999),if::(eq::(${ok3},1),${la3},999)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lamf",
+        "value": "$[if::(lt::(${lam},999),if::(eq::(${lam},0),1,if::(eq::(${lam},1),2,3)),0)]"
+      },
+      "_note": "最近一次事故:0 = 取到的历史里一起都没有 · 1 = 今天 · 2 = 昨天 · 3 = N 天前(N = lam)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "axy",
+        "value": "$[parseNumber::(calc::(36+${n}*24+1),0)]"
+      },
+      "_note": "日期轴紧贴最后一行下面。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "suy",
+        "value": "$[parseNumber::(calc::(36+${n}*24+30),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[parseNumber::(${c0},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[parseNumber::(${c1},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "$[parseNumber::(${c2},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "$[parseNumber::(${c3},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "n",
+          "nall",
+          "more",
+          "tot",
+          "lam",
+          "lamf",
+          "axy",
+          "suy",
+          "dl0",
+          "dl1",
+          "dl2",
+          "dl3",
+          "dl4",
+          "dl5",
+          "dl6",
+          "wd0",
+          "wd1",
+          "wd2",
+          "wd3",
+          "wd4",
+          "wd5",
+          "wd6",
+          "k0n",
+          "k0v",
+          "ok0",
+          "c0",
+          "w0_0",
+          "w0_1",
+          "w0_2",
+          "w0_3",
+          "w0_4",
+          "w0_5",
+          "w0_6",
+          "k1n",
+          "k1v",
+          "ok1",
+          "c1",
+          "w1_0",
+          "w1_1",
+          "w1_2",
+          "w1_3",
+          "w1_4",
+          "w1_5",
+          "w1_6",
+          "k2n",
+          "k2v",
+          "ok2",
+          "c2",
+          "w2_0",
+          "w2_1",
+          "w2_2",
+          "w2_3",
+          "w2_4",
+          "w2_5",
+          "w2_6",
+          "k3n",
+          "k3v",
+          "ok3",
+          "c3",
+          "w3_0",
+          "w3_1",
+          "w3_2",
+          "w3_3",
+          "w3_4",
+          "w3_5",
+          "w3_6"
+        ]
+      }
+    }
+  ]
+}

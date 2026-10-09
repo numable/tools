@@ -1,0 +1,1380 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "dTo",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-3*86400000),yyyy-MM-dd)]"
+      },
+      "_note": "GSC 数据滞后约 2–3 天,窗口右端必须留出这一截 —— 否则最后两三天恒为 0,曲线尾部永远是一道往下扎的假坑。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dFrom",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-31*86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dHalf",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-17*86400000),yyyy-MM-dd)]"
+      },
+      "_note": "环比的分界日:近 14 天 vs 前 14 天。"
+    },
+    {
+      "_note": "入参必须先 op:set 落地成 data 域的键,方法参数里才看得见(§9.5 #3)。`.xwidget` 不传 → 空串 → 归 0 → 全程不碰缓存。",
+      "op": "set",
+      "props": {
+        "key": "cacheIn",
+        "value": "${_cache}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "useCache",
+        "value": "$[parseNumber::(${cacheIn},0)]"
+      }
+    },
+    {
+      "_note": "**结构版本号**:pack 的字段集变了就 +1。它管的不是「数据新不新」而是「这份数据的**形状**还认不认」——缓存键只含对象维度、不含包代际,不盖这个戳,升级后首屏就会拿上一版的 pack 去渲新模板:少的字段取空,尺寸串里的 calc 一算 null,**整卡白块且不报错**。\n⚠️ 从 1 起、绝不能用 0(`eq::(空,0)` 恒为 true,旧缓存会被判成匹配)。⚠️ 刻意不用 `manifest.version`:flow 拿不到,且那会过度失效(只改配色也丢全部缓存)。",
+      "op": "set",
+      "props": {
+        "key": "SCHEMA",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缓存键。⚠️ 凡是影响结果的入参都要进键,且**绝不能用下标**(下标随增删漂移,漂移后会把 A 的数据渲成 B 的,还不报错)。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "c.gsc.home"
+      }
+    },
+    {
+      "_note": "读缓存。`default:{}` 让下面的 ${hit.ts} 在无缓存时安全取空,而不是整条流断掉。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitSchema",
+        "value": "${hit.schema}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "两道闸:**结构比对**(pack 形状对不上就当没有缓存 —— 旧形状渲新模板是白块,比等一次网络糟得多)+ hardTTL = 172800s(太旧的数先渲出来再改口,不如老实等一次)。嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里。",
+      "op": "set",
+      "props": {
+        "key": "hasHit",
+        "value": "$[if::(eq::(${hitSchema},${SCHEMA}),if::(gt::(${hitTs},0),if::(lt::(${age},172800000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "ttl = 3600s(§5.5.3)。纯新鲜度,不掺 useCache —— 掺进去 `_stale` 就算不对了。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},3600000),1,0),0)]"
+      }
+    },
+    {
+      "_note": "「这次先出的是旧货,请后台校新」。**必须进 resultFilter** —— 校新那条路靠它,漏了就是永不校新。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),if::(eq::(${fresh},1),0,1),0),0)]"
+      }
+    },
+    {
+      "_note": "只有「开了缓存 且 有没超 hardTTL 的货」才跳过网络 —— 连接都不建立。⚠️ **stale 也走这条跳过**(首屏零等待是三态的全部价值);写成「不 fresh 就打」= 退回两态,首屏照样白等。卡片(useCache=0)与冷启一律落进 items 真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "sr",
+          "action": "request",
+          "params": {
+            "url": "https://searchconsole.googleapis.com/webmasters/v3/sites",
+            "method": "GET",
+            "header": {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "User-Agent": "Numable"
+            },
+            "formatType": "json",
+            "credential": "google"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b0",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "errMsg",
+            "value": "${sr.error.message}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok",
+            "value": "$[if::(eq::(${sr},),0,if::(eq::(${errMsg},),1,0))]"
+          },
+          "_note": "请求失败两种形态:① 有的端把非 2xx 当节点失败 → resp 整个为空;② 有的端把 JSON 错误体交回来。两种都得抓 —— 不抓就会把 403 渲成「0 个站点」,而假数字比报错更险(标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "total",
+            "value": "$[length::(${sr.siteEntry})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tShow",
+            "value": "$[if::(gt::(${total},6),6,${total})]"
+          },
+          "_note": "屏上最多列 6 个;`total` 仍是真实总数,页脚那句「共 N 个」用它。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k1",
+            "value": "$[findNotEmpty::(get::(index::(${sr.siteEntry},0),siteUrl),get::(index::(${sr.siteEntry},0),siteUrl))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm1_a",
+            "value": "$[if::(eq::(subString::(${k1},0,10),sc-domain:),subString::(${k1},10,99),if::(eq::(subString::(${k1},0,8),https://),subString::(${k1},8,99),if::(eq::(subString::(${k1},0,7),http://),subString::(${k1},7,99),${k1})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm1_n",
+            "value": "$[calc::(length::(${nm1_a})-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm1",
+            "value": "$[if::(eq::(subString::(${nm1_a},${nm1_n},99),/),subString::(${nm1_a},0,${nm1_n}),${nm1_a})]"
+          },
+          "_note": "结尾那个 `/` 也去掉 —— `example.com/` 与 `example.com` 在一列里并排时看着像两个站。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k2",
+            "value": "$[findNotEmpty::(get::(index::(${sr.siteEntry},1),siteUrl),get::(index::(${sr.siteEntry},0),siteUrl))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm2_a",
+            "value": "$[if::(eq::(subString::(${k2},0,10),sc-domain:),subString::(${k2},10,99),if::(eq::(subString::(${k2},0,8),https://),subString::(${k2},8,99),if::(eq::(subString::(${k2},0,7),http://),subString::(${k2},7,99),${k2})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm2_n",
+            "value": "$[calc::(length::(${nm2_a})-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm2",
+            "value": "$[if::(eq::(subString::(${nm2_a},${nm2_n},99),/),subString::(${nm2_a},0,${nm2_n}),${nm2_a})]"
+          },
+          "_note": "结尾那个 `/` 也去掉 —— `example.com/` 与 `example.com` 在一列里并排时看着像两个站。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k3",
+            "value": "$[findNotEmpty::(get::(index::(${sr.siteEntry},2),siteUrl),get::(index::(${sr.siteEntry},0),siteUrl))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm3_a",
+            "value": "$[if::(eq::(subString::(${k3},0,10),sc-domain:),subString::(${k3},10,99),if::(eq::(subString::(${k3},0,8),https://),subString::(${k3},8,99),if::(eq::(subString::(${k3},0,7),http://),subString::(${k3},7,99),${k3})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm3_n",
+            "value": "$[calc::(length::(${nm3_a})-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm3",
+            "value": "$[if::(eq::(subString::(${nm3_a},${nm3_n},99),/),subString::(${nm3_a},0,${nm3_n}),${nm3_a})]"
+          },
+          "_note": "结尾那个 `/` 也去掉 —— `example.com/` 与 `example.com` 在一列里并排时看着像两个站。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k4",
+            "value": "$[findNotEmpty::(get::(index::(${sr.siteEntry},3),siteUrl),get::(index::(${sr.siteEntry},0),siteUrl))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm4_a",
+            "value": "$[if::(eq::(subString::(${k4},0,10),sc-domain:),subString::(${k4},10,99),if::(eq::(subString::(${k4},0,8),https://),subString::(${k4},8,99),if::(eq::(subString::(${k4},0,7),http://),subString::(${k4},7,99),${k4})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm4_n",
+            "value": "$[calc::(length::(${nm4_a})-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm4",
+            "value": "$[if::(eq::(subString::(${nm4_a},${nm4_n},99),/),subString::(${nm4_a},0,${nm4_n}),${nm4_a})]"
+          },
+          "_note": "结尾那个 `/` 也去掉 —— `example.com/` 与 `example.com` 在一列里并排时看着像两个站。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k5",
+            "value": "$[findNotEmpty::(get::(index::(${sr.siteEntry},4),siteUrl),get::(index::(${sr.siteEntry},0),siteUrl))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm5_a",
+            "value": "$[if::(eq::(subString::(${k5},0,10),sc-domain:),subString::(${k5},10,99),if::(eq::(subString::(${k5},0,8),https://),subString::(${k5},8,99),if::(eq::(subString::(${k5},0,7),http://),subString::(${k5},7,99),${k5})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm5_n",
+            "value": "$[calc::(length::(${nm5_a})-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm5",
+            "value": "$[if::(eq::(subString::(${nm5_a},${nm5_n},99),/),subString::(${nm5_a},0,${nm5_n}),${nm5_a})]"
+          },
+          "_note": "结尾那个 `/` 也去掉 —— `example.com/` 与 `example.com` 在一列里并排时看着像两个站。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k6",
+            "value": "$[findNotEmpty::(get::(index::(${sr.siteEntry},5),siteUrl),get::(index::(${sr.siteEntry},0),siteUrl))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm6_a",
+            "value": "$[if::(eq::(subString::(${k6},0,10),sc-domain:),subString::(${k6},10,99),if::(eq::(subString::(${k6},0,8),https://),subString::(${k6},8,99),if::(eq::(subString::(${k6},0,7),http://),subString::(${k6},7,99),${k6})))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm6_n",
+            "value": "$[calc::(length::(${nm6_a})-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nm6",
+            "value": "$[if::(eq::(subString::(${nm6_a},${nm6_n},99),/),subString::(${nm6_a},0,${nm6_n}),${nm6_a})]"
+          },
+          "_note": "结尾那个 `/` 也去掉 —— `example.com/` 与 `example.com` 在一列里并排时看着像两个站。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "site",
+            "value": "${k1}"
+          },
+          "_note": "主站点 = 列表第一个。hero 与曲线都看它。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bodyS",
+            "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dTo}\",\"dimensions\":[],\"rowLimit\":1}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bodyD",
+            "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dTo}\",\"dimensions\":[\"date\"],\"rowLimit\":40}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bodyH",
+            "value": "{\"startDate\":\"${dHalf}\",\"endDate\":\"${dTo}\",\"dimensions\":[],\"rowLimit\":1}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bodyP",
+            "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dHalf}\",\"dimensions\":[],\"rowLimit\":1}"
+          },
+          "_note": "前 14 天(用于 hero 的环比)。⚠️ 两段用**同样的汇总口径**,别拿逐日求和去比 —— 平均排名是按曝光加权的,自己求和会得到对不上的数。"
+        },
+        {
+          "action": "concurrent",
+          "items": [
+            {
+              "id": "s1",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${k1})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyS}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "s2",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${k2})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyS}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "s3",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${k3})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyS}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "s4",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${k4})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyS}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "s5",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${k5})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyS}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "s6",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${k6})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyS}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "day",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyD}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "hA",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyH}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "hB",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyP}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok1",
+            "value": "$[if::(eq::(${s1},),0,if::(eq::(${s1.error.message},),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m1r",
+            "value": "${s1.rows[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m1nd",
+            "value": "$[if::(eq::(${ok1},1),if::(eq::(findNotEmpty::(${m1r.impressions},__none__),__none__),1,0),0)]"
+          },
+          "_note": "一行搜索数据都没有(新站点头 2–3 天):屏上说「还没有搜索数据」,不渲 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m1clicks",
+            "value": "$[if::(eq::(${ok1},1),round::(findNotEmpty::(${m1r}.clicks,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m1imps",
+            "value": "$[if::(eq::(${ok1},1),round::(findNotEmpty::(${m1r}.impressions,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m1ctrN",
+            "value": "$[parseNumber::(calc::(findNotEmpty::(${m1r}.ctr,0)*100),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m1ctr",
+            "value": "$[if::(eq::(${ok1},1),if::(gt::(length::(${m1ctrN}),0),connect::(${m1ctrN},%),),)]"
+          },
+          "_note": "展示串在数据层拼好 —— RCN 里 `$[..]` 不嵌 `$[..]`(标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m1pos",
+            "value": "$[if::(eq::(${ok1},1),parseNumber::(findNotEmpty::(${m1r}.position,0),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok2",
+            "value": "$[if::(eq::(${s2},),0,if::(eq::(${s2.error.message},),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m2r",
+            "value": "${s2.rows[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m2nd",
+            "value": "$[if::(eq::(${ok2},1),if::(eq::(findNotEmpty::(${m2r.impressions},__none__),__none__),1,0),0)]"
+          },
+          "_note": "一行搜索数据都没有(新站点头 2–3 天):屏上说「还没有搜索数据」,不渲 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m2clicks",
+            "value": "$[if::(eq::(${ok2},1),round::(findNotEmpty::(${m2r}.clicks,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m2imps",
+            "value": "$[if::(eq::(${ok2},1),round::(findNotEmpty::(${m2r}.impressions,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m2ctrN",
+            "value": "$[parseNumber::(calc::(findNotEmpty::(${m2r}.ctr,0)*100),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m2ctr",
+            "value": "$[if::(eq::(${ok2},1),if::(gt::(length::(${m2ctrN}),0),connect::(${m2ctrN},%),),)]"
+          },
+          "_note": "展示串在数据层拼好 —— RCN 里 `$[..]` 不嵌 `$[..]`(标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m2pos",
+            "value": "$[if::(eq::(${ok2},1),parseNumber::(findNotEmpty::(${m2r}.position,0),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok3",
+            "value": "$[if::(eq::(${s3},),0,if::(eq::(${s3.error.message},),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m3r",
+            "value": "${s3.rows[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m3nd",
+            "value": "$[if::(eq::(${ok3},1),if::(eq::(findNotEmpty::(${m3r.impressions},__none__),__none__),1,0),0)]"
+          },
+          "_note": "一行搜索数据都没有(新站点头 2–3 天):屏上说「还没有搜索数据」,不渲 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m3clicks",
+            "value": "$[if::(eq::(${ok3},1),round::(findNotEmpty::(${m3r}.clicks,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m3imps",
+            "value": "$[if::(eq::(${ok3},1),round::(findNotEmpty::(${m3r}.impressions,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m3ctrN",
+            "value": "$[parseNumber::(calc::(findNotEmpty::(${m3r}.ctr,0)*100),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m3ctr",
+            "value": "$[if::(eq::(${ok3},1),if::(gt::(length::(${m3ctrN}),0),connect::(${m3ctrN},%),),)]"
+          },
+          "_note": "展示串在数据层拼好 —— RCN 里 `$[..]` 不嵌 `$[..]`(标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m3pos",
+            "value": "$[if::(eq::(${ok3},1),parseNumber::(findNotEmpty::(${m3r}.position,0),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok4",
+            "value": "$[if::(eq::(${s4},),0,if::(eq::(${s4.error.message},),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m4r",
+            "value": "${s4.rows[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m4nd",
+            "value": "$[if::(eq::(${ok4},1),if::(eq::(findNotEmpty::(${m4r.impressions},__none__),__none__),1,0),0)]"
+          },
+          "_note": "一行搜索数据都没有(新站点头 2–3 天):屏上说「还没有搜索数据」,不渲 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m4clicks",
+            "value": "$[if::(eq::(${ok4},1),round::(findNotEmpty::(${m4r}.clicks,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m4imps",
+            "value": "$[if::(eq::(${ok4},1),round::(findNotEmpty::(${m4r}.impressions,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m4ctrN",
+            "value": "$[parseNumber::(calc::(findNotEmpty::(${m4r}.ctr,0)*100),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m4ctr",
+            "value": "$[if::(eq::(${ok4},1),if::(gt::(length::(${m4ctrN}),0),connect::(${m4ctrN},%),),)]"
+          },
+          "_note": "展示串在数据层拼好 —— RCN 里 `$[..]` 不嵌 `$[..]`(标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m4pos",
+            "value": "$[if::(eq::(${ok4},1),parseNumber::(findNotEmpty::(${m4r}.position,0),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok5",
+            "value": "$[if::(eq::(${s5},),0,if::(eq::(${s5.error.message},),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m5r",
+            "value": "${s5.rows[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m5nd",
+            "value": "$[if::(eq::(${ok5},1),if::(eq::(findNotEmpty::(${m5r.impressions},__none__),__none__),1,0),0)]"
+          },
+          "_note": "一行搜索数据都没有(新站点头 2–3 天):屏上说「还没有搜索数据」,不渲 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m5clicks",
+            "value": "$[if::(eq::(${ok5},1),round::(findNotEmpty::(${m5r}.clicks,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m5imps",
+            "value": "$[if::(eq::(${ok5},1),round::(findNotEmpty::(${m5r}.impressions,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m5ctrN",
+            "value": "$[parseNumber::(calc::(findNotEmpty::(${m5r}.ctr,0)*100),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m5ctr",
+            "value": "$[if::(eq::(${ok5},1),if::(gt::(length::(${m5ctrN}),0),connect::(${m5ctrN},%),),)]"
+          },
+          "_note": "展示串在数据层拼好 —— RCN 里 `$[..]` 不嵌 `$[..]`(标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m5pos",
+            "value": "$[if::(eq::(${ok5},1),parseNumber::(findNotEmpty::(${m5r}.position,0),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok6",
+            "value": "$[if::(eq::(${s6},),0,if::(eq::(${s6.error.message},),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m6r",
+            "value": "${s6.rows[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m6nd",
+            "value": "$[if::(eq::(${ok6},1),if::(eq::(findNotEmpty::(${m6r.impressions},__none__),__none__),1,0),0)]"
+          },
+          "_note": "一行搜索数据都没有(新站点头 2–3 天):屏上说「还没有搜索数据」,不渲 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m6clicks",
+            "value": "$[if::(eq::(${ok6},1),round::(findNotEmpty::(${m6r}.clicks,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m6imps",
+            "value": "$[if::(eq::(${ok6},1),round::(findNotEmpty::(${m6r}.impressions,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m6ctrN",
+            "value": "$[parseNumber::(calc::(findNotEmpty::(${m6r}.ctr,0)*100),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m6ctr",
+            "value": "$[if::(eq::(${ok6},1),if::(gt::(length::(${m6ctrN}),0),connect::(${m6ctrN},%),),)]"
+          },
+          "_note": "展示串在数据层拼好 —— RCN 里 `$[..]` 不嵌 `$[..]`(标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m6pos",
+            "value": "$[if::(eq::(${ok6},1),parseNumber::(findNotEmpty::(${m6r}.position,0),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dn",
+            "value": "$[length::(${day.rows})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ser",
+            "value": [
+              "$[get::(index::(${day.rows},calc::(${dn}-1-27)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-26)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-25)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-24)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-23)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-22)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-21)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-20)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-19)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-18)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-17)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-16)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-15)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-14)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-13)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-12)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-11)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-10)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-9)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-8)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-7)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-6)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-5)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-4)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-3)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-2)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-1)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1)),clicks)]"
+            ]
+          },
+          "_note": "逐日点击。⚠️ 末尾锚定:GSC 会**跳过完全没有数据的日子**,所以第 i 个采样不等于「第 i 天」;锚在末尾至少保证最右边那点是最近一天。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lo",
+            "value": "0"
+          },
+          "_note": "⚠️ 基线 **0**,不是窗口最小值:流量图看的是「量」,从最小值起画会把1200→1230 这种 2% 的波动画成一面陡坡。行情图那套 min–max 归一在这里是错的。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hi",
+            "value": "$[max::(calc::(max::(${ser})),1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cA",
+            "value": "$[findNotEmpty::(${hA.rows[0].clicks},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cB",
+            "value": "$[calc::(findNotEmpty::(${hB.rows[0].clicks},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chg",
+            "value": "$[if::(gt::(${cB},0),parseNumber::(calc::((${cA}-${cB})/${cB}*100),0.0),)]"
+          },
+          "_note": "环比:近 14 天 vs 前 14 天。⚠️ 分母为 0 时**不算** —— 「从 0 涨到 5」的百分比是无穷大,渲出来是个荒唐的数;留空让屏上显示 `--`。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "up",
+            "value": "$[if::(gt::(length::(${chg}),0),if::(ge::(${chg},0),1,0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "flat",
+            "value": "$[if::(gt::(length::(${chg}),0),if::(lt::(calc::(${chg}*${chg}),0.25),1,0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chgA",
+            "value": "$[if::(ge::(${chg},0),${chg},calc::(0-${chg}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hpts_a",
+            "value": [
+              "0.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},0)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "9.4",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},1)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "18.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},2)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "28.1",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},3)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "37.5",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},4)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "46.9",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},5)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "56.2",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},6)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "65.6",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},7)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "75.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},8)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "84.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},9)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "93.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},10)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "103.1",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},11)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "112.4",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},12)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "121.8",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},13)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "131.2",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},14)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "140.6",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},15)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "149.9",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},16)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "159.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},17)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "168.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},18)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "178.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},19)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "187.4",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},20)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "196.8",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},21)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "206.1",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},22)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "215.5",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},23)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "224.9",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},24)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "234.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},25)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "243.6",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},26)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]",
+              "253.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},27)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]"
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hpts",
+            "value": "$[join::(${hpts_a},\\,)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hly",
+            "value": "$[findNotEmpty::(parseNumber::(calc::((1-((findNotEmpty::(index::(${ser},27),0)-${lo})/(${hi}-${lo})))*48.0+7.0),0.0),999)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "range",
+            "value": "${dFrom} ~ ${dTo}"
+          }
+        },
+        {
+          "_note": "定长 6 槽。每槽带自己的 siteUrl —— 行点进详情要靠它,而下标会随账号里站点增删漂移。",
+          "op": "set",
+          "props": {
+            "key": "list",
+            "value": [
+              {
+                "u": "${k1}",
+                "n": "${nm1}",
+                "c": "${m1clicks}",
+                "im": "${m1imps}",
+                "ct": "${m1ctr}",
+                "p": "${m1pos}",
+                "nd": "${m1nd}"
+              },
+              {
+                "u": "${k2}",
+                "n": "${nm2}",
+                "c": "${m2clicks}",
+                "im": "${m2imps}",
+                "ct": "${m2ctr}",
+                "p": "${m2pos}",
+                "nd": "${m2nd}"
+              },
+              {
+                "u": "${k3}",
+                "n": "${nm3}",
+                "c": "${m3clicks}",
+                "im": "${m3imps}",
+                "ct": "${m3ctr}",
+                "p": "${m3pos}",
+                "nd": "${m3nd}"
+              },
+              {
+                "u": "${k4}",
+                "n": "${nm4}",
+                "c": "${m4clicks}",
+                "im": "${m4imps}",
+                "ct": "${m4ctr}",
+                "p": "${m4pos}",
+                "nd": "${m4nd}"
+              },
+              {
+                "u": "${k5}",
+                "n": "${nm5}",
+                "c": "${m5clicks}",
+                "im": "${m5imps}",
+                "ct": "${m5ctr}",
+                "p": "${m5pos}",
+                "nd": "${m5nd}"
+              },
+              {
+                "u": "${k6}",
+                "n": "${nm6}",
+                "c": "${m6clicks}",
+                "im": "${m6imps}",
+                "ct": "${m6ctr}",
+                "p": "${m6pos}",
+                "nd": "${m6nd}"
+              }
+            ]
+          }
+        },
+        {
+          "_note": "写回哨兵:**直接取响应字段,不加任何兜底** —— 取数失败/响应变形时它必空。别拿加工后的显示字段当判据,那些几乎都带兜底,拦不住任何东西。",
+          "op": "set",
+          "props": {
+            "key": "_guard",
+            "value": "${sr.siteEntry[0].siteUrl}"
+          }
+        },
+        {
+          "_note": "整份渲染输入打包落盘。⚠️ 键集必须与 resultFilter 完全一致 —— 少一个,命中缓存那趟就少一个字段(而且不报错)。",
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "ok": "${ok}",
+              "errMsg": "${errMsg}",
+              "total": "${total}",
+              "tShow": "${tShow}",
+              "list": "${list}",
+              "range": "${range}",
+              "k1": "${k1}",
+              "nm1": "${nm1}",
+              "m1clicks": "${m1clicks}",
+              "m1imps": "${m1imps}",
+              "m1ctr": "${m1ctr}",
+              "m1pos": "${m1pos}",
+              "m1nd": "${m1nd}",
+              "chgA": "${chgA}",
+              "up": "${up}",
+              "flat": "${flat}",
+              "hpts": "${hpts}",
+              "hly": "${hly}",
+              "ts": "${nowMs}",
+              "schema": "${SCHEMA}"
+            }
+          }
+        },
+        {
+          "_note": "契约 4(§5.5.2):关键字段非空才写回。`_guard` 在取数失败/响应变形时必空 —— 此时什么都不写,盘上的旧货留着继续渲。一次超时把 pack 写成空,就把这页永久钉死在空态上直到下次恰好成功。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${_guard}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中那条少算一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "${box.ok}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "errMsg",
+        "value": "${box.errMsg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "total",
+        "value": "${box.total}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tShow",
+        "value": "${box.tShow}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "list",
+        "value": "${box.list}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "range",
+        "value": "${box.range}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1",
+        "value": "${box.k1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm1",
+        "value": "${box.nm1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m1clicks",
+        "value": "${box.m1clicks}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m1imps",
+        "value": "${box.m1imps}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m1ctr",
+        "value": "${box.m1ctr}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m1pos",
+        "value": "${box.m1pos}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m1nd",
+        "value": "${box.m1nd}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgA",
+        "value": "${box.chgA}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "up",
+        "value": "${box.up}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flat",
+        "value": "${box.flat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hpts",
+        "value": "${box.hpts}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hly",
+        "value": "${box.hly}"
+      }
+    },
+    {
+      "_note": "外传①:这次渲染用的缓存键。跑在 reloadPage **之后**的流(下拉穿透、切对象校新)拿不到 depends 输出,只能读盘;让它们读结果而不是重算判据 —— AF 没有子流程调用,判据抄几份就会有一天「删的键 ≠ 渲的键」,那时下拉安静地刷不动、日志还全绿。",
+      "action": "data.set",
+      "params": {
+        "key": "c.gsc.home._cur",
+        "value": "${ckey}"
+      }
+    },
+    {
+      "_note": "外传②:这次出的是不是旧货。",
+      "action": "data.set",
+      "params": {
+        "key": "c.gsc.home._stale",
+        "value": "${_stale}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "_stale",
+          "ckey",
+          "ok",
+          "errMsg",
+          "total",
+          "tShow",
+          "list",
+          "range",
+          "k1",
+          "nm1",
+          "m1clicks",
+          "m1imps",
+          "m1ctr",
+          "m1pos",
+          "m1nd",
+          "chgA",
+          "up",
+          "flat",
+          "hpts",
+          "hly"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。⚠️ `_stale`/`ckey` 是校新那条路的入参,别删。"
+    }
+  ]
+}

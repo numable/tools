@@ -1,0 +1,333 @@
+{
+  "_note": "桌面小组件取数。与 page/flow/home.df 同源,但**刻意不读 `pack` 键** ——\n桌面卡恒显示「今天所在的这一盒」。用户在 App 里翻看 3 月的记录,桌面卡不该跟着回到 3 月。\n\n(为什么不复用 home.df:`.xwidget` 的 `@[file://…]` 基准目录是 `xWidget/` 而不是包根\n —— 见 memory [[cell-flow-xwidget-base-dir]],跨目录引用是踩过的坑。且两者语义本就不同。)\n\n【小组件的全部价值在这里】\n没有通知能力时,桌面上那句「今天还没记」是这个包唯一的提醒。而它说的是\n**记录完整性**(还没记),不是服药状态(该吃药了)—— 前者是事实陈述,零医学含义,\n却因为「记一笔」和「吃一颗」本就是同一个时刻,提醒效果一点不弱。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "start",
+      "action": "data.get",
+      "params": {
+        "key": "start",
+        "default": ""
+      }
+    },
+    {
+      "id": "active",
+      "action": "data.get",
+      "params": {
+        "key": "active",
+        "default": 21
+      }
+    },
+    {
+      "id": "rest",
+      "action": "data.get",
+      "params": {
+        "key": "rest",
+        "default": 7
+      }
+    },
+    {
+      "id": "alias",
+      "action": "data.get",
+      "params": {
+        "key": "alias",
+        "default": ""
+      }
+    },
+    {
+      "id": "taken",
+      "action": "data.get",
+      "params": {
+        "key": "taken",
+        "default": "_"
+      }
+    },
+    {
+      "id": "skipped",
+      "action": "data.get",
+      "params": {
+        "key": "skipped",
+        "default": "_"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "${start}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasPlan",
+        "value": "$[if::(gt::(length::(${s0}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd",
+        "value": "$[findNotEmpty::(${s0},2026-01-01)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cycle",
+        "value": "$[calc::(${active}+${rest})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startMs",
+        "value": "$[parseDate::(${sd},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayStr",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(${todayStr},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offset",
+        "value": "$[round::(calc::((${todayMs}-${startMs})/86400000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curPack",
+        "value": "$[if::(lt::(${offset},0),0,floor::(calc::(${offset}/${cycle})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "baseOff",
+        "value": "$[calc::(${curPack}*${cycle})]"
+      }
+    },
+    {
+      "_note": "正午锚点,理由同 home.df:按天累加时给夏令时留 12 小时余量。",
+      "op": "set",
+      "props": {
+        "key": "baseMs",
+        "value": "$[calc::(${startMs}+${baseOff}*86400000+43200000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayIdx",
+        "value": "$[calc::(${offset}-${baseOff})]"
+      }
+    },
+    {
+      "op": "set",
+      "_note": "⚠️ 外面这层 `round::` 不是为了取整(值本来就是整数),是为了**取整数类型**:\n`calc::` 在 Android 上落到 `CalcUtil.calc`,签名就是 `double`,于是「第 17 天」在卡片上\n渲成 `Day 17.0`;web/iOS 那两端整值 double 打印不带小数,所以只有 Android 一端露馅\n(2026-08-17 跨端实测:同一份数据 iOS「第 16 天」/ Android「Day 17.0」)。\n`round::` 在 Android 走 `Math.round(double)` → **long**,在 web 走 `Math.round` → number,\n两端都渲成 `17`。\n**凡是要显示给人看的 calc 结果都得套一层**;只参与比较的不用 —— `eq::`/`lt::` 会把两边\n都转 double 再比,`1.0 == 1` 为真。",
+      "props": {
+        "key": "todayNo",
+        "value": "$[round::(calc::(${todayIdx}+1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "future",
+        "value": "$[if::(lt::(${offset},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rows",
+        "value": "$[ceil::(calc::(${cycle}/7))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tag",
+        "value": "$[connect::(_,${todayStr},_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tState",
+        "value": "$[if::(contains::(${taken},${tag}),1,if::(contains::(${skipped},${tag}),2,0))]"
+      }
+    },
+    {
+      "_note": "今天是不是停药日。判据纯粹是日历算术(第几格 ≥ 活性片数),零医学含义。\n⚠️ 起始日填在未来时 todayIdx 为负,`lt` 会判成活性期 —— 所以先用 offset<0 单开一支挡掉。",
+      "op": "set",
+      "props": {
+        "key": "isRest",
+        "value": "$[if::(lt::(${offset},0),0,if::(lt::(${todayIdx},${active}),0,1))]"
+      }
+    },
+    {
+      "_note": "卡片上那个「记一笔」药丸画不画。四个条件缺一不可,与 mark-today.af 的 mode==1 **同一判据**\n—— 两处若漂移,表现是「按钮画出来了但点了不写」或「能写却没画按钮」,都不报错。\n改任何一处必须同步改另一处。",
+      "op": "set",
+      "props": {
+        "key": "canLog",
+        "value": "$[if::(eq::(${hasPlan},0),0,if::(lt::(${offset},0),0,if::(gt::(${tState},0),0,if::(eq::(${isRest},1),0,1))))]"
+      }
+    },
+    {
+      "_note": "本盒还剩几片(含今天那片)。显示用 → 套 `round::` 取整数类型,否则 Android 上是「还剩 5.0 片」。\n停药期为 0,由 isRest 那一支决定不显示。",
+      "op": "set",
+      "props": {
+        "key": "pillsLeft",
+        "value": "$[round::(max::(0,calc::(${active}-${todayNo})))]"
+      }
+    },
+    {
+      "_note": "卡片上「今天」这一格该画哪一态。**把三个正交标志(tState / isRest / future)在数据层收成\n一个枚举**,而不是让每张 RCN 各自用布尔乘法拼一遍 —— 三张卡拼三遍必然漂移,\n且 RCN 里没有 and:: 只能靠 calc 乘法,读起来也不知道在说什么。\n\n  0 = 计划未开始(或没设过计划)\n  1 = 已服用      2 = 记为未服\n  3 = 还没记 · 活性期(唯一可以从卡片直接记一笔的一态,== canLog)\n  4 = 还没记 · 停药期(不该有记录,卡片点击只回一句「今天休息」)\n\n⚠️ 停药期里若用户自己补录过,tState 优先 —— 显示「已服用」而不是「今天休息」。\n   有些方案停药期吃安慰剂片,记录是有效的,不能因为落在停药段就抹掉它。",
+      "op": "set",
+      "props": {
+        "key": "stKind",
+        "value": "$[if::(eq::(${hasPlan},0),0,if::(eq::(${future},1),0,if::(eq::(${tState},1),1,if::(eq::(${tState},2),2,if::(eq::(${isRest},1),4,3)))))]"
+      }
+    },
+    {
+      "_note": "语言判据只认 zh(doc/overseas-first.md §2)。下面几个月日显示键:中文保持 MM-dd,英文写「Sep 25」(§5,不再出现 09-25)。",
+      "op": "set",
+      "props": {
+        "key": "_zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      }
+    },
+    {
+      "_note": "英文月份缩写,按两位月串查表(不走 calc:Android calc 返回 double)。",
+      "op": "set",
+      "props": {
+        "key": "_MON",
+        "value": {
+          "01": "Jan",
+          "02": "Feb",
+          "03": "Mar",
+          "04": "Apr",
+          "05": "May",
+          "06": "Jun",
+          "07": "Jul",
+          "08": "Aug",
+          "09": "Sep",
+          "10": "Oct",
+          "11": "Nov",
+          "12": "Dec"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mdTodayM",
+        "value": "$[findNotEmpty::(get::(${_MON},formatDate::(${todayMs},MM)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mdTodayD",
+        "value": "$[parseNumber::(formatDate::(${todayMs},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_mdTodayE",
+        "value": "${_mdTodayM} ${_mdTodayD}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mdToday",
+        "value": "$[if::(eq::(${_zh},1),formatDate::(${todayMs},MM-dd),${_mdTodayE})]"
+      }
+    },
+    {
+      "_note": "右上角时效锚:中英同为 MM-dd(card-design-system §3;overseas-first §5 把时效锚列为例外)。mdToday 是内容日期(迷你组件里「第 N 天 · Sep 25」),英文仍写月份,两者不能共用。",
+      "op": "set",
+      "props": {
+        "key": "atMd",
+        "value": "$[formatDate::(${todayMs},MM-dd)]"
+      }
+    },
+    {
+      "_note": "到下一个转折点还有几天。**从今天算起**:今天是活性期第 21 天(todayIdx=20)时 `active-todayIdx` = 1,读作「1 天后进入停药期」= 明天。\n⚠️ 别写成 `active-todayNo`(= 本盒还剩几片,那是 `pillsLeft`)—— 那个式子在最后一天会算出 0,渲成「0 天后进入停药期」,而停药期其实是明天开始。两个量长得像、差一天,且只在每盒的最后一天露馅。\n⚠️ 显示用 → 套 `round::` 取整数类型,否则 Android 上是「14.0 天后」(同 todayNo)。",
+      "op": "set",
+      "props": {
+        "key": "toRest",
+        "value": "$[round::(calc::(${active}-${todayIdx}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "toNew",
+        "value": "$[round::(calc::(${cycle}-${todayIdx}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nDays",
+        "value": "$[if::(eq::(${isRest},1),${toNew},if::(gt::(${rest},0),${toRest},${toNew}))]"
+      }
+    },
+    {
+      "_note": "卡上「我现在在周期的哪儿、下一个转折点什么时候到」说哪一句(2026-09-09 加)——这是本包唯一真正的问题,而整盒点阵只画得出「哪几天记了」。\n  0 = 不说(没设过计划 / 起始日在未来:那两态右列已有自己的话)\n  1 = 服药期 · N 天后停药        2 = 服药期 · N 天后开新盒(rest=0 的连续方案)\n  3 = 停药期 · N 天后开新盒\n⚠️ 2 档不能省:`rest=0`(21+0 这种不停药的方案)时下一个转折点是**开新盒**不是停药期,少这一支就会在一个根本没有停药期的方案上预告停药期。",
+      "op": "set",
+      "props": {
+        "key": "pkind",
+        "value": "$[if::(eq::(${hasPlan},0),0,if::(eq::(${future},1),0,if::(eq::(${isRest},1),3,if::(gt::(${rest},0),1,2))))]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "hasPlan",
+          "alias",
+          "active",
+          "cycle",
+          "rows",
+          "baseMs",
+          "todayIdx",
+          "todayNo",
+          "todayStr",
+          "mdToday",
+          "atMd",
+          "tState",
+          "future",
+          "taken",
+          "skipped",
+          "isRest",
+          "canLog",
+          "pillsLeft",
+          "stKind",
+          "rest",
+          "toRest",
+          "toNew",
+          "nDays",
+          "pkind"
+        ]
+      }
+    }
+  ]
+}

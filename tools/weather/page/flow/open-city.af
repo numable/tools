@@ -1,0 +1,16 @@
+{
+  "_note": "开「管理城市」页(`/city`),并在返回后刷新首页城市列表。\n\n⚠️ **为什么不是一句 `/city` 的导航串**(v54 及以前就是那样):那是常规路由压栈,返回时首页拿的是栈里的旧实例,\n`home.df` 不会重跑 —— 用户刚加完一座城市回来,列表里没有它,**要下拉一次才出来**(2026-09-11 用户报)。\ntubewatch 2026-08-22 / appwatch 2026-08-08 各撞过一次同一个病。\n\n⚠️ **也不要挂 `root.events.onVisible`**:协议(xpage-design.md §17)有这个事件,但**四端都没实现**,照写无效且不报错。\n\n正解 = 已落地的 **for-result 续体**:子页关掉(管理页保存后 `closePage`,或用户按 ‹)→ 这条流继续往下走 →\n`xpage.reloadPage` 软重载(保留旧内容、后台重跑 depends、不闪骨架)。\n新加的那一行 depends 桶是空的,会真取数;老城市的行命中 10 分钟 TTL 桶,不白打网络。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "startPageForResult",
+      "params": {
+        "page": "/city",
+        "container": "page"
+      }
+    },
+    {
+      "action": "xpage.reloadPage"
+    }
+  ]
+}

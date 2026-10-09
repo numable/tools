@@ -1,0 +1,77 @@
+{
+  "version": 2,
+  "title": "单币脉搏",
+  "sub": "价格 · 24 小时形状",
+  "i18n": {
+    "en-US": {
+      "title": "Coin pulse",
+      "sub": "Price and its 24h shape"
+    }
+  },
+  "layout": 22,
+  "params": {
+    "pair": "BTC-USDT",
+    "name": "BTC"
+  },
+  "ai": {
+    "shows": "一个币的现价、24h 涨跌幅、24 小时走势线与现价在 24h 区间的位置",
+    "params": {
+      "pair": {
+        "kind": "value",
+        "group": [
+          "pair",
+          "name"
+        ],
+        "format": "OKX 交易对:币种-USDT(现货);只有永续合约的币写 币种-USDT-SWAP",
+        "hint": "name 填 pair 的币种部分(BTC-USDT → BTC)",
+        "examples": [
+          "BTC-USDT",
+          "ETH-USDT",
+          "SOL-USDT",
+          "DOGE-USDT"
+        ]
+      },
+      "name": {
+        "kind": "value",
+        "format": "币种代码 = pair 第一段,如 BTC"
+      }
+    }
+  },
+  "events": {
+    "onClick": "/coin?pair=${pair}&name=${name}",
+    "_note": "单对象卡点击带对象参数进详情页(2026-08-27 用户报「ETH 卡跳成 BTC」—— 原 numable://self 落首页,首页 hero 是默认对象)。参数名抄自本包首页的同路由跳转串;bare path 形态同 stock quote(已真机验)。",
+    "onEdit": "/pick?pair=${pair}&name=${name}"
+  },
+  "canvas": {
+    "source": "@[file://rc/coin.rcn]",
+    "depends": [
+      {
+        "_note": "§D 纯显式:裸 `@[file://…df]` 字符串绑定**传空入参** —— flow 里的 ${x} 取到空、请求打空参,卡片渲一片 `--` 且**不报错**(流仍 success)。要把 widget params 喂给 flow,必须在绑定处显式写 {flow, params}。与 .xpage 的 depends 同一条规则,没有例外。",
+        "flow": "@[file://flow/coin.df]",
+        "params": {
+          "pair": "${pair}",
+          "name": "${name}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "3"
+      ]
+    }
+  },
+  "jobs": [
+    {
+      "id": "price",
+      "params": {
+        "pair": "${pair}"
+      }
+    },
+    {
+      "id": "move",
+      "params": {
+        "pair": "${pair}"
+      }
+    }
+  ]
+}

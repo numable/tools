@@ -1,0 +1,164 @@
+{
+  "rc": {
+    "_note": "Cloudflare 状态 · 11 微档(2026-10-04,card-design-system §8.2):只答「CF 现在挂没挂」。与 22 档 status 同一条 status.df(零新增请求),不改流。\n主值 = 一个状态词(正常 / 维护中 / 异常 / 故障),底行 = 状态灯 + 进行中事件数。没有时效锚(§8.2)。\n⚠️ 主值字号按「文案长度」分档,而文案是本组件的 i18n(不是数据)—— 所以档位在渲染层按语言 + lv 判:中文 2 字 / 英文 OK = 20pt,「维护中」与英文 5 字母词 = 17pt。两档各一个字面量字号的节点,不走数据驱动字号(状态未知时数据可能整个为空,裸 pt 会让整张组件渲不出来)。",
+    "i18n": {
+      "zh-CN": {
+        "brand": "CF 状态",
+        "w0": "正常",
+        "w1": "维护中",
+        "w2": "异常",
+        "w3": "故障",
+        "inc": "起事件"
+      },
+      "en-US": {
+        "brand": "Status",
+        "w0": "OK",
+        "w1": "Maint",
+        "w2": "Minor",
+        "w3": "Major",
+        "inc": "open"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FFFBF8\\,#FEF3EB)@90|linear(#15171A\\,#191A1B\\,#211F1C)@90"
+      },
+      {
+        "_note": "源色身份点(卡片设计系统 §2)。",
+        "id": "srcdot",
+        "type": "layer",
+        "x": "8pt",
+        "y": "{brand.y}+({brand.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#F38020|#FBAD41"
+      },
+      {
+        "_note": "组件名:11 档只有 43pt 宽,「Cloudflare」10pt 粗体 53pt 放不下 → 中文「CF 状态」、英文「Status」(身份由橙点承担)。",
+        "id": "brand",
+        "type": "txt",
+        "x": "17pt",
+        "y": "7pt",
+        "w": "43pt",
+        "h": "-1",
+        "text": "${@i18n.brand}",
+        "fontSize": "10pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "lineBreak": "0"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(and::(ge::(findNotEmpty::(${lv},-1),0),le::(findNotEmpty::(${lv},-1),3)),if::(startsWith::(${@app.language},zh),if::(eq::(${lv},1),0,1),if::(eq::(${lv},0),1,0)),0)]"
+        },
+        "react": [
+          {
+            "id": "st",
+            "type": "txt",
+            "x": "8pt",
+            "y": "22pt",
+            "w": "54pt",
+            "h": "-1",
+            "text": "$[if::(eq::(${lv},0),${@i18n.w0},if::(eq::(${lv},1),${@i18n.w1},if::(eq::(${lv},2),${@i18n.w2},${@i18n.w3})))]",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "lineBreak": "0"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(and::(ge::(findNotEmpty::(${lv},-1),0),le::(findNotEmpty::(${lv},-1),3)),if::(if::(startsWith::(${@app.language},zh),if::(eq::(${lv},1),0,1),if::(eq::(${lv},0),1,0)),0,1),0)]"
+        },
+        "react": [
+          {
+            "id": "st",
+            "type": "txt",
+            "x": "8pt",
+            "y": "22pt",
+            "w": "54pt",
+            "h": "-1",
+            "text": "$[if::(eq::(${lv},0),${@i18n.w0},if::(eq::(${lv},1),${@i18n.w1},if::(eq::(${lv},2),${@i18n.w2},${@i18n.w3})))]",
+            "fontSize": "17pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "lineBreak": "0"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(and::(ge::(findNotEmpty::(${lv},-1),0),le::(findNotEmpty::(${lv},-1),3)),0,1)]"
+        },
+        "react": [
+          {
+            "id": "stE",
+            "type": "txt",
+            "x": "8pt",
+            "y": "28pt",
+            "w": "54pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "lineBreak": "0"
+          }
+        ],
+        "_note": "状态未知 / 取数失败:值位「--」(下移到字中线)。"
+      },
+      {
+        "id": "cnt",
+        "type": "txt",
+        "x": "17pt",
+        "y": "46pt",
+        "w": "45pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${nInc},--)] ${@i18n.inc}",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "lineBreak": "0"
+      },
+      {
+        "_note": "状态灯:与 22 档同一条颜色表达式(lv<0 / 空 = 灰)。",
+        "id": "lamp",
+        "type": "layer",
+        "x": "8pt",
+        "y": "{cnt.y}+({cnt.h}-6pt)/2",
+        "w": "6pt",
+        "h": "6pt",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        },
+        "bgColor": "$[if::(eq::(${lv},0),#1FC77D|#1FC77D,if::(eq::(${lv},1),#F38020|#FBAD41,if::(eq::(${lv},2),#F38020|#FBAD41,if::(eq::(${lv},3),#FF5C4D|#FF5C4D,#6B7280|#8E939B))))]"
+      }
+    ]
+  }
+}

@@ -1,0 +1,319 @@
+{
+  "_note": "热门搜索词(queries 42)。生成器 gen_gsc.py。一次 searchAnalytics/query(dimensions=[query],rowLimit 5),与详情页搜索词块同一个查询。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "hasSite",
+        "value": "$[if::(eq::(${site},),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dTo",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-3*86400000),yyyy-MM-dd)]"
+      },
+      "_note": "GSC 数据滞后 2–3 天,同 traffic.df。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dFrom",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-31*86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${hasSite}"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "bodyQ",
+            "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dTo}\",\"dimensions\":[\"query\"],\"rowLimit\":5}"
+          }
+        },
+        {
+          "id": "resp",
+          "action": "request",
+          "params": {
+            "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+            "method": "POST",
+            "header": {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "User-Agent": "Numable"
+            },
+            "body": "${bodyQ}",
+            "formatType": "json",
+            "credential": "google"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "errMsg",
+            "value": "${resp.error.message}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok",
+            "value": "$[if::(eq::(${resp},),0,if::(eq::(${errMsg},),1,0))]"
+          },
+          "_note": "同 traffic.df:403 不能渲成「没有搜索词」。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(if::(eq::(${resp},),0,1),0,1)]"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "gsc_unreachable"
+              }
+            }
+          ],
+          "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "qn",
+            "value": "$[if::(eq::(${ok},1),length::(${resp.rows}),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "qmax",
+            "value": "$[max::(findNotEmpty::(${resp.rows[0].clicks},1),1)]"
+          },
+          "_note": "GSC 按点击倒序返回,第一行就是最大值(不用 max(pluck),列全空时它会拖垮外层)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0k",
+            "value": "$[findNotEmpty::(${resp.rows[0].keys[0]},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0c",
+            "value": "$[if::(eq::(findNotEmpty::(${q0k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[0].clicks},0),#\\,##0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0p",
+            "value": "$[if::(eq::(findNotEmpty::(${q0k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[0].position},0),0.0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q0x",
+            "value": "$[parseNumber::(max::(calc::(3.0+findNotEmpty::(${resp.rows[0].clicks},0)/${qmax}*86.0),3.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1k",
+            "value": "$[findNotEmpty::(${resp.rows[1].keys[0]},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1c",
+            "value": "$[if::(eq::(findNotEmpty::(${q1k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[1].clicks},0),#\\,##0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1p",
+            "value": "$[if::(eq::(findNotEmpty::(${q1k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[1].position},0),0.0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q1x",
+            "value": "$[parseNumber::(max::(calc::(3.0+findNotEmpty::(${resp.rows[1].clicks},0)/${qmax}*86.0),3.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2k",
+            "value": "$[findNotEmpty::(${resp.rows[2].keys[0]},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2c",
+            "value": "$[if::(eq::(findNotEmpty::(${q2k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[2].clicks},0),#\\,##0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2p",
+            "value": "$[if::(eq::(findNotEmpty::(${q2k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[2].position},0),0.0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q2x",
+            "value": "$[parseNumber::(max::(calc::(3.0+findNotEmpty::(${resp.rows[2].clicks},0)/${qmax}*86.0),3.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q3k",
+            "value": "$[findNotEmpty::(${resp.rows[3].keys[0]},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q3c",
+            "value": "$[if::(eq::(findNotEmpty::(${q3k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[3].clicks},0),#\\,##0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q3p",
+            "value": "$[if::(eq::(findNotEmpty::(${q3k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[3].position},0),0.0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q3x",
+            "value": "$[parseNumber::(max::(calc::(3.0+findNotEmpty::(${resp.rows[3].clicks},0)/${qmax}*86.0),3.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q4k",
+            "value": "$[findNotEmpty::(${resp.rows[4].keys[0]},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q4c",
+            "value": "$[if::(eq::(findNotEmpty::(${q4k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[4].clicks},0),#\\,##0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q4p",
+            "value": "$[if::(eq::(findNotEmpty::(${q4k},__none__),__none__),,parseNumber::(findNotEmpty::(${resp.rows[4].position},0),0.0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "q4x",
+            "value": "$[parseNumber::(max::(calc::(3.0+findNotEmpty::(${resp.rows[4].clicks},0)/${qmax}*86.0),3.0),0.0)]"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sl1",
+        "value": "$[replaceAll::(${site},^sc-domain.,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sl2",
+        "value": "$[replaceAll::(${sl1},^https?.//,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sl3",
+        "value": "$[replaceAll::(${sl2},/$,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "siteLabel",
+        "value": "$[if::(eq::(${hasSite},1),findNotEmpty::(${siteName},${sl3}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "hasSite",
+          "ok",
+          "siteLabel",
+          "at",
+          "qn",
+          "q0k",
+          "q0c",
+          "q0p",
+          "q0x",
+          "q1k",
+          "q1c",
+          "q1p",
+          "q1x",
+          "q2k",
+          "q2c",
+          "q2p",
+          "q2x",
+          "q3k",
+          "q3c",
+          "q3p",
+          "q3x",
+          "q4k",
+          "q4c",
+          "q4p",
+          "q4x"
+        ]
+      }
+    }
+  ]
+}

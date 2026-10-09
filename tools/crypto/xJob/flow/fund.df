@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "_note": "资金费率提醒取数段:当期费率(% 口径)与绝对值、结算周期、下次结算时刻。",
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "kr",
+        "value": "$[findNotEmpty::(${pair},btcusd)]"
+      },
+      "_note": "⚠️ 入参先落地:方法参数里看不见 flow 入参(§9.5 #3)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "$[if::(contains::(${kr},-),toUpperCase::(${kr}),connect::(toUpperCase::(if::(endsWith::(${kr},usdt),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usdc),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usd),subString::(${kr},0,calc::(length::(${kr})-3)),${kr})))),-,if::(endsWith::(${kr},usdc),USDC,USDT)))]"
+      },
+      "_note": "币对归一:从老组件长按进来的实例可能带 Bitstamp 形状 `btcusd`,新的是 OKX instId。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sym",
+        "value": "$[index::(split::(${k},-),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sw",
+        "value": "$[connect::(${sym},-USDT-SWAP)]"
+      }
+    },
+    {
+      "action": "request",
+      "id": "f",
+      "params": {
+        "url": "https://www.okx.com/api/v5/public/funding-rate?instId=${sw}",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fr",
+        "value": "$[get::(index::(${f.data},0),fundingRate)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${fr}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "${@i18n.fail}"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frV",
+        "value": "$[parseNumber::(calc::(${fr}*100),0.0000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frA",
+        "value": "$[if::(ge::(${frV},0),${frV},calc::(0-${frV}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frS",
+        "value": "$[connect::(if::(ge::(${frV},0),+,−),parseNumber::(${frA},0.0000),%)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "setAt",
+        "value": "$[formatDate::(calc::(get::(index::(${f.data},0),fundingTime)*1),HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "frV",
+          "frA",
+          "frS",
+          "setAt",
+          "sym"
+        ]
+      }
+    }
+  ],
+  "i18n": {
+    "zh-CN": {
+      "fail": "取不到资金费率"
+    },
+    "en-US": {
+      "fail": "Funding rate unavailable"
+    }
+  }
+}

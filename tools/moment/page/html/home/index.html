@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Time Progress</title>
+<style>
+/* 与卡片同源(infosource-standard §4.2b):同一套块、**同一种格子**、同一个源色(靛)。
+   v10 起页面与卡片说同一句话 —— 本月一格一天 / 本季一格一周 / 今年一格一月,
+   三态色也逐格对齐(已过实底 / 当下半透明 / 未来轨色 / 不存在的日子几乎不出声)。
+   本页**零网络、零 flow** —— 全部时间量在 JS 里现算。理由与包本身一致:
+   任何数据源都可能挂,这一页不会;也因此它在飞行模式下与联网时完全一样。 */
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --tile:#E7E9EE;--rail:#D6DAE1;--void:#EEF0F4;--accent:#128F66;
+  --src:#5B5BD6;--srcCur:rgba(91,91,214,.5);--srcSoft:rgba(91,91,214,.12);
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--tile:#20232A;--rail:#2C313A;--void:#252930;--accent:#6FE8BE;
+  --src:#A5A3FF;--srcCur:rgba(165,163,255,.5);--srcSoft:rgba(165,163,255,.18);--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  font-variant-numeric:tabular-nums;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+/* §1 页头三段:大标题 + 时效锚(右上角) / 副标 = 此刻的状态。 */
+.hd{display:flex;align-items:flex-start;gap:10px}
+.hd h1{flex:1 1 auto;min-width:0}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+/* 右上角 = 只有图标的「重新读取」圆钮(`.xb-at.ic`),样式全在 xb:anchor 块(tools/infosource/mk_anchor.py)。
+   本包零网络,没有「取数时间」可言(card-design-system §3:无时效意义不放假锚),故**不写日期**;
+   按钮本身留着:重读倒数日列表 + 拿设备时钟重算一遍 —— 跨过午夜还开着这一页时,
+   那正是唯一能让「今天」回到今天的动作。 */
+.sub{color:var(--sub);font-size:13px;margin-bottom:16px}
+/* §2 段标题 = 左名字 + 右摘要。右边那一格不是装饰,是这一段的答案。 */
+.sec{font-size:13px;color:var(--sub);font-weight:500;margin:20px 0 8px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.sec em{font-style:normal;font-weight:500;font-size:13px;color:var(--sub);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sec em b{font-weight:600;color:var(--fg)}
+
+/* 一段 = 一块:标签 + 百分比 + 一行格子 + 图例/剩余。与 44 卡逐行同构。 */
+.seg{background:var(--tile);border-radius:12px;padding:12px;margin-bottom:8px}
+.seg .top{display:flex;align-items:baseline;gap:8px}
+.seg .lab{font-size:12px;font-weight:600}
+.seg .pct{margin-left:auto;font-size:19px;font-weight:700}
+.seg .pct em{font-size:11px;font-style:normal;color:var(--sub);font-weight:600}
+.cells{display:flex;gap:2px;margin-top:10px}
+.cells i{flex:1 1 0;height:18px;border-radius:3px;background:var(--rail);display:block}
+.cells i.on{background:var(--src)}
+.cells i.cur{background:var(--srcCur)}
+.cells i.void{background:var(--void)}
+/* §3 图例(解释格子怎么读)紧贴格子、11pt —— 它是脚注不是内容。 */
+.seg .foot2{display:flex;margin-top:6px;color:var(--sub);font-size:11px}
+.seg .foot2 span+span{margin-left:auto}
+
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.row{display:flex;align-items:center;gap:10px}
+.row+.row{margin-top:10px}
+.lbl{flex:0 0 52px;color:var(--sub);font-size:12px}
+/* ⚠️ 输入框字号必须显式 ≥16px:iOS WebView 上小于 16px 聚焦会把**整页**放大,而且退不回去
+   (memory [[ios-webview-focus-zoom-16px]])。lint 会查这一条。 */
+input{flex:1 1 0;min-width:0;border:0;background:var(--tile);border-radius:10px;
+  padding:11px 12px;font-family:inherit;font-size:16px;font-weight:600;line-height:1.15;
+  color:var(--fg);outline:2px solid transparent}
+input:focus{outline-color:var(--src)}
+.prev{display:flex;align-items:baseline;gap:8px;margin-top:12px;padding-top:12px;
+  border-top:1px solid var(--line);min-height:34px}
+.prev .big{font-size:26px;font-weight:700;letter-spacing:-.5px}
+.prev .unit{font-size:12px;color:var(--sub)}
+.prev .st{color:var(--sub);font-size:12px}
+/* 点阵:与 22 卡上那张同一个隐喻 —— 一格一天,可数 */
+.grid{display:flex;flex-wrap:wrap;gap:3px;margin-top:12px}
+.grid i{width:11px;height:11px;border-radius:3px;background:var(--tile);display:block}
+.grid i.on{background:var(--src)}
+.gridNote{color:var(--sub);font-size:11px;margin-top:7px}
+.picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{border:0;background:var(--tile);color:var(--fg);border-radius:8px;padding:8px 11px;
+  font:600 13px/1 inherit;cursor:pointer}
+
+/* 入口行:与加卡按钮同高同圆角,但**没有 ＋** —— 那个符号是「加卡」的专属信号,
+   借给别的动作用会让两种按钮读起来一样。 */
+.entry{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:0 16px;
+  margin:0;background:var(--card);border:0;border-radius:14px;text-align:left;
+  font:inherit;color:var(--fg);cursor:pointer;box-shadow:var(--shadow)}
+.entry .g{flex:1 1 auto;min-width:0}
+.entry b{display:block;font-size:13.5px;font-weight:700;line-height:1.25}
+.entry .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:var(--sub)}
+.entry .ar{flex:0 0 auto;color:var(--sub);font-size:15px;opacity:.55}
+/* 清单行:一天一行。左边名字与日期,右边一个大数 —— 这一行要回答的就是「还有几天」。 */
+.drow{display:flex;align-items:center;gap:11px;background:var(--card);border-radius:14px;
+  padding:13px 15px;margin-bottom:8px;box-shadow:var(--shadow);cursor:pointer}
+.drow .g{flex:1 1 auto;min-width:0}
+.drow .nm{display:block;font-size:14px;font-weight:600;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.drow .dt{display:block;font-size:11px;color:var(--sub);margin-top:2px}
+.drow .n{flex:0 0 auto;font-size:22px;font-weight:700;letter-spacing:-.5px;color:var(--src)}
+/* v36 节假日:与「下一个假期」卡同一张表(生成器注入,见 xb:holi 标记);条长 = 距今天数,180 天封顶 */
+.hrow{display:flex;align-items:center;gap:11px;background:var(--card);border-radius:14px;padding:11px 14px;margin-bottom:8px}
+.hrow .g{flex:1 1 auto;min-width:0}
+.hrow .nm{display:block;font-size:14px;font-weight:600}
+.hrow .dt{display:block;font-size:11px;color:var(--sub);margin-top:2px}
+.hrow .br{height:4px;border-radius:2px;background:var(--rail,rgba(128,128,128,.2));margin-top:7px;position:relative;max-width:180px}
+.hrow .br i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--src);opacity:.55}
+.hrow .n{flex:0 0 auto;font-size:20px;font-weight:700;color:var(--fg)}
+.hrow .n small{font-size:11px;color:var(--sub);font-weight:600;margin-left:2px}
+.hrow.first .n{color:var(--src)}
+.drow .u{font-size:10.5px;color:var(--sub);margin-left:3px;font-weight:600}
+/* 已经过去的日子不再是「还剩」,数字也不该继续用源色抢注意力 */
+.drow.gone .n{color:var(--sub)}
+/* 「就是今天」那一格放的是文字不是数字,收一档字号 —— 22px 会把它挤成两行 */
+.drow.now .n{font-size:15px;letter-spacing:0}
+/* 一个倒数日都没有时,整段塌成「入口行 + 一句 11pt 说明」——
+   **不铺一屏引导**:那时三条时间进度就是这一页的全部内容,该由它们承接注意力。 */
+.hint{color:var(--sub);font-size:11px;margin:8px 0 0;line-height:1.55}
+
+/* 段可点:箭头是唯一信号(这一页格子已经很密,再加底色会把「数据」与「控件」搅在一起) */
+.seg[data-k]{cursor:pointer}
+.seg .lab .ar{color:var(--sub);font-size:12px;opacity:.55;margin-left:4px}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.7}
+
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.entry,.drow,.seg[data-k],.xb-tap{position:relative}
+.entry::after,.drow::after,.seg[data-k]::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.entry:active::after,.drow:active::after,.seg[data-k]:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.fresh,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.fresh:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#segs,#list";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+  <div class="hd">
+    <h1 data-i="title"></h1>
+    <button class="xb-at" id="fresh" type="button"></button>
+  </div>
+  <!-- 副标 = **这一页此刻的状态**(page-design-system §1.1),不是描述、不是时间 ——
+       时间归右上角那颗时效锚。 -->
+  <div class="sub" id="stateLine"></div>
+
+  <!-- ⚠️ §0:**倒数日在上、三条时间进度在下**(2026-09-10)。
+       卡片早在 v22 就把主次调过来了(「你在等的日子」提到主位、三条进度降为注脚,理由是
+       「今年过了 69% 是制造焦虑而不给行动」),而页面一直还是老的主次 —— 同一个包,
+       卡片说 A 最重要、页面说 B 最重要。用户从卡片点进来,看到的必须是同一套优先级。
+       ⚠️ 三条进度**不是被删掉**,它们仍是这个包的一半;换的是顺序与视觉权重。 -->
+  <div class="sec"><span data-i="secCount"></span><em id="cntSum"></em></div>
+  <!-- 「我的倒数日」清单。配置器本身在 `/count` —— 首页是每天要看的内容(§8),
+       一屏里有一半是填表,那一半每天都在浪费。这里只列**你已经在等的那些日子**。 -->
+  <div id="list"></div>
+  <button class="entry" id="toCount"><span class="g">
+    <b data-i="addT"></b><span class="d" data-i="addS"></span></span><span class="ar">＋</span></button>
+  <div class="hint" id="listHint" hidden></div>
+
+  <div class="sec"><span data-i="secProg"></span><em id="progSum"></em></div>
+  <div id="segs"></div>
+
+  <div class="sec"><span id="secHoli"></span><em id="holiSum"></em></div>
+  <div id="holi"></div>
+
+  <button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg">
+    <b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button>
+
+  <div class="foot" data-i="foot"></div>
+<script>
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+var I18N = {
+ zh:{reload:"重新读取",pickT:"添加组件",pickS:"在面板里挑，确认后加到仪表盘",title:"时间进度",secCount:"倒数日",
+   secProg:"时间进度",secHoliCn:"节假日",secHoliUs:"美国节日",holiSum:"接下来 4 个",holiToday:"就是今天",
+   wk:["周日","周一","周二","周三","周四","周五","周六"],
+   stHas:"距{n} 还有 {d} 天",stToday:"{n} 就是今天",stGone:"{n} 已过 {d} 天",
+   stNone:"还没有在等的日子",
+   sumCount:"{n} 个",sumNone:"还没有",sumYear:"今年已过 {p}%",
+   addT:"添加倒数日",addS:"离某一天还有多少天，存下来这里就有一行",
+   today0:"就是今天",
+   emptyList:"还没有倒数日。添加一个你在等的日子，比如生日、发布日、假期，这里会一直为你倒数。",
+   dMonth:"本月",dQuarter:"本季",dYear:"今年",
+   perDay:"一格一天",perWeek:"一格一周",perMonth:"一格一月",
+   left:"还剩",past:"已过",day:" 天",
+   gridNote:"一格一天——最多显示 56 天",
+   foot:"这个工具不联网，所有数字都根据设备时间计算，开启飞行模式也同样准确。格子有四种状态：实色表示已过去，半透明表示正在进行，灰色表示尚未到来，最浅的是这个月没有的日期（例如 2 月只有 28 格为实色）。倒数日按日历天数算，同一天里早晚看到的天数一样。"},
+ en:{reload:"Reload",pickT:"Add widgets",pickS:"Pick in the panel, then confirm",title:"Time Progress",secCount:"Countdown",
+   secProg:"Time progress",secHoliCn:"China holidays",secHoliUs:"US holidays",holiSum:"next 4",holiToday:"today",
+   wk:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],
+   stHas:"{d} days until {n}","stHas.one":"{d} day until {n}",stToday:"{n} is today",stGone:"{n} was {d} days ago","stGone.one":"{n} was {d} day ago",
+   stNone:"No countdowns yet",
+   sumCount:"{n}",sumNone:"none yet",sumYear:"{p}% of the year gone",
+   addT:"Add a countdown",addS:"Days until a date — save one and it shows up here",
+   today0:"That is today",
+   emptyList:"No countdowns yet. Add a day you are waiting for — a birthday, a launch, a holiday — and it will keep counting here.",
+   dMonth:"Month",dQuarter:"Quarter",dYear:"Year",
+   perDay:"1 cell = 1 day",perWeek:"1 cell = 1 week",perMonth:"1 cell = 1 month",
+   left:"left",past:"ago",day:" days","day.one":" day",
+   gridNote:"one cell = one day — up to 56 shown",
+   foot:"This tool uses no network at all: every number is computed from the device clock, so it is just as accurate in airplane mode. Cells have four states: solid = elapsed, translucent = the one you are in, grey = still ahead, faintest = days this month does not have (February shows only 28 solid slots). Countdowns are counted in calendar days, so you see the same number all day."}
+};
+var LANG="en", MAX=56;
+/* 格数与卡片是同一份常量(tools/infosource/gen_moment.py 的 N_MONTH/N_QUARTER/N_YEAR)。
+   两处对不上不会报错,只会让同一天在页面上亮 21 格、在卡片上亮 22 格。 */
+var N_MONTH=31, N_QUARTER=13, N_YEAR=12;
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键;缺键回落英文(doc/overseas-first.md §2) */
+function tp(k,n){var T=I18N[LANG]; return (Math.abs(n)===1&&T&&Object.prototype.hasOwnProperty.call(T,k+".one"))?T[k+".one"]:t(k);}  /* 单复数:英文 n = 1 取 <key>.one(doc/copy-style-guide.md);中文不设 .one */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function applyTheme(th){
+  var dark = th ? th==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark?"dark":"light");
+}
+function pad(n){ return (n<10?"0":"")+n; }
+function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+/* ⚠️ 两端都归到**当天 0 点**再相减:直接拿时间戳差会让同一天的上午与下午差出一天,
+   而「还剩几天」是个自然日概念。与 `/count`、与卡片同一套。 */
+function midnight(s){ var p=String(s).split("-"); return new Date(+p[0],+p[1]-1,+p[2]).getTime(); }
+/* 日期写法(doc/overseas-first.md §5):中文 2026 年 9 月 25 日 / 英文 Sep 25, 2026;英文不出现 09-25。 */
+var MON_EN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDate(d){ return LANG==="zh" ? d.getFullYear()+" 年 "+(d.getMonth()+1)+" 月 "+d.getDate()+" 日"
+  : MON_EN[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear(); }
+function fmtYmd(s){ var p=String(s||"").split("-"); return p.length<3 ? String(s||"") : fmtDate(new Date(+p[0],+p[1]-1,+p[2])); }
+
+/* 三段格子 —— 与 xWidget/flow/progress.df 逐量同义:
+   百分比 = (now-起点)/(终点-起点);格子下标 = floor((now-起点)/一格的长度)。
+   两者同源,所以「亮到第 21 格」与「69%」不会互相打脸。 */
+function segments(){
+  var now=new Date(), t0=now.getTime(), y=now.getFullYear(), m=now.getMonth();
+  var D=86400000, W=604800000;
+  function pct(a,b){ return Math.round((t0-a)/(b-a)*100); }
+  /* 「还剩」= 今天之后还有几个日子(`round（（区间末 − 现在）/天）`)。
+     ⚠️ **三处必须同一套**:卡片(gen_moment.py 的 `*Left`)、本页、`/span` 详情页 ——
+     曾经我把页面改成「总天数 − 已过天数」,那把**今天**算进了「还剩」而「已过」又没算它,
+     于是 55 + 37 ≠ 92,且同一个季度卡上说 36、页面说 37(2026-08-25 L1 对照卡片抓到)。
+     这一套也与本包倒数日的自然日相减同源。 */
+  function leftD(a,b){ return Math.round((b-t0)/D); }
+  var mA=new Date(y,m,1).getTime(), mB=new Date(y,m+1,1).getTime();
+  var q=Math.floor(m/3), qA=new Date(y,q*3,1).getTime(), qB=new Date(y,q*3+3,1).getTime();
+  var yA=new Date(y,0,1).getTime(), yB=new Date(y+1,0,1).getTime();
+  return [
+    {key:"month", k:"dMonth",  unit:"perDay",   n:N_MONTH,    slots:Math.round((mB-mA)/D),
+     idx:now.getDate()-1, p:pct(mA,mB), left:leftD(mA,mB)+tp("day",leftD(mA,mB))},
+    {key:"quarter", k:"dQuarter",unit:"perWeek",  n:N_QUARTER,  slots:N_QUARTER,
+     idx:Math.min(Math.floor((t0-qA)/W),N_QUARTER-1), p:pct(qA,qB),
+     left:leftD(qA,qB)+tp("day",leftD(qA,qB))},
+    {key:"year", k:"dYear",   unit:"perMonth", n:N_YEAR,     slots:N_YEAR,
+     idx:m, p:pct(yA,yB), left:leftD(yA,yB)+tp("day",leftD(yA,yB))}
+  ];
+}
+function paintSegs(){
+  document.getElementById("segs").innerHTML = segments().map(function(s){
+    var cells=""; for (var i=0;i<s.n;i++){
+      var cls = i<s.idx ? "on" : (i===s.idx ? "cur" : (i<s.slots ? "" : "void"));
+      cells += '<i class="'+cls+'"></i>';
+    }
+    return '<div class="seg" data-k="'+esc(s.key)+'"><div class="top"><span class="lab">'+
+      esc(t(s.k))+'<span class="ar">›</span></span>'+
+      '<span class="pct">'+s.p+"<em>%</em></span></div>"+
+      '<div class="cells">'+cells+"</div>"+
+      '<div class="foot2"><span>'+esc(t(s.unit))+"</span>"+
+      "<span>"+esc(t("left"))+" "+esc(s.left)+"</span></div></div>";
+  }).join("");
+}
+/* 「我的倒数日」。⚠️ 排序按**剩余天数**升序:最近的那个日子才是你每天要看的一行;
+   已经过去的排在最后(它们还有纪念意义,但不该占着第一屏)。
+   ⚠️ 认条目用 `id` 不用下标 —— 下标随增删漂移,漂移之后点 A 会打开 B,还不报错。 */
+var DAYS = [];
+function daysTo(dateStr){
+  return Math.round((midnight(dateStr) - midnight(ymd(new Date()))) / 86400000);
+}
+/* 排好序的清单(副标、段摘要、列表三处共用同一份 —— 三处各排一次必漂)。 */
+function sortedDays(){
+  return DAYS.map(function(d){ return {d:d, n:daysTo(d.date)}; })
+    .sort(function(a,b){
+      if ((a.n<0)!==(b.n<0)) return a.n<0 ? 1 : -1;   /* 过去的一律靠后 */
+      return a.n<0 ? b.n-a.n : a.n-b.n;               /* 未来:近的在前;过去:刚过的在前 */
+    });
+}
+/* §1 页头 + §2 两个段摘要。
+   ⚠️ 副标说的是「此刻的状态」——**最近的那个日子**,与列表第一行、与卡片主位说同一件事;
+   一个倒数日都没有时才退回「今年已过 N%」那一侧(那时进度就是这一页的全部内容)。 */
+function paintHead(){
+  var segs=segments(), yr=segs[2];
+  var rows=sortedDays(), st;
+  if (!rows.length) st=t("stNone");
+  else {
+    var r=rows[0], nm=r.d.title;
+    st = r.n===0 ? t("stToday").replace("{n}",nm)
+       : (r.n>0 ? tp("stHas",r.n) : tp("stGone",r.n)).replace("{n}",nm).replace("{d}",Math.abs(r.n));
+  }
+  document.getElementById("stateLine").textContent=st;
+  document.getElementById("cntSum").textContent =
+    rows.length ? t("sumCount").replace("{n}",rows.length) : t("sumNone");
+  /* 数字给 fg + 600(§2:右侧摘要 13pt/sub,数字可 fg)。文案里无 HTML 特殊字符,
+     先 esc 再塞 <b> 是为了「将来有人往这句里加尖括号」也不出事。 */
+  document.getElementById("progSum").innerHTML =
+    esc(t("sumYear")).replace("{p}","<b>"+yr.p+"</b>");
+}
+function paintList(){
+  var box=document.getElementById("list"), hint=document.getElementById("listHint");
+  hint.hidden = !!DAYS.length;
+  if (!DAYS.length){ box.innerHTML=""; hint.textContent=t("emptyList"); return; }
+  var rows=sortedDays();
+  box.innerHTML=rows.map(function(r){
+    /* ⚠️ 今天那一行不写「还剩 0 天」——**与卡片同一句**(progress.rcn 的 `today0`)。
+       两处对同一个 0 说两种话,是「卡片点进页面看到的信息更少/更乱」的另一种形态。 */
+    var big = r.n===0 ? esc(t("today0"))
+      : Math.abs(r.n)+'<span class="u">'+esc(tp("day",r.n))+"</span>";
+    var tail = r.n===0 ? "" : " · "+esc(r.n<0?t("past"):t("left"));
+    return '<div class="drow'+(r.n<0?" gone":"")+(r.n===0?" now":"")+'" data-id="'+esc(r.d.id)+'">'+
+      '<span class="g"><span class="nm">'+esc(r.d.title)+"</span>"+
+      '<span class="dt">'+esc(fmtYmd(r.d.date))+tail+"</span></span>"+
+      '<span class="n">'+big+"</span></div>";
+  }).join("");
+}
+async function loadList(){
+  if (!(window.xbridge && xbridge.runDataFlow)) return;
+  try{
+    var r=await xbridge.runDataFlow("read",{});
+    var v=(r && (r.data||r)) || {};
+    var raw=v.list;
+    /* ⚠️ 两种形态都收:`data.get` 的结果过桥后各端可能是数组、也可能已被字符串化
+       (memory [[actionflow-df-pitfalls]] 那条「跨端字符串化没有保证」)。 */
+    DAYS = typeof raw === "string" ? (JSON.parse(raw||"[]")||[]) : (raw||[]);
+    if (!Array.isArray(DAYS)) DAYS=[];
+  }catch(e){ DAYS=[]; }
+  paintList(); paintHead();
+}
+
+/* xb:holi — 由 tools/infosource/gen_moment_holiday.py 注入,别手改(与 holiday 卡同一张表) */
+var HOLI={"cn": [["2026-09-25", "中秋节", "Mid-Autumn Festival"], ["2026-10-01", "国庆节", "National Day"], ["2027-01-01", "元旦", "New Year's Day"], ["2027-02-06", "春节", "Spring Festival"], ["2027-04-05", "清明节", "Qingming Festival"], ["2027-05-01", "劳动节", "Labour Day"], ["2027-06-09", "端午节", "Dragon Boat Festival"], ["2027-09-15", "中秋节", "Mid-Autumn Festival"], ["2027-10-01", "国庆节", "National Day"], ["2028-01-01", "元旦", "New Year's Day"], ["2028-01-26", "春节", "Spring Festival"], ["2028-04-04", "清明节", "Qingming Festival"], ["2028-05-01", "劳动节", "Labour Day"], ["2028-05-28", "端午节", "Dragon Boat Festival"], ["2028-10-01", "国庆节", "National Day"], ["2028-10-03", "中秋节", "Mid-Autumn Festival"], ["2029-01-01", "元旦", "New Year's Day"]], "us": [["2026-10-12", "哥伦布日", "Columbus Day"], ["2026-11-11", "退伍军人节", "Veterans Day"], ["2026-11-26", "感恩节", "Thanksgiving"], ["2026-12-25", "圣诞节", "Christmas"], ["2027-01-01", "元旦", "New Year's Day"], ["2027-01-18", "马丁·路德·金纪念日", "MLK Day"], ["2027-02-15", "总统日", "Presidents' Day"], ["2027-05-31", "阵亡将士纪念日", "Memorial Day"], ["2027-06-19", "六月节", "Juneteenth"], ["2027-07-04", "美国独立日", "Independence Day"], ["2027-09-06", "劳工节", "Labor Day"], ["2027-10-11", "哥伦布日", "Columbus Day"], ["2027-11-11", "退伍军人节", "Veterans Day"], ["2027-11-25", "感恩节", "Thanksgiving"], ["2027-12-25", "圣诞节", "Christmas"], ["2028-01-01", "元旦", "New Year's Day"], ["2028-01-17", "马丁·路德·金纪念日", "MLK Day"], ["2028-02-21", "总统日", "Presidents' Day"], ["2028-05-29", "阵亡将士纪念日", "Memorial Day"], ["2028-06-19", "六月节", "Juneteenth"], ["2028-07-04", "美国独立日", "Independence Day"], ["2028-09-04", "劳工节", "Labor Day"], ["2028-10-09", "哥伦布日", "Columbus Day"], ["2028-11-11", "退伍军人节", "Veterans Day"], ["2028-11-23", "感恩节", "Thanksgiving"], ["2028-12-25", "圣诞节", "Christmas"], ["2029-01-01", "元旦", "New Year's Day"]]};
+/* xb:holi end */
+function paintHoli(){
+  /* 国内默认看中国节假日,其余看美国节日,段标题写明是哪国的(doc/overseas-first.md §8)。
+     HOLI 每行 [日期, 中文名, 英文名],名字按界面语言取。 */
+  var cn=nbCnDefault(ENV);
+  var list=(cn?HOLI.cn:HOLI.us)||[], box=document.getElementById("holi"); if(!box) return;
+  var hs=document.getElementById("secHoli"); if (hs) hs.textContent=t(cn?"secHoliCn":"secHoliUs");
+  var now=new Date(), t0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+  var up=list.map(function(h){ var p=h[0].split("-"); var d=new Date(+p[0],+p[1]-1,+p[2]);
+      return {n:(LANG==="zh"?h[1]:h[2]),d:d,k:Math.round((d.getTime()-t0)/86400000)}; }).filter(function(h){return h.k>=0;}).slice(0,4);
+  document.getElementById("holiSum").textContent = up.length ? t("holiSum") : "";
+  box.innerHTML = up.map(function(h,i){
+    var wk=(I18N[LANG]||I18N.en).wk[h.d.getDay()], w=Math.max(Math.min(h.k,180)/180*100,3);
+    return '<div class="hrow'+(i===0?" first":"")+'"><div class="g"><span class="nm">'+esc(h.n)+'</span>'+
+      '<span class="dt">'+esc(fmtDate(h.d))+' · '+wk+'</span>'+
+      '<div class="br"><i style="width:'+w.toFixed(0)+'%"></i></div></div>'+
+      '<div class="n">'+(h.k===0?esc(t("holiToday")):h.k+'<small>'+esc(tp("day",h.k).trim())+'</small>')+'</div></div>';
+  }).join("");
+}
+function paint(){
+  document.title=t("title");
+  document.querySelectorAll("[data-i]").forEach(function(el){
+    var k=el.dataset.i;
+    if (k==="foot") el.innerHTML=t(k); else el.textContent=t(k);
+  });
+  /* 右上角「重新读取」圆钮:只画图标(本包无时间可锚),无障碍名随语言。 */
+  var fr=document.getElementById("fresh");
+  xbAt.set(fr,null); fr.setAttribute("aria-label",t("reload"));
+  paintSegs(); paintList(); paintHead(); paintHoli();
+}
+/* 容器内导航走 xbridge.route(裸 path 会被补成 numable://<self>/page<path>);拿不到桥时回落相对路径 ——
+   ⚠️ 这里原本写的是 `xbridge.navigate`:**桥上没有这个方法**(全表只有 route),`if(xbridge.x)` 守卫不报错,
+      于是一直静默走相对路径兜底。三 native 的 WebView 有真 URL 还能跳过去;**Win 的 H5 页是 srcdoc iframe**,
+      相对路径按宿主 origin 解析 → 把整个 App 装进容器 iframe(2026-09-11 用户报「点详情崩溃」的真因)。 编辑器预览与
+   浏览器里没有桥,但那两处也该点得开。 */
+function go(path, q){
+  q = q || "";
+  try{ if (window.xbridge && xbridge.route) return xbridge.route(path+q); }catch(e){}
+  location.href = "../"+path.replace(/^\//,"")+"/index.html"+q;
+}
+document.addEventListener("click", function(e){
+  /* 右上角「重新读取」圆钮:拿设备时钟重算三段进度与节假日,再重读倒数日列表
+     (loadList 末尾自带 paintList + paintHead;没有桥时它直接返回,故先画一遍兜底)。
+     ⚠️ 判据用 closest 不用 e.target.id —— 按钮里是 xbAt 画的 svg,点在它身上 e.target 不是按钮(G12)。 */
+  if (e.target.closest && e.target.closest("#fresh")){
+    paintSegs(); paintHoli(); paintList(); paintHead(); void loadList(); return; }
+  var seg = e.target.closest && e.target.closest("[data-k]");
+  if (seg){ go("/span","?k="+encodeURIComponent(seg.dataset.k)); return; }
+  var row = e.target.closest && e.target.closest("[data-id]");
+  if (row){ go("/count","?id="+encodeURIComponent(row.dataset.id)); return; }
+  if (e.target.closest && e.target.closest("#toCount")){ go("/count",""); return; }
+  /* 加卡入口 = **一个按钮**(§8.1a)。⚠️ 这里**不带 params**:首页没有「当前这一个倒数日」
+     (配置器已经搬走),硬塞一个默认日期进去就是替用户回答他还没做的选择。
+     带日期的加卡入口在 `/count` —— 那一页讲的就是他刚填的那个日子。
+     ⚠️ 判据用 closest 而不是 e.target.id:按钮里有 `<span class="pk">＋</span>` 等子元素,
+     点在它们身上时 e.target 是那个 span、id 为空 —— 会「点了没反应」且不报错(G12)。 */
+  if (e.target.closest && e.target.closest("#pickw")){
+    if (window.xbridge && xbridge.pickWidgets) xbridge.pickWidgets();
+    return; }
+});
+
+var ENV={};
+/* 启动顺序照 market boot()(doc/overseas-first.md §1–§2):先读宿主写好的 <html data-lang>,
+   再等 appInfo(nbInfo 处理信封);**缺省英文**。 */
+(async function boot(){
+  var de=document.documentElement;
+  if (de.getAttribute("data-lang")) LANG=nbLang(de.getAttribute("data-lang"));
+  ENV=await nbInfo();
+  applyTheme(ENV.theme || de.getAttribute("data-theme") || undefined);
+  LANG=nbLang(ENV.language||ENV.locale);
+  paint();
+  await loadList();
+})();
+</script>
+</body></html>

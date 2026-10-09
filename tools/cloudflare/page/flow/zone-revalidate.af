@@ -1,0 +1,207 @@
+{
+  "_note": "域名页首屏三态的中间那一行,同首页 revalidate.af。生成器 gen_cloudflare.py。\n**挂在 `root.events.onLoad`**(全生命周期恰好一次,不会自激)。⚠️ 绝不能改挂 onVisible。\n三块 Canvas 的键 = zone.df 当前键 + 后缀,各按 ttl 判。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "st",
+        "value": "${stale}"
+      },
+      "_note": "入参先落地(§9.5 #3)。拿不到就当 0(不校新)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isStale",
+        "value": "$[parseNumber::(${st},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "${ckey}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "now",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasK",
+        "value": "$[if::(gt::(length::(${k}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st_zone",
+        "value": "$[if::(eq::(${isStale},1),${hasK},0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${st_zone},1),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "${k}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k_t",
+        "value": "$[connect::(${k},_t)]"
+      }
+    },
+    {
+      "id": "h_t",
+      "action": "data.get",
+      "params": {
+        "key": "${k_t}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ts_t",
+        "value": "$[parseNumber::(${h_t.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st_t",
+        "value": "$[if::(gt::(${ts_t},0),if::(ge::(calc::(${now}-${ts_t}),300000),1,0),0)]"
+      },
+      "_note": "没有缓存不算旧 —— 那一趟本来就是前台真取数,再校新一次 = 白打一轮网络。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${st_t},1),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "${k_t}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k_c",
+        "value": "$[connect::(${k},_c)]"
+      }
+    },
+    {
+      "id": "h_c",
+      "action": "data.get",
+      "params": {
+        "key": "${k_c}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ts_c",
+        "value": "$[parseNumber::(${h_c.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st_c",
+        "value": "$[if::(gt::(${ts_c},0),if::(ge::(calc::(${now}-${ts_c}),900000),1,0),0)]"
+      },
+      "_note": "没有缓存不算旧 —— 那一趟本来就是前台真取数,再校新一次 = 白打一轮网络。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${st_c},1),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "${k_c}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k_m",
+        "value": "$[connect::(${k},_m)]"
+      }
+    },
+    {
+      "id": "h_m",
+      "action": "data.get",
+      "params": {
+        "key": "${k_m}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ts_m",
+        "value": "$[parseNumber::(${h_m.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st_m",
+        "value": "$[if::(gt::(${ts_m},0),if::(ge::(calc::(${now}-${ts_m}),1800000),1,0),0)]"
+      },
+      "_note": "没有缓存不算旧 —— 那一趟本来就是前台真取数,再校新一次 = 白打一轮网络。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${st_m},1),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "${k_m}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "有任何一块旧了才重载,且只重载一次。键为空(zone.df 没跑完过)什么都不做。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${hasK},1),if::(gt::(calc::(${st_zone}+${st_t}+${st_c}+${st_m}),0),1,0),0)]"
+      },
+      "items": [
+        {
+          "action": "xpage.reloadPage"
+        }
+      ]
+    }
+  ]
+}

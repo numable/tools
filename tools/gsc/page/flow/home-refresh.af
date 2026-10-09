@@ -1,0 +1,42 @@
+{
+  "_note": "下拉刷新 = 穿透缓存真取数。⚠️ 键读 `.df` 写下的 `c.gsc.home._cur`,**不在这里重算** —— 判据抄两份就会有一天「删的键」与「渲的键」不是同一个,那时下拉安静地刷不动而日志全绿。\n⚠️ `onRefresh` 一旦声明就完全接管下拉,那句 reloadPage 必须自己写。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "点下去先震一下:RCN 没有按压态,重载要 ~250ms 才有画面变化(G22)。",
+      "action": "ui.haptic"
+    },
+    {
+      "id": "curKey",
+      "action": "data.get",
+      "params": {
+        "key": "c.gsc.home._cur",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "${curKey}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${k}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "${k}"
+          }
+        }
+      ]
+    },
+    {
+      "action": "xpage.reloadPage"
+    }
+  ]
+}

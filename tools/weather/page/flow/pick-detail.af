@@ -1,0 +1,94 @@
+{
+  "_note": "详情页的加卡:与 pick.af 逐字同构,只有城市的来源不同 —— 这里吃**本页的** lat/lon/city(路由 query),\npick.af 那边取 `data.cities` 的第一座。在详情页上复用 pick.af 就会加出「列表第一座城市」,\n而用户明明正在看长沙 —— 与 v49 修掉的 onClick 是同一个病(卡片与它说的城市对不上),别再合并回去。\n⚠️ 首个 action 是 `ui.haptic`(G22):点下去到面板弹出之间有一段空白,不给触觉用户会再点一次。\n⚠️ 流里**绝不能**在这之后接「已添加」——落盘只发生在面板里的原生按钮上,用户可能翻两下就关掉。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "ui.haptic"
+    },
+    {
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。",
+      "op": "set",
+      "props": {
+        "key": "lat",
+        "value": "${lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lon",
+        "value": "${lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "city",
+        "value": "${city}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "picks",
+        "value": [
+          {
+            "id": "now",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "today",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "hours",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "week",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "air",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "sun",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          }
+        ]
+      },
+      "_note": "⚠️ 候选先经 op:set 落成数组、再整体引用 —— 带 ${} 的嵌套字面量直接写进 action params\n全仓没有先例,某端不递归求值时表现是「加出一张没有参数的空卡」且不报错。"
+    },
+    {
+      "action": "widget.pick",
+      "params": {
+        "items": "${picks}"
+      }
+    }
+  ]
+}

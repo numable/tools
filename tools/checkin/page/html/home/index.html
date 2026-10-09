@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<!--
+  首页(路由 /)。通用打卡:同时打多件事,每件事各自一份记录、自己的图标 / 主题色 / 每日目标。
+
+  ⚠️ 2026-08-21 起首页**就是打卡的地方**(A 版):右侧那颗圆可点即记一笔。
+  此前刻意不在首页打卡,理由是「列表行的默认语义是导航,同一行两种语义误触代价不对称」——
+  那条顾虑成立,但结论下错了:正解不是取消打卡,而是给它**专用命中区**(44pt 见方的
+  `.tapwrap`,与整行导航互不重叠)+ **撤销就在原地**。缺了后者只做前者,那条顾虑才真的成立。
+  整行仍然是「进详情」。
+
+  ⚠️ **两型分叉**(同轮):事项分「做了就算」(check,二值 toggle)与「要数次数」(count,+1)。
+  此前所有事项共用一套「次 / 达标日」双口径,得配一段说明书才讲得清 —— 而需要解释的交互
+  就是还没收敛。现在类型决定口径与文案:check 型从头到尾不出现「次」「达标日」「每日目标」。
+  ⚠️ 老数据没有 `kind`,**读侧推断、不写盘迁移**:`goal>1 → count`,否则 check。
+  check 型的 log 按天去重**只在读的时候做**(`effLog`)—— 历史里一天多条的记录原样留在盘上,
+  改回 count 就又都在了。
+
+  ⚠️ 为什么整包页面都是 html:写入之后必须重算派生量(连续天数、平均间隔、最长间隔都要遍历
+  相邻的**达标日**),而 flow 没有 map/filter。
+
+  ⚠️ 事项上限 8 件,来自平台:read.df 只能按固定下标摊开(没有 map)。改上限要同时改
+  read.df(l0..l7)、today.df(6 行)与本文件的 MAX 三处。
+
+  ⚠️ 输入控件字号必须 ≥16px:iOS WKWebView 聚焦会放大整页且不回弹(memory [[ios-webview-focus-zoom-16px]])。
+  CSP:离线 html 被注入 `default-src 'self'; connect-src 'none'` —— 本页全自包含,零外部引用。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Check-in</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --tile:#E7E9EE;--tile2:#EEF0F4}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--tile:#20232A;--tile2:#252930}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+/* §1 页头三段:大标题 + 时效锚(右上角) / 副标 = 此刻的状态。
+   本页的副标 `今天 09-10 · 已完成 0/8` 是 page-design-system §1.1 点名的范式,原样保留。 */
+.hd{display:flex;align-items:flex-start;gap:10px}
+.hd h1{flex:1 1 auto;min-width:0}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+/* 右上角 = 只有图标的「重新读取」圆钮(`.xb-at.ic`),样式全在 xb:anchor 块(tools/infosource/mk_anchor.py)。
+   本包零网络,没有「取数时间」可言(card-design-system §3:无时效意义不放假锚),故**不写时间**;
+   按钮本身留着 —— 在桌面小组件上打过卡再回来,点它把盘上的最新记录重读一遍。 */
+.sub{color:var(--sub);font-size:13px;margin-bottom:14px}
+/* §2 段标题 = 左名字 + 右摘要,13pt/Medium/sub。 */
+.sec{font-size:13px;color:var(--sub);font-weight:500;margin:20px 2px 8px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.card{background:var(--card);border-radius:14px;padding:6px;margin-bottom:10px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05)}
+html[data-theme="dark"] .card{box-shadow:none}
+/* 一行 = 一件事，整行只做一件事:进详情。 */
+.it{display:flex;align-items:center;gap:10px;padding:12px 8px;border-radius:12px;cursor:pointer}
+.it+.it{margin-top:2px}
+.ic{flex:0 0 auto;width:34px;height:34px;border-radius:10px;display:flex;
+  align-items:center;justify-content:center;font-size:18px}
+.ic svg{width:18px;height:18px;display:block}
+.it .grow{flex:1 1 auto;min-width:0}
+.it b{display:block;font-size:16px;font-weight:600;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.it .d{color:var(--sub);font-size:12px;margin-top:2px}
+/* §0 结论行:与 streak 卡上第二行**同一句话**(见 concludeOf 的注)。
+   卡片说「距最佳纪录还差 19 天」而页面上一个字都没有,是这一轮要根治的病。 */
+.it .cc{color:var(--sub);font-size:11.5px;margin-top:3px;line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* —— 今天那一颗:**可点的按钮**，不再是只读指示 ——
+   这是本轮最大的语义变化。整行仍然是「进详情」，而这颗有自己的命中区(44pt 见方，
+   与整行导航互不重叠)；勾选型再点一次即撤销，计次型点一次 +1。
+   ⚠️ 误触不靠确认框兜:一次误点的代价是「今天多了一条记录」，配确认框会让每天的正常打卡
+   都变成两步。兜法是**撤销就在原地**(勾选型)或**4 秒撤销条**(计次型)。 */
+.tapwrap{flex:0 0 auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center}
+.tap{width:38px;height:38px;border-radius:19px;border:0;padding:0;cursor:pointer;
+  background:transparent;position:relative;display:flex;align-items:center;justify-content:center;
+  font-family:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
+.tap svg{position:absolute;inset:0;width:38px;height:38px;transform:rotate(-90deg)}
+/* ⚠️ §4.1(2026-09-10):这颗圆是整页**唯一的主操作**,而它此前是一个**空心灰圈** ——
+   无实底、无描边强调、无图标,判据「不读文字能不能认出它可点」直接不成立。
+   现在未打卡态 = 源色淡底 + 源色描边 + 源色 ✓;已打卡态 = 源色实底 + 白 ✓。
+   ⚠️ 两态必须能分,且**已打卡态不能看起来像禁用** —— 所以已打卡是最强的那一档(实底),
+      不是把它调灰。灰=禁用是平台通用语义,拿它表达「做完了」正好说反。 */
+.tap .trk{fill:none;stroke:currentColor;stroke-width:2.5;opacity:.42}
+/* 淡底:圆有了「面」才像控件;它在 .on 时被 .fill 的实底整个盖住,不必单独藏。 */
+.tap .base{position:absolute;left:3px;top:3px;right:3px;bottom:3px;border-radius:16px;
+  background:currentColor;opacity:.12;display:block}
+/* 未打卡时那枚源色 ✓ —— 「点这里就是打勾」。打上之后交给 .mk 那枚白 ✓(带庆祝动画)。 */
+.tap .gh{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:currentColor;font-size:16px;font-weight:700;line-height:1;
+  transition:transform .18s cubic-bezier(.32,.72,0,1),opacity .12s ease}
+.tap.on .gh{opacity:0;transform:scale(.55)}
+.tap .arc{fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;
+  stroke-dasharray:106.8;stroke-dashoffset:106.8;
+  transition:stroke-dashoffset .18s cubic-bezier(.4,0,.2,1)}
+.tap .fill{position:absolute;left:3px;top:3px;right:3px;bottom:3px;border-radius:16px;
+  background:currentColor;transform:scale(.2);opacity:0;
+  transition:transform .26s cubic-bezier(.32,.72,0,1),opacity .14s ease}
+.tap .mk{position:relative;color:#FFF;font-size:17px;font-weight:700;line-height:1;
+  transform:scale(.3);opacity:0;
+  transition:transform .26s cubic-bezier(.32,.72,0,1) .08s,opacity .12s ease .08s}
+.tap .cnt{position:relative;color:currentColor;font-size:13px;font-weight:700;
+  font-variant-numeric:tabular-nums;line-height:1}
+.tap .cnt s{text-decoration:none;font-size:9px;opacity:.6}
+.tap.on .arc{stroke-dashoffset:0}
+.tap.on .fill{transform:scale(1);opacity:1}
+.tap.on .mk{transform:scale(1);opacity:1}
+.tap.on .cnt{color:#FFF}
+/* 撤销时反向且更快，且**不给 overshoot** —— 撤销不该被庆祝。 */
+.tap.undoing .arc{transition-duration:.14s}
+.tap.undoing .fill{transition:transform .16s ease,opacity .12s ease}
+.tap.undoing .mk{transition:transform .1s ease,opacity .08s ease}
+
+/* 近 14 天的点条 —— 替掉了原先那句描述文案。趋势不用读，扫一眼就有。 */
+.strip{display:flex;gap:3px;margin-top:6px}
+.strip i{width:6px;height:6px;border-radius:3px;background:var(--line);display:block}
+.strip i.on{background:currentColor}
+.strip i.half{background:currentColor;opacity:.42}
+.strip i.today{box-shadow:0 0 0 1.5px var(--card),0 0 0 3px currentColor}
+
+/* 今天已经记过的塌到列表后半段 —— 注意力落在还没做的事上。
+   ⚠️ **刻意不把它调暗**:打完卡那一刻是正反馈,把成果调灰是反的;而且「记了 / 没记」
+   靠那颗圆的实心 ✓ 与空心环已经分得很清,再叠一层透明度是重复计费。排序本身就够了。 */
+.empty{color:var(--sub);font-size:13px;text-align:center;padding:20px 8px}
+/* §3 用法说明紧贴它所描述的那组元素之后,11pt —— 它是脚注不是内容。
+   此前这几句和「不联网 / 不上传」挤在页尾同一段里,离那颗要解释的圆有整整一屏。 */
+.use{color:var(--sub);font-size:11px;margin:8px 2px 0;line-height:1.6}
+/* 列表尾部的「添加位」—— 与 today 卡的空槽同一个语汇（标准 §4.2a：空槽不是空白，是入口） */
+.new{display:flex;align-items:center;gap:10px;padding:12px 8px;border-radius:12px;
+  color:var(--sub);font-size:14px;cursor:pointer}
+.new i{flex:0 0 auto;width:34px;height:34px;border-radius:10px;border:1px dashed var(--line);
+  display:flex;align-items:center;justify-content:center;font-size:18px;font-style:normal;
+  line-height:1;color:var(--sub)}
+
+/* —— 页内自绘 sheet ——
+   ⚠️ 刻意**不**用平台弹窗、也不用 startPageForResult：页内自绘天然收在容器视图里
+   （CLAUDE.md「浮层容器边界」§4），大屏上不会溢出到窗口。
+   动画照同一条契约：遮罩独立淡入淡出，卡片贴底滑上滑下（进退对称）。 */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.42);opacity:0;pointer-events:none;
+  transition:opacity var(--xb-mask) ease;z-index:10}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);z-index:11;
+  border-radius:18px 18px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));
+  transform:translateY(110%);transition:transform var(--xb-sheet) var(--xb-ease-sheet);
+  box-shadow:0 -8px 30px rgba(0,0,0,.14);max-height:86vh;overflow-y:auto}
+html[data-theme="dark"] .sheet{box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+body.open .mask{opacity:1;pointer-events:auto}
+body.open .sheet{transform:translateY(0)}
+.sheet h2{font-size:17px;margin:0 0 4px;font-weight:700}
+.sheet .d{color:var(--sub);font-size:12px;margin-bottom:14px}
+.sheet label{display:block;font-size:12px;color:var(--sub);margin:14px 0 8px}
+/* font-size 必须 ≥16px：iOS WebView 聚焦小于 16px 的 input 会把整页放大且不回弹 */
+.name{width:100%;border:1px solid var(--line);background:transparent;
+  color:var(--fg);border-radius:12px;padding:13px 14px;font-size:16px;outline:none}
+.pick{display:flex;flex-wrap:wrap;gap:8px}
+.pick button{border:2px solid transparent;background:var(--tile);border-radius:8px;
+  width:40px;height:40px;font-size:19px;line-height:1;cursor:pointer;padding:0;color:var(--fg)}
+.pick button svg{width:20px;height:20px;display:block;margin:auto}
+.pick button[aria-pressed="true"]{border-color:var(--fg)}
+.pick .sw{border-radius:20px}
+.acts{display:flex;gap:10px;margin-top:20px}
+.btn{flex:1 1 0;border:0;color:#fff;font-size:16px;font-weight:700;
+  border-radius:14px;padding:14px 16px;cursor:pointer}
+.btn.ghost{background:var(--tile);color:var(--fg)}
+.btn[disabled]{opacity:.5}
+.foot{color:var(--sub);font-size:11px;margin-top:24px;line-height:1.7}
+
+/* —— 4 秒撤销条(只服务计次型)——
+   判据:**能原地逆的不给撤销条，不能原地逆的必须给**。勾选型再点一次就是撤销，按钮自己就是
+   撤销入口，再摞一条 toast 只是噪音；而计次型 +1 之后同一颗圆已经被「再 +1」占住了，
+   撤销无处安放，只好另找地方。倒计时环必须可见 —— 看不见的倒计时等于没有倒计时。 */
+.undock{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9}
+.undo{display:flex;align-items:center;gap:11px;background:var(--fg);color:var(--bg);
+  border-radius:13px;padding:12px 14px;font-size:13px;
+  transform:translateY(24px);opacity:0;pointer-events:none;
+  transition:transform var(--xb-sheet) var(--xb-ease-sheet),opacity var(--xb-mask) ease;
+  box-shadow:0 6px 22px rgba(0,0,0,.18)}
+.undo.show{transform:translateY(0);opacity:1;pointer-events:auto}
+.undo .msg{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.undo button{border:0;background:transparent;color:var(--bg);font-family:inherit;font-size:13px;
+  font-weight:700;cursor:pointer;padding:4px 2px;display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.undo .ring{width:17px;height:17px;flex:0 0 auto}
+.undo .ring svg{width:17px;height:17px;transform:rotate(-90deg)}
+.undo .ring circle{fill:none;stroke:currentColor;stroke-width:2.5;opacity:.4}
+.undo .ring .c2{opacity:1;stroke-dasharray:44;stroke-dashoffset:0}
+
+/* 新建 sheet 里的「怎么记」二选一 */
+.kinds{display:flex;flex-direction:column;gap:8px}
+.kind{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;
+  border:1.5px solid var(--line);background:transparent;cursor:pointer;text-align:left;
+  font-family:inherit;color:var(--fg);width:100%}
+.kind[aria-pressed="true"]{border-color:var(--fg)}
+.kind i{flex:0 0 auto;width:30px;height:30px;border-radius:9px;background:var(--tile);
+  display:flex;align-items:center;justify-content:center;font-style:normal;font-size:15px}
+.kind .g{flex:1 1 auto;min-width:0}
+.kind b{display:block;font-size:15px;font-weight:600}
+.kind span{display:block;color:var(--sub);font-size:11.5px;margin-top:1px}
+.kind em{flex:0 0 auto;width:18px;height:18px;border-radius:9px;border:1.5px solid var(--line);
+  font-style:normal;display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent}
+.kind[aria-pressed="true"] em{border-color:transparent;color:#FFF}
+.step{display:flex;align-items:center;gap:14px;margin-top:12px}
+/* ⚠️ `[hidden]` 只是 UA 的 `display:none`,**优先级低于类选择器** —— `.step{display:flex}`
+   会把它盖掉,于是 `el.hidden=true` 设了跟没设一样(选「做了就算」时次数 stepper 照样露着,
+   而 JS 里查 `.hidden` 又是 true,对不上)。凡是给带 display 的类加 hidden,都要补这一条。 */
+.step[hidden]{display:none}
+.step button{border:0;background:var(--tile);color:var(--fg);width:40px;height:40px;
+  border-radius:20px;font-size:19px;line-height:1;cursor:pointer;font-family:inherit}
+.step b{font-size:18px;font-variant-numeric:tabular-nums;min-width:48px;text-align:center}
+.step span{color:var(--sub);font-size:12px}
+.state{color:var(--sub);font-size:13px;padding:14px;text-align:center}
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.it,.new,.xb-tap{position:relative}
+.it::after,.new::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.it:active::after,.new:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.fresh,.tap,.btn,.step button,.pick button,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.fresh:active,.tap:active,.btn:active,.step button:active,.pick button:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style><!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+  <div class="hd">
+    <h1 data-i="title"></h1>
+    <button class="xb-at" id="fresh" type="button"></button>
+  </div>
+  <div class="sub" id="sub"></div>
+
+  <div class="card" id="listBox"></div>
+  <!-- §3:用法说明紧贴它所描述的那组元素(上面那张列表卡)之后,11pt。
+       ⚠️ 一件事都没有时整句隐藏 —— 它讲的是「右边那颗圆」,而那时一颗圆都还不存在,
+       对着空列表解释一个看不见的控件,比不解释更让人糊涂。 -->
+  <div class="use" id="useLine" data-i="use" hidden></div>
+
+  <!-- 加卡入口 = **一个按钮**(§8.1a),版式由 tools/infosource/mk_addbtn.py 定(§8.1b)。
+       首页只列**不需要先指定事项**的卡;streak/recent/rhythm/overview 四张都吃 itemId,
+       归各自的事项详情页(§8.1 的判据:加这张卡需不需要先指定一个对象)。
+       ⚠️ 一件事都没有时整段隐藏 —— 那时候聚合卡渲出来是空的,加了也是白加(§8.1a 纪律 4 / G12)。 -->
+  <div id="addWrap" hidden>
+    <!-- 加卡按钮不配段落标题(§8.1b):按钮自己已经在说这件事 -->
+    <button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg">
+      <b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button>
+  </div>
+
+  <!-- §3:数据来源与隐私恒在**页尾**,11pt。刻意不再给它一个「关于」段标题 ——
+       段标题的右边那一格要能给出这一段的答案,而一段隐私说明没有答案可给
+       (page-design-system §2.1:实在没有摘要可给的段落,考虑它是不是不该单独成段)。 -->
+  <div class="foot" data-i="foot"></div>
+
+  <div class="undock"><div class="undo" id="undo">
+    <span class="msg" id="undoMsg"></span>
+    <button id="undoBtn">
+      <span class="ring"><svg viewBox="0 0 17 17"><circle cx="8.5" cy="8.5" r="7"></circle>
+        <circle class="c2" id="undoCd" cx="8.5" cy="8.5" r="7"></circle></svg></span>
+      <span id="undoTxt"></span>
+    </button>
+  </div></div>
+
+  <div class="mask" id="mask"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true">
+    <h2 data-i="newT"></h2>
+    <div class="d" id="newHint"></div>
+    <input class="name" id="newName" maxlength="12" enterkeyhint="done">
+    <label data-i="fHow"></label>
+    <div class="kinds">
+      <button class="kind" id="kCheck" data-kind="check" aria-pressed="true">
+        <i>✓</i><span class="g"><b data-i="kCheckT"></b><span data-i="kCheckD"></span></span><em>✓</em>
+      </button>
+      <button class="kind" id="kCount" data-kind="count" aria-pressed="false">
+        <i>＃</i><span class="g"><b data-i="kCountT"></b><span data-i="kCountD"></span></span><em>✓</em>
+      </button>
+    </div>
+    <div class="step" id="goalStep" hidden>
+      <button id="gDec">−</button><b id="gVal">2</b><button id="gInc">＋</button>
+      <span id="gHint"></span>
+    </div>
+    <label data-i="fIcon"></label>
+    <div class="pick" id="icons"></div>
+    <label data-i="fColor"></label>
+    <div class="pick" id="cols"></div>
+    <div class="acts">
+      <button class="btn ghost" id="newCancel"></button>
+      <button class="btn" id="newBtn"></button>
+    </div>
+  </div>
+
+<script>
+/* 首页加卡候选 = 不需要先指定事项的聚合卡。新增这类卡时要往这里补一个 id。
+   ⚠️ 吃 itemId 的卡不进这个表 —— 它们归事项详情页。 */
+var PICKS = ["progress","today","week","month"];
+var MAX = 8;               /* 与 read.df 的 l0..l7 一一对应，改一处必须改三处 */
+
+/* 六色调色板 —— 与生成 flow / RCN 的 palette.py **同一张表**。
+   ⚠️ 改色要两边一起改：这里管页面，那边管卡片，对不上就是「App 里紫、桌面上绿」。
+   每色两档（浅|深）：深色档要在 #15171A 上够亮，不是同一个色摆两遍（标准 §4.2a 第 3 条）。 */
+var PAL={1:["#2E9E6B","#45C793"],2:["#2F6FE4","#5C9BFF"],3:["#7A5AF8","#A78BFA"],
+         4:["#E07B39","#F0A05F"],5:["#D2536D","#E87A93"],6:["#0E9AA7","#35C2CE"]};
+/*ICONS:BEGIN*//* 由 tools/infosource/gen_checkin_icons.py 生成,四页逐字同源,勿手改 */
+var ICONS=["target", "sunrise", "footprints", "droplet", "book-open", "flower-2", "dumbbell", "pen-line", "salad", "pill", "cigarette-off", "bed", "coffee", "sprout", "guitar", "paintbrush"];
+var IC={"target": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\" /><circle cx=\"12\" cy=\"12\" r=\"6\" /><circle cx=\"12\" cy=\"12\" r=\"2\" /></svg>", "sunrise": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2v8\" /><path d=\"m4.93 10.93 1.41 1.41\" /><path d=\"M2 18h2\" /><path d=\"M20 18h2\" /><path d=\"m19.07 10.93-1.41 1.41\" /><path d=\"M22 22H2\" /><path d=\"m8 6 4-4 4 4\" /><path d=\"M16 18a4 4 0 0 0-8 0\" /></svg>", "footprints": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z\" /><path d=\"M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z\" /><path d=\"M16 17h4\" /><path d=\"M4 13h4\" /></svg>", "droplet": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" /></svg>", "book-open": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 7v14\" /><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" /></svg>", "flower-2": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 5a3 3 0 1 1 3 3m-3-3a3 3 0 1 0-3 3m3-3v1M9 8a3 3 0 1 0 3 3M9 8h1m5 0a3 3 0 1 1-3 3m3-3h-1m-2 3v-1\" /><circle cx=\"12\" cy=\"8\" r=\"2\" /><path d=\"M12 10v12\" /><path d=\"M12 22c4.2 0 7-1.667 7-5-4.2 0-7 1.667-7 5Z\" /><path d=\"M12 22c-4.2 0-7-1.667-7-5 4.2 0 7 1.667 7 5Z\" /></svg>", "dumbbell": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.4 14.4 9.6 9.6\" /><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\" /><path d=\"m21.5 21.5-1.4-1.4\" /><path d=\"M3.9 3.9 2.5 2.5\" /><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\" /></svg>", "pen-line": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\" /><path d=\"M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z\" /></svg>", "salad": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 21h10\" /><path d=\"M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z\" /><path d=\"M11.38 12a2.4 2.4 0 0 1-.4-4.77 2.4 2.4 0 0 1 3.2-2.77 2.4 2.4 0 0 1 3.47-.63 2.4 2.4 0 0 1 3.37 3.37 2.4 2.4 0 0 1-1.1 3.7 2.51 2.51 0 0 1 .03 1.1\" /><path d=\"m13 12 4-4\" /><path d=\"M10.9 7.25A3.99 3.99 0 0 0 4 10c0 .73.2 1.41.54 2\" /></svg>", "pill": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /><path d=\"m8.5 8.5 7 7\" /></svg>", "cigarette-off": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 12H3a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h13\" /><path d=\"M18 8c0-2.5-2-2.5-2-5\" /><path d=\"m2 2 20 20\" /><path d=\"M21 12a1 1 0 0 1 1 1v2a1 1 0 0 1-.5.866\" /><path d=\"M22 8c0-2.5-2-2.5-2-5\" /><path d=\"M7 12v4\" /></svg>", "bed": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 4v16\" /><path d=\"M2 8h18a2 2 0 0 1 2 2v10\" /><path d=\"M2 17h20\" /><path d=\"M6 8v9\" /></svg>", "coffee": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M10 2v2\" /><path d=\"M14 2v2\" /><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\" /><path d=\"M6 2v2\" /></svg>", "sprout": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7 20h10\" /><path d=\"M10 20c5.5-2.5.8-6.4 3-10\" /><path d=\"M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z\" /><path d=\"M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z\" /></svg>", "guitar": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m11.9 12.1 4.514-4.514\" /><path d=\"M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z\" /><path d=\"m6 16 2 2\" /><path d=\"M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z\" /><circle cx=\"11.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\" /></svg>", "paintbrush": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m14.622 17.897-10.68-2.913\" /><path d=\"M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z\" /><path d=\"M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15\" /></svg>"};
+var EMO={"🎯": "target", "🌅": "sunrise", "🏃": "footprints", "💧": "droplet", "📖": "book-open", "🧘": "flower-2", "💪": "dumbbell", "✍️": "pen-line", "🥗": "salad", "💊": "pill", "🚭": "cigarette-off", "🛏": "bed", "☕": "coffee", "🌱": "sprout", "🎸": "guitar", "🧹": "paintbrush"};
+function icName(v){ return IC[v]?v:(EMO[v]||"target"); }
+function icSvg(v){ return IC[icName(v)]; }
+/*ICONS:END*/
+
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+var I18N = {
+  zh:{title:"打卡",secAbout:"关于",reload:"重新读取",
+      pickT:"添加组件",pickS:"在面板里挑，确认后加到仪表盘",
+      newT:"添加事项",newRow:"添加事项",newCancel:"取消",newBtn:"添加",
+      fIcon:"图标",fColor:"主题色",fHow:"怎么记",
+      kCheckT:"做了就算",kCheckD:"一天一次，点一下打勾",
+      kCountT:"要数次数",kCountD:"比如喝水 8 杯、背 20 个单词",
+      gHint:"次 / 天",
+      today:"今天",doneOf:"已完成 {a}/{b}",
+      empty:"还没有事项，点下方的 ＋ 添加一件想坚持的事",
+      newPh:"比如：早起 / 跑步 / 读书",
+      newHint:"起个一眼认得出的名字。最多 {n} 件。",
+      full:"最多 {n} 件事项",dup:"已经有同名事项了",needName:"先给这件事起个名",
+      undoOne:"{n} · 记下第 {c} 次",undoBtn:"撤销",
+      notX:"当前不在 XBundle 环境中",
+      /* ⚠️ 下面五个词与 xWidget/rc/streak.rcn 的 i18n **逐字同源**:同一句结论在卡上与页上
+         必须是同一句话。改一处必须改两处(页与卡之间没有共享词表)。 */
+      gapLbl:"距最佳纪录还差",atBest:"已是你的最佳纪录",bestLbl:"最佳纪录",
+      notToday:"今天还没打卡",dU:" 天",
+      use:"点右侧的圆圈即可记录一次：「做了就算」的事项再点一次可撤销；「要数次数」的事项每点一次加一次，4 秒内可撤销。点击某一行可查看日历、修改记录或删除。",
+      foot:"这个工具不联网，记录只保存在这台设备上，不会上传到任何服务器。数据会随 App 的「备份与还原」一起备份。"},
+  en:{title:"Check-in",secAbout:"About",reload:"Reload",
+      pickT:"Add widgets",pickS:"Pick in the panel, then confirm",
+      newT:"Add a habit",newRow:"Add a habit",newCancel:"Cancel",newBtn:"Add",
+      fIcon:"Icon",fColor:"Colour",fHow:"How to track",
+      kCheckT:"Just did it",kCheckD:"Once a day — tap to tick",
+      kCountT:"Count it",kCountD:"e.g. 8 glasses of water, 20 words",
+      gHint:"per day",
+      today:"Today",doneOf:"{a} of {b} done",
+      empty:"No habits yet — tap ＋ below to add one",
+      newPh:"e.g. Run / Read / Wake early",
+      newHint:"Pick a name you'll recognise at a glance. Up to {n}.",
+      full:"At most {n} habits",dup:"That name is already taken",needName:"Give it a name first",
+      undoOne:"{n} · logged #{c}",undoBtn:"Undo",
+      notX:"Not running inside XBundle",
+      gapLbl:"To your best:",atBest:"Your best streak yet",bestLbl:"Best streak",
+      notToday:"Not logged today",dU:" d",
+      use:"Tap the circle on the right to log one. For \u201cJust did it\u201d habits, tap again to undo; for counted ones each tap adds one and you get 4 seconds to undo. Tap a row for the calendar, editing or delete.",
+      foot:"This tool doesn't use the network. Entries are stored only on this device and never uploaded to any server. They're included when you use Backup & Restore in the app."}
+};
+
+var LANG="en", DARK=false, ITEMS=[], BOOTED=false, NEW={icon:"target",pal:1,kind:"check",goal:2};
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键;缺键回落英文(doc/overseas-first.md §2) */
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c];});}
+function p2(n){return (n<10?"0":"")+n;}
+function fmtDay(ms){var d=new Date(ms);return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());}
+function dayMid(ms){var d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();}
+function accent(pal){ return (PAL[pal]||PAL[1])[DARK?1:0]; }
+function applyTheme(x){ DARK = x?x==="dark":matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme",DARK?"dark":"light");}
+function toast(m){if(window.xbridge&&xbridge.toast) xbridge.toast(m);}
+/* 震一下。⚠️ **必须探测再调** —— `xbridge.haptic` 是 2026-08-22 才加的桥方法,老版本 App 上它是
+   `undefined`,直接调 = TypeError,而这些调用点全在事件 handler 里 → 那一下点击整个哑掉,
+   看起来像「按钮坏了」而不是「没震」。同 toast/route 的既有姿态。
+   ⚠️ **写盘动作不在这里发** —— 它们走 flow 首位的 `ui.haptic`(save.af / items.af),
+   两边都发会撞在一起:原语层只有 80ms 节流,而「paint() + 跨桥 + AF 启动」经常超过 80ms,
+   于是变成一次动作听见两下含糊的响。**分工:写盘走 flow,不写盘走这里。** */
+function hap(k){if(window.xbridge&&xbridge.haptic) xbridge.haptic(k);}
+function newId(){return "k"+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36);}
+function go(u){ if(window.xbridge&&xbridge.route) xbridge.route(u); }
+
+/* 派生统计全在这里算完、整份写回 —— .df 没有 map/filter，而 JS 有。读侧（days.df / streak.df /
+   today.df）只做「查表 + 天数减法」。**两个页面各存一份逐字相同的实现**：页与页之间没有模块系统，
+   抽公共文件反而要多引一个资源。改动时两处必须一起改（home / item）。
+
+   ⚠️ 「达标日」= 当天次数 ≥ 每日目标。连续 / 平均间隔 / 最长间隔全部只串**达标日** ——
+   目标 3 次时只打 1 次不该算数，否则连续天数会把敷衍的一天也串进去。
+   ⚠️ 连续天数**不能存成天数**：它每过一个午夜就会变。这里只存 streakStart（当前这一段的起始
+   自然日，不随时间变），读侧投影成天数。best（历史最长）才是真正不随时间变的量，可以存。 */
+function computeStat(log, goal, meta){
+  goal = goal>=1 ? goal : 1;
+  var s={total:log.length,lastTs:log.length?log[0]:null,avgGap:null,maxGap:null,
+         streakStart:null,best:0,byDay:{}};
+  var cut=dayMid(Date.now())-400*864e5, i;   // byDay 只留近 400 天：卡片最远只看 30 天，
+  for(i=0;i<log.length;i++){                 // 不裁剪的话这张表会随年份无限长大（log 才是真源）
+    if(log[i]<cut) continue;
+    var k=fmtDay(log[i]); s.byDay[k]=(s.byDay[k]||0)+1;
+  }
+  var hit=[];                                 // 达标日，降序、去重
+  for(i=0;i<log.length;i++){
+    var mi=dayMid(log[i]);
+    if(hit.length&&hit[hit.length-1]===mi) continue;
+    if((s.byDay[fmtDay(log[i])]||0)>=goal) hit.push(mi);
+  }
+  var gaps=[];
+  for(i=0;i+1<hit.length;i++) gaps.push(Math.round((hit[i]-hit[i+1])/864e5));
+  if(gaps.length){
+    var sum=0,mx=0;
+    for(i=0;i<gaps.length;i++){sum+=gaps[i]; if(gaps[i]>mx) mx=gaps[i];}
+    s.avgGap=Math.round(sum/gaps.length*10)/10; s.maxGap=mx;
+  }
+  if(hit.length){
+    // ⚠️ 判「相邻」一律用 Math.round(差/864e5)===1，不用 ===864e5：夏令时那两天是 23/25 小时，
+    // 严格相等会在有 DST 的地区把连续段无声地切断。
+    var start=hit[0];
+    for(i=0;i+1<hit.length;i++){ if(Math.round((hit[i]-hit[i+1])/864e5)===1) start=hit[i+1]; else break; }
+    s.streakStart=start;
+    // ⚠️ `streakEnd` = 当前这段的**最后一个达标日**,与 `lastTs`(最后一条**记录**)不是一回事:
+    // 计次型今天打了 1 次没打够时,lastTs 是今天而 streakEnd 是昨天。用 lastTs 投影会把
+    // 今天白算一天 —— 表现为「连续 10 天」而「最长 9 天」,自相矛盾(2026-08-21 验出的既有 bug)。
+    s.streakEnd=hit[0];
+    var run=1,best=1;
+    for(i=0;i+1<hit.length;i++){
+      if(Math.round((hit[i]-hit[i+1])/864e5)===1){ run++; if(run>best) best=run; } else run=1;
+    }
+    s.best=best;
+  }
+  // 卡片要跟着事项的图标/颜色/目标走，而 widget params 是「添加那一刻」定死的 ——
+  // 所以这四样跟着 stat 一起落盘，days.df / streak.df / today.df 从 stat 里读。
+  if(meta){ s.goal=goal; s.pal=meta.pal||1; s.icon=meta.icon||""; s.name=meta.name||"";
+            s.kind=meta.kind||"check"; }
+  return s;
+}
+/* —— 两型 —— 「做了就算」(check,二值)与「要数次数」(count,+1)。**两个页面各存一份逐字相同的
+   实现,改动时两处必须一起改**(home / item)。
+
+   ⚠️ 老数据没有 `kind`,这里**读侧推断、不写盘迁移**:`goal>1` 的当年就是拿目标当计数用的,
+   判成 count;其余判成 check。不写盘的好处是这条推断随时可以改,也不会把历史改坏。 */
+function kindOf(it){
+  if(it.kind==="count"||it.kind==="check") return it.kind;
+  return (Number(it.goal)||1)>1 ? "count" : "check";
+}
+function goalOf(it){ return kindOf(it)==="count" ? Math.max(1,Number(it.goal)||1) : 1; }
+
+/* check 型的有效 log = **按天去重**。一天记两次和记一次是同一件事(做了就算)。
+   ⚠️ 只在读的时候去重,`it.log` 原样落盘 —— 历史里一天多条的记录不会被抹掉,
+   改回 count 型就又都在了。去重保留当天**最早**那条(时间轴上「那天做了」的锚点)。 */
+function effLog(it){
+  if(kindOf(it)==="count") return it.log;
+  var seen={}, out=[], i;
+  for(i=it.log.length-1;i>=0;i--){        // log 是降序,倒着走 = 从早到晚,先到的留下
+    var k=fmtDay(it.log[i]);
+    if(seen[k]) continue;
+    seen[k]=1; out.push(it.log[i]);
+  }
+  out.sort(function(a,b){return b-a;});
+  return out;
+}
+function streakOf(it){
+  var s=computeStat(effLog(it), goalOf(it));
+  if(s.streakStart==null||s.streakEnd==null) return 0;
+  // ⚠️ 判「断没断」用 **lastTs**(最后一条记录)而不是 streakEnd —— 这一天的宽限是刻意的:
+  // 计次型今天打了但没打够,不该立刻宣告断签,今天还没过完。
+  // 而**投影天数**必须用 streakEnd(最后一个达标日),否则会把没达标的今天也算进去。
+  var alive=dayMid(s.lastTs!=null?s.lastTs:s.streakEnd), today=dayMid(Date.now());
+  if(today-alive>864e5*1.5) return 0;
+  return Math.round((dayMid(s.streakEnd)-s.streakStart)/864e5)+1;
+}
+function countToday(it){ return countOn(it, Date.now()); }
+/* —— §0 结论行 ——
+   streak 卡上第二行说的那一句(「距最佳纪录还差 19 天」/「今天还没打卡」),页面上必须有,
+   且不能比卡片更靠后 —— 所以它就贴在事项名字底下。
+
+   ⚠️ **阶梯与 xWidget/flow/streak.df 的 `skind` 逐档同义**,词表与 streak.rcn 逐字同源:
+        0 = 不说话   1 = 距最佳还差 N 天   2 = 已是最佳(含追平)
+        3 = 当前已断,只报最佳纪录   4 = 有记录但从没达标过,且今天还没打
+      两处对同一件事说两句不同的话,就是「从卡片点进页面反而更糊涂」。
+      页与 flow 之间没有共享模块(一个是 JS、一个是 JSON DSL),改动必须两处一起改。
+   ⚠️ **措辞一律中性**:断签在习惯类产品里本来就常见,不出现任何指责性的词。
+   ⚠️ `has=0`(从没记过)刻意不说话 —— 那时右边那颗空圆自己就是邀请,再补一句是重复计费。 */
+function concludeOf(it){
+  var lg=effLog(it);
+  if(!lg.length) return "";
+  var s=computeStat(lg,goalOf(it)), streak=streakOf(it), best=Number(s.best)||0;
+  if(streak>=1){
+    var gap=best-streak;
+    return (best>=1 && gap>0) ? t("gapLbl")+" "+gap+t("dU") : t("atBest");
+  }
+  if(best>=1) return t("bestLbl")+" "+best+t("dU");
+  return countToday(it)===0 ? t("notToday") : "";
+}
+function countOn(it, ms){
+  var d=fmtDay(ms), lg=effLog(it), n=0;
+  for(var i=0;i<lg.length;i++) if(fmtDay(lg[i])===d) n++;
+  return n;
+}
+/* 今天算不算「做到了」:check 型 = 记过就算;count 型 = 次数达到目标。 */
+function doneToday(it){ return countToday(it) >= goalOf(it); }
+/* 写一件事的记录 + 它的派生统计。首页现在也写记录(那颗圆),所以这条从详情页搬了过来。
+   ⚠️ stat 用 **effLog** 算(check 型按天去重),而落盘的 `log` 是原始那份 —— 两者刻意不同:
+   统计要按类型的口径,数据要保真。
+   ⚠️ `kind` 一并进 stat:卡片将来要按类型换口径,而 widget params 是「添加那一刻」定死的。 */
+/* 跨事项的日聚合 —— 三张**聚合卡**(progress / week / month)的数据底座。
+   **两个页面各存一份逐字相同的实现**(同 computeStat 的既有姿态,页与页之间没有模块系统),
+   改动时 home / item 两处必须一起改。
+
+   ⚠️ **只存历史事实,不存「今天完成了几件」这类会过期的量**。`byDay[日期] = 那天有几件事达标`
+      是钉死的;而「今天」是哪天由**卡片自己**用 `@time.nowMs` 算出来再查表(同 today.df 的姿态)。
+      存成「今天 3/5」的话,用户今天打完卡就不再开 App,明天桌面卡还挂着昨天那个 3/5 ——
+      而且它不会报错,只是**安静地不对**。同 [[runtime-misc-pitfalls]]「随时间变的派生量存锚点」。
+   ⚠️ 判据是**达标**(当天次数 ≥ 该事项的每日目标)不是「记过一笔」:目标 3 次只打 1 次不算,
+      与 computeStat 里连续天数的口径一致,否则同一天在两张卡上一个算数一个不算。
+   ⚠️ 窗口裁到近 60 天:月卡最远看 35 天,余量够了。不裁的话这张表会随年份长大(log 才是真源)。 */
+function computeAgg(){
+  var byDay={}, cut=fmtDay(dayMid(Date.now())-60*864e5), i, k;
+  for(i=0;i<ITEMS.length;i++){
+    var it=ITEMS[i], g=goalOf(it), s=computeStat(effLog(it),g);
+    for(k in s.byDay){
+      if(k<cut) continue;                       // yyyy-MM-dd 定长,字典序即时间序
+      if(s.byDay[k]>=g) byDay[k]=(byDay[k]||0)+1;
+    }
+  }
+  return {total:ITEMS.length, byDay:byDay};
+}
+async function saveLog(it){
+  await xbridge.runFlow("save",{id:it.id,log:it.log,
+    stat:computeStat(effLog(it),goalOf(it),
+      {pal:it.pal,icon:icName(it.icon),name:it.name,kind:kindOf(it)}),
+    // ⚠️ agg 必须在**调用点**现算:此时 it.log 已经改过了,聚合要反映这一笔。
+    agg:computeAgg()});
+}
+async function saveItems(){
+  await xbridge.runFlow("items",{items:ITEMS.map(function(x){
+    return {id:x.id,name:x.name,icon:icName(x.icon),pal:x.pal,kind:kindOf(x),goal:goalOf(x),
+            createdAt:x.createdAt};}),
+    // 增删事项会改变 agg.total(以及被删那件事的 byDay 贡献),所以这条路也要写回。
+    agg:computeAgg()});
+}
+
+/* —— 一行的右侧那颗圆 ——
+   check:空心环 / 实心 ✓。count:环按 次数/目标 走 + 圆内数字,达标后实心 ✓。
+   ⚠️ SVG 半径 17 → 周长 106.8,与 CSS 的 stroke-dasharray 必须同值,否则环永远画不满。 */
+function tapHtml(it){
+  var k=kindOf(it), g=goalOf(it), c=countToday(it), on=c>=g;
+  var arc = on ? 0 : 106.8*(1-Math.min(k==="count"?c/g:0,1));
+  /* §4.1:未打卡态也要有「面」与图标 —— 计次型内圈是数字(它本身就是内容),
+     勾选型给一枚源色 ✓,打上之后由 .mk 那枚白 ✓ 接手。 */
+  var inner = k==="count" && !on
+    ? '<span class="cnt">'+c+'<s>/'+g+'</s></span>'
+    : '<span class="gh">✓</span><span class="mk">✓</span>';
+  return '<span class="tapwrap"><button class="tap'+(on?" on":"")+'" data-tap="'+esc(it.id)+'"'+
+         ' aria-pressed="'+(on?"true":"false")+'" aria-label="'+esc(it.name)+'">'+
+         '<svg viewBox="0 0 38 38"><circle class="trk" cx="19" cy="19" r="17"></circle>'+
+         '<circle class="arc" cx="19" cy="19" r="17" style="stroke-dashoffset:'+arc.toFixed(1)+'"></circle></svg>'+
+         '<span class="base"></span><span class="fill"></span>'+inner+"</button></span>";
+}
+
+/* 近 14 天点条。今天那颗带一圈描边 —— 它同时是右边那颗大圆的「缩影」,两者永远同态。 */
+function stripHtml(it){
+  var g=goalOf(it), h="", d0=dayMid(Date.now()), i;
+  for(i=13;i>=0;i--){
+    var ms=d0-i*864e5, c=countOn(it,ms);
+    var cls = c>=g ? "on" : (c>0 ? "half" : "");
+    if(i===0) cls += (cls?" ":"")+"today";
+    h+='<i'+(cls?' class="'+cls+'"':"")+"></i>";
+  }
+  return '<div class="strip">'+h+"</div>";
+}
+
+/* 加卡入口 = **一个按钮**(§8.1a):打开系统「添加到仪表盘」面板,由**用户**在面板里挑。
+   包内不画组件名录 —— 那是在手抄一份 .xwidget 目录(与真目录两份真源,新增组件忘了改就永远加不到),
+   而面板已经做得更好(真 RCN 预览、轮播 ⇄ 网格、多选)。
+   ⚠️ 候选只列**不吃 itemId** 的聚合卡。streak/recent/rhythm/overview 四张都要先指定是哪件事,
+      摆在首页就得引入一个「当前选中项」—— 用户看不见它、也说不清加的是谁(§8.1 的判据)。
+   ⚠️ **每次 paint 都重绑**(paint 会重渲整个列表),所以用 onclick 而不是 addEventListener,
+      否则同一个按钮会叠上 N 个监听、一次点击开 N 次面板。
+   ⚠️ 不提示「已添加」:落盘只发生在面板里的原生按钮上,用户完全可能翻两下就关掉。 */
+function bindPick(){
+  var b=document.getElementById("pickw");
+  if(!b) return;
+  b.onclick=function(){
+    if(!(window.xbridge && xbridge.pickWidgets)) return;
+    xbridge.pickWidgets(PICKS.map(function(id){ return {id:id}; }));
+  };
+}
+
+function paint(){
+  var done=0, i;
+  for(i=0;i<ITEMS.length;i++) if(doneToday(ITEMS[i])) done++;
+  document.getElementById("sub").textContent =
+    t("today")+" "+fmtDay(Date.now()).slice(5)+" · "+
+    t("doneOf").replace("{a}",done).replace("{b}",ITEMS.length);
+
+  /* 一件事都没有 → 藏掉加卡区:那时候 today 卡渲出来是空的,加了也是白加
+     (§8.1a 纪律 4「加不出数据的卡不进候选」/ G12「不得出现点了没反应的控件」)。 */
+  document.getElementById("addWrap").hidden = !ITEMS.length;
+  document.getElementById("useLine").hidden = !ITEMS.length;
+
+  var box=document.getElementById("listBox");
+  // 满 8 件就不画「添加位」—— 画一个点了只会弹 toast 的入口，比没有入口更糟。
+  var addRow = ITEMS.length<MAX
+    ? '<div class="new" id="newRow"><i>＋</i><span>'+esc(t("newRow"))+"</span></div>" : "";
+  if(!ITEMS.length){ box.innerHTML='<div class="empty">'+esc(t("empty"))+"</div>"+addRow; }
+  else{
+    /* 恒按清单原有顺序渲染,**打卡不改变位置**。
+       ⚠️ 曾按「未记在前、已记塌后」稳定分区 —— 点打卡那一下立即重绘,该项瞬移到底部,
+       用户读成「没打上」(2026-08-26 用户反馈,已废除)。完成态只靠大圆填充表达。 */
+    var ordered=ITEMS, h="";
+    for(i=0;i<ordered.length;i++){
+      var it=ordered[i], col=accent(it.pal), ok=doneToday(it);
+      var cc=concludeOf(it);
+      h+='<div class="it" style="color:'+col+'">'+
+         '<span class="ic" data-open="'+esc(it.id)+'" data-name="'+esc(it.name)+'" style="background:'+col+'22;color:'+col+'">'+icSvg(it.icon)+"</span>"+
+         '<div class="grow" data-open="'+esc(it.id)+'" data-name="'+esc(it.name)+'"><b style="color:var(--fg)">'+esc(it.name)+"</b>"+
+         (cc?'<div class="cc">'+esc(cc)+"</div>":"")+
+         stripHtml(it)+"</div>"+
+         tapHtml(it)+"</div>";
+    }
+    box.innerHTML=h+addRow;
+    // 整行仍然是「进详情」,但**大圆那 44pt 不是** —— 它有自己的命中区,两者互不重叠。
+    Array.prototype.forEach.call(box.querySelectorAll("[data-open]"),function(el){
+      el.addEventListener("click",function(){
+        var nm=String(el.dataset.name||"").trim();
+        go("numable://self/page/item?id="+encodeURIComponent(el.dataset.open)+(nm?"&name="+encodeURIComponent(nm):"")); });
+    });
+    Array.prototype.forEach.call(box.querySelectorAll("[data-tap]"),function(el){
+      el.addEventListener("click",function(e){ e.stopPropagation(); onTap(el.dataset.tap); });
+    });
+  }
+  var nr=document.getElementById("newRow");
+  if(nr) nr.addEventListener("click",openSheet);
+  bindPick();
+}
+
+/* —— 点那一下 ——
+   check:toggle。已记 → 删掉今天**全部**记录(对二值型「今天」要么有要么无);未记 → 记一条。
+   count:+1,并弹 4 秒撤销条。
+   ⚠️ **写盘不挡 UI**:先改内存、先重绘,`saveLog` 在后面跑。零网络本地写失败率接近零,
+   为它把动画卡住 300ms 是拿常态换异常。失败了下一次 reload 会把真相拉回来。 */
+var TAPPING={};
+async function onTap(id){
+  var it=null, i;
+  for(i=0;i<ITEMS.length;i++) if(ITEMS[i].id===id) it=ITEMS[i];
+  if(!it||TAPPING[id]) return;
+  TAPPING[id]=1;
+  try{
+    var k=kindOf(it), today=fmtDay(Date.now());
+    if(k==="check"){
+      if(countToday(it)>0){
+        it.log=it.log.filter(function(x){ return fmtDay(x)!==today; });
+        hideUndo();
+      }else{
+        it.log.push(Date.now()); it.log.sort(function(a,b){return b-a;});
+      }
+    }else{
+      it.log.push(Date.now()); it.log.sort(function(a,b){return b-a;});
+      showUndo(it, countToday(it));
+    }
+    paint();
+    await saveLog(it);
+  } finally { delete TAPPING[id]; }
+}
+
+/* —— 撤销条(只服务计次型)—— 撤掉的是**刚才那一条**,不是清空今天。
+   这正是「撤销今天会把好的那几条一起抹掉」那条老顾虑的正解:粒度对齐到动作,不对齐到天。
+   ⚠️ 连点只留一条:文案改成新的次数、计时重置,撤销仍然只撤最后一次。 */
+var UNDO={id:null,ts:null,timer:null};
+function showUndo(it,c){
+  UNDO.id=it.id; UNDO.ts=it.log[0];
+  document.getElementById("undoMsg").textContent =
+    t("undoOne").replace("{n}",it.name).replace("{c}",c);
+  var bar=document.getElementById("undo"), cd=document.getElementById("undoCd");
+  bar.classList.add("show");
+  cd.style.transition="none"; cd.style.strokeDashoffset="0";
+  // 双 rAF:同帧内改回 transition 会被合并掉,倒计时环就不动了。
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){
+    cd.style.transition="stroke-dashoffset 4000ms linear"; cd.style.strokeDashoffset="44"; }); });
+  clearTimeout(UNDO.timer);
+  UNDO.timer=setTimeout(hideUndo,4000);
+}
+function hideUndo(){
+  clearTimeout(UNDO.timer);
+  document.getElementById("undo").classList.remove("show");
+  UNDO.id=null; UNDO.ts=null;
+}
+async function doUndo(){
+  if(UNDO.id==null||UNDO.ts==null) return;
+  var it=null, i;
+  for(i=0;i<ITEMS.length;i++) if(ITEMS[i].id===UNDO.id) it=ITEMS[i];
+  var ts=UNDO.ts;
+  hideUndo();
+  if(!it) return;
+  // ⚠️ 删单条用 indexOf+splice,不用 filter —— 同一毫秒的重复值会被 filter 全删光。
+  var k=it.log.indexOf(ts); if(k>=0) it.log.splice(k,1);
+  paint();
+  await saveLog(it);
+}
+
+/* sheet 开关。⚠️ 键盘弹起时 `position:fixed;bottom:0` 会被盖住 —— iOS WebView 不缩 layout
+   viewport，只缩 visualViewport。这里把键盘高度顶到 sheet 底下；没有 visualViewport 的端
+   （老 WebView）退化成不顶。 */
+function liftSheet(){
+  var vv=window.visualViewport, el=document.getElementById("sheet");
+  var kb = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  el.style.bottom = kb ? kb+"px" : "";
+  // ⚠️ 只把 sheet 顶到键盘上方是不够的:内容一多,**顶部会被推出屏幕**,名字输入框整个看不见
+  // (iOS 模拟器实测,2026-08-21 —— 浏览器里没有软键盘,这条验不出来)。
+  // 可用高必须扣掉键盘,不能只靠 CSS 的 86vh(vh 算的是 layout viewport,不随键盘缩)。
+  el.style.maxHeight = ((vv ? vv.height : window.innerHeight) - 24) + "px";
+}
+function paintPicker(){
+  var ib=document.getElementById("icons"), h="", i;
+  for(i=0;i<ICONS.length;i++)
+    h+='<button data-ic="'+esc(ICONS[i])+'" aria-pressed="'+(ICONS[i]===NEW.icon)+'">'+IC[ICONS[i]]+"</button>";
+  ib.innerHTML=h;
+  Array.prototype.forEach.call(ib.querySelectorAll("[data-ic]"),function(b){
+    b.addEventListener("click",function(){ hap("selection"); NEW.icon=b.dataset.ic; paintPicker(); });
+  });
+  var cb=document.getElementById("cols"); h="";
+  for(var p=1;p<=6;p++)
+    h+='<button class="sw" data-pal="'+p+'" aria-pressed="'+(p===NEW.pal)+
+       '" style="background:'+PAL[p][DARK?1:0]+'"></button>';
+  cb.innerHTML=h;
+  Array.prototype.forEach.call(cb.querySelectorAll("[data-pal]"),function(b){
+    b.addEventListener("click",function(){ hap("selection"); NEW.pal=Number(b.dataset.pal); paintPicker(); });
+  });
+  document.getElementById("newBtn").style.background=accent(NEW.pal);
+  paintKind();
+}
+/* 「怎么记」二选一 + 计次型的次数 stepper(只在选了计次时出现 —— 选了「做了就算」的人
+   从头到尾不该看见「次 / 天」这三个字)。 */
+function paintKind(){
+  ["kCheck","kCount"].forEach(function(k){
+    var b=document.getElementById(k), on=(b.dataset.kind===NEW.kind);
+    b.setAttribute("aria-pressed",on?"true":"false");
+    b.querySelector("em").style.background = on ? accent(NEW.pal) : "";
+  });
+  document.getElementById("goalStep").hidden = NEW.kind!=="count";
+  document.getElementById("gVal").textContent=NEW.goal;
+}
+function openSheet(){
+  // 图标与颜色按顺序轮着给 —— 新建的两件事默认同色看着像一件事的两半。
+  // 默认 check:绝大多数打卡是二值的,让 80% 的人一次也不必碰到「次 / 目标」这些词。
+  NEW={icon:ICONS[(ITEMS.length+1)%ICONS.length], pal:(ITEMS.length%6)+1, kind:"check", goal:2};
+  document.getElementById("newName").value="";
+  paintPicker();
+  document.body.classList.add("open");
+  // 聚焦要等转场起来之后，否则 iOS 上键盘和滑入动画抢同一帧，sheet 会跳一下
+  setTimeout(function(){ document.getElementById("newName").focus(); }, 260);
+}
+function closeSheet(){
+  document.body.classList.remove("open");
+  document.getElementById("newName").blur();
+}
+
+async function reload(){
+  hideUndo();          // 从详情页返回时那条计次撤销条已经没有意义了(数据可能已被改过)
+  try{
+    var r=await xbridge.runDataFlow("read",{});
+    var dd=(r&&r.data)||{};
+    var list=Array.isArray(dd.items)?dd.items:[];
+    ITEMS=[];
+    for(var i=0;i<list.length&&i<MAX;i++){
+      var lg=dd["l"+i]; lg=Array.isArray(lg)?lg.slice():[];
+      lg.sort(function(a,b){return b-a;});
+      ITEMS.push({id:list[i].id,name:list[i].name,icon:icName(list[i].icon||"target"),
+                  pal:Number(list[i].pal)||1,kind:list[i].kind,
+                  goal:Number(list[i].goal)||1,
+                  createdAt:list[i].createdAt,log:lg});
+    }
+  }catch(e){ /* 读不到就保持上一份，不要清空成「一件事都没有」 */ }
+  paint();
+  void syncAgg(dd && dd.agg);
+}
+
+/* 冷启动补写:三张聚合卡读的是落盘的 `agg`,而它只在打卡 / 增删事项时才被写。
+   老用户从旧版包升上来时盘上**压根没有这个 key** —— 卡片会一直空着,直到他碰巧打一次卡。
+   所以每次读完都比对一次「盘上的」与「算出来的」,不一致才补写。
+
+   ⚠️ 走 agg.af(只 data.set)而**不是** save.af —— 后者末尾带 widget.refresh,
+      那会让「打开一次首页」= 把盘上所有卡片重渲一轮,纯浪费。
+   ⚠️ 比对用 JSON 串:两边都是「字符串键 → 整数」的扁平表,computeAgg 的 for-in 与
+      JSON.stringify 的键序在同一份对象上是一致的,足够当指纹用。
+   ⚠️ 失败不管:补写是锦上添花,失败最多让卡片晚一次打卡才更新,不该打断首页。 */
+async function syncAgg(onDisk){
+  try{
+    var now=computeAgg();
+    if(onDisk && JSON.stringify(onDisk)===JSON.stringify(now)) return;
+    await xbridge.runFlow("agg",{agg:now});
+  }catch(e){}
+}
+
+/* 启动顺序照 market boot()(doc/overseas-first.md §1–§2):先读宿主写好的 <html data-lang>,
+   再等 appInfo(nbInfo 处理信封);**缺省英文**。 */
+(async function boot(){
+  var de=document.documentElement;
+  if(de.getAttribute("data-lang")) LANG=nbLang(de.getAttribute("data-lang"));
+  var d=await nbInfo();
+  LANG=nbLang(d.language||d.locale);
+  if(!window.xbridge){ applyTheme(de.getAttribute("data-theme")||undefined);
+    document.body.insertAdjacentHTML("afterbegin",'<div class="state">'+esc(t("notX"))+"</div>"); return; }
+  applyTheme(d.theme||de.getAttribute("data-theme")||undefined);
+  document.title=t("title");
+  Array.prototype.forEach.call(document.querySelectorAll("[data-i]"),function(el){
+    el.textContent=t(el.dataset.i);});
+  /* 右上角「重新读取」圆钮:只画图标(本包无时间可锚),无障碍名随语言。 */
+  var fr=document.getElementById("fresh");
+  xbAt.set(fr,null); fr.setAttribute("aria-label",t("reload"));
+  document.getElementById("newName").placeholder=t("newPh");
+  document.getElementById("newBtn").textContent=t("newBtn");
+  document.getElementById("newCancel").textContent=t("newCancel");
+  document.getElementById("newHint").textContent=t("newHint").replace("{n}",MAX);
+  document.getElementById("gHint").textContent=t("gHint");
+  document.getElementById("undoTxt").textContent=t("undoBtn");
+
+  ["kCheck","kCount"].forEach(function(k){
+    document.getElementById(k).addEventListener("click",function(){
+      // 已经选中的那个再点一次 = 什么都没变,不该有反馈(离散选择的语义是「变了」)。
+      if(NEW.kind!==this.dataset.kind) hap("selection");
+      NEW.kind=this.dataset.kind; paintKind(); });
+  });
+  // ⚠️ 触觉分两态:值真的变了 = selection;**撞到上下限 = warning**。
+  //    到边界完全不给反馈会让人以为「按钮没点上」而反复戳(屏幕上那个数字纹丝不动,
+  //    没有任何东西告诉他这是拒绝而不是丢失);而给 selection 又是在撒谎 —— 什么都没变。
+  document.getElementById("gDec").addEventListener("click",function(){
+    if(NEW.goal>2){ hap("selection"); NEW.goal--; paintKind(); } else hap("warning"); });
+  document.getElementById("gInc").addEventListener("click",function(){
+    if(NEW.goal<20){ hap("selection"); NEW.goal++; paintKind(); } else hap("warning"); });
+  document.getElementById("undoBtn").addEventListener("click",function(){ void doUndo(); });
+  /* 右上角圆钮 = 重读一次盘、重算一遍(桌面小组件上打过卡再回来时用)。
+     读盘是本地毫秒级,不接 xbAt.busy —— 转圈只会闪一下,按下态的缩放已经给了反馈。 */
+  document.getElementById("fresh").addEventListener("click",function(){ void reload(); });
+
+  var nb=document.getElementById("newBtn"), ni=document.getElementById("newName");
+  async function submit(){
+    var name=ni.value.trim();
+    // 三条校验失败:toast 是**看**的,触觉是**感觉**的 —— 手指还压在按钮上、视线也还在按钮上时,
+    // 顶部弹出来的那条 toast 未必被看见。warning 而非 error:没坏东西,只是这一下不成立。
+    if(!name){ hap("warning"); toast(t("needName")); return; }
+    if(ITEMS.length>=MAX){ hap("warning"); toast(t("full").replace("{n}",MAX)); return; }
+    for(var i=0;i<ITEMS.length;i++) if(ITEMS[i].name===name){ hap("warning"); toast(t("dup")); return; }
+    nb.disabled=true;
+    try{
+      ITEMS.push({id:newId(),name:name,icon:NEW.icon,pal:NEW.pal,
+                  kind:NEW.kind, goal:NEW.kind==="count"?NEW.goal:1,
+                  createdAt:Date.now(),log:[]});
+      await saveItems(); closeSheet(); paint();
+    } finally { nb.disabled=false; }
+  }
+  nb.addEventListener("click",submit);
+  ni.addEventListener("keydown",function(e){ if(e.key==="Enter") submit(); });
+  document.getElementById("newCancel").addEventListener("click",closeSheet);
+  document.getElementById("mask").addEventListener("click",closeSheet);
+  if(window.visualViewport){
+    window.visualViewport.addEventListener("resize",liftSheet);
+    window.visualViewport.addEventListener("scroll",liftSheet);
+  }
+
+  // ⚠️ html 栈页从子页返回不会自动重跑任何东西 —— 不接这条，从详情页改完回来看到的还是旧数字。
+  // BOOTED 闸：pageshow 在首次加载时也会触发，不挡住就会和下面 boot 末尾那次 reload 撞成两次读。
+  window.addEventListener("pageshow",function(){ if(BOOTED) reload(); });
+  document.addEventListener("visibilitychange",function(){ if(BOOTED&&!document.hidden) reload(); });
+
+  await reload();
+  BOOTED=true;
+})();
+</script>
+</body></html>

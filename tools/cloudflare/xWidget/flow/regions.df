@@ -1,0 +1,1219 @@
+{
+  "_note": "全球数据中心健康(regions 卡 + 首页块)。生成器 tools/infosource/gen_cloudflare.py,计数手法见其文件头。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "_cacheIn",
+        "value": "${cache}"
+      },
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cache",
+        "value": "$[parseNumber::(${_cacheIn},0)]"
+      },
+      "_note": "1 = 首页块(读缓存);组件不传 = 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_t0",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_zk",
+        "value": "${zoneId}"
+      },
+      "_note": "入参先落地,键表达式里才看得见(§9.5 #3)。无域名参数的流里恒空,不影响。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ck",
+        "value": "c.cf.rg"
+      }
+    },
+    {
+      "id": "_hit",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hitTs",
+        "value": "$[parseNumber::(${_hit.ts},0)]"
+      }
+    },
+    {
+      "_note": "页面有缓存 → 整段跳过(连接都不建);组件 / 无缓存 → 真取数。取数体里的 fail_unless 失败即终止整条流,所以走到 data.set 的一定是取到了的。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${_cache},1),if::(gt::(${_hitTs},0),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "raw",
+          "action": "request",
+          "params": {
+            "url": "https://www.cloudflarestatus.com/api/v2/components.json",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable",
+              "Accept": "application/json"
+            }
+          },
+          "_note": "取**原文**(string):按大洲计数靠正则切分,见文件头。约 175KB。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${raw}),1000),0,1)]"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "cf_status_unreachable"
+              }
+            }
+          ],
+          "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reT_as",
+            "value": "\"group_id\":\"77867vxkttgw\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reO_as",
+            "value": "\"status\":\"operational\"[^{}]*\"group_id\":\"77867vxkttgw\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reM_as",
+            "value": "\"status\":\"under_maintenance\"[^{}]*\"group_id\":\"77867vxkttgw\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "t_as",
+            "value": "$[calc::(length::(split::(${raw},${reT_as}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o_as",
+            "value": "$[calc::(length::(split::(${raw},${reO_as}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m_as",
+            "value": "$[calc::(length::(split::(${raw},${reM_as}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "i_as",
+            "value": "$[max::(calc::(${t_as}-${o_as}-${m_as}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xo_as",
+            "value": "$[parseNumber::(max::(calc::(4.0+(${o_as}/max::(${t_as},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xm_as",
+            "value": "$[parseNumber::(max::(calc::(4.0+((${o_as}+${m_as})/max::(${t_as},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xa_as",
+            "value": "$[parseNumber::(max::(calc::(4.0+(min::(${t_as},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reT_eu",
+            "value": "\"group_id\":\"zqxhg7y54vy8\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reO_eu",
+            "value": "\"status\":\"operational\"[^{}]*\"group_id\":\"zqxhg7y54vy8\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reM_eu",
+            "value": "\"status\":\"under_maintenance\"[^{}]*\"group_id\":\"zqxhg7y54vy8\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "t_eu",
+            "value": "$[calc::(length::(split::(${raw},${reT_eu}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o_eu",
+            "value": "$[calc::(length::(split::(${raw},${reO_eu}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m_eu",
+            "value": "$[calc::(length::(split::(${raw},${reM_eu}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "i_eu",
+            "value": "$[max::(calc::(${t_eu}-${o_eu}-${m_eu}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xo_eu",
+            "value": "$[parseNumber::(max::(calc::(4.0+(${o_eu}/max::(${t_eu},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xm_eu",
+            "value": "$[parseNumber::(max::(calc::(4.0+((${o_eu}+${m_eu})/max::(${t_eu},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xa_eu",
+            "value": "$[parseNumber::(max::(calc::(4.0+(min::(${t_eu},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reT_na",
+            "value": "\"group_id\":\"4l01sk5cdn5c\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reO_na",
+            "value": "\"status\":\"operational\"[^{}]*\"group_id\":\"4l01sk5cdn5c\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reM_na",
+            "value": "\"status\":\"under_maintenance\"[^{}]*\"group_id\":\"4l01sk5cdn5c\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "t_na",
+            "value": "$[calc::(length::(split::(${raw},${reT_na}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o_na",
+            "value": "$[calc::(length::(split::(${raw},${reO_na}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m_na",
+            "value": "$[calc::(length::(split::(${raw},${reM_na}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "i_na",
+            "value": "$[max::(calc::(${t_na}-${o_na}-${m_na}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xo_na",
+            "value": "$[parseNumber::(max::(calc::(4.0+(${o_na}/max::(${t_na},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xm_na",
+            "value": "$[parseNumber::(max::(calc::(4.0+((${o_na}+${m_na})/max::(${t_na},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xa_na",
+            "value": "$[parseNumber::(max::(calc::(4.0+(min::(${t_na},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reT_la",
+            "value": "\"group_id\":\"91blz4ztt7dm\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reO_la",
+            "value": "\"status\":\"operational\"[^{}]*\"group_id\":\"91blz4ztt7dm\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reM_la",
+            "value": "\"status\":\"under_maintenance\"[^{}]*\"group_id\":\"91blz4ztt7dm\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "t_la",
+            "value": "$[calc::(length::(split::(${raw},${reT_la}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o_la",
+            "value": "$[calc::(length::(split::(${raw},${reO_la}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m_la",
+            "value": "$[calc::(length::(split::(${raw},${reM_la}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "i_la",
+            "value": "$[max::(calc::(${t_la}-${o_la}-${m_la}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xo_la",
+            "value": "$[parseNumber::(max::(calc::(4.0+(${o_la}/max::(${t_la},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xm_la",
+            "value": "$[parseNumber::(max::(calc::(4.0+((${o_la}+${m_la})/max::(${t_la},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xa_la",
+            "value": "$[parseNumber::(max::(calc::(4.0+(min::(${t_la},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reT_af",
+            "value": "\"group_id\":\"00gpj4s37mz4\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reO_af",
+            "value": "\"status\":\"operational\"[^{}]*\"group_id\":\"00gpj4s37mz4\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reM_af",
+            "value": "\"status\":\"under_maintenance\"[^{}]*\"group_id\":\"00gpj4s37mz4\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "t_af",
+            "value": "$[calc::(length::(split::(${raw},${reT_af}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o_af",
+            "value": "$[calc::(length::(split::(${raw},${reO_af}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m_af",
+            "value": "$[calc::(length::(split::(${raw},${reM_af}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "i_af",
+            "value": "$[max::(calc::(${t_af}-${o_af}-${m_af}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xo_af",
+            "value": "$[parseNumber::(max::(calc::(4.0+(${o_af}/max::(${t_af},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xm_af",
+            "value": "$[parseNumber::(max::(calc::(4.0+((${o_af}+${m_af})/max::(${t_af},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xa_af",
+            "value": "$[parseNumber::(max::(calc::(4.0+(min::(${t_af},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reT_me",
+            "value": "\"group_id\":\"m3639x4txd08\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reO_me",
+            "value": "\"status\":\"operational\"[^{}]*\"group_id\":\"m3639x4txd08\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reM_me",
+            "value": "\"status\":\"under_maintenance\"[^{}]*\"group_id\":\"m3639x4txd08\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "t_me",
+            "value": "$[calc::(length::(split::(${raw},${reT_me}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o_me",
+            "value": "$[calc::(length::(split::(${raw},${reO_me}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m_me",
+            "value": "$[calc::(length::(split::(${raw},${reM_me}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "i_me",
+            "value": "$[max::(calc::(${t_me}-${o_me}-${m_me}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xo_me",
+            "value": "$[parseNumber::(max::(calc::(4.0+(${o_me}/max::(${t_me},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xm_me",
+            "value": "$[parseNumber::(max::(calc::(4.0+((${o_me}+${m_me})/max::(${t_me},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xa_me",
+            "value": "$[parseNumber::(max::(calc::(4.0+(min::(${t_me},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reT_oc",
+            "value": "\"group_id\":\"q6qm6fvkst4h\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reO_oc",
+            "value": "\"status\":\"operational\"[^{}]*\"group_id\":\"q6qm6fvkst4h\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reM_oc",
+            "value": "\"status\":\"under_maintenance\"[^{}]*\"group_id\":\"q6qm6fvkst4h\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "t_oc",
+            "value": "$[calc::(length::(split::(${raw},${reT_oc}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o_oc",
+            "value": "$[calc::(length::(split::(${raw},${reO_oc}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m_oc",
+            "value": "$[calc::(length::(split::(${raw},${reM_oc}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "i_oc",
+            "value": "$[max::(calc::(${t_oc}-${o_oc}-${m_oc}),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xo_oc",
+            "value": "$[parseNumber::(max::(calc::(4.0+(${o_oc}/max::(${t_oc},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xm_oc",
+            "value": "$[parseNumber::(max::(calc::(4.0+((${o_oc}+${m_oc})/max::(${t_oc},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "xa_oc",
+            "value": "$[parseNumber::(max::(calc::(4.0+(min::(${t_oc},1))*166.0),4.0),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "T",
+            "value": "$[calc::(${t_as}+${t_eu}+${t_na}+${t_la}+${t_af}+${t_me}+${t_oc})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "O",
+            "value": "$[calc::(${o_as}+${o_eu}+${o_na}+${o_la}+${o_af}+${o_me}+${o_oc})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "M",
+            "value": "$[calc::(${m_as}+${m_eu}+${m_na}+${m_la}+${m_af}+${m_me}+${m_oc})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "I",
+            "value": "$[calc::(${i_as}+${i_eu}+${i_na}+${i_la}+${i_af}+${i_me}+${i_oc})]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(${T},100),0,1)]"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "cf_status_format"
+              }
+            }
+          ],
+          "_note": "总数都数不出来 = 格式变了或取回的不是那份 JSON。抛错走回落,而不是渲一张全 0 的图。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pctOn",
+            "value": "$[if::(eq::(${O},${T}),100,parseNumber::(calc::(${O}*100/${T}),0.0))]"
+          },
+          "_note": "在线率 = 正常 / 全部。维护中的节点**不算在线**(那一刻它确实不接流量),但也不算异常。100 单列:parseNumber 0.0 会把 100 写成 100.0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mxI",
+            "value": "$[max::(${i_as},${i_eu},${i_na},${i_la},${i_af},${i_me},${i_oc})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "worst",
+            "value": "$[if::(gt::(${mxI},0),if::(eq::(${i_as},${mxI}),1,if::(eq::(${i_eu},${mxI}),2,if::(eq::(${i_na},${mxI}),3,if::(eq::(${i_la},${mxI}),4,if::(eq::(${i_af},${mxI}),5,if::(eq::(${i_me},${mxI}),6,if::(eq::(${i_oc},${mxI}),7,0))))))),0)]"
+          },
+          "_note": "异常最多的洲(1..7),没有异常 = 0。并列取行序靠前的(规模更大的洲)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reST",
+            "value": "\"group_id\":\"1km35smx8p41\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "reSO",
+            "value": "\"status\":\"operational\"[^{}]*\"group_id\":\"1km35smx8p41\""
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sT",
+            "value": "$[calc::(length::(split::(${raw},${reST}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sO",
+            "value": "$[calc::(length::(split::(${raw},${reSO}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sD",
+            "value": "$[max::(calc::(${sT}-${sO}),0)]"
+          },
+          "_note": "产品服务里「不是 operational」的项数(降级 / 局部故障 / 维护都算,状态页上它们一律标黄)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "at",
+            "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_pack",
+            "value": {
+              "ts": "${@time.nowMs}",
+              "T": "${T}",
+              "O": "${O}",
+              "M": "${M}",
+              "I": "${I}",
+              "pctOn": "${pctOn}",
+              "worst": "${worst}",
+              "mxI": "${mxI}",
+              "sT": "${sT}",
+              "sD": "${sD}",
+              "at": "${at}",
+              "t_as": "${t_as}",
+              "o_as": "${o_as}",
+              "i_as": "${i_as}",
+              "xo_as": "${xo_as}",
+              "xm_as": "${xm_as}",
+              "xa_as": "${xa_as}",
+              "t_eu": "${t_eu}",
+              "o_eu": "${o_eu}",
+              "i_eu": "${i_eu}",
+              "xo_eu": "${xo_eu}",
+              "xm_eu": "${xm_eu}",
+              "xa_eu": "${xa_eu}",
+              "t_na": "${t_na}",
+              "o_na": "${o_na}",
+              "i_na": "${i_na}",
+              "xo_na": "${xo_na}",
+              "xm_na": "${xm_na}",
+              "xa_na": "${xa_na}",
+              "t_la": "${t_la}",
+              "o_la": "${o_la}",
+              "i_la": "${i_la}",
+              "xo_la": "${xo_la}",
+              "xm_la": "${xm_la}",
+              "xa_la": "${xa_la}",
+              "t_af": "${t_af}",
+              "o_af": "${o_af}",
+              "i_af": "${i_af}",
+              "xo_af": "${xo_af}",
+              "xm_af": "${xm_af}",
+              "xa_af": "${xa_af}",
+              "t_me": "${t_me}",
+              "o_me": "${o_me}",
+              "i_me": "${i_me}",
+              "xo_me": "${xo_me}",
+              "xm_me": "${xm_me}",
+              "xa_me": "${xa_me}",
+              "t_oc": "${t_oc}",
+              "o_oc": "${o_oc}",
+              "i_oc": "${i_oc}",
+              "xo_oc": "${xo_oc}",
+              "xm_oc": "${xm_oc}",
+              "xa_oc": "${xa_oc}"
+            }
+          }
+        },
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${_ck}",
+            "value": "${_pack}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入,两条路径只有一份字段映射。",
+      "id": "_box",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "T",
+        "value": "${_box.T}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "O",
+        "value": "${_box.O}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M",
+        "value": "${_box.M}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "I",
+        "value": "${_box.I}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pctOn",
+        "value": "${_box.pctOn}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "worst",
+        "value": "${_box.worst}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mxI",
+        "value": "${_box.mxI}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sT",
+        "value": "${_box.sT}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sD",
+        "value": "${_box.sD}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "${_box.at}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_as",
+        "value": "${_box.t_as}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o_as",
+        "value": "${_box.o_as}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i_as",
+        "value": "${_box.i_as}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xo_as",
+        "value": "${_box.xo_as}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xm_as",
+        "value": "${_box.xm_as}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xa_as",
+        "value": "${_box.xa_as}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_eu",
+        "value": "${_box.t_eu}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o_eu",
+        "value": "${_box.o_eu}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i_eu",
+        "value": "${_box.i_eu}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xo_eu",
+        "value": "${_box.xo_eu}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xm_eu",
+        "value": "${_box.xm_eu}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xa_eu",
+        "value": "${_box.xa_eu}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_na",
+        "value": "${_box.t_na}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o_na",
+        "value": "${_box.o_na}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i_na",
+        "value": "${_box.i_na}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xo_na",
+        "value": "${_box.xo_na}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xm_na",
+        "value": "${_box.xm_na}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xa_na",
+        "value": "${_box.xa_na}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_la",
+        "value": "${_box.t_la}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o_la",
+        "value": "${_box.o_la}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i_la",
+        "value": "${_box.i_la}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xo_la",
+        "value": "${_box.xo_la}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xm_la",
+        "value": "${_box.xm_la}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xa_la",
+        "value": "${_box.xa_la}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_af",
+        "value": "${_box.t_af}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o_af",
+        "value": "${_box.o_af}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i_af",
+        "value": "${_box.i_af}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xo_af",
+        "value": "${_box.xo_af}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xm_af",
+        "value": "${_box.xm_af}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xa_af",
+        "value": "${_box.xa_af}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_me",
+        "value": "${_box.t_me}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o_me",
+        "value": "${_box.o_me}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i_me",
+        "value": "${_box.i_me}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xo_me",
+        "value": "${_box.xo_me}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xm_me",
+        "value": "${_box.xm_me}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xa_me",
+        "value": "${_box.xa_me}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t_oc",
+        "value": "${_box.t_oc}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o_oc",
+        "value": "${_box.o_oc}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i_oc",
+        "value": "${_box.i_oc}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xo_oc",
+        "value": "${_box.xo_oc}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xm_oc",
+        "value": "${_box.xm_oc}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xa_oc",
+        "value": "${_box.xa_oc}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(if::(eq::(${_cache},1),1,if::(ge::(parseNumber::(${_box.ts},0),${_t0}),1,0)),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_status_unreachable"
+          }
+        }
+      ],
+      "_note": "组件模式:回读到的不是这一轮写的 = 这轮没取到。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "T",
+          "O",
+          "M",
+          "I",
+          "pctOn",
+          "worst",
+          "mxI",
+          "sT",
+          "sD",
+          "at",
+          "t_as",
+          "o_as",
+          "i_as",
+          "xo_as",
+          "xm_as",
+          "xa_as",
+          "t_eu",
+          "o_eu",
+          "i_eu",
+          "xo_eu",
+          "xm_eu",
+          "xa_eu",
+          "t_na",
+          "o_na",
+          "i_na",
+          "xo_na",
+          "xm_na",
+          "xa_na",
+          "t_la",
+          "o_la",
+          "i_la",
+          "xo_la",
+          "xm_la",
+          "xa_la",
+          "t_af",
+          "o_af",
+          "i_af",
+          "xo_af",
+          "xm_af",
+          "xa_af",
+          "t_me",
+          "o_me",
+          "i_me",
+          "xo_me",
+          "xm_me",
+          "xa_me",
+          "t_oc",
+          "o_oc",
+          "i_oc",
+          "xo_oc",
+          "xm_oc",
+          "xa_oc"
+        ]
+      }
+    }
+  ]
+}

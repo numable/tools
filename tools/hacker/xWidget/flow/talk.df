@@ -1,0 +1,257 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowS",
+        "value": "$[parseNumber::(calc::(${@time.nowMs}/1000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "since",
+        "value": "$[parseNumber::(calc::(${nowS}-86400),0)]"
+      },
+      "_note": "24 小时窗下界(秒)。⚠️ 取整,见 base() 里同一条注释。"
+    },
+    {
+      "action": "request",
+      "id": "resp",
+      "params": {
+        "url": "https://hn.algolia.com/api/v1/search?tags=story&numericFilters=created_at_i%3E${since},num_comments%3E0&hitsPerPage=30&attributesToRetrieve=title,points,num_comments,created_at_i,objectID&attributesToHighlight=none",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp.hits}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "hn_talk_unreachable"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      },
+      "_note": "榜单本身没有「数据时间」字段,用取数时刻兜底(标准 §4.4)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cmax",
+        "value": "$[max::(pluck::(${resp.hits},num_comments))]"
+      },
+      "_note": "候选池里的评论数峰值。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ks",
+        "value": [
+          "$[if::(eq::(${resp.hits[0].num_comments},${cmax}),0,999)]",
+          "$[if::(eq::(${resp.hits[1].num_comments},${cmax}),1,999)]",
+          "$[if::(eq::(${resp.hits[2].num_comments},${cmax}),2,999)]",
+          "$[if::(eq::(${resp.hits[3].num_comments},${cmax}),3,999)]",
+          "$[if::(eq::(${resp.hits[4].num_comments},${cmax}),4,999)]",
+          "$[if::(eq::(${resp.hits[5].num_comments},${cmax}),5,999)]",
+          "$[if::(eq::(${resp.hits[6].num_comments},${cmax}),6,999)]",
+          "$[if::(eq::(${resp.hits[7].num_comments},${cmax}),7,999)]",
+          "$[if::(eq::(${resp.hits[8].num_comments},${cmax}),8,999)]",
+          "$[if::(eq::(${resp.hits[9].num_comments},${cmax}),9,999)]",
+          "$[if::(eq::(${resp.hits[10].num_comments},${cmax}),10,999)]",
+          "$[if::(eq::(${resp.hits[11].num_comments},${cmax}),11,999)]",
+          "$[if::(eq::(${resp.hits[12].num_comments},${cmax}),12,999)]",
+          "$[if::(eq::(${resp.hits[13].num_comments},${cmax}),13,999)]",
+          "$[if::(eq::(${resp.hits[14].num_comments},${cmax}),14,999)]",
+          "$[if::(eq::(${resp.hits[15].num_comments},${cmax}),15,999)]",
+          "$[if::(eq::(${resp.hits[16].num_comments},${cmax}),16,999)]",
+          "$[if::(eq::(${resp.hits[17].num_comments},${cmax}),17,999)]",
+          "$[if::(eq::(${resp.hits[18].num_comments},${cmax}),18,999)]",
+          "$[if::(eq::(${resp.hits[19].num_comments},${cmax}),19,999)]",
+          "$[if::(eq::(${resp.hits[20].num_comments},${cmax}),20,999)]",
+          "$[if::(eq::(${resp.hits[21].num_comments},${cmax}),21,999)]",
+          "$[if::(eq::(${resp.hits[22].num_comments},${cmax}),22,999)]",
+          "$[if::(eq::(${resp.hits[23].num_comments},${cmax}),23,999)]",
+          "$[if::(eq::(${resp.hits[24].num_comments},${cmax}),24,999)]",
+          "$[if::(eq::(${resp.hits[25].num_comments},${cmax}),25,999)]",
+          "$[if::(eq::(${resp.hits[26].num_comments},${cmax}),26,999)]",
+          "$[if::(eq::(${resp.hits[27].num_comments},${cmax}),27,999)]",
+          "$[if::(eq::(${resp.hits[28].num_comments},${cmax}),28,999)]",
+          "$[if::(eq::(${resp.hits[29].num_comments},${cmax}),29,999)]"
+        ]
+      },
+      "_note": "命中峰值的下标,没命中的填 999(**不能留空**,空串会被当成 0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pick",
+        "value": "$[min::(${_ks})]"
+      },
+      "_note": "并列最高时取最小下标 —— 候选池按分数降序,于是「评论一样多就取分数更高的那条」,结果确定。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tr0",
+        "value": "$[get::(index::(${resp.hits},${pick}),title)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reTl",
+        "value": "[ ]+[^ ]*$"
+      },
+      "_note": "截断后退到上一个词边界(英文)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reTp",
+        "value": "[-,;:.–—/ ]+$"
+      },
+      "_note": "截断处的句尾标点 / 空格剥掉再补省略号。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reAs",
+        "value": "[ -~]"
+      },
+      "_note": "可打印 ASCII —— 剥掉它们剩下的就是宽字符(中日韩)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0L",
+        "value": "$[length::(${tr0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0N",
+        "value": "$[length::(replaceAll::(${tr0},${reAs},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0W",
+        "value": "$[round::(calc::(${t0L}+${t0N}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0K",
+        "value": "$[round::(min::(floor::(calc::(${t0L}*50/max::(${t0W},1))),${t0L}))]"
+      },
+      "_note": "截到第几个字:按本条的平均字宽把预算折成字数。round 是为了 Android 上 floor 返回 double。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[if::(gt::(${t0W},50),connect::(replaceAll::(replaceAll::(subString::(${tr0},0,${t0K}),${reTl},),${reTp},),…),${tr0})]"
+      },
+      "_note": "超出 50 个宽度单位才截:按词退一格、剥句尾标点、补「…」(线上宿主的文本节点出不了省略号)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[get::(index::(${resp.hits},${pick}),num_comments)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p0",
+        "value": "$[get::(index::(${resp.hits},${pick}),points)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cr0",
+        "value": "$[get::(index::(${resp.hits},${pick}),created_at_i)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0",
+        "value": "$[parseNumber::(max::(calc::((${nowS}-${cr0})/3600),1),0)]"
+      },
+      "_note": "上榜小时数,下限钳 1 —— 与另外三张卡同一条判据。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "am0",
+        "value": "$[max::(floor::(calc::((${nowS}-${cr0})/60)),1)]"
+      },
+      "_note": "发帖距今分钟数 →「N 小时前」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a0",
+        "value": "$[round::(if::(lt::(${am0},60),${am0},if::(lt::(${am0},2880),floor::(calc::(${am0}/60)),floor::(calc::(${am0}/1440)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u0",
+        "value": "$[if::(lt::(${am0},60),1,if::(lt::(${am0},2880),2,3))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "id0",
+        "value": "$[get::(index::(${resp.hits},${pick}),objectID)]"
+      },
+      "_note": "⚠️ 提成**顶层标量**:整卡 onClick 的插值只认顶层标量键,嵌套路径一律取空。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "t0",
+          "c0",
+          "p0",
+          "g0",
+          "id0",
+          "a0",
+          "u0"
+        ]
+      }
+    }
+  ]
+}

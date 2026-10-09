@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "id": "move",
+  "title": "异动提醒",
+  "sub": "24 小时涨跌超过你设的幅度时提醒",
+  "_note": "电平型:|24h 涨跌| ≥ 阈值就响,响过冷却 4 小时 —— 大行情里不会每 5 分钟弹一条。不需要判定段,activeCondition 直接对 tick.df 的输出写。",
+  "i18n": {
+    "en-US": {
+      "title": "Big-move alert",
+      "sub": "When the 24h move exceeds your threshold",
+      "message": {
+        "title": "${sym} ${chgS} in 24h",
+        "body": "Now at ${cur} — past your ±${pct}%"
+      },
+      "form": {
+        "pair": {
+          "title": "Coin",
+          "component": {
+            "props": {
+              "placeholder": "e.g. BTC-USDT"
+            }
+          }
+        },
+        "pct": {
+          "title": "Threshold (%)",
+          "component": {
+            "props": {
+              "placeholder": "e.g. 5"
+            }
+          }
+        }
+      }
+    }
+  },
+  "params": {
+    "pair": "",
+    "pct": ""
+  },
+  "form": {
+    "pair": {
+      "title": "币种",
+      "required": true,
+      "component": {
+        "type": "textInput",
+        "props": {
+          "placeholder": "如 BTC-USDT"
+        }
+      }
+    },
+    "pct": {
+      "title": "幅度(%)",
+      "required": true,
+      "component": {
+        "type": "numberInput",
+        "props": {
+          "placeholder": "如 5"
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "/coin?pair=${pair}"
+  },
+  "task": {
+    "depends": [
+      {
+        "flow": "@[file://xJob/flow/tick.df]",
+        "params": {
+          "pair": "${pair}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "300"
+      ],
+      "cooldown": 14400
+    }
+  },
+  "alert": {
+    "level": "normal",
+    "activeCondition": "$[ge::(${chgA},${pct})]",
+    "message": {
+      "title": "${sym} 24 小时 ${chgS}",
+      "body": "现价 ${cur},超过你设的 ±${pct}%"
+    }
+  }
+}

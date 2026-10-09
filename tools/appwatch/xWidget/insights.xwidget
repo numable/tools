@@ -1,0 +1,55 @@
+{
+ "_note": "v54 修 onClick:原来传 `bundleId`,而 /reviews 只读 `app` / `b` → 点进去是空页。",
+ "version": 2,
+ "title": "评论分析",
+ "sub": "星级分布 · 每周评论数 · 差评与待回复",
+ "i18n": {
+  "en-US": {
+   "title": "Review insights",
+   "sub": "Star mix, weekly volume, low ratings and replies"
+  }
+ },
+ "layout": 44,
+ "params": {
+  "appId": ""
+ },
+ "events": {
+  "onClick": "/reviews?appId=${appId}&country=",
+  "onEdit": "/edit?w=asc&appId=${appId}",
+  "_noteClick": "单对象组件点击带对象参数进详情页。`id=&n=` / `app=&n=` 两个空值键刻意写上,保证页面判空拿到的是空串而不是「键缺席 → ${} 原样透传」([[xpage-pitfalls]])。bundleId 为空 = 账号里按名字排第一个的 App,页面流用同一条规则解析,点进去看到的就是组件上那一个。"
+ },
+ "jobs": [
+  {
+   "id": "bad-review",
+   "params": {
+    "appId": "${appId}"
+   }
+  }
+ ],
+ "canvas": {
+  "source": "@[file://rc/insights.rcn]",
+  "depends": [
+   {
+    "flow": "@[file://flow/insights.df]",
+    "params": {
+     "appId": "${appId}",
+     "_preview": "${_preview}"
+    }
+   }
+  ],
+  "refresh": {
+   "interval": [
+    "1800"
+   ]
+  }
+ },
+ "ai": {
+  "shows": "最近评论的星级分布、近 12 周每周评论数、差评与待回复数;需接入 App Store Connect",
+  "params": {
+   "appId": {
+    "kind": "account",
+    "hint": "用户 App Store Connect 账号里某个 App 的 Apple ID;留空 = 账号里按名字排第一个的 App"
+   }
+  }
+ }
+}

@@ -1,0 +1,75 @@
+{
+  "version": 2,
+  "title": "最新评论",
+  "sub": "自己的 App 看全部地区和待回复，其他 App 看公开评论",
+  "i18n": {
+    "en-US": {
+      "title": "Latest review",
+      "sub": "All storefronts and replies for your apps, public reviews for others"
+    }
+  },
+  "layout": 42,
+  "params": {
+    "_note": "appId 空 = 我关注的第一个 App(流在取数时回落,组件首行照实显示是谁)。想固定盯某一个:长按组件「编辑参数」(/edit)选,或从详情页的「添加组件」加(带参数)。",
+    "appId": "",
+    "country": ""
+  },
+  "events": {
+    "onClick": "/reviews?appId=${appId}&country=${country}",
+    "onEdit": "/edit?w=app&appId=${appId}&country=${country}"
+  },
+  "canvas": {
+    "source": "@[file://rc/review.rcn]",
+    "depends": [
+      {
+        "flow": "@[file://flow/vreview.df]",
+        "params": {
+          "appId": "${appId}"
+        },
+        "_note": "私有分支:ASC 全地区最新评论 + 待回复数(只对账号里的 App 发请求)。"
+      },
+      {
+        "flow": "@[file://flow/prv.df]",
+        "params": {
+          "appId": "${appId}",
+          "country": "${country}"
+        },
+        "_note": "公开分支:该地区最新一条公开评论(输出键 p 前缀,与私有分支不撞)。"
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "900"
+      ]
+    }
+  },
+  "jobs": [
+    {
+      "id": "bad-review",
+      "params": {
+        "appId": "${appId}"
+      }
+    }
+  ],
+  "_note": "双源组件:自己的 App 且已接入 → ASC 全地区最新评论 + 待回复;否则 → 该地区最新公开评论。两支同一张版式。",
+  "ai": {
+    "shows": "某个 App 的最新一条评论:自己已接入的 App 看全部地区并带未回复数,其他 App 看该地区公开评论",
+    "params": {
+      "appId": {
+        "kind": "value",
+        "format": "App Store 数字 Apple ID(apps.apple.com 链接里 id 后面那串数字),任意公开 App 都可以",
+        "hint": "留空 = 用户关注列表里的第一个 App;不确知 ID 就留空,别猜",
+        "examples": [
+          "414478124",
+          "389801252",
+          "835599320"
+        ]
+      },
+      "country": {
+        "kind": "auto",
+        "format": "两位 App Store 地区码,大写,如 US / CN / JP / GB / DE",
+        "hint": "留空 = 关注列表的地区设置(没设过:国内用户 CN、其余 US);用户点名地区时才填"
+      }
+    }
+  }
+}

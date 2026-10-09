@@ -1,0 +1,46 @@
+{
+  "_note": "动态提醒:给**重复**待办(以及没排上准点提醒的待办)发到点通知。只有一个实例(无参数),开一次就管全部待办。\n\n2026-09-25 起不重复的待办改走 once.xjob(一次性,准点);页面写 rq 时排除已排上一次性提醒的待办(model.js buildRQ),两边不会各响一次。\n本条仍是尽力而为:节律下限 30 分钟,到点后可能晚一些才响 —— 页面只对重复待办这么说。\n边沿状态 rqLast 只在 then 段写(alert-design §5.3):首轮只建基线不响。",
+  "version": 1,
+  "id": "due",
+  "title": "待办到点提醒",
+  "sub": "重复的待办到点发通知（可能稍晚一些）",
+  "i18n": {
+    "en-US": {
+      "title": "To-do reminders",
+      "sub": "Notifies you when a repeating to-do comes due (may arrive a little late)",
+      "message": {
+        "title": "${title}",
+        "body": "To-dos due now: ${n}"
+      }
+    }
+  },
+  "events": {
+    "onClick": "/view?f=today"
+  },
+  "task": {
+    "depends": [
+      {
+        "flow": "@[file://xJob/flow/due.df]",
+        "params": {}
+      }
+    ],
+    "then": {
+      "flow": "@[file://xJob/flow/due-mark.df]",
+      "params": {
+        "now": "${now}"
+      }
+    },
+    "refresh": {
+      "interval": [
+        "300"
+      ]
+    }
+  },
+  "alert": {
+    "level": "normal",
+    "message": {
+      "title": "${title}",
+      "body": "${n} 件待办到了提醒时间"
+    }
+  }
+}

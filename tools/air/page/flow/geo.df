@@ -1,0 +1,212 @@
+{
+  "_note": "城市检索(与 weather 同一套写法:open-meteo 裸词 + 加「市」两路并搜,两路都交白卷时才补 OSM Nominatim)。\n排序、去重、Nominatim 清洗都在 H5 页的 JS 里做(VParser 没有 sort/concat)。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "入参先落地:方法参数里的 ${} 看不见 flow 入参(§9.5 #3)。",
+      "op": "set",
+      "props": {
+        "key": "_lg",
+        "value": "${lang}"
+      }
+    },
+    {
+      "_note": "「词+市」那一路只在中文检索时发(doc/overseas-first.md P4):英文 / 其它语言加「市」必然零结果(实测 `Tokyo市` 200 空数组),白打一次往返。非中文时只发裸词那一路,rB 不存在 → listC / cN 为空,下游原本就按「加市没命中」那一支走。",
+      "op": "set",
+      "props": {
+        "key": "_zh",
+        "value": "$[if::(startsWith::(${_lg},zh),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${_zh},1)]"
+      },
+      "items": [
+        {
+          "_note": "两路必须**并发**:串行就是两次 TLS 往返(实测单次 ~0.6s),搜索框上翻倍很明显。\n⚠️ `concurrent` 写在 **action 位**不是 op 位 —— 写成 op 时整块被静默跳过,\n   请求根本不发、流几毫秒就 success、字段全空。",
+          "action": "concurrent",
+          "items": [
+            {
+              "id": "rA",
+              "action": "request",
+              "params": {
+                "url": "https://geocoding-api.open-meteo.com/v1/search?name=${kw}&count=8&language=${lang}",
+                "method": "GET",
+                "formatType": "json"
+              }
+            },
+            {
+              "id": "rB",
+              "action": "request",
+              "params": {
+                "url": "https://geocoding-api.open-meteo.com/v1/search?name=${kw}市&count=5&language=${lang}",
+                "method": "GET",
+                "formatType": "json"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${_zh},0)]"
+      },
+      "items": [
+        {
+          "id": "rA",
+          "action": "request",
+          "params": {
+            "url": "https://geocoding-api.open-meteo.com/v1/search?name=${kw}&count=8&language=${lang}",
+            "method": "GET",
+            "formatType": "json"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "⚠️ **屏障节点,勿删**:`concurrent` 的结果对紧邻的下一个节点还不可见 ——\n读到的是 null,而流仍报 success,于是搜索框「什么都搜不到」且零报错。",
+      "op": "set",
+      "props": {
+        "key": "_barrier",
+        "value": "1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "list",
+        "value": "${rA.results}"
+      }
+    },
+    {
+      "_note": "加「市」那一路。消费侧把它排在前面参与合并(按人口排序后自然会站到该站的位置)。",
+      "op": "set",
+      "props": {
+        "key": "listC",
+        "value": "${rB.results}"
+      }
+    },
+    {
+      "_note": "「这次搜索到底搜出一座像样的城市没有」的判据 —— 取**裸搜前三条 + 加市第一条**里最大的人口数。\n⚠️ 不用 `max::(pluck::(…))`:实测 `pluck` 本身没问题(给 `[null,null]`),但 `max` 对全 null 的数组\n   求空,外层 `parseNumber` 跟着**整体求空** —— 那个键直接从输出里消失,而流照报 success。\n   全仓零 `pluck` 用例,这是条没人走过的路。静态下标 + 手工比大小啰嗦,但每一步都是确定的。\n⚠️ 只看前三条够用:open-meteo 的返回顺序不按人口,但一座真城市不会排到第四条之后才出现。\n⚠️ `parseNumber` 外面**必须再套一层 `findNotEmpty`** —— 这些条目的 `population` 是 JSON `null`,\n   而 `parseNumber::(null, 0)` **不给默认值,整体求空**,那个键就从输出里消失了\n   (于是判据恒不成立、第三路永不执行,且流照报 success)。\n   同页 detail.df 里那一串 `if::(eq::(findNotEmpty::(x,__none__),__none__),,parseNumber::(x))` 也是为这个。",
+      "op": "set",
+      "props": {
+        "key": "_p0",
+        "value": "$[parseNumber::(findNotEmpty::(${rA.results[0].population},0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_p1",
+        "value": "$[parseNumber::(findNotEmpty::(${rA.results[1].population},0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_p2",
+        "value": "$[parseNumber::(findNotEmpty::(${rA.results[2].population},0),0)]"
+      }
+    },
+    {
+      "_note": "加「市」那一路的第一条 —— 长沙市(309 万)就在这里,有它就不必补第二源。",
+      "op": "set",
+      "props": {
+        "key": "_pc",
+        "value": "$[parseNumber::(findNotEmpty::(${rB.results[0].population},0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_m1",
+        "value": "$[if::(gt::(${_p0},${_p1}),${_p0},${_p1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_m2",
+        "value": "$[if::(gt::(${_m1},${_p2}),${_m1},${_p2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_best",
+        "value": "$[if::(gt::(${_m2},${_pc}),${_m2},${_pc})]"
+      }
+    },
+    {
+      "_note": "「这一路能不能发」先落成键再给 op:if 用:⚠️ 把 if::(eq::…) 直接嵌进 if::(lt::…) 的参数里,整条流静默求空(success 但 data 全空,2026-09-28 CLI 实测)。大陆分发(@app.region=cn)时为 0:nominatim 在大陆被墙,被墙的连接不回拒绝而是一直挂着(大陆机实测 8 秒仍连不上),页面给检索流的上限是 12 秒,先到 → 整次搜索报失败、连 open-meteo 已有的结果都显示不出来(请求失败本身不会中断流,CLI 实测)(doc/region-distribution.md §5)。老宿主没有 @app.region → 不等于 cn → 照旧发。",
+      "op": "set",
+      "props": {
+        "key": "_nOK",
+        "value": "$[if::(eq::(${@app.region},cn),0,1)]"
+      }
+    },
+    {
+      "_note": "Nominatim 返回地名的语言跟界面走(doc/overseas-first.md P4):中文 zh-CN,其它 en。",
+      "op": "set",
+      "props": {
+        "key": "_al",
+        "value": "$[if::(eq::(${_zh},1),zh-CN,en)]"
+      }
+    },
+    {
+      "_note": "**第二源(OSM Nominatim),只在 open-meteo 交白卷时才发**。\n判据 = 两路里最大的人口数 < 50 万:搜「长沙」时两路已经拿到长沙市(309 万),这一支根本不跑;\n而搜「东京」「纽约」「首尔」时两路的结果全是人口几千的同名村镇(或零结果),这一支才补上。\n   50 万这条线也接住了**伦敦**:裸搜给的是加拿大安大略那个伦敦(42 万),英国伦敦(896 万)在库里是繁体「倫敦」。\n   线定高一点只是多补几次搜索、结果按人口排序后不会变差;定低了就会漏掉「有结果但不是那一个」这一类。\n⚠️ 为什么需要它:open-meteo 的中文匹配是**精确**的,而 GeoNames 里这几座城市的中文别名\n   存的是**繁体**(東京 / 紐約 / 倫敦 都能搜到,简体搜不到);首尔存的是「首尔特别市」。\n   这是数据源中文覆盖的硬伤,两路搜也治不了(2026-09-10 实测 12 座主要外国城市,坏 4 座)。\n⚠️ **条件发**不是省事,是**守 OSM 的使用政策**:Nominatim 要求 ≤1 req/s、不得重度使用。\n   绝大多数搜索(中国城市 + 巴黎/新加坡/曼谷/悉尼/洛杉矶/迪拜/柏林/莫斯科…)走不到这里。\n⚠️ `User-Agent` 是政策**硬要求**(要能识别到应用),不是可选项 —— 与 tubewatch 那几条流同规。\n⚠️ 归属标注:三处搜索页的页脚都写了「城市检索结果含 OpenStreetMap 数据」。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(lt::(${_best},500000),${_nOK},0)]"
+      },
+      "items": [
+        {
+          "id": "rC",
+          "action": "request",
+          "params": {
+            "url": "https://nominatim.openstreetmap.org/search?q=${kw}&format=jsonv2&limit=5&accept-language=${_al}&addressdetails=1&featuretype=city",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable/1.0 (+https://numable.app)",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "_note": "读取屏障(勿删):request 之后紧邻的节点读不到结果。",
+          "op": "set",
+          "props": {
+            "key": "_bn",
+            "value": "1"
+          }
+        },
+        {
+          "_note": "Nominatim 的原始数组。**字段形状与 open-meteo 不同**(`lat`/`lon` 是字符串、\n地名在 `address.city`、没有 population、有 `importance`),清洗交给消费侧:\nH5 那两张页有 JS(`normNom()`);引导屏走 `setup-search.af` 里的槽位。\n⚠️ 名字带**简繁双写**(「纽约;紐約」「东京都/東京都」「韩国 / 南韓」),分隔符 `;` 与 `/` 都有 ——\n   取第一段即可(伦敦那条繁体在前、会显示成「大倫敦」,认得出,不值得为它再加一层规则)。",
+          "op": "set",
+          "props": {
+            "key": "listN",
+            "value": "${rC}"
+          }
+        }
+      ]
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "list",
+          "listC",
+          "listN"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。\n⚠️ 三个列表的**形状不一样**:`list`/`listC` 是 open-meteo 的(name/latitude/longitude/admin1/country/population),\n`listN` 是 Nominatim 的(name/lat/lon/address.{city,state,country}/importance,名字还带简繁双写)。\n统一交给消费侧:H5 有 `normNom()`,引导屏走 setup-search.af 的槽位。\n⚠️ 判据中间量(_p*/_m*/_best)**不透出** —— 对下游没用,而 _best 恰好可能是数字 0,\n   透出去只会让 L1 的「空即错」判据多一处要豁免的地方。"
+    }
+  ],
+  "_lintCache": "exempt",
+  "_noteCache": "【G23 豁免】城市搜索流:用户敲了城市名才跑,不是首屏。"
+}

@@ -1,0 +1,90 @@
+{
+  "_note": "⚠️⚠️ **字段一律不预填(`value` 留空)** —— 2026-08-16 iOS 实测查实的平台缺口:\n`nav.openForResult` 的**嵌套 `params` 对象里的 `${}` 不做求值**(字面量能传、表达式原样透传;\n同一次对照实验里 `alias:\"LITERAL-OK\"` 正常显示,而 `${initStart}`/`${active}` 全空)。\n于是 `.xform` 的 `value: \"${start}\"` 会拿到字面串 `\"${start}\"` 去求值 ——\ndatePicker 认不出显示空、numberInput 认不出显示 0,而**「显示名称」会把 `${alias}` 这串\n原样摆进输入框,用户一保存就把别名设成了 `${alias}`**。这是会毁数据的那种。\n(URL query 那条路也不通:`presentForResult` 只拿入参 params 当 routeParams,不解析 query。)\n\n所以降级为:**不预填 + 留空即保持不变**(由 plan-save.af 的空值防御兜底)。\n代价是看不到当前值 —— 平台把嵌套 params 的深度求值补上后即可恢复预填。",
+  "type": "form",
+  "id": "pill-setup",
+  "title": "${@i18n.title}",
+  "desc": "${@i18n.desc}",
+  "confirmTxt": "${@i18n.save}",
+  "themeColor": "#128F66|#6FE8BE",
+  "onSubmit": "@[file://page/flow/plan-save.af]",
+  "i18n": {
+    "zh-CN": {
+      "title": "记录设置",
+      "desc": "只填想改的项，留空的保持不变。记录只保存在这台设备上，不上传。",
+      "save": "保存",
+      "start_title": "本盒起始日",
+      "start_desc": "这盒药第 1 天的日期。可以往前填——已经吃了几天也补得回来。留空则不改。",
+      "active_title": "活性片数",
+      "active_desc": "一盒里需要服用的天数，常见为 21 或 24。留空（0）则不改。",
+      "rest_title": "停药天数",
+      "rest_desc": "活性片之后的间隔天数，常见为 7 或 4；连续服用填 0。留空则不改——要改成 0 请先填别的数再改回。",
+      "alias_title": "显示名称",
+      "alias_desc": "显示在组件和桌面小组件上。留空则不改；当前留空时显示「每日记录」。桌面是别人也会看到的地方。",
+      "alias_ph": "每日记录"
+    },
+    "en-US": {
+      "title": "Log Settings",
+      "desc": "Fill in only what you want to change; blank fields stay as they are. Entries stay on this device and are never uploaded.",
+      "save": "Save",
+      "start_title": "Pack start date",
+      "start_desc": "Day 1 of this pack. You can back-date it — days already taken are counted. Leave blank to keep.",
+      "active_title": "Active pills",
+      "active_desc": "Days you take a pill per pack, usually 21 or 24. Blank (0) keeps the current value.",
+      "rest_title": "Break days",
+      "rest_desc": "Days off after the active pills, usually 7 or 4; enter 0 for continuous use. Blank keeps the current value — to set 0, enter another number first, then change it back.",
+      "alias_title": "Display name",
+      "alias_desc": "Shown on the widget and the home-screen widget. Blank keeps the current name; when unset it shows \"Daily log\". Remember the home screen is where others may see it.",
+      "alias_ph": "Daily log"
+    }
+  },
+  "form": {
+    "start": {
+      "title": "${@i18n.start_title}",
+      "desc": "${@i18n.start_desc}",
+      "component": {
+        "type": "datePicker",
+        "value": "",
+        "props": {
+          "format": "yyyy-MM-dd"
+        }
+      }
+    },
+    "active": {
+      "title": "${@i18n.active_title}",
+      "desc": "${@i18n.active_desc}",
+      "component": {
+        "type": "numberInput",
+        "value": "",
+        "props": {
+          "min": "1",
+          "max": "90",
+          "step": "1"
+        }
+      }
+    },
+    "rest": {
+      "title": "${@i18n.rest_title}",
+      "desc": "${@i18n.rest_desc}",
+      "component": {
+        "type": "numberInput",
+        "value": "",
+        "props": {
+          "min": "0",
+          "max": "30",
+          "step": "1"
+        }
+      }
+    },
+    "alias": {
+      "title": "${@i18n.alias_title}",
+      "desc": "${@i18n.alias_desc}",
+      "component": {
+        "type": "textInput",
+        "value": "",
+        "props": {
+          "placeholder": "${@i18n.alias_ph}"
+        }
+      }
+    }
+  }
+}

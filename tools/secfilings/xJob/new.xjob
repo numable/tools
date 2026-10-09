@@ -1,0 +1,79 @@
+{
+  "_note_gen": "tools/infosource/gen_secfilings.py",
+  "_note": "**动态提醒(边沿 + 按 accession 编号去重)**:关注的公司出现新的 8-K / 10-Q / 10-K(外国公司 6-K / 20-F / 40-F)时提醒;参数 ins=1 时 Form 4(内部人交易)也提醒。取数段 xJob/flow/scan.df(不写状态),判定段 xJob/flow/new.df(基线只在这里写,键拼上 ins 与代码)。首跑只建基线、不补报;一家都没取到 = 未知(不响、不动基线)。\nmessage 的结构为同意面板的预览而设:面板只拿 params 做 ${} 代入(不跑流),预览渲成「美股新公告」;送达时 then 补上分隔符与内容 →「美股新公告：NVDA 提交了 8-K」。",
+  "version": 1,
+  "id": "new",
+  "title": "新公告提醒",
+  "sub": "关注的公司交了 8-K、季报或年报时提醒你",
+  "i18n": {
+    "en-US": {
+      "title": "New filing alert",
+      "sub": "Get notified when a company you follow files an 8-K, 10-Q or 10-K",
+      "message": {
+        "title": "SEC filing alert${sep} ${mt}",
+        "body": "${mb}"
+      },
+      "form": {
+        "ins": {
+          "title": "Filings"
+        }
+      }
+    }
+  },
+  "params": {
+    "ins": "0"
+  },
+  "form": {
+    "ins": {
+      "title": "提醒哪些文件",
+      "required": true,
+      "component": {
+        "type": "select",
+        "props": {
+          "items": [
+            {
+              "label": "8-K / 10-Q / 10-K",
+              "value": "0"
+            },
+            {
+              "label": "8-K / 10-Q / 10-K / Form 4",
+              "value": "1"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "task": {
+    "depends": [
+      {
+        "flow": "@[file://xJob/flow/scan.df]",
+        "params": {
+          "ins": "${ins}"
+        }
+      }
+    ],
+    "then": {
+      "flow": "@[file://xJob/flow/new.df]",
+      "params": {
+        "ins": "${ins}",
+        "J": "${J}"
+      }
+    },
+    "refresh": {
+      "interval": [
+        "06:00-22:00@900",
+        "3600"
+      ],
+      "tz": "America/New_York",
+      "_note": "受理时段 15 分钟检查一次、其余 1 小时;免费档平台钳到 30 分钟。每次检查 N 个请求。"
+    }
+  },
+  "alert": {
+    "level": "normal",
+    "message": {
+      "title": "美股新公告${sep}${mt}",
+      "body": "${mb}"
+    }
+  }
+}

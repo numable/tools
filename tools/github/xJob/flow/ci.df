@@ -1,0 +1,208 @@
+{
+ "_note": "`xJob/ci.xjob` 的**判定段**(doc/alert-design.md §5.3)。入参由 `.xjob` 的 then.params 显式传入:conclusion(failure / success / 空)、id(失败签名串)、f0..f5(每个关注位的失败签名「名字@oid;」,没失败为空),都来自 xWidget/flow/repos.df。\n判据 = 这一轮出了结论、有失败、且**至少有一个失败项不在上次的基线里**(边沿:同一次失败只报一次,修好后再挂会再报)。",
+ "version": 1,
+ "actions": [
+  {
+   "id": "prevRaw",
+   "action": "data.get",
+   "params": {
+    "key": "ci.last",
+    "default": ""
+   },
+   "_note": "基线 = 上一轮已出结论时的失败签名串(「名字@oid;」拼起来;全部通过时是 ok)。这条规则没有 params,状态键就是 ci.last。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "_b",
+    "value": "1"
+   },
+   "_note": "⚠️ data.get 之后的屏障(勿删)。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "prev",
+    "value": "$[connect::(k,${prevRaw})]"
+   },
+   "_note": "前缀 k 让基线恒为字符串,空基线 = 'k';下面用 contains 逐条查。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "cc",
+    "value": "${conclusion}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "hasConc",
+    "value": "$[if::(eq::(connect::(k,${cc}),k),0,1)]"
+   },
+   "_note": "结论为空 = 有仓库的 CI 还在跑(或一个配了 CI 的都没有):不判、不写基线。判空用哨兵,不用 length::。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "bad",
+    "value": "$[if::(eq::(${cc},success),0,1)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "s0",
+    "value": "${f0}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "s1",
+    "value": "${f1}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "s2",
+    "value": "${f2}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "s3",
+    "value": "${f3}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "s4",
+    "value": "${f4}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "s5",
+    "value": "${f5}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "n0",
+    "value": "$[if::(eq::(connect::(k,${s0}),k),0,if::(contains::(${prev},${s0}),0,1))]"
+   },
+   "_note": "第 i 个关注位是不是**新**挂的:失败签名不在基线里。整串比较的老写法在「A、B 都挂 → A 修好」时,签名从 A;B; 变成 B;,会把早就报过的 B 再报一次 urgent(2026-09-25 审查实证)。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "n1",
+    "value": "$[if::(eq::(connect::(k,${s1}),k),0,if::(contains::(${prev},${s1}),0,1))]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "n2",
+    "value": "$[if::(eq::(connect::(k,${s2}),k),0,if::(contains::(${prev},${s2}),0,1))]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "n3",
+    "value": "$[if::(eq::(connect::(k,${s3}),k),0,if::(contains::(${prev},${s3}),0,1))]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "n4",
+    "value": "$[if::(eq::(connect::(k,${s4}),k),0,if::(contains::(${prev},${s4}),0,1))]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "n5",
+    "value": "$[if::(eq::(connect::(k,${s5}),k),0,if::(contains::(${prev},${s5}),0,1))]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "_n",
+    "value": [
+     "${n0}",
+     "${n1}",
+     "${n2}",
+     "${n3}",
+     "${n4}",
+     "${n5}"
+    ]
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "_nb",
+    "value": "1"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "nNew",
+    "value": "$[parseNumber::(sum::(${_n}),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "newRepo",
+    "value": "$[if::(eq::(${n0},1),replaceAll::(${s0},@.*$,),if::(eq::(${n1},1),replaceAll::(${s1},@.*$,),if::(eq::(${n2},1),replaceAll::(${s2},@.*$,),if::(eq::(${n3},1),replaceAll::(${s3},@.*$,),if::(eq::(${n4},1),replaceAll::(${s4},@.*$,),if::(eq::(${n5},1),replaceAll::(${s5},@.*$,),))))))]"
+   },
+   "_note": "通知点名的仓库 = 第一个新挂的(不是按槽位排第一的失败仓库 —— 那个可能早就报过)。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "hit",
+    "value": "$[if::(and::(eq::(${hasConc},1),eq::(${bad},1),gt::(${nNew},0)),1,0)]"
+   }
+  },
+  {
+   "op": "if",
+   "props": {
+    "val": "${hasConc}"
+   },
+   "items": [
+    {
+     "action": "data.set",
+     "params": {
+      "key": "ci.last",
+      "value": "${id}"
+     }
+    }
+   ],
+   "_note": "⚠️ 只在这一轮真出了结论时才写基线。CI 还在跑就写进去,等它真的失败时那一条已经在基线里、永远不会报。"
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "hit",
+     "newRepo",
+     "nNew"
+    ]
+   },
+   "_note": "`alert` 里没写 activeCondition,默认读 hit;newRepo / nNew 并进作用域给通知文案用。"
+  }
+ ]
+}

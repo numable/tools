@@ -1,0 +1,82 @@
+{
+  "_note": "引导屏里点中一条搜索结果 → 落盘成「我的城市」的第一个,然后**直接进正常首页**。\n§7.1.1 第 1 条要求这一屏说清「做完得到什么」;做完了就别再要一次确认 —— 这里不弹任何「已添加」,`reloadPage` 完成时用户看到的就是他那座城的天空。\n\n⚠️ `lat/lon/name` 由**结果行那个 Canvas 节点的 events.params** 带进来(`${s1lat}` 这类页面 state 键在节点作用域里求值,与 crypto/forex 首页那几行 `params: {k1: \"${k1}\"}` 同一条路)。\n⚠️ 写盘前先验一次:坐标为空就只震一下、什么都不写。写坏 `data.cities` 是**持久**的,而这条流的入参万一在某个端上没求出值,不拦就是把空城市永久写进用户沙盒(v12 那次 `\"${_i}\"` 的教训)。\n⚠️ 用 `op:set` 把整份数组落成结构再 `data.set`:AF 里没有数组追加原语,而引导屏的语义本来就是「第一座城」,整份覆盖正确。",
+  "version": 1,
+  "i18n": {
+    "zh-CN": {
+      "loading": "正在获取天气…"
+    },
+    "en-US": {
+      "loading": "Fetching weather…"
+    }
+  },
+  "actions": [
+    {
+      "_note": "G22:表达「收到了」,必须是第一个。",
+      "action": "ui.haptic"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "okLat",
+        "value": "$[length::(${lat})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "okLon",
+        "value": "$[length::(${lon})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(gt::(${okLat},0),if::(gt::(${okLon},0),1,0),0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${ok},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "one",
+            "value": [
+              {
+                "lat": "${lat}",
+                "lon": "${lon}",
+                "name": "${name}",
+                "where": "${where}"
+              }
+            ]
+          }
+        },
+        {
+          "action": "data.set",
+          "params": {
+            "key": "cities",
+            "value": "${one}"
+          }
+        },
+        {
+          "_note": "刚选完的城市必然没有缓存,取数是真往返(实测 ~1.7s),无条件弹浮层。",
+          "action": "ui.showLoading",
+          "params": {
+            "text": "${@i18n.loading}"
+          }
+        },
+        {
+          "_note": "reloadPage 是 await 的(等 depends 跑完 + 整树渲染完),所以下面那句 hide 落在正确时机。重跑 home.df → n 从 0 变成 1 → 引导屏整块收起、正常首页出现。",
+          "action": "xpage.reloadPage"
+        },
+        {
+          "action": "ui.hideLoading"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,584 @@
+{
+  "_note": "生成器 tools/infosource/gen_releases.py。首页单仓库取数(带 G23 三态缓存,键 = c.rl.<owner>~<repo> 小写)。只取 tag 名 / 链接 / 时间,发布说明一律不读(§3.13)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "tzNow",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzLf",
+        "value": "$[formatDate::(${tzNow},yyyy-MM-dd HH:mm)]"
+      },
+      "_note": "此刻的**本机**年月日时分。pattern 只用纯 token + `-` `:` 空格(跨端安全子集,G4c)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzY",
+        "value": "$[subString::(${tzLf},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMo",
+        "value": "$[subString::(${tzLf},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzD",
+        "value": "$[subString::(${tzLf},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzH",
+        "value": "$[subString::(${tzLf},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMi",
+        "value": "$[subString::(${tzLf},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzAdj",
+        "value": "$[if::(le::(${tzMo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzYoe",
+        "value": "$[calc::(${tzY}-2000-${tzAdj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMp",
+        "value": "$[calc::(${tzMo}-3+12*${tzAdj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzDb",
+        "value": "$[floor::(calc::((153*${tzMp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzQ4",
+        "value": "$[floor::(calc::(${tzYoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzDays",
+        "value": "$[calc::(11017+${tzYoe}*365+${tzQ4}+${tzDb}+${tzD}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzE",
+        "value": "$[calc::(${tzDays}*86400000+${tzH}*3600000+${tzMi}*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMin",
+        "value": "$[calc::(floor::(calc::(${tzNow}/60000))*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzO",
+        "value": "$[round::(calc::(${tzE}-${tzMin}))]"
+      },
+      "_note": "本机时区偏移(毫秒):东八区 = 28800000。round 是为了 Android 上 calc 返回 double 时不带 .0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reId",
+        "value": "Repository/[0-9]+/"
+      },
+      "_note": "tag 名在 `<id>tag:github.com,2008:Repository/<数字>/<tag 名></id>` 里 —— 按这段切。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rePre",
+        "value": "[0-9][-._+]?(alpha|beta|rc|canary|nightly|preview|pre|dev|next|snapshot|insiders|experimental)|[0-9](a|b)[0-9]|[0-9][-.]m[0-9]"
+      },
+      "_note": "预发布判据(对小写 tag 名),见生成器头注。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reDig",
+        "value": "[0-9]"
+      },
+      "_note": "不含数字的 tag(nightly / stable / latest)是会移动的指针,不是版本 —— 一律当预发布。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reHd",
+        "value": "href=\"https://github.com/"
+      },
+      "_note": "feed 头部第一个 href = 仓库**正名**(改名仓库 301 之后的那个名字)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oIn",
+        "value": "${o}"
+      },
+      "_note": "入参落地(勿删):方法参数里的 ${} 看不见 flow 入参。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rIn",
+        "value": "${r}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "okey",
+        "value": "$[toLowerCase::(${oIn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rkey",
+        "value": "$[toLowerCase::(${rIn})]"
+      }
+    },
+    {
+      "_note": "入参必须先 op:set 落地成 data 域的键,方法参数里才看得见(§9.5 #3)。`.xwidget` 不传 → 空串 → 归 0 → 全程不碰缓存。",
+      "op": "set",
+      "props": {
+        "key": "cacheIn",
+        "value": "${_cache}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "useCache",
+        "value": "$[parseNumber::(${cacheIn},0)]"
+      }
+    },
+    {
+      "_note": "**结构版本号**:pack 的字段集变了就 +1。它管的不是「数据新不新」而是「这份数据的**形状**还认不认」——缓存键只含对象维度、不含包代际,不盖这个戳,升级后首屏就会拿上一版的 pack 去渲新模板:少的字段取空,尺寸串里的 calc 一算 null,**整卡白块且不报错**。\n⚠️ 从 1 起、绝不能用 0(`eq::(空,0)` 恒为 true,旧缓存会被判成匹配)。⚠️ 刻意不用 `manifest.version`:flow 拿不到,且那会过度失效(只改配色也丢全部缓存)。",
+      "op": "set",
+      "props": {
+        "key": "SCHEMA",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缓存键。⚠️ 凡是影响结果的入参都要进键,且**绝不能用下标**(下标随增删漂移,漂移后会把 A 的数据渲成 B 的,还不报错)。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.rl.,${okey},~,${rkey})]"
+      }
+    },
+    {
+      "_note": "读缓存。`default:{}` 让下面的 ${hit.ts} 在无缓存时安全取空,而不是整条流断掉。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitSchema",
+        "value": "${hit.schema}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "两道闸:**结构比对**(pack 形状对不上就当没有缓存 —— 旧形状渲新模板是白块,比等一次网络糟得多)+ hardTTL = 259200s(太旧的数先渲出来再改口,不如老实等一次)。嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里。",
+      "op": "set",
+      "props": {
+        "key": "hasHit",
+        "value": "$[if::(eq::(${hitSchema},${SCHEMA}),if::(gt::(${hitTs},0),if::(lt::(${age},259200000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "ttl = 600s(§5.5.3)。纯新鲜度,不掺 useCache —— 掺进去 `_stale` 就算不对了。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},600000),1,0),0)]"
+      }
+    },
+    {
+      "_note": "「这次先出的是旧货,请后台校新」。**必须进 resultFilter** —— 校新那条路靠它,漏了就是永不校新。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),if::(eq::(${fresh},1),0,1),0),0)]"
+      }
+    },
+    {
+      "_note": "只有「开了缓存 且 有没超 hardTTL 的货」才跳过网络 —— 连接都不建立。⚠️ **stale 也走这条跳过**(首屏零等待是三态的全部价值);写成「不 fresh 就打」= 退回两态,首屏照样白等。卡片(useCache=0)与冷启一律落进 items 真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "x",
+          "action": "request",
+          "params": {
+            "url": "https://github.com/${oIn}/${rIn}/tags.atom",
+            "method": "GET",
+            "formatType": "string",
+            "timeout": "10000",
+            "header": {
+              "User-Agent": "Numable-releases/1 (+https://numable.app)",
+              "Accept": "application/atom+xml"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "rm",
+            "value": "^(v?[0-9]|${rkey}[-@]?v?[0-9])"
+          },
+          "_note": "「主线」tag 判据(2026-10-08):`v1.2` / `1.2` / `<仓库名>@1.2` / `<仓库名>-v1.2` / `go1.2`。monorepo(withastro/astro)的 feed 里混着一串子包 tag(`@astrojs/netlify@8.2.8`),用户关注 withastro/astro 想看的是 astro 本身 —— 先挑主线正式版,没有再退回任意正式版,再退回第一条(标预发布)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g",
+            "value": "$[split::(${x},<entry>)]"
+          },
+          "_note": "按 `<entry>` 切:第 0 段是 feed 头部,条目从第 1 段起。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "Q",
+            "value": {
+              "ok": "$[if::(contains::(${x},<feed),1,0)]",
+              "ne": "$[calc::(length::(${g})-1)]",
+              "cn": "$[index::(split::(index::(split::(${x},${reHd}),1),/releases),0)]",
+              "bits": "$[connect::(if::(matches::(index::(split::(index::(split::(${g[1]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[1]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[1]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[2]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[2]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[2]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[3]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[3]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[3]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[4]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[4]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[4]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[5]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[5]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[5]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[6]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[6]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[6]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[7]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[7]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[7]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[8]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[8]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[8]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[9]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[9]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[9]},${reId}),1),</id>),0)),${rm}),s,t)),p),if::(matches::(index::(split::(index::(split::(${g[10]},${reId}),1),</id>),0),${reDig}),if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[10]},${reId}),1),</id>),0)),${rePre}),p,if::(matches::(toLowerCase::(index::(split::(index::(split::(${g[10]},${reId}),1),</id>),0)),${rm}),s,t)),p))]"
+            }
+          },
+          "_note": "ok = 取到了 feed(404 / 断网时 request 失败、原文为空);ne = 条目数(没有任何 tag 的仓库是 0);cn = 仓库正名;bits = 前 10 条各自是 预发布(p)/ 主线正式版(s)/ 其它正式版(t,monorepo 子包)。同一节点里的值互不可见,故都只引前面落地过的键。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "fs",
+            "value": "$[length::(index::(split::(${Q.bits},s),0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ft",
+            "value": "$[length::(index::(split::(${Q.bits},t),0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k",
+            "value": "$[if::(lt::(${fs},${Q.ne}),calc::(${fs}+1),if::(lt::(${ft},${Q.ne}),calc::(${ft}+1),1))]"
+          },
+          "_note": "选中的段号:主线正式版 → 其它正式版 → 第一条(标预发布)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sg",
+            "value": "$[index::(${g},${k})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "F",
+            "value": {
+              "tag": "$[index::(split::(index::(split::(${sg},${reId}),1),</id>),0)]",
+              "href": "$[index::(split::(index::(split::(${sg},href=\\\"),1),\\\"),0)]",
+              "iso": "$[index::(split::(index::(split::(${sg},<updated>),1),</updated>),0)]",
+              "pre": "$[if::(lt::(${fs},${Q.ne}),0,if::(lt::(${ft},${Q.ne}),0,1))]"
+            }
+          },
+          "_note": "tag 取 `<id>` 里的原始名(`<title>` 是 Release 标题);href = 条目链接(已 URL 编码,monorepo 的 @ / 斜杠都在里面);iso = `<updated>`,UTC。**`<content>`(提交 / 发布说明)从不读取**(§3.13)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "iso",
+            "value": "${F.iso}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "m",
+            "value": "$[if::(gt::(length::(${iso}),0),calc::(parseDate::(subString::(${iso},0,10),yyyy-MM-dd)+${tzO}+subString::(${iso},11,13)*3600000+subString::(${iso},14,16)*60000+subString::(${iso},17,19)*1000),0)]"
+          },
+          "_note": "UTC 时刻:该日期的本机零点(parseDate)+ 时区偏移 = UTC 零点,再加时分秒。日期部分只用 `yyyy-MM-dd`(跨端安全子集,G4c)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok",
+            "value": "${Q.ok}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cn",
+            "value": "${Q.cn}"
+          },
+          "_note": "正名 o/r:添加时存它,改名仓库也就跟上了。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tg",
+            "value": "${F.tag}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "href",
+            "value": "${F.href}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pr",
+            "value": "${F.pre}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ms",
+            "value": "$[parseNumber::(${m},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ne",
+            "value": "${Q.ne}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "fetchedMs",
+            "value": "${@time.nowMs}"
+          },
+          "_note": "这份数据的取数时刻(页面时效锚取所有行里最旧的那个)。"
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "x"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "g"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "sg"
+          }
+        },
+        {
+          "_note": "整份渲染输入打包落盘。⚠️ 键集必须与 resultFilter 完全一致 —— 少一个,命中缓存那趟就少一个字段(而且不报错)。",
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "ok": "${ok}",
+              "cn": "${cn}",
+              "tg": "${tg}",
+              "href": "${href}",
+              "pr": "${pr}",
+              "ms": "${ms}",
+              "ne": "${ne}",
+              "fetchedMs": "${fetchedMs}",
+              "ts": "${nowMs}",
+              "schema": "${SCHEMA}"
+            }
+          }
+        },
+        {
+          "_note": "契约 4(§5.5.2):关键字段非空才写回。`cn` 在取数失败/响应变形时必空 —— 此时什么都不写,盘上的旧货留着继续渲。一次超时把 pack 写成空,就把这页永久钉死在空态上直到下次恰好成功。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${cn}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中那条少算一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "${box.ok}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cn",
+        "value": "${box.cn}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tg",
+        "value": "${box.tg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "href",
+        "value": "${box.href}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pr",
+        "value": "${box.pr}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ms",
+        "value": "${box.ms}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ne",
+        "value": "${box.ne}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fetchedMs",
+        "value": "${box.fetchedMs}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "_stale",
+          "ckey",
+          "ok",
+          "cn",
+          "tg",
+          "href",
+          "pr",
+          "ms",
+          "ne",
+          "fetchedMs"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。⚠️ `_stale`/`ckey` 是校新那条路的入参,别删。"
+    }
+  ]
+}

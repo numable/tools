@@ -1,0 +1,84 @@
+{
+ "_note": "设置页的额度探针。/rate_limit 本身**不计入配额**(GitHub 明示),可以随时查。\nv41 起全包只用 GraphQL,所以看的是 `resources.graphql`(5000 点/小时),不再是 core。\n【G23 豁免】看的就是「此刻还剩多少」,缓存与目的相悖。",
+ "version": 1,
+ "actions": [
+  {
+   "id": "cred",
+   "action": "credential.state",
+   "params": {
+    "id": "gh"
+   },
+   "_note": "凭证绑定状态(纯本地查表,零网络)。v41 起 gh 是 required:未绑时宿主不注入、请求必 401,页面据 hasToken / credState 画绑定引导。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "hdr",
+    "value": {
+     "Accept": "application/vnd.github+json",
+     "User-Agent": "Numable"
+    }
+   }
+  },
+  {
+   "id": "resp",
+   "action": "request",
+   "params": {
+    "url": "https://api.github.com/rate_limit",
+    "method": "GET",
+    "header": "${hdr}",
+    "formatType": "json",
+    "credential": "gh"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "limit",
+    "value": "${resp.resources.graphql.limit}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "remaining",
+    "value": "${resp.resources.graphql.remaining}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "resetAt",
+    "value": "$[formatDate::(calc::(${resp.resources.graphql.reset}*1000),HH:mm)]"
+   }
+  },
+  {
+   "_note": "只回「配没配」,绝不回 token 本体 —— 页面拿到就可能进 DOM、进日志、进分享截图。\n  ⚠️ 2026-09-09 由 `eq::(${resp.rate.limit},60)` 迁到 `credential.state`。\n  旧写法是**从配额上限反推**有没有 token(匿名恒 60/h、认证 5000/h)—— 能用,但它是\n  **纯服务特定的 hack**:GitHub 哪天调一下匿名配额,这个判据就静默失真(不报错,\n  只是徽标一直显示反的)。而且它要等 /rate_limit 回来才知道,断网时答不出。\n  现在直接查绑定表:纯本地、零网络、与服务方配额策略解耦。",
+   "op": "set",
+   "props": {
+    "key": "hasToken",
+    "value": "$[if::(eq::(${cred.state},bound),1,0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "credState",
+    "value": "$[connect::(${cred.state},)]"
+   }
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "limit",
+     "remaining",
+     "resetAt",
+     "hasToken",
+     "credState"
+    ]
+   }
+  }
+ ],
+ "_lintCache": "exempt"
+}

@@ -1,0 +1,59 @@
+{
+  "version": 2,
+  "title": "最近公告",
+  "sub": "最近两份 · 类型、释义与提交时间",
+  "i18n": {
+    "en-US": {
+      "title": "Recent filings",
+      "sub": "The two newest filings with type and time"
+    }
+  },
+  "layout": 42,
+  "params": {
+    "kind": "all"
+  },
+  "ai": {
+    "shows": "你关注的公司最近两份 SEC 文件的类型、中文释义与提交时间",
+    "params": {
+      "kind": {
+        "kind": "enum",
+        "values": {
+          "all": "全部公告(公司自己交的文件,不含内部人交易与发行说明书)",
+          "cur": "8-K 重大事项(业绩发布、高管变动、并购等)",
+          "fin": "财报(10-Q 季报与 10-K 年报)",
+          "ins": "内部人交易(Form 3/4/5 与 144)"
+        },
+        "hint": "按用户想看的文件类型选;没说就用 all"
+      }
+    }
+  },
+  "events": {
+    "onClick": "numable://self",
+    "onEdit": "/kind?kind=${kind}"
+  },
+  "canvas": {
+    "source": "@[file://rc/recent.rcn]",
+    "depends": [
+      {
+        "flow": "@[file://flow/recent.df]",
+        "params": {
+          "kind": "${kind}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "06:00-22:00@300",
+        "1800"
+      ],
+      "tz": "America/New_York",
+      "_note": "EDGAR 受理时段(美东 06:00–22:00,工作日)每 5 分钟;其余时间新文件极少,30 分钟。一次刷新 = 关注数 N 个请求(≤8,串行)。免费档由平台钳到 5 分钟;只有可见的组件才刷新。"
+    }
+  },
+  "jobs": [
+    {
+      "id": "new"
+    }
+  ],
+  "_note": "无对象参数:关注列表由包自己从 data.sec_list 读,首页增删、组件自动跟上。kind = 显示哪类文件(all 全部 / cur 8-K / fin 财报 / ins 内部人),长按编辑改。长按「添加提醒」→ xJob/new.xjob(新公告提醒)。"
+}

@@ -1,0 +1,452 @@
+{
+  "rc": {
+    "_note": "按模型费用(2026-10-08 新增,零新增请求):与 models(按输出 token)同一个版式,改按**近 30 天费用**排的前 3 个模型;条 = 费用占比(条色跟模型走,与页面同一套钉槽),右 = 金额与较前 30 天的变化(前 30 天没用过写「新」)。底行 = 近 30 天合计。\n名字 / 金额 / 颜色来自服务端 w.cost.models;占比数值与变化来自 summary.df 的 mcP / mcG / mcU / mcN(costModels 同序)。占比 < 1% 不画填充(零宽圆角矩形会让整张组件渲不出来)。",
+    "i18n": {
+      "zh-CN": {
+        "title": "按模型费用",
+        "empty": "等待首次同步",
+        "new": "新",
+        "ftA": "近 30 天合计 ",
+        "ftB": " · 较前 30 天 ",
+        "ftE": "近 30 天合计 --"
+      },
+      "en-US": {
+        "title": "Cost by model",
+        "empty": "Not synced yet",
+        "new": "New",
+        "ftA": "30-day total ",
+        "ftB": " · vs prior 30 days ",
+        "ftE": "30-day total --"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FDFBFA\\,#FBF3F1)@90|linear(#15171A\\,#1A1A1C\\,#221E1F)@90",
+        "_note": "按模型费用(2026-10-08 新增,零新增请求):与 models(按输出 token)同一个版式,改按**近 30 天费用**排的前 3 个模型;条 = 费用占比(条色跟模型走,与页面同一套钉槽),右 = 金额与较前 30 天的变化(前 30 天没用过写「新」)。底行 = 近 30 天合计。"
+      },
+      {
+        "_note": "源色身份点:本包统一用 Claude 暖橙两档。",
+        "id": "dot",
+        "type": "layer",
+        "x": "14pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#C15F3C|#E8916B"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "23pt",
+        "y": "12pt",
+        "w": "{parent.w}-94pt",
+        "h": "-1",
+        "text": "${@i18n.title}",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "type": "layer",
+        "x": "96pt",
+        "y": "42pt",
+        "w": "{parent.w}-250pt",
+        "h": "6pt",
+        "bgColor": "#EEE4E0|#2A2522",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${w.cost.models[0].n}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "38pt",
+            "w": "78pt",
+            "h": "-1",
+            "text": "${w.cost.models[0].n}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "{parent.w}-152pt",
+            "y": "38pt",
+            "w": "76pt",
+            "h": "-1",
+            "text": "${w.cost.models[0].s}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "2"
+          },
+          {
+            "type": "txt",
+            "x": "{parent.w}-72pt",
+            "y": "39pt",
+            "w": "58pt",
+            "h": "-1",
+            "text": "$[if::(eq::(${mcN0},1),${@i18n.new},${mcG0})]",
+            "fontSize": "9pt",
+            "textColor": "$[if::(eq::(${mcN0},1),#C15F3C|#E8916B,if::(eq::(${mcU0},1),#C15F3C|#E8916B,#6B7280|#8E939B))]",
+            "maxLines": "1",
+            "alignmentH": "2"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.cost.models[0].n}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "38pt",
+            "w": "78pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(ge::(findNotEmpty::(${mcP0},0),1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "96pt",
+            "y": "42pt",
+            "w": "({parent.w}-250pt)*${mcP0}/100",
+            "h": "6pt",
+            "bgColor": "$[findNotEmpty::(${w.cost.models[0].c},#C15F3C|#E8916B)]",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            }
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "96pt",
+        "y": "68pt",
+        "w": "{parent.w}-250pt",
+        "h": "6pt",
+        "bgColor": "#EEE4E0|#2A2522",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${w.cost.models[1].n}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "64pt",
+            "w": "78pt",
+            "h": "-1",
+            "text": "${w.cost.models[1].n}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "{parent.w}-152pt",
+            "y": "64pt",
+            "w": "76pt",
+            "h": "-1",
+            "text": "${w.cost.models[1].s}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "2"
+          },
+          {
+            "type": "txt",
+            "x": "{parent.w}-72pt",
+            "y": "65pt",
+            "w": "58pt",
+            "h": "-1",
+            "text": "$[if::(eq::(${mcN1},1),${@i18n.new},${mcG1})]",
+            "fontSize": "9pt",
+            "textColor": "$[if::(eq::(${mcN1},1),#C15F3C|#E8916B,if::(eq::(${mcU1},1),#C15F3C|#E8916B,#6B7280|#8E939B))]",
+            "maxLines": "1",
+            "alignmentH": "2"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.cost.models[1].n}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "64pt",
+            "w": "78pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(ge::(findNotEmpty::(${mcP1},0),1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "96pt",
+            "y": "68pt",
+            "w": "({parent.w}-250pt)*${mcP1}/100",
+            "h": "6pt",
+            "bgColor": "$[findNotEmpty::(${w.cost.models[1].c},#C15F3C|#E8916B)]",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            }
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "96pt",
+        "y": "94pt",
+        "w": "{parent.w}-250pt",
+        "h": "6pt",
+        "bgColor": "#EEE4E0|#2A2522",
+        "cornerRadius": {
+          "leftT": "3pt",
+          "leftB": "3pt",
+          "rightT": "3pt",
+          "rightB": "3pt"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${w.cost.models[2].n}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "90pt",
+            "w": "78pt",
+            "h": "-1",
+            "text": "${w.cost.models[2].n}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "{parent.w}-152pt",
+            "y": "90pt",
+            "w": "76pt",
+            "h": "-1",
+            "text": "${w.cost.models[2].s}",
+            "fontSize": "11pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "2"
+          },
+          {
+            "type": "txt",
+            "x": "{parent.w}-72pt",
+            "y": "91pt",
+            "w": "58pt",
+            "h": "-1",
+            "text": "$[if::(eq::(${mcN2},1),${@i18n.new},${mcG2})]",
+            "fontSize": "9pt",
+            "textColor": "$[if::(eq::(${mcN2},1),#C15F3C|#E8916B,if::(eq::(${mcU2},1),#C15F3C|#E8916B,#6B7280|#8E939B))]",
+            "maxLines": "1",
+            "alignmentH": "2"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${w.cost.models[2].n}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "90pt",
+            "w": "78pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(ge::(findNotEmpty::(${mcP2},0),1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "96pt",
+            "y": "94pt",
+            "w": "({parent.w}-250pt)*${mcP2}/100",
+            "h": "6pt",
+            "bgColor": "$[findNotEmpty::(${w.cost.models[2].c},#C15F3C|#E8916B)]",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            }
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "14pt",
+        "y": "118pt",
+        "w": "{parent.w}-28pt",
+        "h": "1pt",
+        "bgColor": "#EFE5E1|#2A2522"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${cost30}),k),0,1),1),if::(eq::(connect::(k,${w.cost.d30C}),k),0,1),0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "127pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.ftA}${cost30}${@i18n.ftB}${w.cost.d30C}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${cost30}),k),0,1),1),if::(eq::(if::(eq::(connect::(k,${w.cost.d30C}),k),0,1),1),0,1),0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "127pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.ftA}${cost30}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(connect::(k,${cost30}),k),0,1),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "127pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.ftE}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "时效锚:右上角、与卡名同一基线、9pt、右对齐(卡片设计系统 §3)。",
+        "id": "at",
+        "type": "txt",
+        "x": "14pt",
+        "y": "15pt",
+        "w": "{parent.w}-28pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},${@i18n.empty})]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "2"
+      }
+    ]
+  }
+}

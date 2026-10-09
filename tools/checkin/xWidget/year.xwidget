@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "title": "全年热力",
+  "sub": "一件事 · 过去一年，每格一天（宽幅）",
+  "i18n": {
+    "en-US": {
+      "title": "Year heatmap",
+      "sub": "One habit · past year, one day per square (wide)"
+    }
+  },
+  "layout": 42,
+  "params": {
+    "itemId": "",
+    "mask": "0"
+  },
+  "ai": {
+    "shows": "一件事项过去一年每天一格的热力图,加全年合计天数或次数",
+    "params": {
+      "itemId": {
+        "kind": "user",
+        "hint": "用户的一件打卡事项 id;留空时组件显示「选择事项」,装上后长按「编辑参数」挑一件"
+      },
+      "mask": {
+        "kind": "enum",
+        "values": {
+          "0": "正常显示",
+          "1": "打码:数字与格子隐去,只在 App 内能看"
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "numable://self/page/item?id=${itemId}",
+    "onEdit": "/edit?cur=${itemId}"
+  },
+  "canvas": {
+    "source": "@[file://rc/year.rcn]",
+    "depends": [
+      {
+        "_note": "§D 纯显式:裸绑定传空入参 = 键落成 `stat_`、整卡空且不报错(标准 §9.5 / lint G12c)。year.df/year.rcn 由 tools/infosource/mk_checkin_year.py 生成,改卡先改脚本再重跑。",
+        "flow": "@[file://flow/year.df]",
+        "params": {
+          "itemId": "${itemId}",
+          "mask": "${mask}"
+        }
+      }
+    ],
+    "refresh": {
+      "_note": "天级信息,3600s 足够;打卡时 save.af 的 widget.refresh(scope=bundle) 会立即踢它。",
+      "interval": [
+        "3600"
+      ]
+    }
+  },
+  "_note": "GitHub 式过去一年热力(53 周 × 7 行,今天 = 右下角),单事项版:色 = 事项主题色按达标口径四档(n≥goal 实底 / n*2≥goal 中档 / n≥1 浅档 / 0 底格),与详情页月历/全年阵列同一张浓淡表。⚠️ 网格刻意不做周一对齐:VParser 拿不到「今天星期几」,而「今天锚右下」后每一行仍是同一个星期几,周期纹理不丢。byDay 只留近 400 天,371 天窗口刚好盖住。`mask` 语义同其余卡。"
+}

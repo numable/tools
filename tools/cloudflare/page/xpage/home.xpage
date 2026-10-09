@@ -1,0 +1,333 @@
+{
+  "_note": "首页(路由 /)。选型按标准 §8.2 的判据:这一页干的是「概览 + 动态列表 + 加卡」,没有任何数组增删 —— 所以整页 XPage,不需要 H5 子页(weather/appwatch 之所以还留一个 H5 子页,是因为 AF 没有数组 push/remove 原语,而本包的四张卡**全都无参数**、用户没有任何要维护的列表)。\n\n只有一条路由,也就没有任何跳子页的 onClick —— 本包避开了 §9.5 第 6/10 条那类「点了空白页」的整片雷区。\n\n⚠️ 上下留白读 `@contentInset`(= @safeArea + 容器 chrome 占位 + 键盘),不写死:首页 navStyle=none,容器的 ···/✕ 胶囊浮在内容之上,写死留白会让顶部那行被压在胶囊底下。也不能读 `@safeArea` —— 全屏容器上碰巧够用,大屏浮层卡上它全是 0。",
+  "type": "page",
+  "id": "cloudflare-home",
+  "i18n": {
+    "zh-CN": {
+      "addBtnT": "添加组件",
+      "addBtnS": "在面板里挑，确认后加到仪表盘"
+    },
+    "en-US": {
+      "addBtnT": "Add widgets",
+      "addBtnS": "Pick in the panel, then confirm"
+    }
+  },
+  "root": {
+    "type": "container",
+    "id": "root",
+    "layout": "list",
+    "direction": "vertical",
+    "gap": "10pt",
+    "padding": "14pt",
+    "paddingTop": "${@contentInset.top}pt",
+    "paddingBottom": "24pt",
+    "_noteDepends": "页面级 depends 取一次,hero 与两个列表共用同一份(四个端点里 upcoming 一个就 33KB,每块面板各自取数 = 白拉四遍)。",
+    "depends": [
+      {
+        "flow": "@[file://page/flow/home.df]",
+        "params": {
+          "_cache": 1
+        },
+        "_note": "\n`_cache:1` = 开首屏缓存(§5.5 / G23)。**开关默认关**,所以组件卡那边一个字都不用改、照旧每次真取数;页面这一处传 1,才让 home.df 走三态。"
+      }
+    ],
+    "items": [
+      {
+        "type": "Canvas",
+        "id": "hero",
+        "h": "152pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-hero.rcn]",
+          "depends": [
+            "@[file://page/flow/home.df]"
+          ]
+        }
+      },
+      {
+        "_note": "全球数据中心块(v39):与 regions 卡同源(gen_cloudflare.py),点开跳状态页。",
+        "type": "Canvas",
+        "id": "regions",
+        "h": "354pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-regions.rcn]",
+          "depends": [
+            {
+              "flow": "@[file://xWidget/flow/regions.df]",
+              "params": {
+                "cache": "1"
+              }
+            }
+          ]
+        },
+        "events": {
+          "onClick": "@[file://page/flow/open-status.af]"
+        }
+      },
+      {
+        "_note": "近 14 天事故块(v39):与 incidents 卡同源。",
+        "type": "Canvas",
+        "id": "incidents",
+        "h": "158pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-incidents.rcn]",
+          "depends": [
+            {
+              "flow": "@[file://xWidget/flow/incidents.df]",
+              "params": {
+                "cache": "1"
+              }
+            }
+          ]
+        },
+        "events": {
+          "onClick": "@[file://page/flow/open-status.af]"
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "secInc",
+        "h": "28pt",
+        "params": {
+          "k": "inc",
+          "v": "$[findNotEmpty::(${nInc},0)]"
+        },
+        "canvas": {
+          "source": "@[file://page/rc/p-sec.rcn]"
+        }
+      },
+      {
+        "_note": "定长 3 槽按 nInc 截断。cond 用 `$[if::(…,1,0)]` 兜成 1/0 —— evalBool 只认 boolean / 数字非零 / 字符串 \"true\"|\"1\",把 lt::() 的原始返回直接丢进去在四端不一定同形。",
+        "op": "forEach",
+        "props": {
+          "items": "${incs}",
+          "key": "e",
+          "index": "i"
+        },
+        "items": [
+          {
+            "op": "if",
+            "props": {
+              "cond": "$[if::(lt::(${i},${nInc}),1,0)]"
+            },
+            "items": [
+              {
+                "type": "Canvas",
+                "id": "inc-${i}",
+                "h": "60pt",
+                "params": {
+                  "n": "${e.n}",
+                  "imp": "${e.imp}",
+                  "d": "${e.d}"
+                },
+                "canvas": {
+                  "source": "@[file://page/rc/p-inc.rcn]"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "_note": "空态 = 好消息态(多数时刻走这条)。也覆盖取数失败取不到 nInc 那轮。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(ge::(findNotEmpty::(${nInc},0),1),0,1)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "incEmpty",
+            "h": "60pt",
+            "params": {
+              "k": "inc"
+            },
+            "canvas": {
+              "source": "@[file://page/rc/p-empty.rcn]"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Canvas",
+        "id": "secMaint",
+        "h": "28pt",
+        "params": {
+          "k": "maint",
+          "v": "$[findNotEmpty::(${mTotal},0)]"
+        },
+        "canvas": {
+          "source": "@[file://page/rc/p-sec.rcn]"
+        }
+      },
+      {
+        "op": "forEach",
+        "props": {
+          "items": "${rows}",
+          "key": "m",
+          "index": "j"
+        },
+        "items": [
+          {
+            "op": "if",
+            "props": {
+              "cond": "$[if::(lt::(${j},${mTotal}),1,0)]"
+            },
+            "items": [
+              {
+                "type": "Canvas",
+                "id": "maint-${j}",
+                "h": "60pt",
+                "params": {
+                  "n": "${m.n}",
+                  "d": "${m.d}",
+                  "t": "${m.t}"
+                },
+                "canvas": {
+                  "source": "@[file://page/rc/p-maint.rcn]"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "op": "if",
+        "props": {
+          "cond": "$[if::(ge::(findNotEmpty::(${mTotal},0),1),0,1)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "maintEmpty",
+            "h": "60pt",
+            "params": {
+              "k": "maint"
+            },
+            "canvas": {
+              "source": "@[file://page/rc/p-empty.rcn]"
+            }
+          }
+        ]
+      },
+      {
+        "_note": "账号入口。`hasToken` 由 home.df 提供(只回布尔,不回本体)。整行可点 → /settings。",
+        "type": "Canvas",
+        "id": "acct",
+        "h": "62pt",
+        "params": {
+          "hasToken": "${hasToken}"
+        },
+        "events": {
+          "onClick": "numable://self/page/settings"
+        },
+        "canvas": {
+          "source": "@[file://page/rc/p-acct.rcn]"
+        }
+      },
+      {
+        "_note": "整段只在有令牌时出现:没令牌时首页与改造前逐字一样(§3.6 第 1 条「无凭证时功能完整」在本包的具体兑现方式)。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(eq::(${hasToken},1),1,0)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "secZone",
+            "h": "28pt",
+            "params": {
+              "k": "zone",
+              "v": "$[findNotEmpty::(${nZone},0)]"
+            },
+            "canvas": {
+              "source": "@[file://page/rc/p-sec.rcn]"
+            }
+          },
+          {
+            "op": "forEach",
+            "props": {
+              "items": "${zones}",
+              "key": "z",
+              "index": "zi"
+            },
+            "items": [
+              {
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(lt::(${zi},${nZone}),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "zone-${zi}",
+                    "h": "60pt",
+                    "params": {
+                      "n": "${z.n}",
+                      "st": "${z.st}",
+                      "pl": "${z.pl}"
+                    },
+                    "events": {
+                      "onClick": "numable://self/page/zone?zoneId=${z.id}&zoneName=${z.n}"
+                    },
+                    "canvas": {
+                      "source": "@[file://page/rc/p-zone.rcn]"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "_note": "加卡入口 = **一个按钮**(§8.1a)。此前是段标题 + 四行「组件名 + 说明 + 尺寸」,等于在包内手抄一份 .xwidget 目录(与真目录两份真源,新增组件忘了改这里就永远加不到);而系统面板本来就有真 RCN 预览、轮播 ⇄ 网格、多选、跨包浏览。",
+        "type": "Canvas",
+        "id": "addBtn",
+        "h": "56pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-addbtn.rcn]"
+        },
+        "events": {
+          "onClick": {
+            "flow": "@[file://page/flow/pick-home.af]",
+            "params": {}
+          }
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "link",
+        "h": "52pt",
+        "events": {
+          "onClick": "@[file://page/flow/open-status.af]"
+        },
+        "canvas": {
+          "source": "@[file://page/rc/p-link.rcn]"
+        }
+      },
+      {
+        "type": "Canvas",
+        "id": "foot",
+        "h": "152pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-foot.rcn]"
+        }
+      }
+    ],
+    "h": "{parent.h}",
+    "events": {
+      "_note": "`onLoad`:三态的中间那一行 —— 首屏若渲的是旧货就后台校新一次。gate 全生命周期恰好一次、软重载不重置,所以不会自激(xpage-design.md §10.1);⚠️ 别改挂 onVisible。\n`onRefresh`:声明后容器**不再**自动 reloadPage,下拉整个由 refresh.af 负责(先删当前缓存键,保证一定穿透)。",
+      "onLoad": [
+        {
+          "flow": "@[file://page/flow/revalidate.af]",
+          "params": {
+            "stale": "${_stale}",
+            "ckey": "${ckey}"
+          }
+        }
+      ],
+      "onRefresh": "@[file://page/flow/refresh.af]"
+    },
+    "_notePad": "§5:页面左右内边距恒 14pt(page-design-system.md)。上下留白仍读 @contentInset。"
+  }
+}

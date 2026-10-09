@@ -1,0 +1,398 @@
+{
+  "rc": {
+    "_note": "⚠️ **表头圆点的 y 锚在标题实测框上,不许写常量**(2026-08-31 全仓收口,canonical=gen_asc.py):\n`y=\"{<标题id>.y}+({<标题id>.h}-<直径>pt)/2\"` —— 标题保持 `h:\"-1\"`,引擎按**真实字体度量**\n量出标题框高、再把圆点摆到正中,换字号/字体/端都自动跟上。\n原先是人肉试出来的常量 y(等于拿肉眼猜行高):2026-08-27 那轮「逐卡调 y 收敛到 <0.9pt」\n治的是症状,同一批卡 08-31 又被用户报出来。\n· 备选写法 `h:\"20pt\" + alignmentV:\"1\"`(定高带内居中)也有效,不用它是因为要凭空定一个带高。\n⚠️ 布局字段里的纯锚点算术是规范允许的(`+ - * / %` 与括号);那条「坐标不支持减法」\n说的是 `${数据变量}pt-24pt`,与纯锚点算术不是一回事。\n2026-09-25 体检:tile 按卡片设计系统 §4 收口 —— 标签 10.5pt / 数字 20pt、圆角 12、tile 间距 8(原 6 / 4)、内边距上 8.5 下 8(原上 7 下 11);卡名 y 11 / 锚 y 14 与本包其它组件同;空态数字 -- 下移到数字墨迹中线、底行照画。",
+    "i18n": {
+      "zh-CN": {
+        "title": "Claude Code 用量",
+        "sessions": "会话",
+        "msgs": "消息",
+        "out": "输出 token",
+        "days": "活跃天",
+        "streak": "连续",
+        "unitDay": "天",
+        "peak": "高峰",
+        "oclock": "点",
+        "empty": "等待首次同步"
+      },
+      "en-US": {
+        "title": "Claude Code usage",
+        "sessions": "Sessions",
+        "msgs": "Messages",
+        "out": "Output tokens",
+        "days": "Active days",
+        "streak": "Streak",
+        "unitDay": "d",
+        "peak": "Peak",
+        "oclock": ":00",
+        "empty": "Not synced yet"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FDFBFA\\,#FBF3F1)@90|linear(#15171A\\,#1A1A1C\\,#221E1F)@90"
+      },
+      {
+        "id": "dot",
+        "type": "layer",
+        "x": "14pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#C15F3C|#E8916B"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "23pt",
+        "y": "12pt",
+        "w": "{parent.w}-120pt",
+        "h": "-1",
+        "text": "${@i18n.title}",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1"
+      },
+      {
+        "id": "t0",
+        "type": "layer",
+        "x": "14pt",
+        "y": "34pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "44pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "t1",
+        "type": "layer",
+        "x": "{parent.w}/2+4pt",
+        "y": "34pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "44pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "t2",
+        "type": "layer",
+        "x": "14pt",
+        "y": "86pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "44pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "t3",
+        "type": "layer",
+        "x": "{parent.w}/2+4pt",
+        "y": "86pt",
+        "w": "({parent.w}-36pt)/2",
+        "h": "44pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "type": "txt",
+        "x": "24pt",
+        "y": "34pt+8.5pt",
+        "w": "({parent.w}-36pt)/2-20pt",
+        "h": "-1",
+        "text": "${@i18n.sessions}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${sessions}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "24pt",
+            "y": "34pt+21.5pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "${sessions}",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${sessions}),k),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "24pt",
+            "y": "34pt+21.5pt+6.0pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "txt",
+        "x": "{parent.w}/2+14pt",
+        "y": "34pt+8.5pt",
+        "w": "({parent.w}-36pt)/2-20pt",
+        "h": "-1",
+        "text": "${@i18n.msgs}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${msgsNum}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}/2+14pt",
+            "y": "34pt+21.5pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "${msgsNum}${msgsUnit}",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${msgsNum}),k),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}/2+14pt",
+            "y": "34pt+21.5pt+6.0pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "txt",
+        "x": "24pt",
+        "y": "86pt+8.5pt",
+        "w": "({parent.w}-36pt)/2-20pt",
+        "h": "-1",
+        "text": "${@i18n.out}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${outNum}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "24pt",
+            "y": "86pt+21.5pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "${outNum}${outUnit}",
+            "fontSize": "20pt",
+            "textColor": "#C15F3C|#E8916B",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${outNum}),k),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "24pt",
+            "y": "86pt+21.5pt+6.0pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "textColor": "#C15F3C|#E8916B",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "txt",
+        "x": "{parent.w}/2+14pt",
+        "y": "86pt+8.5pt",
+        "w": "({parent.w}-36pt)/2-20pt",
+        "h": "-1",
+        "text": "${@i18n.days}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${activeDays}),k),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}/2+14pt",
+            "y": "86pt+21.5pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "${activeDays}",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${activeDays}),k),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}/2+14pt",
+            "y": "86pt+21.5pt+6.0pt",
+            "w": "({parent.w}-36pt)/2-20pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "20pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "_note": "底部一行：连续天数 + 高峰时段。无数据时整行不画 —— 渲成「-- 天 · -- 点」比不画更糟。\n⚠️ y 锚 tile 底边而非 `{parent.h}-24pt`:layout 42 卡高恒 158pt,原来四格 tile 到 140pt、底行落 134pt,正好压在「输出 token」大字上(2026-09-06 用户实拍 + harness 复现)。整体预算:tile 38+44 / 86+44 → 130,底行 136~148,卡底留 10。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[ge::(findNotEmpty::(${activeDays},0),1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "{t2.y}+{t2.h}+8pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.streak} ${streak}${@i18n.unitDay}   ·   ${@i18n.peak} ${peakTxt}${@i18n.oclock}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "底部一行：连续天数 + 高峰时段。无数据时整行不画 —— 渲成「-- 天 · -- 点」比不画更糟。\n⚠️ y 锚 tile 底边而非 `{parent.h}-24pt`:layout 42 卡高恒 158pt,原来四格 tile 到 140pt、底行落 134pt,正好压在「输出 token」大字上(2026-09-06 用户实拍 + harness 复现)。整体预算:tile 38+44 / 86+44 → 130,底行 136~148,卡底留 10。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(ge::(findNotEmpty::(${activeDays},0),1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "14pt",
+            "y": "{t2.y}+{t2.h}+8pt",
+            "w": "{parent.w}-28pt",
+            "h": "-1",
+            "text": "${@i18n.streak} --   ·   ${@i18n.peak} --",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-104pt",
+        "y": "15pt",
+        "w": "90pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},${@i18n.empty})]",
+        "fontSize": "9pt",
+        "alignmentH": "2",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "_note": "时效锚 y = 卡名 y + 3:txt 盒顶 = 墨迹顶,同盒顶时 9pt 锚的基线比 13pt 卡名高 4.5pt(cell_align 实测),+3 后差 ≤ 1pt(卡片设计系统 §3「与组件名同基线」)"
+      }
+    ]
+  }
+}

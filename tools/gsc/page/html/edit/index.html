@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<!--
+  选站点页(路由 /edit):「搜索表现」「点击数」两张卡「编辑参数」的落点,?brickId=<实例> 定位要改的那张卡。
+  点某一行 → xbridge.updateParams(brickId, {site, siteName}) 立即回写(改即生效)。
+  两个键都写回:site 是取数键(siteUrl 原文,如 sc-domain:example.com),siteName 是卡面直接显示的名字
+  (剥掉 sc-domain: / https:// 前缀)—— 流里不做前缀剥离,避免表达式里 split『://』跟方法分隔符 :: 打架。
+
+  ⚠️ 这一页必须是 H5,不能是 XPage(onEdit 那条路写死 WebView 壳、从不读 route type;cloudflare 包同注)。
+  ⚠️ 取数流是 .df,必须 runDataFlow(runFlow 只搜 .af)。sites.df 声明了 credential:google,
+  注入发生在网络边界 —— 页面拿到的只是站点清单,永远拿不到 token。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Choose a site</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --tile:#E7E9EE;--rail:#D6DAE1;--accent:#128F66;
+  --src:#1A73E8;--srcSoft:rgba(26,115,232,.12);
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--tile:#20232A;--rail:#2C313A;--accent:#6FE8BE;
+  --src:#8AB4F8;--srcSoft:rgba(138,180,248,.18);--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  font-variant-numeric:tabular-nums;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 16px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px;display:flex;align-items:center;gap:9px}
+h1 i{flex:0 0 auto;width:7px;height:7px;border-radius:4px;background:var(--src);display:inline-block}
+.sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+.sec{font-size:11px;color:var(--sub);font-weight:600;margin:22px 2px 8px}
+.note{background:var(--tile);border-radius:12px;padding:13px;font-size:12px;
+  line-height:1.65;color:var(--sub)}
+.note b{color:var(--fg);font-weight:600}
+.wcard{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:14px;
+  padding:14px;margin-bottom:8px;box-shadow:var(--shadow)}
+.wcard .grow{flex:1 1 auto;min-width:0}
+.wcard b{display:block;font-size:15px;font-weight:600}
+.wcard .d{color:var(--sub);font-size:12px;margin-top:2px}
+.tag{flex:0 0 auto;font-size:11px;color:var(--sub);background:var(--tile);
+  border-radius:6px;padding:3px 7px}
+.add{flex:0 0 auto;border:0;background:var(--accent);color:#fff;font:600 13px/1 inherit;
+  border-radius:16px;padding:9px 16px;cursor:pointer}
+html[data-theme="dark"] .add{color:#0B0C0E}
+.add[disabled]{opacity:.45}
+.state{color:var(--sub);font-size:13px;text-align:center;padding:22px}
+.row{display:flex;align-items:center;gap:12px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:8px;box-shadow:var(--shadow)}
+.hit{display:flex;align-items:center;gap:10px;padding:12px 12px;border-radius:10px;cursor:pointer}
+.hit .grow{flex:1 1 auto;min-width:0}
+.hit small{color:var(--sub)}
+/* ⚠️ 输入框字号必须显式 ≥16px:iOS WebView 上小于 16px 聚焦会把**整页**放大,而且退不回去
+   (memory [[ios-webview-focus-zoom-16px]])。lint 会查这一条。 */
+input,input.q{width:100%;border:0;background:var(--tile);border-radius:10px;
+  padding:11px 12px;font-family:inherit;font-size:16px;line-height:1.15;
+  color:var(--fg);outline:2px solid transparent}
+input:focus{outline-color:var(--src)}
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.7}
+.foot b{color:var(--fg);font-weight:600}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.hit,.xb-tap{position:relative}
+.hit::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.hit:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.add,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.add:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style></head><body>
+<h1 data-i="h1"></h1>
+<div class="sub" id="sub"></div>
+<div id="list"></div>
+
+<script>
+var $=function(i){return document.getElementById(i)};
+var bridge=function(){return window.xbridge||{}};
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。 */
+var brickId='', cur='', sites=[], LANG=nbLang(document.documentElement.getAttribute('data-lang'));
+var I18N={zh:{h1:'选择站点',sub:'这个组件显示哪个站点的搜索数据。点一行即刻生效。',bridge:'桥不可用。',
+    empty:'这个 Google 账号下没有 Search Console 资源。<br>先在 search.google.com/search-console 添加并验证站点。',
+    need:'还没有连接 Google 账号。<br>回到仪表盘，在组件上点「连接」完成授权。',expired:'Google 授权已失效。<br>回到仪表盘，在组件上点「连接」重新授权。',fail:'读取站点列表失败：',
+    domain:'域名资源',prefix:'网址前缀资源'},
+  en:{h1:'Pick a site',sub:'Which property this widget shows. Tap a row to apply.',bridge:'Bridge unavailable.',
+    empty:'No Search Console properties in this Google account.<br>Add and verify a site at search.google.com/search-console first.',
+    need:'Google account not connected yet.<br>Go back to the dashboard and tap Connect on the widget.',expired:'Google authorization has expired.<br>Go back to the dashboard and tap Connect to re-authorize.',fail:'Failed to load sites: ',
+    domain:'Domain property',prefix:'URL-prefix property'}};
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键回落中文 */
+
+function label(u){ return String(u||'').replace(/^sc-domain:/,'').replace(/^https?:\/\//,'').replace(/\/$/,''); }
+function pick(s){
+  if(!(window.xbridge && xbridge.updateParams && brickId)) return;
+  cur = s.siteUrl;
+  xbridge.updateParams(brickId, {site:s.siteUrl, siteName:label(s.siteUrl)});
+  render();
+}
+function render(){
+  var box=$('list'); box.innerHTML='';
+  if(!sites.length){ box.innerHTML='<div class="empty">'+t('empty')+'</div>'; return; }
+  sites.forEach(function(s){
+    var d=document.createElement('div');
+    d.className='row'+(s.siteUrl===cur?' on':'');
+    d.innerHTML='<span class="tx"><b></b><i></i></span><span class="tick">✓</span>';
+    d.querySelector('b').textContent=label(s.siteUrl);
+    d.querySelector('i').textContent=(String(s.siteUrl).indexOf('sc-domain:')===0?t('domain'):t('prefix'))+' · '+(s.permissionLevel||'--');
+    d.onclick=function(){pick(s)};
+    box.appendChild(d);
+  });
+}
+(async function(){
+  var d = await nbInfo();
+  if(d.theme==='dark'||d.theme==='light') document.documentElement.setAttribute('data-theme',d.theme);
+  LANG=nbLang(d.language||d.locale);
+  $('sub').textContent=t('sub'); document.querySelector('[data-i="h1"]').textContent=t('h1');
+  var q=new URLSearchParams(location.search);
+  brickId=q.get('brickId')||'';
+  cur=q.get('site')||'';
+  if(!bridge().runDataFlow){ $('sub').textContent=t('bridge'); return; }
+  bridge().runDataFlow('sites',{},15000).then(function(r){
+    var d=(r&&r.data)||r||{};
+    // 节点失败(未连接 credential_required / 401 / 网络)不升级流失败,runDataFlow 照常 resolve —— 所以要看 sites.df 产的 ok 哨兵,
+    // 否则失败也渲成「这个账号下没有资源」(假空)。
+    // 三态分诊(credential-vault · credential.state)。⚠️ 2026-09-09 之前这里只有两档:
+    // 有 errMsg → 「失败」,否则一律 「还没连接」—— 于是**已连过但授权失效**的用户
+    // (oauth refresh 被 Google 拒)看到的是「还没有连接」,而他明明连过,
+    // 正确的下一步是「重新授权」不是「去连接」。现在直接查绑定表,三态各说各话。
+    if(String(d.ok)==='0'){
+      var cs=String(d.credState||'');
+      var msg = cs==='expired' ? t('expired')
+              : cs==='unbound' ? t('need')
+              : (d.errMsg ? (t('fail')+d.errMsg) : t('need'));
+      $('list').innerHTML='<div class="empty">'+msg+'</div>'; return;
+    }
+    sites=(d.list||[]).filter(function(s){return s && s.siteUrl;});
+    render();
+  }).catch(function(e){
+    var m=String((e&&e.message)||e||'');
+    // ⚠️ 2026-09-09:去掉了 `m.indexOf('credential_')` 这条**错误串匹配** —— 它耦合宿主抛的
+    // 错误文本格式(`credential_required:<declId>`),改一个字就静默失真;而且 AF「节点失败
+    // 不升级流失败」意味着这条 catch 本来就很少走到。凭证态一律走上面那条 credState 分诊。
+    $('list').innerHTML='<div class="empty">'+(t('fail')+m)+'</div>';
+  });
+})();
+</script>
+</body></html>

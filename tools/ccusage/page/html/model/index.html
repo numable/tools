@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Model</title>
+<style>
+
+/* 源色 = Claude 暖橙两档,与本包 RCN 卡片同源;其余一律取 design-tokens 的 token。 */
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --src:#C15F3C;--srcSoft:rgba(194,65,12,.10);--chip:#E7E9EE;
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px -14px rgba(15,20,30,.18)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--src:#E8916B;--srcSoft:rgba(251,146,60,.14);--chip:#20232A;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.55 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+.top{display:flex;align-items:center;gap:9px;margin-bottom:5px}
+.dot{width:8px;height:8px;border-radius:4px;background:var(--src);flex:0 0 auto}
+h1{font-size:24px;margin:0;font-weight:700;letter-spacing:-.6px}
+.top .grow{flex:1 1 auto;min-width:0}
+.lead{color:var(--sub);font-size:12.5px;margin:2px 0 18px 17px}
+/* §1 时效锚 = 页头右上角的 `.xb-at` 胶囊(与首页那颗同规),样式与格式全在 xb:anchor 块
+   (tools/infosource/mk_anchor.py),本页只管给它时间。它同时是刷新按钮(§5.5.2 契约 2)。 */
+.card{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow);margin-bottom:12px}
+.step{display:flex;gap:12px;margin-bottom:16px}
+.step:last-child{margin-bottom:0}
+.num{flex:0 0 auto;width:22px;height:22px;border-radius:11px;background:var(--srcSoft);color:var(--src);
+  font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step .b{flex:1 1 auto;min-width:0}
+.step h3{margin:0 0 5px;font-size:14px;font-weight:600}
+.step p{margin:0;color:var(--sub);font-size:12.5px}
+code.cmd{display:block;background:var(--chip);border-radius:12px;padding:9px 11px;margin-top:8px;
+  font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+button{border:0;font:inherit;cursor:pointer}
+.btn{display:block;width:100%;background:var(--src);color:#fff;border-radius:12px;
+  padding:12px;font-size:14px;font-weight:600;margin-top:10px}
+.btn.ghost{background:var(--chip);color:var(--fg)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.st{background:var(--chip);border-radius:12px;padding:11px 12px}
+.st .k{color:var(--sub);font-size:11px}
+.st .v{font-size:20px;font-weight:700;margin-top:2px}
+.st .v.acc{color:var(--src)}
+/* ── 聚合首页 ─────────────────────────────────────────── */
+/* §2 段标题 = 左名字 + 右摘要,13pt/sub。⚠️ 这条规则在本文件里原本写了两遍
+   (这里一份、样式表末尾又一份 uppercase 的),后者整个盖掉前者。现在只留一份。 */
+.sect{font-size:13px;color:var(--sub);font-weight:700;margin:20px 0 8px;
+  display:flex;align-items:baseline;gap:8px}
+.sect em{font-style:normal;font-weight:400;font-size:13px;margin-left:auto;text-align:right}
+/* 今日:一个大数 + 两个小数。大数是**输出 token** —— 消息数不区分一句话与一整轮重构,
+   而 token 才是「今天让模型干了多少活」。 */
+.hero{display:flex;align-items:flex-end;gap:12px}
+.hero .big{font-size:40px;font-weight:700;letter-spacing:-1.2px;line-height:.98;color:var(--src)}
+.hero .big .u{font-size:22px;opacity:.55;letter-spacing:-.4px}
+.hero .side{margin-left:auto;text-align:right}
+.hero .side .k{font-size:10.5px;color:var(--sub)}
+.hero .side .v{font-size:15px;font-weight:700;margin-top:1px}
+.hlbl{font-size:11.5px;color:var(--sub);margin-bottom:6px}
+.hcmp{font-size:11.5px;color:var(--sub);margin-top:11px;padding-top:10px;border-top:1px solid var(--line)}
+.hcmp b{color:var(--fg)}
+/* 折线:与其它包同构(SVG 只画线与面,标注交给 HTML) */
+.chartWrap{position:relative;height:96px;margin:2px 0 4px}
+.spark{width:100%;height:100%;display:block}
+.axis{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:2px}
+/* 行:最近的日子 / 模型 —— 两处同一种行式,点进去看一个对象 */
+.row{display:flex;align-items:center;gap:10px;padding:11px 0;cursor:pointer}
+.row + .row{border-top:1px solid var(--line)}
+.row .d{flex:0 0 58px;font-size:12.5px;font-weight:600}
+.row .nm{flex:0 0 76px;font-size:13px;font-weight:600;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.row .bar{flex:1 1 0;height:6px;border-radius:3px;background:var(--chip);overflow:hidden;min-width:20px}
+.row .bar i{display:block;height:100%;border-radius:3px;background:var(--src);opacity:.8}
+.row .v{flex:0 0 56px;text-align:right;font-size:13.5px;font-weight:700;letter-spacing:-.2px}
+.row .x{flex:0 0 42px;text-align:right;font-size:11px;color:var(--sub)}
+.row .ar{flex:0 0 auto;color:var(--sub);font-size:13px;opacity:.5}
+/* 24 小时作息:柱阵,峰值那根用源色 */
+.hours{display:flex;align-items:flex-end;gap:2px;height:52px;margin-top:2px}
+.hours i{flex:1 1 0;background:var(--chip);border-radius:3px 3px 0 0;min-height:2px}
+.hours i.pk{background:var(--src)}
+.hlab{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:5px}
+.three{display:flex;gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}
+.three>div{flex:1;text-align:center}
+.three .k{font-size:10.5px;color:var(--sub)}
+.three .v{font-size:16px;font-weight:700;margin-top:2px;letter-spacing:-.2px}
+/* §3 元信息(数据来源 / 用法说明)一律 11pt。 */
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+.note{color:var(--sub);font-size:11px;line-height:1.6;margin:14px 0 0}
+.hide{display:none}
+/* ── 2026-09-24 二版:与首页同一套配色 / 胶囊 / 图表(首页 index.html 是真源) ── */
+:root{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--sOther:#B8BDC6;--grid:#EEF0F3;
+  --up:#C15F3C;--upBg:rgba(193,95,60,.10);--dn:#5B6472;--dnBg:rgba(91,100,114,.10)}
+html[data-theme="dark"]{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--sOther:#4B5059;--grid:#23262C;
+  --up:#E8916B;--upBg:rgba(232,145,107,.14);--dn:#9AA1AC;--dnBg:rgba(154,161,172,.14)}
+.st .dl{margin-top:4px}
+.plot{display:block;width:100%;height:120px}
+.plot text{font-size:10px;fill:var(--sub);paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round}
+.share{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;margin:2px 0 10px}
+.share i{display:block;height:100%}
+.mrow{display:flex;align-items:center;gap:10px;padding:9px 0}
+.mrow + .mrow{border-top:1px solid var(--line)}
+.mrow .dot2{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+.mrow .nm{flex:1 1 auto;font-size:13px;font-weight:600;min-width:0}
+.mrow .v{flex:0 0 auto;font-size:14px;font-weight:700}
+.mrow .x{flex:0 0 44px;text-align:right;font-size:11px;color:var(--sub)}
+.axis2{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:4px}
+.big2{display:flex;align-items:baseline;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.big2 .k{font-size:11.5px;color:var(--sub)}
+.big2 .v{font-size:20px;font-weight:700;letter-spacing:-.4px}
+.hero2{border-radius:18px;padding:16px 16px 14px;color:#fff;margin-bottom:12px;
+  background:linear-gradient(135deg,#E07B55 0%,#C15F3C 52%,#96401F 100%);
+  box-shadow:0 10px 26px -14px rgba(150,64,31,.65)}
+html[data-theme="dark"] .hero2{background:linear-gradient(135deg,#A9553A 0%,#7E3A22 55%,#4E2313 100%);box-shadow:none}
+.hero2 .lbl{display:flex;justify-content:space-between;align-items:center;font-size:12px;opacity:.86}
+.hero2 .lbl b{font-weight:600}
+.hero2 .val{font-size:48px;font-weight:700;letter-spacing:-1.6px;line-height:1.05;margin:6px 0 2px}
+.hero2 .sub{font-size:12px;opacity:.86}
+.meter{margin-top:12px}
+.meter .trk{position:relative;height:8px;border-radius:4px;background:rgba(255,255,255,.24);overflow:visible}
+.meter .fil{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#fff}
+.meter .avg{position:absolute;top:-4px;width:2px;height:16px;border-radius:1px;background:rgba(255,255,255,.9)}
+.meter .cap{display:flex;justify-content:space-between;font-size:11px;opacity:.86;margin-top:6px}
+.hero2 .four{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px;padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.22)}
+.hero2 .four .k{font-size:10.5px;opacity:.78}
+.hero2 .four .v{font-size:15px;font-weight:700;margin-top:2px;white-space:nowrap;letter-spacing:-.3px}
+/* 变化值小胶囊:上涨用源色、下降用中性灰 —— 用量涨跌不是好坏,不用状态色 */
+.chip{display:inline-block;font-size:10.5px;font-weight:600;border-radius:999px;padding:2px 7px;line-height:1.35;
+  white-space:nowrap;vertical-align:middle}
+.chip.up{color:var(--up);background:var(--upBg)}
+.chip.dn{color:var(--dn);background:var(--dnBg)}
+.hero2 .chip{color:#fff;background:rgba(255,255,255,.22)}
+/* 近 7 天 KPI 2×2 */
+
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.row,.xb-tap{position:relative}
+.row::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.row:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.btn,.sect .at,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.btn:active,.sect .at:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+
+/* ── 跳转(2026-09-24):凡是能点进去的,都给按下反馈 + 右侧 ›;柱状图整列都是命中区 ── */
+[data-go],[data-day],[data-model],[data-tool]{cursor:pointer;-webkit-user-select:none;user-select:none}
+.hero2[data-go],.kpi[data-go],.card[data-go],.st[data-go],tr[data-go],.mrow[data-model],.mrow[data-tool],.mrow[data-day],.mrow[data-go]{
+  transition:opacity var(--xb-out,140ms) ease,transform var(--xb-out,140ms) ease}
+.hero2[data-go]:active,.kpi[data-go]:active,.card[data-go]:active,.st[data-go]:active{transform:scale(.985);opacity:.8;transition-duration:var(--xb-in,60ms)}
+tr[data-go]:active,.mrow[data-model]:active,.mrow[data-tool]:active,.mrow[data-day]:active,.mrow[data-go]:active{opacity:.55;transition-duration:var(--xb-in,60ms)}
+.chev{flex:0 0 auto;color:var(--sub);opacity:.5;font-size:14px;line-height:1;margin-left:2px}
+.plot .hit{fill:transparent;cursor:pointer}
+.plot .hit:active{fill:var(--fg);fill-opacity:.06}
+.segs{display:flex;background:var(--chip);border-radius:10px;padding:3px;gap:2px;margin:0 0 12px}
+.segs button{flex:1 1 0;border:0;background:transparent;font:inherit;font-size:12.5px;color:var(--sub);padding:6px 0;border-radius:8px;cursor:pointer}
+.segs button.on{background:var(--card);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgba(15,20,30,.08)}
+.dnav{display:flex;gap:8px;margin:-8px 0 14px 17px}
+.dnav button{border:0;font:inherit;font-size:12px;color:var(--fg);background:var(--chip);border-radius:999px;padding:5px 11px;cursor:pointer}
+.dnav button[disabled]{opacity:.35;cursor:default}
+.mrow .bar2{flex:1 1 auto;height:6px;border-radius:3px;background:var(--chip);overflow:hidden;min-width:30px}
+.mrow .bar2 i{display:block;height:100%;border-radius:3px}
+.mrow .nm.w{flex:0 0 86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow .dd{flex:0 0 auto;font-size:11px;color:var(--sub);width:26px}
+/* NAV_MARK */
+</style>
+
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#all";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head><body>
+
+<div class="top"><span class="dot" id="dot"></span><span class="grow"><h1 id="h1">--</h1></span>
+  <button class="xb-at" id="at" type="button"></button></div>
+<p class="lead" id="lead"></p>
+
+<!-- 近 30 天费用主卡(与首页同一个渐变主卡)。老服务端没有 costModels → 退回老的输出卡 -->
+<div class="hero2 hide" id="hero"></div>
+
+<div id="dailyWrap" class="hide">
+  <div class="sect"><span id="secDaily">每日费用</span><em id="vDaily"></em></div>
+  <div class="card" id="daily"></div>
+</div>
+
+<div id="costWrap" class="hide">
+  <div class="sect"><span id="secCost">费用占比</span><em id="vCost"></em></div>
+  <div class="card" id="cost"></div>
+</div>
+
+<div class="sect"><span id="secAll">累计输出</span><em id="vAll"></em></div>
+<div class="card" id="main"></div>
+<div class="card" id="all"></div>
+<div class="note" id="note"></div>
+
+<script>
+var L = { "zh-CN": {}, "en-US": {
+  lead:"One model's share", secAll:"All-time output", leadS:"{p}% of output \u00b7 #{r} of {n}",
+  vAll:"{p}% \u00b7 #{r} of {n}", leadC:"{v} in 30 days \u00b7 {p}% of cost",
+  secDaily:"Daily cost", vDaily:"Peak {d}", secCost:"Share of cost", vCost:"#{r} of {n}",
+  cost30:"Est. cost, last 30 days", prev:"Previous 30 days {v}", prevNone:"Not used in the previous 30 days",
+  fast:"includes fast mode", costShare:"Cost share", perDay:"Daily avg", peak:"Peak day", days:"Days used",
+  outTok:"Output tokens", msgs:"Messages", inTok:"Input tokens", perMsg:"Output per message",
+  share:"Share of output", rank:"Rank", of:" of {n}",
+  noData:"No record for this model",
+  note:"Share is computed on output tokens — the closest thing to 'how much work this model did'. Message counts do not separate a one-liner from a full refactor."
+}};
+/* 与首页共用同一发数据(`summary` 流 + 同一个缓存键 `c.cc.s`)—— 从首页点进来是命中缓存,
+   零额外请求。⚠️ 这不是省事:采集端一天才上传几次,两页各写一套键 = 同一份数据取两遍,
+   而其中一遍还会把另一遍的时间锚弄乱。 */
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+var T = {}, EN = false, D = null;
+/* 折叠栏标题(container-model §0.2d):容器只认 DOMContentLoaded 之后改出来的 document.title,
+   解析期(含先渲缓存)的调用推迟到其后再写,否则会被记成「静态值」而不采用。 */
+var xbTitle=(function(){ var ok=document.readyState!=="loading", v="";
+  if(!ok) document.addEventListener("DOMContentLoaded",function(){ setTimeout(function(){ ok=true; if(v) document.title=v; },0); });
+  return function(s){ s=String(s==null?"":s).trim(); if(!s||s==="--") return; v=s; if(ok) document.title=s; }; })();
+function t(k, fb){ return (T && Object.prototype.hasOwnProperty.call(T,k)) ? T[k] : fb; }  /* 空串是合法译文,不能当缺键回落 */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function fmt(n){
+  n = Number(n)||0;
+  if(n>=1e9) return (Math.round(n/1e8)/10)+'B';   /* 缓存读取一个月能到百亿级 */
+  if(n>=1e6) return (Math.round(n/1e5)/10)+'M';
+  if(n>=1e3) return (Math.round(n/1e2)/10)+'k';
+  return String(n);
+}
+/* 月日:中文「9月25日」/ 英文「Sep 25」(doc/overseas-first.md §5,不出现纯数字月日)。 */
+var MON_EN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function md(s){ s=String(s||""); var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); if(!m) return s;
+  return EN ? MON_EN[+m[2]-1]+" "+(+m[3]) : (+m[2])+"月"+(+m[3])+"日"; }
+function applyTheme(th){
+  var dark = th==='dark' || (th!=='light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+}
+async function ready(){ for(var i=0;i<24 && !window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+  return !!window.xbridge; }
+async function appInfo(){
+  try{ if(xbridge.appInfo) return await xbridge.appInfo(); }catch(e){}
+  return {};
+}
+function M(){ return (D && D.merged) || {}; }
+
+/* ── 跳转(2026-09-24):一个分发器管全部 —— data-go="/路由?参数" / data-day / data-model / data-tool。
+   容器内走 xbridge.route(得容器栈与 router.json 标题);没有桥(浏览器预览)回落相对路径。 */
+function go(path, q){
+  q=q||"";
+  try{ if (window.xbridge && xbridge.route) return xbridge.route(path+q); }catch(e){}
+  location.href = "../"+path.replace(/^\//,"")+"/index.html"+q;
+}
+document.addEventListener("click", function(e){
+  var el=e.target.closest?e.target.closest("[data-go],[data-day],[data-model],[data-tool]"):null;
+  if (!el) return;
+  var d=el.dataset;
+  if (d.go){ var i=d.go.indexOf("?"); return go(i<0?d.go:d.go.slice(0,i), i<0?"":d.go.slice(i)); }
+  if (d.day) return go("/day","?date="+encodeURIComponent(d.day));
+  if (d.model) return go("/model","?name="+encodeURIComponent(d.model));
+  if (d.tool) return go("/tool","?name="+encodeURIComponent(d.tool));
+});
+var TOOL_ZH={Agent:"子代理",Todo:"待办",Other:"其他",AskUserQuestion:"向你提问",ToolSearch:"查找工具",
+  WebSearch:"联网搜索",WebFetch:"抓取网页",ExitPlanMode:"计划模式",EnterPlanMode:"计划模式",NotebookEdit:"改笔记本",
+  Skill:"技能",SlashCommand:"命令"};
+var TOOL_EN={Agent:"Agents",Todo:"To-dos",Other:"Other",AskUserQuestion:"Asked you",ToolSearch:"Tool search",
+  WebSearch:"Web search",WebFetch:"Web fetch",ExitPlanMode:"Plan mode",EnterPlanMode:"Plan mode",NotebookEdit:"Notebooks",
+  Skill:"Skills",SlashCommand:"Commands"};
+function toolLabel(n){ return (EN ? TOOL_EN[n] : TOOL_ZH[n]) || n; }
+var WD_ZH=["周日","周一","周二","周三","周四","周五","周六"], WD_EN=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function wdOf(d){ var w=new Date(Date.parse(d+"T00:00:00Z")).getUTCDay(); return (EN?WD_EN:WD_ZH)[w]; }
+function isoAdd(d, n){ return new Date(Date.parse(d+"T00:00:00Z")+n*864e5).toISOString().slice(0,10); }
+function todayOf(){ var m=M(); return (m.today && m.today.date) || ((m.days||[]).length ? m.days[m.days.length-1].date : ""); }
+function dur2(min){
+  min=Math.round(Number(min)||0);
+  if (!min) return EN ? "0m" : "0 分钟";
+  var h=Math.floor(min/60), mm=min%60;
+  if (EN) return h ? (h+"h"+(mm?" "+mm+"m":"")) : (mm+"m");
+  return h ? (h+" 小时"+(mm?" "+mm+" 分":"")) : (mm+" 分钟");
+}
+/* 百分比的变化用「点」:98% → 99% 是 +1 点,说成「↑1%」会被读成涨了百分之一 */
+function ptChip(a, b){
+  if (b==null || !isFinite(Number(b))) return "";
+  var d=Math.round((Number(a)-Number(b))*10)/10;
+  return '<span class="chip '+(d>=0?"up":"dn")+'">'+(d>=0?"↑":"↓")+Math.abs(d)+(EN?" pt":" 点")+"</span>";
+}
+/* ── 详情页共用的一小套(与首页同一份规则,首页 index.html 是真源):配色 / 变化胶囊 / 柱状图 ── */
+function chipOf(c){
+  if (!c || c.p==null || !isFinite(Number(c.p))) return "";
+  var p=Number(c.p), txt;
+  if (p>=200){ var x=1+p/100; txt="↑"+(x>=10?Math.round(x):Math.round(x*10)/10)+"×"; }
+  else txt=(p>=0?"↑":"↓")+Math.abs(p)+"%";
+  return '<span class="chip '+(p>=0?"up":"dn")+'">'+esc(txt)+"</span>";
+}
+function chgOf(cur, prev){
+  cur=Number(cur)||0; prev=Number(prev)||0;
+  if (!(prev>0)) return null;
+  return { p: Math.round((cur-prev)/prev*100) };
+}
+function mlabel(n){
+  if (n==="other") return EN ? "Other" : "其他";
+  var m=/^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/.exec(String(n||""));
+  if (!m) return String(n||"").replace(/^claude-/,"");
+  return m[1][0].toUpperCase()+m[1].slice(1)+" "+m[2]+(m[3]?"."+m[3]:"");
+}
+var PIN={"claude-opus-5":1,"claude-fable-5":2,"claude-fable-5-1":3,"claude-opus-5-5":4,"claude-sonnet-5":5};
+var COLOR={};
+function buildColors(names){
+  COLOR={}; var used={};
+  names.forEach(function(n){ if (PIN[n]){ COLOR[n]="var(--s"+PIN[n]+")"; used[PIN[n]]=1; } });
+  names.forEach(function(n){
+    if (COLOR[n] || n==="other") return;
+    for (var s=1;s<=5;s++) if (!used[s]){ used[s]=1; COLOR[n]="var(--s"+s+")"; return; }
+  });
+}
+function colorOf(n){ return COLOR[n] || "var(--sOther)"; }
+function allModelNames(){
+  var m=M(), names=(m.daily30Models||[]).concat((m.costModels||[]).map(function(x){ return x.name; }))
+    .concat((m.models||[]).map(function(x){ return x.name; }));
+  return names.filter(function(n, i){ return names.indexOf(n)===i; });
+}
+/* 30 天柱状图:单色,hi = 高亮那根(其余调淡),avg 线按「有用量的日子」算;
+   dates 给了就把整列做成命中区(比柱子宽得多),点哪一列进哪一天 */
+function columns(vals, hi, fill, fmtV, W, dates){
+  /* 按实际宽度画(页面左右各 14 + 卡内各 14):写死宽度在宽屏上会被等比缩小、两边留白 */
+  W=W||Math.max(260, (document.body.clientWidth||360)-56); var H=120, top=12, bottom=4, ph=H-top-bottom, n=vals.length;
+  var mx=Math.max.apply(null, vals.concat([0]));
+  if (!(mx>0)) return "";
+  var e=Math.pow(10, Math.floor(Math.log(mx)/Math.LN10)), f=mx/e, steps=[1,1.5,2,2.5,3,4,5,6,8,10], ymax=10*e;
+  for (var i=0;i<steps.length;i++) if (f<=steps[i]){ ymax=steps[i]*e; break; }
+  var band=W/n, bw=Math.min(12, band*0.62), g="", lab="", hits="";
+  var Y=function(v){ return top+ph-(v/ymax)*ph; };
+  [0, ymax].forEach(function(v){ g+='<line x1="0" x2="'+W+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" stroke="var(--grid)" stroke-width="1"/>'; });
+  lab+='<text x="0" y="'+(Y(ymax)-3).toFixed(1)+'">'+esc(fmtV(ymax))+"</text>";
+  for (var j=0;j<n;j++){
+    var v=vals[j];
+    if (dates && dates[j] && v>0) hits+='<rect class="hit" data-day="'+esc(dates[j])+'" x="'+(j*band).toFixed(2)+'" y="0" width="'+band.toFixed(2)+'" height="'+H+'"/>';
+    if (!(v>0)) continue;
+    var h=Math.max(1.5, top+ph-Y(v)), x=j*band+(band-bw)/2, y=top+ph-h, r=Math.min(3, h, bw/2);
+    g+='<path d="M'+x.toFixed(2)+","+(y+h).toFixed(2)+"V"+(y+r).toFixed(2)+"Q"+x.toFixed(2)+","+y.toFixed(2)+" "+(x+r).toFixed(2)+","+y.toFixed(2)+
+      "H"+(x+bw-r).toFixed(2)+"Q"+(x+bw).toFixed(2)+","+y.toFixed(2)+" "+(x+bw).toFixed(2)+","+(y+r).toFixed(2)+"V"+(y+h).toFixed(2)+
+      'Z" fill="'+fill+'"'+(hi>=0 && j!==hi?' opacity=".35"':"")+"/>";
+  }
+  var s=0, c=0; vals.forEach(function(v){ if (v>0){ s+=v; c++; } });
+  if (c){ var a=s/c, ya=Y(a).toFixed(1);
+    g+='<line x1="0" x2="'+W+'" y1="'+ya+'" y2="'+ya+'" stroke="var(--fg)" stroke-opacity=".35" stroke-width="1"/>';
+    lab+='<text x="'+W+'" y="'+(Y(a)-3).toFixed(1)+'" text-anchor="end">'+esc((EN?"avg ":"日均 ")+fmtV(a))+"</text>"; }
+  return '<svg class="plot" viewBox="0 0 '+W+" "+H+'" role="img">'+g+lab+hits+"</svg>";
+}
+async function fetchSummary(useCache){
+  if (!(window.xbridge && xbridge.runDataFlow)) return null;
+  try{ var r = await xbridge.runDataFlow('summary', { _cache: useCache?1:0 });
+       return (r && (r.data || r)) || null; }catch(e){ return null; }
+}
+/* 一格统计。空值渲 `--` 而不是 0 —— 「今天 0 条消息」会被读成「今天没用」(§7.3)。 */
+function cell(k, v, accent){
+  return '<div class="st"><div class="k">'+esc(k)+'</div><div class="v'+(accent?" acc":"")+'">'+
+    esc(v==null?"--":v)+"</div></div>";
+}
+
+/* §1 时效锚。与首页同源:取**采集端上传的时刻**,不是本页什么时候取的。 */
+function stamp(raw){
+  var up = raw && raw.updatedAt || (D && D.updatedAt);
+  var e = document.getElementById("at");
+  if (e) xbAt.set(e, up ? Number(up) : null);   /* updatedAt 是毫秒;格式归 xbAt */
+}
+var NAME = "";
+/* 占比取整:花了钱却不到 0.5% 时写「<1」,不写「0」(2026-10-08)—— 「$39.19 · 0%」读起来像没花钱。 */
+function pct0(p, v){ var n=Number(p)||0; return (n<0.5 && Number(v)>0) ? "<1" : n.toFixed(0); }
+function usd(v){
+  if (v==null || !isFinite(Number(v))) return "--";
+  v=Number(v);
+  if (v===0) return "$0";
+  if (v<0.01) return "<$0.01";
+  return "$"+(v<100 ? v.toFixed(2) : Math.round(v).toLocaleString("en-US"));
+}
+/* 近 30 天:主卡 + 每日费用柱 + 费用占比。数据全是服务端 insights 派生的(同一发 summary),
+   口径与首页「模型」那张卡逐字一致 —— 这里点进来看到的数必须和首页那一行对得上。 */
+function paintCost(){
+  var m=M(), cms=m.costModels||[], hero=document.getElementById("hero");
+  var c=null, ci=-1; for (var k=0;k<cms.length;k++) if (cms[k].name===NAME){ c=cms[k]; ci=k; break; }
+  var show=function(id, on){ document.getElementById(id).classList.toggle("hide", !on); };
+  if (!c){ show("hero", false); show("dailyWrap", false); show("costWrap", false); return false; }
+
+  /* 逐日:只有费用前 4 的模型单列(其余并成「其他」),不在前 4 的模型没有每日序列 → 柱图不出 */
+  var d30=m.daily30||[], has=(m.daily30Models||[]).indexOf(NAME)>=0;
+  var vals=d30.map(function(r){ return Number((r.parts||{})[NAME])||0; });
+  var used=vals.filter(function(v){ return v>0; }), mx=Math.max.apply(null, vals.concat([0]));
+  var mxAt=vals.indexOf(mx);
+
+  var four=[
+    [t("costShare","费用占比"), pct0(c.pct, c.usd)+"%"],
+    [t("perDay","日均"), has && used.length ? usd(used.reduce(function(a,b){return a+b;},0)/used.length) : "--"],
+    [t("peak","最高一天"), has && mx>0 ? usd(mx) : "--"],
+    [t("days","用过的天数"), has ? String(used.length) : "--"]
+  ];
+  hero.innerHTML =
+    '<div class="lbl"><b>'+esc(t("cost30","近 30 天费用估算"))+"</b>"+chipOf(c.chg)+"</div>"+
+    '<div class="val">'+esc(usd(c.usd))+"</div>"+
+    '<div class="sub">'+esc(c.prevUsd>0 ? t("prev","前 30 天 {v}").replace("{v}", usd(c.prevUsd))
+                                         : t("prevNone","前 30 天没有用过"))+
+      (c.fastOut>0 ? " · "+esc(t("fast","含快速模式")) : "")+"</div>"+
+    '<div class="four">'+four.map(function(x){
+      return '<div><div class="k">'+esc(x[0])+'</div><div class="v">'+esc(x[1])+"</div></div>"; }).join("")+"</div>";
+  show("hero", true);
+
+  if (has && mx>0){
+    document.getElementById("vDaily").textContent =
+      t("vDaily","最高 {d}").replace("{d}", md(d30[mxAt].d));
+    document.getElementById("daily").innerHTML =
+      columns(vals, -1, colorOf(NAME), usd, 0, d30.map(function(r){ return r.d; }))+
+      '<div class="axis2"><span>'+esc(md(d30[0].d))+"</span><span>"+esc(md(d30[d30.length-1].d))+"</span></div>";
+    show("dailyWrap", true);
+  } else show("dailyWrap", false);
+
+  /* 费用占比:整条分段条 + 每个模型一行(当前这个不调淡),每行带「比前 30 天」 */
+  document.getElementById("vCost").textContent =
+    t("vCost","第 {r} / 共 {n} 个").replace("{r}", ci+1).replace("{n}", cms.length);
+  document.getElementById("cost").innerHTML =
+    '<div class="share">'+cms.map(function(x){
+      return '<i style="width:'+Math.max(0.8, Number(x.pct)||0)+"%;background:"+colorOf(x.name)+
+        (x.name===NAME?"":";opacity:.3")+'"></i>'; }).join("")+"</div>"+
+    cms.map(function(x){
+      var on=x.name===NAME;
+      return '<div class="mrow"'+(on?"":' style="opacity:.62" data-model="'+esc(x.name)+'"')+'><span class="dot2" style="background:'+colorOf(x.name)+'"></span>'+
+        '<span class="nm">'+esc(mlabel(x.name))+"</span>"+chipOf(x.chg)+
+        '<span class="v">'+esc(usd(x.usd))+'</span><span class="x">'+esc(pct0(x.pct, x.usd))+"%</span></div>";
+    }).join("");
+  show("costWrap", true);
+  return true;
+}
+function paint(){
+  /* 组件直达不带模型名 → 近 30 天费用最高的那个 */
+  if (!NAME){ var cm0=M().costModels||[], ms0=M().models||[]; NAME = cm0.length ? cm0[0].name : (ms0.length ? ms0[0].name : ""); }
+  buildColors(allModelNames());
+  document.getElementById("dot").style.background = colorOf(NAME);
+  var ms=M().models||[], main=document.getElementById("main");
+  var i=-1; for (var k=0;k<ms.length;k++) if (ms[k].name===NAME) { i=k; break; }
+  paintCost();
+  if (i<0){
+    main.innerHTML='<div class="note" style="margin:0">'+esc(t("noData","这个模型还没有记录"))+"</div>";
+    document.getElementById("all").innerHTML=""; return; }
+  var m=ms[i], out=Number(m.out||0), msgs=Number(m.msgs||0);
+  document.getElementById("h1").textContent = m.label || m.name; xbTitle(m.label || m.name);
+  var cm=null; (M().costModels||[]).forEach(function(x){ if (x.name===NAME) cm=x; });
+  /* §1 副标 = 此刻的状态:近 30 天花了多少、比前 30 天怎样;老服务端退回「占输出」 */
+  document.getElementById("lead").textContent = cm
+    ? t("leadC","近 30 天 {v} · 占费用 {p}%").replace("{v}", usd(cm.usd)).replace("{p}", pct0(cm.pct, cm.usd))
+    : t("leadS","占输出 {p}% · 排第 {r} / 共 {n}")
+        .replace("{p}", Number(m.pct||0).toFixed(1)).replace("{r}", i+1).replace("{n}", ms.length);
+  document.getElementById("vAll").textContent =
+    t("vAll","占 {p}% · 第 {r} / 共 {n} 个").replace("{p}", Number(m.pct||0).toFixed(1))
+      .replace("{r}", i+1).replace("{n}", ms.length);
+
+  /* 每条消息的输出量 = 这个模型「一次说多少」。同样是一条消息,
+     opus 写一个函数与 haiku 补一行注释不是一回事,这个数把它们分得开。 */
+  var per = msgs>0 ? Math.round(out/msgs) : null;
+  main.innerHTML =
+    '<div class="grid">'+
+      cell(t("outTok","输出 token"), fmt(out), true)+
+      cell(t("msgs","消息"), fmt(msgs))+
+      cell(t("inTok","输入 token"), fmt(m["in"]))+
+      cell(t("perMsg","每条输出"), per==null?null:fmt(per))+
+    "</div>";
+
+  /* 把它放回全表:一行一个模型,当前这个用它自己的颜色,其余调淡。单看一个百分比说明不了「它是主力还是零头」。 */
+  document.getElementById("all").innerHTML = ms.map(function(x){
+    var p=Number(x.pct||0), on = x.name===NAME;
+    return '<div class="row"'+(on?' style="cursor:default"':' data-model="'+esc(x.name)+'"')+'><span class="nm"'+
+      (on?"":' style="color:var(--sub)"')+">"+esc(x.label||x.name)+"</span>"+
+      '<span class="bar"><i style="width:'+Math.max(3,p).toFixed(0)+"%;background:"+colorOf(x.name)+
+        (on?"":";opacity:.35")+'"></i></span>'+
+      '<span class="v">'+esc(p.toFixed(1))+"%</span>"+
+      '<span class="x">'+esc(fmt(x.out))+"</span></div>";
+  }).join("");
+}
+
+(async function boot(){
+  var q=new URLSearchParams(location.search);
+  NAME=String(q.get("name")||"");
+  var ok=await ready();
+  var raw=ok?await appInfo():{};
+  var info=(raw && raw.data) || raw || {};
+  applyTheme(info && info.theme);
+  /* 语言:appInfo → <html data-lang> → 英文(doc/overseas-first.md §1–§2,nbLang)。 */
+  var lang=(info && (info.language||info.lang||info.locale)) || document.documentElement.getAttribute('data-lang') || '';
+  EN = nbLang(lang) !== 'zh';
+  T = EN ? L['en-US'] : L['zh-CN'];
+  document.documentElement.lang = (EN || T === L['en-US']) ? 'en' : 'zh-CN';
+  if (EN){ ['lead','secAll','secDaily','secCost','note'].forEach(function(k){
+      var e=document.getElementById(k); if(e&&T[k]) e.textContent=T[k]; });
+    document.documentElement.lang='en'; }
+  /* ⚠️ 这里是 textContent 不是 innerHTML —— 文案里别写 Markdown 星号,
+     它会原样渲出来(2026-08-25 L2 看图抓到「占比按**输出 token** 算」)。 */
+  else document.getElementById("note").textContent =
+    "占比按输出 token 计算，它最能反映模型实际完成的工作量；消息数无法区分一句简短回复和一次大规模重构。";
+  document.getElementById("h1").textContent = NAME || "--";
+  if (!ok) return;
+  /* 点锚 = 穿透缓存真取一次、原地替换(§5.5.2 契约 2,与首页同规);在途转圈、连点只算一次。
+     新数据解析不出来就保留旧的 D,不把好数据抹掉。 */
+  var atBusy=false;
+  document.getElementById("at").addEventListener("click", async function(){
+    if (atBusy) return;
+    atBusy=true; xbAt.busy("at", true);
+    try{
+      var f=await fetchSummary(false);
+      if (f && String(f.live||"")==="1"){
+        var nd=null; try{ nd=JSON.parse(String(f.raw||"")); }catch(e){}
+        if (nd){ D=nd; paint(); stamp(f); }
+      }
+    } finally { atBusy=false; xbAt.busy("at", false); }
+  });
+  var data=await fetchSummary(true);
+  if (!data || String(data.live||"")!=="1") return;
+  try{ D=JSON.parse(String(data.raw||"")); }catch(e){ D=null; }
+  if (D) paint(); stamp(data);
+  if (String(data._stale)==="1"){
+    var fresh=await fetchSummary(false);
+    if (!fresh || String(fresh.live||"")!=="1") return;
+    try{ D=JSON.parse(String(fresh.raw||"")); }catch(e){ return; }
+    paint(); stamp(fresh);
+  }
+})();
+</script>
+</body></html>

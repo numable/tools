@@ -1,0 +1,75 @@
+{
+  "version": 2,
+  "title": "合约脉搏",
+  "sub": "资金费率 · 持仓 · 多空比 · 主动买卖",
+  "i18n": {
+    "en-US": {
+      "title": "Derivatives pulse",
+      "sub": "Funding, open interest, long/short, taker flow"
+    }
+  },
+  "layout": 42,
+  "params": {
+    "pair": "BTC-USDT",
+    "name": "BTC"
+  },
+  "ai": {
+    "shows": "一个币的永续合约:资金费率(含年化)、持仓量、多空人数比、24h 主动买入占比",
+    "params": {
+      "pair": {
+        "kind": "value",
+        "group": [
+          "pair",
+          "name"
+        ],
+        "format": "OKX 交易对:币种-USDT(现货);只有永续合约的币写 币种-USDT-SWAP",
+        "hint": "name 填 pair 的币种部分(BTC-USDT → BTC)",
+        "examples": [
+          "BTC-USDT",
+          "ETH-USDT",
+          "SOL-USDT",
+          "DOGE-USDT"
+        ]
+      },
+      "name": {
+        "kind": "value",
+        "format": "币种代码 = pair 第一段,如 BTC"
+      }
+    }
+  },
+  "events": {
+    "onClick": "/coin?pair=${pair}&name=${name}",
+    "onEdit": "/pick?pair=${pair}&name=${name}"
+  },
+  "jobs": [
+    {
+      "id": "funding",
+      "params": {
+        "pair": "${pair}"
+      }
+    },
+    {
+      "id": "price",
+      "params": {
+        "pair": "${pair}"
+      }
+    }
+  ],
+  "canvas": {
+    "source": "@[file://rc/deriv.rcn]",
+    "depends": [
+      {
+        "flow": "@[file://flow/deriv.df]",
+        "params": {
+          "pair": "${pair}",
+          "name": "${name}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "60"
+      ]
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "version": 2,
+  "title": "多周期涨跌",
+  "sub": "1 小时到 90 天 · 距高低点",
+  "i18n": {
+    "en-US": {
+      "title": "Performance",
+      "sub": "1H to 90D, and distance from the range"
+    }
+  },
+  "layout": 42,
+  "params": {
+    "pair": "BTC-USDT",
+    "name": "BTC"
+  },
+  "ai": {
+    "shows": "一个币 1 小时/4 小时/24 小时/7 天/30 天/90 天涨跌幅,及距 90 日高点、低点",
+    "params": {
+      "pair": {
+        "kind": "value",
+        "group": [
+          "pair",
+          "name"
+        ],
+        "format": "OKX 交易对:币种-USDT(现货);只有永续合约的币写 币种-USDT-SWAP",
+        "hint": "name 填 pair 的币种部分(BTC-USDT → BTC)",
+        "examples": [
+          "BTC-USDT",
+          "ETH-USDT",
+          "SOL-USDT",
+          "DOGE-USDT"
+        ]
+      },
+      "name": {
+        "kind": "value",
+        "format": "币种代码 = pair 第一段,如 BTC"
+      }
+    }
+  },
+  "events": {
+    "onClick": "/coin?pair=${pair}&name=${name}",
+    "onEdit": "/pick?pair=${pair}&name=${name}"
+  },
+  "jobs": [
+    {
+      "id": "price",
+      "params": {
+        "pair": "${pair}"
+      }
+    },
+    {
+      "id": "move",
+      "params": {
+        "pair": "${pair}"
+      }
+    }
+  ],
+  "canvas": {
+    "source": "@[file://rc/perf.rcn]",
+    "depends": [
+      {
+        "flow": "@[file://flow/perf.df]",
+        "params": {
+          "pair": "${pair}",
+          "name": "${name}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "60"
+      ]
+    }
+  }
+}

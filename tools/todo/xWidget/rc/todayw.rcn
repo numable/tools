@@ -1,0 +1,371 @@
+{
+ "rc": {
+  "_note": "今天(42):左 = 今天完成环 + 还剩几件;右 = 今天(含逾期)的前 3 件。",
+  "i18n": {
+   "zh-CN": {
+    "tToday": "今天",
+    "today": "今天",
+    "tmr": "明天",
+    "none": "还没有待办",
+    "stale": "数据未更新",
+    "allDone": "今天的都做完了",
+    "free": "今天没有要做的事",
+    "overN1": "其中 ",
+    "overN2": " 件已逾期",
+    "doneN1": "已完成 ",
+    "doneN2": " 件",
+    "more1": "还有 ",
+    "more2": " 件",
+    "addHint": "添加待办",
+    "left": "还剩",
+    "od1": "逾期 ",
+    "od2": " 天"
+   },
+   "en-US": {
+    "tToday": "Today",
+    "today": "Today",
+    "tmr": "Tomorrow",
+    "none": "No to-dos yet",
+    "stale": "Not up to date",
+    "allDone": "All done for today",
+    "free": "Nothing due today",
+    "overN1": "",
+    "overN2": " overdue",
+    "doneN1": "",
+    "doneN2": " done",
+    "more1": "+",
+    "more2": " more",
+    "addHint": "Add a to-do",
+    "left": "Left",
+    "od1": "",
+    "od2": "d overdue"
+   }
+  },
+  "i18nEmptyOk": [
+   "doneN1",
+   "od1",
+   "overN1"
+  ],
+  "cells": [
+   {
+    "id": "bg",
+    "type": "layer",
+    "x": "0pt",
+    "y": "0pt",
+    "w": "{parent.w}",
+    "h": "{parent.h}",
+    "bgColor": "linear(#FFFFFF\\,#FEFBFC\\,#FCF3F6)@90|linear(#15171A\\,#1B191D\\,#251D23)@90"
+   },
+   {
+    "id": "dot",
+    "type": "layer",
+    "x": "14pt",
+    "y": "{ttl.y}+({ttl.h}-5pt)/2",
+    "w": "5pt",
+    "h": "5pt",
+    "bgColor": "#D6336C|#F06595",
+    "cornerRadius": {
+     "leftT": "2.5pt",
+     "leftB": "2.5pt",
+     "rightT": "2.5pt",
+     "rightB": "2.5pt"
+    }
+   },
+   {
+    "id": "ttl",
+    "type": "txt",
+    "x": "23pt",
+    "y": "12pt",
+    "w": "{parent.w}-37pt",
+    "h": "-1",
+    "text": "${@i18n.tToday}",
+    "fontSize": "13pt",
+    "textColor": "#0E1116|#F3F4F6",
+    "maxLines": "1",
+    "typeface": "System-Bold",
+    "lineBreak": "0"
+   },
+   {
+    "id": "rgBg",
+    "type": "arc",
+    "x": "14pt",
+    "y": "40pt",
+    "w": "88pt",
+    "h": "88pt",
+    "startAngle": "0",
+    "sweepAngle": "360",
+    "useCenter": "0",
+    "lineWidth": "8pt",
+    "strokeColor": "#E7E9EE|#20232A"
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[gt::(${sweep},0)]"
+    },
+    "react": [
+     {
+      "id": "rg",
+      "type": "arc",
+      "x": "14pt",
+      "y": "40pt",
+      "w": "88pt",
+      "h": "88pt",
+      "startAngle": "-90",
+      "sweepAngle": "$[findNotEmpty::(${sweep},0)]",
+      "useCenter": "0",
+      "lineWidth": "8pt",
+      "lineCap": "round",
+      "strokeColor": "#D6336C|#F06595"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[eq::(${ok},1)]"
+    },
+    "react": [
+     {
+      "type": "txt",
+      "x": "14pt",
+      "y": "66pt",
+      "w": "88pt",
+      "h": "-1",
+      "text": "${rem}",
+      "fontSize": "26pt",
+      "textColor": "#0E1116|#F3F4F6",
+      "maxLines": "1",
+      "typeface": "System-Bold",
+      "alignmentH": "1",
+      "lineBreak": "0"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[ne::(${ok},1)]"
+    },
+    "react": [
+     {
+      "type": "txt",
+      "x": "14pt",
+      "y": "73.8pt",
+      "w": "88pt",
+      "h": "-1",
+      "text": "--",
+      "fontSize": "26pt",
+      "textColor": "#0E1116|#F3F4F6",
+      "maxLines": "1",
+      "typeface": "System-Bold",
+      "alignmentH": "1",
+      "lineBreak": "0"
+     }
+    ]
+   },
+   {
+    "id": "rl",
+    "type": "txt",
+    "x": "14pt",
+    "y": "96pt",
+    "w": "88pt",
+    "h": "-1",
+    "text": "${@i18n.left}",
+    "fontSize": "10pt",
+    "textColor": "#6B7280|#8E939B",
+    "maxLines": "1",
+    "alignmentH": "1",
+    "lineBreak": "0"
+   },
+   {
+    "type": "op",
+    "action": "forEach",
+    "props": {
+     "items": "${rows}",
+     "key": "_it",
+     "index": "_i"
+    },
+    "react": [
+     {
+      "type": "op",
+      "action": "if",
+      "props": {
+       "val": "$[and::(le::(${_it.dm},${tdm}),lt::(${_it.i},3),eq::(${ok},1))]"
+      },
+      "react": [
+       {
+        "type": "layer",
+        "x": "120pt",
+        "y": "40pt+${_it.i}*32pt+8.5pt",
+        "w": "15pt",
+        "h": "15pt",
+        "borderColor": "${_it.pc}",
+        "borderWidth": "1.6pt",
+        "cornerRadius": {
+         "leftT": "7.5pt",
+         "leftB": "7.5pt",
+         "rightT": "7.5pt",
+         "rightB": "7.5pt"
+        }
+       },
+       {
+        "type": "txt",
+        "x": "143pt",
+        "y": "40pt+${_it.i}*32pt+10.0pt",
+        "w": "{parent.w}-219pt",
+        "h": "-1",
+        "text": "${_it.t}",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "lineBreak": "0"
+       },
+       {
+        "type": "txt",
+        "x": "{parent.w}-72pt",
+        "y": "40pt+${_it.i}*32pt+12.3pt",
+        "w": "58pt",
+        "h": "-1",
+        "text": "$[if::(eq::(${_it.hdm},0),,if::(lt::(round::(calc::((${_it.dm}-${tdm})/86400000)),0),${@i18n.od1}round::(calc::((${tdm}-${_it.dm})/86400000))${@i18n.od2},if::(eq::(round::(calc::((${_it.dm}-${tdm})/86400000)),0),if::(eq::(${_it.htm},1),${_it.tm},${@i18n.today}),if::(eq::(round::(calc::((${_it.dm}-${tdm})/86400000)),1),${@i18n.tmr},if::(lt::(round::(calc::((${_it.dm}-${tdm})/86400000)),7),if::(startsWith::(${@app.language},zh),${_it.wdz},${_it.wde}),if::(startsWith::(${@app.language},zh),${_it.mdz},${_it.mde}))))))]",
+        "fontSize": "11pt",
+        "textColor": "$[if::(eq::(${_it.hdm},0),if::(eq::(${theme},dark),#8E939B,#6B7280),if::(lt::(round::(calc::((${_it.dm}-${tdm})/86400000)),0),if::(eq::(${theme},dark),#FF6369,#E5484D),if::(eq::(round::(calc::((${_it.dm}-${tdm})/86400000)),0),if::(eq::(${theme},dark),#F06595,#D6336C),if::(eq::(${theme},dark),#8E939B,#6B7280))))]",
+        "maxLines": "1",
+        "alignmentH": "2",
+        "lineBreak": "0"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[and::(eq::(${ok},1),gt::(${ovr},0))]"
+    },
+    "react": [
+     {
+      "id": "hr",
+      "type": "txt",
+      "x": "14pt",
+      "y": "13.5pt",
+      "w": "{parent.w}-28pt",
+      "h": "-1",
+      "text": "${@i18n.overN1}${ovr}${@i18n.overN2}",
+      "fontSize": "11pt",
+      "textColor": "#E5484D|#FF6369",
+      "maxLines": "1",
+      "typeface": "System-Bold",
+      "alignmentH": "2",
+      "lineBreak": "0"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[and::(eq::(${ok},1),eq::(${ovr},0),gt::(${doneT},0))]"
+    },
+    "react": [
+     {
+      "id": "hr",
+      "type": "txt",
+      "x": "14pt",
+      "y": "13.5pt",
+      "w": "{parent.w}-28pt",
+      "h": "-1",
+      "text": "${@i18n.doneN1}${doneT}${@i18n.doneN2}",
+      "fontSize": "11pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "alignmentH": "2",
+      "lineBreak": "0"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[and::(eq::(${ok},1),gt::(${rem},3))]"
+    },
+    "react": [
+     {
+      "type": "txt",
+      "x": "143pt",
+      "y": "138pt",
+      "w": "{parent.w}-157pt",
+      "h": "-1",
+      "text": "${@i18n.more1}$[calc::(${rem}-3)]${@i18n.more2}",
+      "fontSize": "10.5pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "lineBreak": "0"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[and::(eq::(${ok},1),eq::(${rem},0))]"
+    },
+    "react": [
+     {
+      "type": "txt",
+      "x": "120pt",
+      "y": "68pt",
+      "w": "{parent.w}-134pt",
+      "h": "-1",
+      "text": "$[if::(gt::(${doneT},0),${@i18n.allDone},${@i18n.free})]",
+      "fontSize": "13pt",
+      "textColor": "#0E1116|#F3F4F6",
+      "maxLines": "1",
+      "typeface": "System-Bold",
+      "lineBreak": "0"
+     },
+     {
+      "type": "txt",
+      "x": "120pt",
+      "y": "90pt",
+      "w": "{parent.w}-134pt",
+      "h": "-1",
+      "text": "+ ${@i18n.addHint}",
+      "fontSize": "11.5pt",
+      "textColor": "#D6336C|#F06595",
+      "maxLines": "1",
+      "typeface": "System-Bold",
+      "lineBreak": "0"
+     }
+    ]
+   },
+   {
+    "type": "op",
+    "action": "if",
+    "props": {
+     "val": "$[or::(ne::(${ok},1),ne::(${any},1))]"
+    },
+    "react": [
+     {
+      "type": "txt",
+      "x": "120pt",
+      "y": "72pt",
+      "w": "{parent.w}-134pt",
+      "h": "-1",
+      "text": "$[if::(ne::(${any},1),${@i18n.none},${@i18n.stale})]",
+      "fontSize": "13pt",
+      "textColor": "#6B7280|#8E939B",
+      "maxLines": "1",
+      "typeface": "System-Bold",
+      "lineBreak": "0"
+     }
+    ]
+   }
+  ]
+ }
+}

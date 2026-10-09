@@ -1,0 +1,44 @@
+name: sync
+# Mirror the published official tools (tools.json ∩ /bundle/list) into tools/.
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [tools.json, scripts/sync.mjs]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - id: sync
+        # A held-back tool exits 1; everything else is still applied and committed below, then the run fails.
+        run: |
+          set +e
+          node scripts/sync.mjs
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+      - name: commit
+        env:
+          SUMMARY: ${{ steps.sync.outputs.summary }}
+        run: |
+          git add -A tools index.json README.md
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git config user.name "numable-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "${SUMMARY:-sync}"
+          git push
+      - name: fail if anything was held back
+        if: steps.sync.outputs.status != '0'
+        run: exit 1

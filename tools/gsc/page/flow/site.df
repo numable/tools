@@ -1,0 +1,823 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "dTo",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-3*86400000),yyyy-MM-dd)]"
+      },
+      "_note": "GSC 数据滞后约 2–3 天,窗口右端必须留出这一截 —— 否则最后两三天恒为 0,曲线尾部永远是一道往下扎的假坑。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dFrom",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-31*86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dHalf",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-17*86400000),yyyy-MM-dd)]"
+      },
+      "_note": "环比的分界日:近 14 天 vs 前 14 天。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "site",
+        "value": "${u}"
+      },
+      "_note": "⚠️ 入参落地(勿删):方法参数与 URL 模板里的 ${} **看不见 flow 入参**,空 site 会打出 `/sites//searchAnalytics` 这种 404。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bodyS",
+        "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dTo}\",\"dimensions\":[],\"rowLimit\":1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bodyD",
+        "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dTo}\",\"dimensions\":[\"date\"],\"rowLimit\":40}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bodyQ",
+        "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dTo}\",\"dimensions\":[\"query\"],\"rowLimit\":8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bodyH",
+        "value": "{\"startDate\":\"${dHalf}\",\"endDate\":\"${dTo}\",\"dimensions\":[],\"rowLimit\":1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bodyP",
+        "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dHalf}\",\"dimensions\":[],\"rowLimit\":1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "label_a",
+        "value": "$[if::(eq::(subString::(${site},0,10),sc-domain:),subString::(${site},10,99),if::(eq::(subString::(${site},0,8),https://),subString::(${site},8,99),if::(eq::(subString::(${site},0,7),http://),subString::(${site},7,99),${site})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "label_n",
+        "value": "$[calc::(length::(${label_a})-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "label",
+        "value": "$[if::(eq::(subString::(${label_a},${label_n},99),/),subString::(${label_a},0,${label_n}),${label_a})]"
+      },
+      "_note": "结尾那个 `/` 也去掉 —— `example.com/` 与 `example.com` 在一列里并排时看着像两个站。"
+    },
+    {
+      "_note": "入参必须先 op:set 落地成 data 域的键,方法参数里才看得见(§9.5 #3)。`.xwidget` 不传 → 空串 → 归 0 → 全程不碰缓存。",
+      "op": "set",
+      "props": {
+        "key": "cacheIn",
+        "value": "${_cache}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "useCache",
+        "value": "$[parseNumber::(${cacheIn},0)]"
+      }
+    },
+    {
+      "_note": "**结构版本号**:pack 的字段集变了就 +1。它管的不是「数据新不新」而是「这份数据的**形状**还认不认」——缓存键只含对象维度、不含包代际,不盖这个戳,升级后首屏就会拿上一版的 pack 去渲新模板:少的字段取空,尺寸串里的 calc 一算 null,**整卡白块且不报错**。\n⚠️ 从 1 起、绝不能用 0(`eq::(空,0)` 恒为 true,旧缓存会被判成匹配)。⚠️ 刻意不用 `manifest.version`:flow 拿不到,且那会过度失效(只改配色也丢全部缓存)。",
+      "op": "set",
+      "props": {
+        "key": "SCHEMA",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缓存键。⚠️ 凡是影响结果的入参都要进键,且**绝不能用下标**(下标随增删漂移,漂移后会把 A 的数据渲成 B 的,还不报错)。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.gsc.site.,${site})]"
+      }
+    },
+    {
+      "_note": "读缓存。`default:{}` 让下面的 ${hit.ts} 在无缓存时安全取空,而不是整条流断掉。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitSchema",
+        "value": "${hit.schema}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "两道闸:**结构比对**(pack 形状对不上就当没有缓存 —— 旧形状渲新模板是白块,比等一次网络糟得多)+ hardTTL = 172800s(太旧的数先渲出来再改口,不如老实等一次)。嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里。",
+      "op": "set",
+      "props": {
+        "key": "hasHit",
+        "value": "$[if::(eq::(${hitSchema},${SCHEMA}),if::(gt::(${hitTs},0),if::(lt::(${age},172800000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "ttl = 3600s(§5.5.3)。纯新鲜度,不掺 useCache —— 掺进去 `_stale` 就算不对了。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},3600000),1,0),0)]"
+      }
+    },
+    {
+      "_note": "「这次先出的是旧货,请后台校新」。**必须进 resultFilter** —— 校新那条路靠它,漏了就是永不校新。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),if::(eq::(${fresh},1),0,1),0),0)]"
+      }
+    },
+    {
+      "_note": "只有「开了缓存 且 有没超 hardTTL 的货」才跳过网络 —— 连接都不建立。⚠️ **stale 也走这条跳过**(首屏零等待是三态的全部价值);写成「不 fresh 就打」= 退回两态,首屏照样白等。卡片(useCache=0)与冷启一律落进 items 真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),0,1),1)]"
+      },
+      "items": [
+        {
+          "action": "concurrent",
+          "items": [
+            {
+              "id": "resp",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyS}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "day",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyD}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "q",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyQ}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "hA",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyH}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            },
+            {
+              "id": "hB",
+              "action": "request",
+              "params": {
+                "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+                "method": "POST",
+                "header": {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "Numable"
+                },
+                "body": "${bodyP}",
+                "formatType": "json",
+                "credential": "google"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "errMsg",
+            "value": "${resp.error.message}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok",
+            "value": "$[if::(eq::(${resp},),0,if::(eq::(${errMsg},),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mr",
+            "value": "${resp.rows[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mnd",
+            "value": "$[if::(eq::(${ok},1),if::(eq::(findNotEmpty::(${mr.impressions},__none__),__none__),1,0),0)]"
+          },
+          "_note": "一行搜索数据都没有(新站点头 2–3 天):屏上说「还没有搜索数据」,不渲 0。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mclicks",
+            "value": "$[if::(eq::(${ok},1),round::(findNotEmpty::(${mr}.clicks,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mimps",
+            "value": "$[if::(eq::(${ok},1),round::(findNotEmpty::(${mr}.impressions,0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mctrN",
+            "value": "$[parseNumber::(calc::(findNotEmpty::(${mr}.ctr,0)*100),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mctr",
+            "value": "$[if::(eq::(${ok},1),if::(gt::(length::(${mctrN}),0),connect::(${mctrN},%),),)]"
+          },
+          "_note": "展示串在数据层拼好 —— RCN 里 `$[..]` 不嵌 `$[..]`(标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mpos",
+            "value": "$[if::(eq::(${ok},1),parseNumber::(findNotEmpty::(${mr}.position,0),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dn",
+            "value": "$[length::(${day.rows})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ser",
+            "value": [
+              "$[get::(index::(${day.rows},calc::(${dn}-1-27)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-26)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-25)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-24)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-23)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-22)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-21)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-20)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-19)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-18)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-17)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-16)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-15)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-14)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-13)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-12)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-11)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-10)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-9)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-8)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-7)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-6)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-5)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-4)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-3)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-2)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-1)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1)),clicks)]"
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lo",
+            "value": "0"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hi",
+            "value": "$[max::(calc::(max::(${ser})),1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cA",
+            "value": "$[findNotEmpty::(${hA.rows[0].clicks},0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cB",
+            "value": "$[calc::(findNotEmpty::(${hB.rows[0].clicks},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chg",
+            "value": "$[if::(gt::(${cB},0),parseNumber::(calc::((${cA}-${cB})/${cB}*100),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "up",
+            "value": "$[if::(gt::(length::(${chg}),0),if::(ge::(${chg},0),1,0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "flat",
+            "value": "$[if::(gt::(length::(${chg}),0),if::(lt::(calc::(${chg}*${chg}),0.25),1,0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chgA",
+            "value": "$[if::(ge::(${chg},0),${chg},calc::(0-${chg}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pts_a",
+            "value": [
+              "0.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},0)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "9.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},1)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "18.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},2)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "28.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},3)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "37.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},4)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "46.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},5)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "56.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},6)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "65.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},7)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "74.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},8)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "84.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},9)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "93.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},10)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "102.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},11)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "112.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},12)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "121.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},13)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "130.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},14)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "140.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},15)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "149.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},16)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "158.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},17)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "168.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},18)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "177.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},19)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "186.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},20)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "196.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},21)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "205.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},22)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "214.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},23)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "224.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},24)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "233.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},25)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "242.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},26)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]",
+              "252.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},27)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]"
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pts",
+            "value": "$[join::(${pts_a},\\,)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lastY",
+            "value": "$[findNotEmpty::(parseNumber::(calc::((1-((findNotEmpty::(index::(${ser},27),0)-${lo})/(${hi}-${lo})))*92.0+8.0),0.0),999)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "qn",
+            "value": "$[length::(${q.rows})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "qmax",
+            "value": "$[max::(calc::(max::(pluck::(${q.rows},clicks))),1)]"
+          },
+          "_note": "热度条的分母 —— 用**本页最大值**而不是站点总点击:Top 8 里第一名常占大头,拿总数当分母会让后面七条全挤成一根线。"
+        },
+        {
+          "_note": "定长 8 行。`w` 是热度条像素宽(尺寸字段吃不下方法,必须在这里算完);空行的 w 兜 0 —— 零宽的 `line` 端点重合仍画得出圆头,不像 `layer` 会整卡失败。",
+          "op": "set",
+          "props": {
+            "key": "qlist",
+            "value": [
+              {
+                "k": "$[get::(index::(${q.rows},0),keys[0])]",
+                "c": "$[findNotEmpty::(round::(get::(index::(${q.rows},0),clicks)),)]",
+                "w": "$[parseNumber::(calc::(findNotEmpty::(get::(index::(${q.rows},0),clicks),0)/${qmax}*260),0.0)]"
+              },
+              {
+                "k": "$[get::(index::(${q.rows},1),keys[0])]",
+                "c": "$[findNotEmpty::(round::(get::(index::(${q.rows},1),clicks)),)]",
+                "w": "$[parseNumber::(calc::(findNotEmpty::(get::(index::(${q.rows},1),clicks),0)/${qmax}*260),0.0)]"
+              },
+              {
+                "k": "$[get::(index::(${q.rows},2),keys[0])]",
+                "c": "$[findNotEmpty::(round::(get::(index::(${q.rows},2),clicks)),)]",
+                "w": "$[parseNumber::(calc::(findNotEmpty::(get::(index::(${q.rows},2),clicks),0)/${qmax}*260),0.0)]"
+              },
+              {
+                "k": "$[get::(index::(${q.rows},3),keys[0])]",
+                "c": "$[findNotEmpty::(round::(get::(index::(${q.rows},3),clicks)),)]",
+                "w": "$[parseNumber::(calc::(findNotEmpty::(get::(index::(${q.rows},3),clicks),0)/${qmax}*260),0.0)]"
+              },
+              {
+                "k": "$[get::(index::(${q.rows},4),keys[0])]",
+                "c": "$[findNotEmpty::(round::(get::(index::(${q.rows},4),clicks)),)]",
+                "w": "$[parseNumber::(calc::(findNotEmpty::(get::(index::(${q.rows},4),clicks),0)/${qmax}*260),0.0)]"
+              },
+              {
+                "k": "$[get::(index::(${q.rows},5),keys[0])]",
+                "c": "$[findNotEmpty::(round::(get::(index::(${q.rows},5),clicks)),)]",
+                "w": "$[parseNumber::(calc::(findNotEmpty::(get::(index::(${q.rows},5),clicks),0)/${qmax}*260),0.0)]"
+              },
+              {
+                "k": "$[get::(index::(${q.rows},6),keys[0])]",
+                "c": "$[findNotEmpty::(round::(get::(index::(${q.rows},6),clicks)),)]",
+                "w": "$[parseNumber::(calc::(findNotEmpty::(get::(index::(${q.rows},6),clicks),0)/${qmax}*260),0.0)]"
+              },
+              {
+                "k": "$[get::(index::(${q.rows},7),keys[0])]",
+                "c": "$[findNotEmpty::(round::(get::(index::(${q.rows},7),clicks)),)]",
+                "w": "$[parseNumber::(calc::(findNotEmpty::(get::(index::(${q.rows},7),clicks),0)/${qmax}*260),0.0)]"
+              }
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "range",
+            "value": "${dFrom} ~ ${dTo}"
+          }
+        },
+        {
+          "_note": "写回哨兵:**直接取响应字段,不加任何兜底** —— 取数失败/响应变形时它必空。别拿加工后的显示字段当判据,那些几乎都带兜底,拦不住任何东西。",
+          "op": "set",
+          "props": {
+            "key": "_guard",
+            "value": "${day.rows[0].keys[0]}"
+          }
+        },
+        {
+          "_note": "整份渲染输入打包落盘。⚠️ 键集必须与 resultFilter 完全一致 —— 少一个,命中缓存那趟就少一个字段(而且不报错)。",
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "ok": "${ok}",
+              "errMsg": "${errMsg}",
+              "site": "${site}",
+              "label": "${label}",
+              "range": "${range}",
+              "qn": "${qn}",
+              "qlist": "${qlist}",
+              "mnd": "${mnd}",
+              "mclicks": "${mclicks}",
+              "mimps": "${mimps}",
+              "mctr": "${mctr}",
+              "mpos": "${mpos}",
+              "chgA": "${chgA}",
+              "up": "${up}",
+              "flat": "${flat}",
+              "pts": "${pts}",
+              "lastY": "${lastY}",
+              "ts": "${nowMs}",
+              "schema": "${SCHEMA}"
+            }
+          }
+        },
+        {
+          "_note": "契约 4(§5.5.2):关键字段非空才写回。`_guard` 在取数失败/响应变形时必空 —— 此时什么都不写,盘上的旧货留着继续渲。一次超时把 pack 写成空,就把这页永久钉死在空态上直到下次恰好成功。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${_guard}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中那条少算一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "${box.ok}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "errMsg",
+        "value": "${box.errMsg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "site",
+        "value": "${box.site}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "label",
+        "value": "${box.label}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "range",
+        "value": "${box.range}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qn",
+        "value": "${box.qn}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qlist",
+        "value": "${box.qlist}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mnd",
+        "value": "${box.mnd}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mclicks",
+        "value": "${box.mclicks}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mimps",
+        "value": "${box.mimps}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mctr",
+        "value": "${box.mctr}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mpos",
+        "value": "${box.mpos}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgA",
+        "value": "${box.chgA}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "up",
+        "value": "${box.up}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flat",
+        "value": "${box.flat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pts",
+        "value": "${box.pts}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lastY",
+        "value": "${box.lastY}"
+      }
+    },
+    {
+      "_note": "外传①:这次渲染用的缓存键。跑在 reloadPage **之后**的流(下拉穿透、切对象校新)拿不到 depends 输出,只能读盘;让它们读结果而不是重算判据 —— AF 没有子流程调用,判据抄几份就会有一天「删的键 ≠ 渲的键」,那时下拉安静地刷不动、日志还全绿。",
+      "action": "data.set",
+      "params": {
+        "key": "c.gsc.site._cur",
+        "value": "${ckey}"
+      }
+    },
+    {
+      "_note": "外传②:这次出的是不是旧货。",
+      "action": "data.set",
+      "params": {
+        "key": "c.gsc.site._stale",
+        "value": "${_stale}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "_stale",
+          "ckey",
+          "ok",
+          "errMsg",
+          "site",
+          "label",
+          "range",
+          "qn",
+          "qlist",
+          "mnd",
+          "mclicks",
+          "mimps",
+          "mctr",
+          "mpos",
+          "chgA",
+          "up",
+          "flat",
+          "pts",
+          "lastY"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。⚠️ `_stale`/`ckey` 是校新那条路的入参,别删。"
+    }
+  ]
+}

@@ -1,0 +1,724 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "_note": "入参必须先 op:set 落地成 data 域的键,方法参数里才看得见(§9.5 #3)。`.xwidget` 不传 → 空串 → 归 0 → 全程不碰缓存。",
+      "op": "set",
+      "props": {
+        "key": "cacheIn",
+        "value": "${_cache}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "useCache",
+        "value": "$[parseNumber::(${cacheIn},0)]"
+      }
+    },
+    {
+      "_note": "**结构版本号**:pack 的字段集变了就 +1。它管的不是「数据新不新」而是「这份数据的**形状**还认不认」——缓存键只含对象维度、不含包代际,不盖这个戳,升级后首屏就会拿上一版的 pack 去渲新模板:少的字段取空,尺寸串里的 calc 一算 null,**整卡白块且不报错**。\n⚠️ 从 1 起、绝不能用 0(`eq::(空,0)` 恒为 true,旧缓存会被判成匹配)。⚠️ 刻意不用 `manifest.version`:flow 拿不到,且那会过度失效(只改配色也丢全部缓存)。",
+      "op": "set",
+      "props": {
+        "key": "SCHEMA",
+        "value": "3"
+      }
+    },
+    {
+      "_note": "缓存键。⚠️ 凡是影响结果的入参都要进键,且**绝不能用下标**(下标随增删漂移,漂移后会把 A 的数据渲成 B 的,还不报错)。",
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.hn.story.,${id})]"
+      }
+    },
+    {
+      "_note": "读缓存。`default:{}` 让下面的 ${hit.ts} 在无缓存时安全取空,而不是整条流断掉。",
+      "id": "hit",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitSchema",
+        "value": "${hit.schema}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hit.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "age",
+        "value": "$[calc::(${nowMs}-${hitTs})]"
+      }
+    },
+    {
+      "_note": "两道闸:**结构比对**(pack 形状对不上就当没有缓存 —— 旧形状渲新模板是白块,比等一次网络糟得多)+ hardTTL = 86400s(太旧的数先渲出来再改口,不如老实等一次)。嵌套 if 而不是 and:: —— `and` 不在确认可用的方法集里。",
+      "op": "set",
+      "props": {
+        "key": "hasHit",
+        "value": "$[if::(eq::(${hitSchema},${SCHEMA}),if::(gt::(${hitTs},0),if::(lt::(${age},86400000),1,0),0),0)]"
+      }
+    },
+    {
+      "_note": "ttl = 300s(§5.5.3)。纯新鲜度,不掺 useCache —— 掺进去 `_stale` 就算不对了。",
+      "op": "set",
+      "props": {
+        "key": "fresh",
+        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},300000),1,0),0)]"
+      }
+    },
+    {
+      "_note": "「这次先出的是旧货,请后台校新」。**必须进 resultFilter** —— 校新那条路靠它,漏了就是永不校新。",
+      "op": "set",
+      "props": {
+        "key": "_stale",
+        "value": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),if::(eq::(${fresh},1),0,1),0),0)]"
+      }
+    },
+    {
+      "_note": "只有「开了缓存 且 有没超 hardTTL 的货」才跳过网络 —— 连接都不建立。⚠️ **stale 也走这条跳过**(首屏零等待是三态的全部价值);写成「不 fresh 就打」= 退回两态,首屏照样白等。卡片(useCache=0)与冷启一律落进 items 真取数。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${useCache},1),if::(eq::(${hasHit},1),0,1),1)]"
+      },
+      "items": [
+        {
+          "_note": "单条详情。**刻意不透传评论树**:children 是 7 层嵌套、几百 KB,且每个评论对象都带着一堆对本页无用的 null 字段(title/url/points —— 评论不是 story)。详情页的职责是「这条是什么 + 去哪读」,评论交给 HN 讨论页本身(点『在 HN 上讨论』就到,那里的评论体验本来就更好)。",
+          "id": "resp",
+          "action": "request",
+          "params": {
+            "url": "https://hn.algolia.com/api/v1/items/${id}",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "title",
+            "value": "${resp.title}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "author",
+            "value": "${resp.author}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "points",
+            "value": "${resp.points}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "createdAt",
+            "value": "$[subString::(${resp.created_at},0,10)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nComments",
+            "value": "$[length::(${resp.children})]"
+          }
+        },
+        {
+          "_note": "Ask HN / Show HN 这类帖子没有外链(url 为 null),此时「阅读原文」按钮该隐藏 —— 给个空串让页面自己判。",
+          "op": "set",
+          "props": {
+            "key": "url",
+            "value": "$[findNotEmpty::(${resp.url},)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "host",
+            "value": "$[findNotEmpty::(${resp.url},)]"
+          }
+        },
+        {
+          "_note": "帖子正文(Ask HN / Show HN 的 text,HTML 片段;外链帖恒为 null)。⚠️ 刻意不走 $[findNotEmpty::…] —— 正文里有逗号/括号,过方法参数解析器会被切碎;null 由页面侧判掉(render 里过滤 \"null\")。",
+          "op": "set",
+          "props": {
+            "key": "body",
+            "value": "${resp.text}"
+          }
+        },
+        {
+          "_note": "HN 讨论页恒为 news.ycombinator.com/item?id=<id>。这是给用户点的外链(容器把它当下一页 push、不注入桥),不发请求,故不进 manifest.network。",
+          "op": "set",
+          "props": {
+            "key": "hnUrl",
+            "value": "https://news.ycombinator.com/item?id=${id}"
+          }
+        },
+        {
+          "_note": "评论(2026-09-22 用户要求详情页有内容):只挑**前 20 条顶层评论 + 每条前 2 条回复**,每条只留 作者/正文/时间 + 直接回复数 n(顶层另带 id,供「在 HN 上看这条」) —— 整棵树 7 层几百 KB,不整份透传。⚠️ Algolia children 是**按时间**排的不是 HN 的排名,页面侧按 n(直接回复数)重排作热度近似。越界下标取空,页面按「作者或正文为空」滤掉(已删除的评论同理)。正文是 HN 的 HTML 片段,带逗号括号,故只走直取不过方法。",
+          "op": "set",
+          "props": {
+            "key": "comments",
+            "value": [
+              {
+                "a": "${resp.children[0].author}",
+                "t": "${resp.children[0].text}",
+                "at": "${resp.children[0].created_at_i}",
+                "n": "$[length::(${resp.children[0].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[0].children[0].author}",
+                    "t": "${resp.children[0].children[0].text}",
+                    "at": "${resp.children[0].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[0].children[1].author}",
+                    "t": "${resp.children[0].children[1].text}",
+                    "at": "${resp.children[0].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[0].id}"
+              },
+              {
+                "a": "${resp.children[1].author}",
+                "t": "${resp.children[1].text}",
+                "at": "${resp.children[1].created_at_i}",
+                "n": "$[length::(${resp.children[1].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[1].children[0].author}",
+                    "t": "${resp.children[1].children[0].text}",
+                    "at": "${resp.children[1].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[1].children[1].author}",
+                    "t": "${resp.children[1].children[1].text}",
+                    "at": "${resp.children[1].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[1].id}"
+              },
+              {
+                "a": "${resp.children[2].author}",
+                "t": "${resp.children[2].text}",
+                "at": "${resp.children[2].created_at_i}",
+                "n": "$[length::(${resp.children[2].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[2].children[0].author}",
+                    "t": "${resp.children[2].children[0].text}",
+                    "at": "${resp.children[2].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[2].children[1].author}",
+                    "t": "${resp.children[2].children[1].text}",
+                    "at": "${resp.children[2].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[2].id}"
+              },
+              {
+                "a": "${resp.children[3].author}",
+                "t": "${resp.children[3].text}",
+                "at": "${resp.children[3].created_at_i}",
+                "n": "$[length::(${resp.children[3].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[3].children[0].author}",
+                    "t": "${resp.children[3].children[0].text}",
+                    "at": "${resp.children[3].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[3].children[1].author}",
+                    "t": "${resp.children[3].children[1].text}",
+                    "at": "${resp.children[3].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[3].id}"
+              },
+              {
+                "a": "${resp.children[4].author}",
+                "t": "${resp.children[4].text}",
+                "at": "${resp.children[4].created_at_i}",
+                "n": "$[length::(${resp.children[4].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[4].children[0].author}",
+                    "t": "${resp.children[4].children[0].text}",
+                    "at": "${resp.children[4].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[4].children[1].author}",
+                    "t": "${resp.children[4].children[1].text}",
+                    "at": "${resp.children[4].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[4].id}"
+              },
+              {
+                "a": "${resp.children[5].author}",
+                "t": "${resp.children[5].text}",
+                "at": "${resp.children[5].created_at_i}",
+                "n": "$[length::(${resp.children[5].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[5].children[0].author}",
+                    "t": "${resp.children[5].children[0].text}",
+                    "at": "${resp.children[5].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[5].children[1].author}",
+                    "t": "${resp.children[5].children[1].text}",
+                    "at": "${resp.children[5].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[5].id}"
+              },
+              {
+                "a": "${resp.children[6].author}",
+                "t": "${resp.children[6].text}",
+                "at": "${resp.children[6].created_at_i}",
+                "n": "$[length::(${resp.children[6].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[6].children[0].author}",
+                    "t": "${resp.children[6].children[0].text}",
+                    "at": "${resp.children[6].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[6].children[1].author}",
+                    "t": "${resp.children[6].children[1].text}",
+                    "at": "${resp.children[6].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[6].id}"
+              },
+              {
+                "a": "${resp.children[7].author}",
+                "t": "${resp.children[7].text}",
+                "at": "${resp.children[7].created_at_i}",
+                "n": "$[length::(${resp.children[7].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[7].children[0].author}",
+                    "t": "${resp.children[7].children[0].text}",
+                    "at": "${resp.children[7].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[7].children[1].author}",
+                    "t": "${resp.children[7].children[1].text}",
+                    "at": "${resp.children[7].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[7].id}"
+              },
+              {
+                "a": "${resp.children[8].author}",
+                "t": "${resp.children[8].text}",
+                "at": "${resp.children[8].created_at_i}",
+                "n": "$[length::(${resp.children[8].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[8].children[0].author}",
+                    "t": "${resp.children[8].children[0].text}",
+                    "at": "${resp.children[8].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[8].children[1].author}",
+                    "t": "${resp.children[8].children[1].text}",
+                    "at": "${resp.children[8].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[8].id}"
+              },
+              {
+                "a": "${resp.children[9].author}",
+                "t": "${resp.children[9].text}",
+                "at": "${resp.children[9].created_at_i}",
+                "n": "$[length::(${resp.children[9].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[9].children[0].author}",
+                    "t": "${resp.children[9].children[0].text}",
+                    "at": "${resp.children[9].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[9].children[1].author}",
+                    "t": "${resp.children[9].children[1].text}",
+                    "at": "${resp.children[9].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[9].id}"
+              },
+              {
+                "a": "${resp.children[10].author}",
+                "t": "${resp.children[10].text}",
+                "at": "${resp.children[10].created_at_i}",
+                "n": "$[length::(${resp.children[10].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[10].children[0].author}",
+                    "t": "${resp.children[10].children[0].text}",
+                    "at": "${resp.children[10].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[10].children[1].author}",
+                    "t": "${resp.children[10].children[1].text}",
+                    "at": "${resp.children[10].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[10].id}"
+              },
+              {
+                "a": "${resp.children[11].author}",
+                "t": "${resp.children[11].text}",
+                "at": "${resp.children[11].created_at_i}",
+                "n": "$[length::(${resp.children[11].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[11].children[0].author}",
+                    "t": "${resp.children[11].children[0].text}",
+                    "at": "${resp.children[11].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[11].children[1].author}",
+                    "t": "${resp.children[11].children[1].text}",
+                    "at": "${resp.children[11].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[11].id}"
+              },
+              {
+                "a": "${resp.children[12].author}",
+                "t": "${resp.children[12].text}",
+                "at": "${resp.children[12].created_at_i}",
+                "n": "$[length::(${resp.children[12].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[12].children[0].author}",
+                    "t": "${resp.children[12].children[0].text}",
+                    "at": "${resp.children[12].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[12].children[1].author}",
+                    "t": "${resp.children[12].children[1].text}",
+                    "at": "${resp.children[12].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[12].id}"
+              },
+              {
+                "a": "${resp.children[13].author}",
+                "t": "${resp.children[13].text}",
+                "at": "${resp.children[13].created_at_i}",
+                "n": "$[length::(${resp.children[13].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[13].children[0].author}",
+                    "t": "${resp.children[13].children[0].text}",
+                    "at": "${resp.children[13].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[13].children[1].author}",
+                    "t": "${resp.children[13].children[1].text}",
+                    "at": "${resp.children[13].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[13].id}"
+              },
+              {
+                "a": "${resp.children[14].author}",
+                "t": "${resp.children[14].text}",
+                "at": "${resp.children[14].created_at_i}",
+                "n": "$[length::(${resp.children[14].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[14].children[0].author}",
+                    "t": "${resp.children[14].children[0].text}",
+                    "at": "${resp.children[14].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[14].children[1].author}",
+                    "t": "${resp.children[14].children[1].text}",
+                    "at": "${resp.children[14].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[14].id}"
+              },
+              {
+                "a": "${resp.children[15].author}",
+                "t": "${resp.children[15].text}",
+                "at": "${resp.children[15].created_at_i}",
+                "n": "$[length::(${resp.children[15].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[15].children[0].author}",
+                    "t": "${resp.children[15].children[0].text}",
+                    "at": "${resp.children[15].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[15].children[1].author}",
+                    "t": "${resp.children[15].children[1].text}",
+                    "at": "${resp.children[15].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[15].id}"
+              },
+              {
+                "a": "${resp.children[16].author}",
+                "t": "${resp.children[16].text}",
+                "at": "${resp.children[16].created_at_i}",
+                "n": "$[length::(${resp.children[16].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[16].children[0].author}",
+                    "t": "${resp.children[16].children[0].text}",
+                    "at": "${resp.children[16].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[16].children[1].author}",
+                    "t": "${resp.children[16].children[1].text}",
+                    "at": "${resp.children[16].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[16].id}"
+              },
+              {
+                "a": "${resp.children[17].author}",
+                "t": "${resp.children[17].text}",
+                "at": "${resp.children[17].created_at_i}",
+                "n": "$[length::(${resp.children[17].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[17].children[0].author}",
+                    "t": "${resp.children[17].children[0].text}",
+                    "at": "${resp.children[17].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[17].children[1].author}",
+                    "t": "${resp.children[17].children[1].text}",
+                    "at": "${resp.children[17].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[17].id}"
+              },
+              {
+                "a": "${resp.children[18].author}",
+                "t": "${resp.children[18].text}",
+                "at": "${resp.children[18].created_at_i}",
+                "n": "$[length::(${resp.children[18].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[18].children[0].author}",
+                    "t": "${resp.children[18].children[0].text}",
+                    "at": "${resp.children[18].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[18].children[1].author}",
+                    "t": "${resp.children[18].children[1].text}",
+                    "at": "${resp.children[18].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[18].id}"
+              },
+              {
+                "a": "${resp.children[19].author}",
+                "t": "${resp.children[19].text}",
+                "at": "${resp.children[19].created_at_i}",
+                "n": "$[length::(${resp.children[19].children})]",
+                "r": [
+                  {
+                    "a": "${resp.children[19].children[0].author}",
+                    "t": "${resp.children[19].children[0].text}",
+                    "at": "${resp.children[19].children[0].created_at_i}"
+                  },
+                  {
+                    "a": "${resp.children[19].children[1].author}",
+                    "t": "${resp.children[19].children[1].text}",
+                    "at": "${resp.children[19].children[1].created_at_i}"
+                  }
+                ],
+                "id": "${resp.children[19].id}"
+              }
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nowS",
+            "value": "$[parseNumber::(calc::(${@time.nowMs}/1000),0)]"
+          },
+          "_note": "时间锚(契约3,与 front.df 同形):取数那一刻的秒级时间戳,进缓存跟数据一起变旧。"
+        },
+        {
+          "_note": "写回哨兵:**直接取响应字段,不加任何兜底** —— 取数失败/响应变形时它必空。别拿加工后的显示字段当判据,那些几乎都带兜底,拦不住任何东西。",
+          "op": "set",
+          "props": {
+            "key": "_guard",
+            "value": "${resp.title}"
+          }
+        },
+        {
+          "_note": "整份渲染输入打包落盘。⚠️ 键集必须与 resultFilter 完全一致 —— 少一个,命中缓存那趟就少一个字段(而且不报错)。",
+          "op": "set",
+          "props": {
+            "key": "pack",
+            "value": {
+              "title": "${title}",
+              "author": "${author}",
+              "points": "${points}",
+              "createdAt": "${createdAt}",
+              "nComments": "${nComments}",
+              "url": "${url}",
+              "body": "${body}",
+              "hnUrl": "${hnUrl}",
+              "nowS": "${nowS}",
+              "ts": "${nowMs}",
+              "schema": "${SCHEMA}",
+              "comments": "${comments}"
+            }
+          }
+        },
+        {
+          "_note": "契约 4(§5.5.2):关键字段非空才写回。`_guard` 在取数失败/响应变形时必空 —— 此时什么都不写,盘上的旧货留着继续渲。一次超时把 pack 写成空,就把这页永久钉死在空态上直到下次恰好成功。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${_guard}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入 —— 两条路径只有一份字段映射,不会出现「命中那条少算一个字段」的分叉。",
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "title",
+        "value": "${box.title}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "author",
+        "value": "${box.author}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "points",
+        "value": "${box.points}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "createdAt",
+        "value": "${box.createdAt}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nComments",
+        "value": "${box.nComments}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "url",
+        "value": "${box.url}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "body",
+        "value": "${box.body}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hnUrl",
+        "value": "${box.hnUrl}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowS",
+        "value": "${box.nowS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "comments",
+        "value": "${box.comments}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "_stale",
+          "ckey",
+          "title",
+          "author",
+          "points",
+          "createdAt",
+          "nComments",
+          "url",
+          "body",
+          "hnUrl",
+          "nowS",
+          "comments"
+        ]
+      },
+      "_note": "resultFilter 恒放最后;少透一个键,下游就是空参。⚠️ `_stale`/`ckey` 是校新那条路的入参,别删。"
+    }
+  ],
+  "_note": "【G23 豁免】详情页缓存第二批(TODO 已登记):/story 详情页在 §5.5.11 辖内但首批未做。做的时候删本标记。"
+}

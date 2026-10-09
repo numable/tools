@@ -1,0 +1,56 @@
+{
+  "_note": "账号卡:**需要先选一个域名**,所以挂在 /zone 详情页而不是首页(标准 §8.1 的分类判据 —— 「加这张卡需不需要先指定一个对象」)。本包那四张公开卡正好相反:无参数、全挂首页。\n⚠️ depends 必须是 {flow,params} 显式携参槽,裸串会把入参吞成空(memory xwidget-depends-object-slots:流仍 success、卡片静默渲 --)。\n⚠️ **onEdit 必须指向 H5 路由,不能指 `type:\"xpage\"` 的路由**(2026-08-09 Android 真机撞到):`PageRouter.openParamPage` 与常规的 `openPage` 不是一条路 —— 后者按 type 做 xpage/form/html 三分派,前者**写死 SheetActivity(WebView 壳)、从不读 type**,于是 xpage 路由被塞进 WebView 去解析一个不存在的域名(`ERR_NAME_NOT_RESOLVED`)。这与 `openPage` 注释里记的「form 被静默塞进 WebView 渲成空白」是同一个病,当初只修了 openPage。平台侧应当补齐三分派;在那之前,onEdit 一律指 H5。\n⚠️ depends 的 params **两个键都要写**:显式携参槽只传写明的键(§D 纯显式),少写 zoneName 的话流里 `${zoneName}` 恒空 → 卡上域名渲 `--`,而数据却是对的 —— 「数字都对、只有标题空着」这种半对状态最容易被当成没问题。",
+  "version": 2,
+  "title": "请求趋势",
+  "sub": "近 30 天每日请求柱状图",
+  "i18n": {
+    "en-US": {
+      "title": "Request trend",
+      "sub": "Daily requests over the last 30 days"
+    }
+  },
+  "layout": 44,
+  "params": {
+    "zoneId": "",
+    "zoneName": ""
+  },
+  "events": {
+    "onClick": "/zone?zoneId=${zoneId}&zoneName=${zoneName}",
+    "onEdit": "/edit",
+    "_noteClick": "单对象卡点击带对象参数进详情页(2026-08-27 深链评审第二批)。zoneId 是取数键、zoneName 是显示名,两个都带(与首页跳转串同式);zoneId 为空时详情页渲 p-unbound 兜底(同日新增),不再是死页。"
+  },
+  "canvas": {
+    "source": "@[file://rc/trend.rcn]",
+    "depends": [
+      {
+        "flow": "@[file://flow/trend.df]",
+        "params": {
+          "zoneId": "${zoneId}",
+          "zoneName": "${zoneName}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "300"
+      ]
+    }
+  },
+  "ai": {
+    "shows": "某个域名近 30 天每日请求数柱状图;需绑 Cloudflare 令牌",
+    "params": {
+      "zoneId": {
+        "kind": "account",
+        "group": [
+          "zoneId",
+          "zoneName"
+        ],
+        "hint": "用户 Cloudflare 账号里的域名(Zone)ID;留空 = 账号里第一个域名,装上后用户可在编辑页换"
+      },
+      "zoneName": {
+        "kind": "account",
+        "hint": "与 zoneId 配套的域名,只用于显示"
+      }
+    }
+  }
+}

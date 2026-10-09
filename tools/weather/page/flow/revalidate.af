@@ -1,0 +1,90 @@
+{
+  "_note": "首屏三态的中间那一行:进页时若渲的是旧货(`_stale=1`),后台校新一次。\n**挂在 `root.events.onLoad`** —— 它的 gate 挂在节点持久态、**全生命周期恰好一次**,软重载不重置(xpage-design.md §10.1),\n所以「删键 → reloadPage → 再跑 depends」不会自激。⚠️ **绝不能改挂 onVisible**:那个每次可见都触发,配上 reloadPage 就是死循环。\n此刻页面**有数据**,四端的 reloadPage 都走 stale-while-revalidate(保留旧内容、后台跑 depends、不闪骨架),\n用户看到的是旧数据原地换成新数据,全程没有骨架、没有浮层 —— 自动校新不该弹浮层(那是用户主动发起的操作才配有的反馈,§9.5 第 16 条)。\n入参由 home.df 的 resultFilter 透出(`_stale` / `ckey`),这里不重算新鲜度。\nv64:另删详情页「24 小时」「空气 + 日照」两块的缓存键(`s24key` / `aqkey`)—— 新旧由 detail.df 统一判定,三个键一起删、一次 reloadPage。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "入参先落地:方法参数里的 ${} 看不见 flow 入参(§9.5 #3)。parseNumber 兜底,拿不到就当 0(不校新),宁可少刷一次也不要空转一轮网络。",
+      "op": "set",
+      "props": {
+        "key": "st",
+        "value": "${stale}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isStale",
+        "value": "$[parseNumber::(${st},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "${ckey}"
+      }
+    },
+    {
+      "_note": "详情页另两块的缓存键(detail.df 透出;首页不传 = 空,下面按空跳过)。",
+      "op": "set",
+      "props": {
+        "key": "k2",
+        "value": "${s24key}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3",
+        "value": "${aqkey}"
+      }
+    },
+    {
+      "_note": "⚠️ 键为空时什么都不做 —— 空键 remove 会删掉一个叫空串的键(无害但无意义),而随后的 reloadPage 会白跑一整轮网络。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${isStale},1),if::(gt::(length::(${k}),0),1,0),0)]"
+      },
+      "items": [
+        {
+          "_note": "删掉这一个城市的缓存键,下一趟 depends 必然 miss → 真取数 → 写回新值。**穿透靠删键,不靠传 force** —— depends 的 params 是静态的,传不进去。",
+          "action": "data.remove",
+          "params": {
+            "key": "${k}"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${k2}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.remove",
+              "params": {
+                "key": "${k2}"
+              }
+            }
+          ]
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${k3}),0),1,0)]"
+          },
+          "items": [
+            {
+              "action": "data.remove",
+              "params": {
+                "key": "${k3}"
+              }
+            }
+          ]
+        },
+        {
+          "action": "xpage.reloadPage"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,344 @@
+{
+  "_note": "空气质量(air 卡 + 详情页块)。Open-Meteo 空气质量接口(CAMS 模型,约 11 km 格点,是模型值不是站点实测)。生成器 gen_weather_more.py。",
+  "version": 1,
+  "i18n": {
+    "zh-CN": {
+      "autoCn": "上海",
+      "autoUs": "纽约"
+    },
+    "en-US": {
+      "autoCn": "Shanghai",
+      "autoUs": "New York"
+    }
+  },
+  "actions": [
+    {
+      "_note": "wxenv.auto_city:组件默认参数是哨兵 `auto`(doc/overseas-first.md §3)—— 城市不写进 .xwidget,在这里按 cnd 兜底:国内默认上海,海外默认纽约。用户选过城市就是真坐标,原样用。",
+      "op": "set",
+      "props": {
+        "key": "_latIn",
+        "value": "${lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lonIn",
+        "value": "${lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cityRaw",
+        "value": "${city}"
+      }
+    },
+    {
+      "_note": "国内默认判据(doc/overseas-first.md §1,逐字照抄):地区 cn,或地区未知且界面中文 → 1。",
+      "op": "set",
+      "props": {
+        "key": "cnd",
+        "value": "$[if::(eq::(${@app.region},cn),1,if::(eq::(${@app.region},overseas),0,if::(startsWith::(${@app.language},zh),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_auto",
+        "value": "$[if::(eq::(${_latIn},auto),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lat",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),31.2222,40.7128),${_latIn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lon",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),121.4581,-74.0060),${_lonIn})]"
+      }
+    },
+    {
+      "_note": "城市名走本文件 A 表(按 App 语言);宿主没注入 @i18n 时退回英文。",
+      "op": "set",
+      "props": {
+        "key": "city",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),findNotEmpty::(${@i18n.autoCn},Shanghai),findNotEmpty::(${@i18n.autoUs},New York)),${_cityRaw})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lat",
+        "value": "${lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lon",
+        "value": "${lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cacheIn",
+        "value": "${cache}"
+      },
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cache",
+        "value": "$[parseNumber::(${_cacheIn},0)]"
+      },
+      "_note": "1 = 详情页(读缓存);组件不传 = 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.aq.,${_lat},_,${_lon})]"
+      }
+    },
+    {
+      "id": "hitc",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[parseNumber::(${hitc.ts},0)]"
+      }
+    },
+    {
+      "_note": "页面有缓存 → 整段跳过(连接都不建);组件 / 无缓存 → 真取数,取到了才写。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${_cache},1),if::(gt::(${hitTs},0),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "n_aq",
+          "action": "request",
+          "params": {
+            "url": "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5,pm10&timezone=auto",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "id": "n_resp",
+          "action": "request",
+          "params": {
+            "url": "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,is_day&timezone=auto",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[gt::(length::(${n_aq.current.time}),0)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "pack",
+                "value": {
+                  "ts": "${@time.nowMs}",
+                  "aq": "${n_aq}",
+                  "resp": "${n_resp}"
+                }
+              }
+            },
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aq",
+        "value": "${box.aq}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "resp",
+        "value": "${box.resp}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(if::(eq::(${_cache},1),1,if::(ge::(parseNumber::(${box.ts},0),${t0}),1,0)),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "weather_unreachable"
+          }
+        }
+      ],
+      "_note": "组件模式:回读到的不是这一轮写的 = 这轮没取到。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${aq.current.time}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "air_unreachable"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "code",
+        "value": "${resp.current.weather_code}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "night",
+        "value": "$[if::(eq::(${resp.current.is_day},1),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "group",
+        "value": "$[if::(le::(${code},0),clear,if::(le::(${code},2),partly,if::(le::(${code},3),cloudy,if::(le::(${code},48),fog,if::(le::(${code},57),drizzle,if::(le::(${code},67),rain,if::(le::(${code},77),snow,if::(le::(${code},82),rain,if::(le::(${code},86),snow,thunder)))))))))]"
+      },
+      "_note": "WMO 天气码归组,与 weather.df 同式。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sky",
+        "value": "$[if::(eq::(${night},1),night,if::(or::(eq::(${group},clear),eq::(${group},partly)),clear,if::(eq::(${group},snow),snow,if::(or::(eq::(${group},cloudy),eq::(${group},fog)),overcast,rain))))]"
+      },
+      "_note": "天空档:与 weather.df 同式(夜恒 night)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aqi",
+        "value": "$[round::(findNotEmpty::(${aq.current.us_aqi},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lv",
+        "value": "$[if::(le::(${aqi},50),1,if::(le::(${aqi},100),2,if::(le::(${aqi},150),3,if::(le::(${aqi},200),4,if::(le::(${aqi},300),5,6)))))]"
+      },
+      "_note": "US AQI 六档(0-50 / 51-100 / 101-150 / 151-200 / 201-300 / 300+)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aqC",
+        "value": "$[if::(eq::(${lv},1),#34C759,if::(eq::(${lv},2),#F5C400,if::(eq::(${lv},3),#FF9500,if::(eq::(${lv},4),#FF3B30,if::(eq::(${lv},5),#AF52DE,#8E2B3A)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sw",
+        "value": "$[parseNumber::(calc::(min::(${aqi},300)*240/300),0.0)]"
+      },
+      "_note": "仪表弧 240°,300 封顶。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pm25",
+        "value": "$[parseNumber::(findNotEmpty::(${aq.current.pm2_5},0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pm10",
+        "value": "$[parseNumber::(findNotEmpty::(${aq.current.pm10},0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "city",
+          "sky",
+          "aqi",
+          "lv",
+          "aqC",
+          "sw",
+          "pm25",
+          "pm10",
+          "at"
+        ]
+      }
+    }
+  ]
+}

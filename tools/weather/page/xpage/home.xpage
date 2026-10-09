@@ -1,0 +1,708 @@
+{
+  "_note": "首页 = 一整片天空。页头(城市/温度/状态)→ 城市切换条 → 逐时 → 五日 → 详情格 → 页脚。\n**加卡入口只在页脚一行**,卡片墙整体搬去 `/cards` 子页 —— 信息源页是每天要看的内容,不是货架;加卡是一次性动作,不该占掉一半版面(v20 首页有一半在卖组件)。",
+  "type": "page",
+  "id": "weather-home",
+  "i18n": {
+    "en-US": {
+      "addBtnT": "Add widgets",
+      "addBtnS": "Pick in the panel, then confirm",
+      "foot": "Source: Open-Meteo (open weather data, no API key). Refreshed every 5 minutes, fetched directly on your device. Your cities and their coordinates stay on this device by default.",
+      "t": "Weather",
+      "unit": " cities",
+      "unit1": " city",
+      "manageT": "Manage cities",
+      "high": "H",
+      "low": "L",
+      "cond_clear": "Clear",
+      "cond_partly": "Partly cloudy",
+      "cond_cloudy": "Cloudy",
+      "cond_fog": "Fog",
+      "cond_drizzle": "Drizzle",
+      "cond_rain": "Rain",
+      "cond_snow": "Snow",
+      "cond_thunder": "Thunderstorm",
+      "su_foot": "Source: Open-Meteo (open weather data, no API key). Your city and its coordinates stay on your devices. City search results include data from OpenStreetMap (© OSM contributors).",
+      "su_t": "Pick a city to start",
+      "su_s": "Once you pick one, you'll see current conditions, the next 12 hours and a 5-day forecast.",
+      "su_hot": "Popular cities",
+      "su_c1": "New York",
+      "su_c2": "London",
+      "su_c3": "Tokyo",
+      "su_c4": "Singapore",
+      "su_c5": "Sydney",
+      "su_c6": "Los Angeles",
+      "su_none": "No matching city — try another spelling",
+      "su_sec": "Search a city",
+      "su_ph": "Type a city name, e.g. Tokyo"
+    },
+    "zh-CN": {
+      "addBtnT": "添加组件",
+      "addBtnS": "在面板里挑，确认后加到仪表盘",
+      "foot": "数据来源：Open-Meteo（开放气象数据，无需密钥）。天气每 5 分钟刷新一次，在你的设备上直接获取。城市与坐标默认只保存在本机。",
+      "t": "天气",
+      "unit": " 座城市",
+      "unit1": " 座城市",
+      "manageT": "管理城市",
+      "high": "高",
+      "low": "低",
+      "cond_clear": "晴",
+      "cond_partly": "多云",
+      "cond_cloudy": "阴",
+      "cond_fog": "雾",
+      "cond_drizzle": "小雨",
+      "cond_rain": "雨",
+      "cond_snow": "雪",
+      "cond_thunder": "雷阵雨",
+      "su_foot": "数据来源：Open-Meteo（开放气象数据，无需密钥）。城市与坐标默认只保存在本机。城市检索结果含 OpenStreetMap 数据（© OSM 贡献者）。",
+      "su_t": "先选一个城市",
+      "su_s": "选好城市后，这里会显示实况、逐时和五日预报。",
+      "su_hot": "常用城市",
+      "su_c1": "北京",
+      "su_c2": "上海",
+      "su_c3": "广州",
+      "su_c4": "深圳",
+      "su_c5": "成都",
+      "su_c6": "香港",
+      "su_none": "没有找到匹配的城市，换个说法试试",
+      "su_sec": "搜索城市",
+      "su_ph": "输入城市名，如 上海 / Tokyo"
+    }
+  },
+  "root": {
+    "type": "container",
+    "id": "root",
+    "_lintTopInset": "exempt",
+    "_notePad": "全铺底沉浸页:天空要铺到屏幕最顶(含容器 chrome 压着的那一截),故 root 不做顶部让位 —— 页头 Canvas 自己把文字块贴底锚定,顶上 130pt 纯天空留给 chrome。\n⚠️ paddingBottom 也必须是 0:留了就在最后一块下沿露出 App 底色,整页天空断在那儿。安全区改由页脚块(p-foot,214pt,内容只占上半)的余高盖住。",
+    "paddingTop": "0pt",
+    "paddingBottom": "0pt",
+    "layout": "list",
+    "direction": "vertical",
+    "gap": "0pt",
+    "padding": "0pt",
+    "_note": "整页只有这一条 depends —— 六个块全部读它的输出。",
+    "depends": [
+      {
+        "_note": "必须用显式绑定 {flow, params} —— XPage §D 纯显式:裸 `@[file://…]` 字符串传空入参。home.df 自己从 data.* 读城市,故无需传参,但仍写成对象形态保持一致。",
+        "flow": "@[file://page/flow/home.df]",
+        "params": {}
+      }
+    ],
+    "params": {
+      "_note": "仅首帧兜底。真实值由 home.df 输出覆盖同名键。\n⚠️ v44:`lat/lon/city` 的「上海」三件套删除 —— 那是首启播种的最后一处残留,留着就是「新用户第一帧看到一个不是他的城市名」。现在首帧渲 `--`,一拍之后由真值替换。\n⚠️ `n` 兜底写 **1** 而不是 0:这一位决定首帧走正常首页还是引导屏。写 0 会让**老用户**在 depends 回来之前闪一下引导屏(明明他有城市),写 1 只让新用户多看一帧空骨架 —— 两害里后者轻得多。\n`sky/decor/group` 落中性阴天,天空不会渲成一块黑。",
+      "lat": "",
+      "lon": "",
+      "city": "",
+      "n": "1",
+      "sky": "overcast",
+      "decor": "fog",
+      "group": "cloudy"
+    },
+    "items": [
+      {
+        "_note": "正常首页 = **城市列表**(v49 起)。此前这里是「`data.cityIdx` 那一座城市的整片天空 + 一条城市 chip 条」——\n于是没有任何一个页面能代表「长沙」:卡片、桌面小组件、chip 全都只把你送回同一个首页。\n现在整片天空搬去 `/detail?lat=&lon=&city=`,每行点进去就是那座城市(TODO §284「有多个对象的包必须有对象详情页」)。\n**只在已经有城市时出现**(§7.1.2:未就绪态的作用面是页面,不是卡片)。判据是 `n`(城市数)而不是\n「取没取到天气」:取不到是**失败**(只能等),没有城市是**未就绪**(用户有明确的下一步)。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(ge::(${n},1),1,0)]"
+        },
+        "items": [
+          {
+            "_note": "列表整体。root 的 padding 恒 0(引导屏那一支自己带内边距,且历史上首页是全铺天空的沉浸页),\n所以顶部让位由**这一层**读 `@contentInset.top`(= 安全区 + 容器 chrome 占位 + 键盘)。\n⚠️ 不能读 `@safeArea`:大屏浮层卡上它全是 0,chrome 照样浮着,标题就被压在下面。\n行距走容器 `gap: 8pt`,不靠占位块也不靠卡内留白 —— 后者会让点击热区比看到的卡大一圈,缝里的点击被派给上面那一行。",
+            "type": "container",
+            "id": "listWrap",
+            "layout": "list",
+            "direction": "vertical",
+            "gap": "8pt",
+            "_notePad": "左右 16pt 页边(2026-09-25 体检前是 0:城市行 / 管理城市 / 加卡三块从屏幕左缘铺到右缘,圆角悬在屏幕边上;标题与脚注又各自内缩 18pt,一页三条左缘线)。上下仍由 paddingTop/Bottom 覆盖为 contentInset。",
+            "padding": "16pt",
+            "paddingTop": "${@contentInset.top}pt",
+            "paddingBottom": "${@contentInset.bottom}pt",
+            "items": [
+              {
+                "type": "Canvas",
+                "id": "head",
+                "h": "52pt",
+                "canvas": {
+                  "source": "@[file://page/rc/p-head.rcn]"
+                }
+              },
+              {
+                "_note": "第 1 行(城市不足时整块收起)。槽位是**字面下标**展开的:RCN/XPage 没有循环,\n而 VParser 的方括号寻址只认字面数字。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(ge::(${n},1),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row1",
+                    "h": "76pt",
+                    "_note": "城市行。**事件挂在这个 XPage 节点上,不挂 cell** —— cell 上挂事件时文字盖在底板上、\n只有底板收得到点击,点正中央没反应(同页引导屏的 hit1..hit5 是同一条路,已验证)。\n⚠️ onClick 串必须以**字面**路径开头:四端的 nav 分类跑在 `${}` 插值**之前**,\n   纯模板串会被判成非导航、当 `.af` 路径读,然后静默 no-op。\n⚠️ 城市名走 `${r1q}`(数据层 urlEncode 过的那份),不是 `${r1n}` —— 中文与空格直接进 query 不安全。",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]",
+                      "_note": "**这一行自己的取数** —— 与详情页同一条 `detail.df`、同一个缓存桶 `c.wx.<lat>_<lon>`。\n于是:点进详情页必然秒开(桶已经热了)、列表与详情页永远是同一份数、\n首页零取数逻辑(没有第二套「怎么算天空档」的代码可以漂)。\n⚠️ 必须显式绑定 {flow, params}(XPage §D 纯显式:裸 `@[file://…]` 字符串传空入参 ——\n   坐标取到空,请求打成 `latitude=&longitude=`,整行渲 `--` 且流仍 success)。",
+                      "depends": [
+                        {
+                          "flow": "@[file://page/flow/detail.df]",
+                          "params": {
+                            "lat": "${r1lat}",
+                            "lon": "${r1lon}",
+                            "city": "${r1n}"
+                          }
+                        }
+                      ]
+                    },
+                    "events": {
+                      "onClick": "/detail?lat=${r1lat}&lon=${r1lon}&city=${r1q}"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 2 行。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(ge::(${n},2),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row2",
+                    "h": "76pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]",
+                      "_note": "第 2 行的取数,同上。",
+                      "depends": [
+                        {
+                          "flow": "@[file://page/flow/detail.df]",
+                          "params": {
+                            "lat": "${r2lat}",
+                            "lon": "${r2lon}",
+                            "city": "${r2n}"
+                          }
+                        }
+                      ]
+                    },
+                    "events": {
+                      "onClick": "/detail?lat=${r2lat}&lon=${r2lon}&city=${r2q}"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 3 行。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(ge::(${n},3),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row3",
+                    "h": "76pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]",
+                      "_note": "第 3 行的取数,同上。",
+                      "depends": [
+                        {
+                          "flow": "@[file://page/flow/detail.df]",
+                          "params": {
+                            "lat": "${r3lat}",
+                            "lon": "${r3lon}",
+                            "city": "${r3n}"
+                          }
+                        }
+                      ]
+                    },
+                    "events": {
+                      "onClick": "/detail?lat=${r3lat}&lon=${r3lon}&city=${r3q}"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 4 行。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(ge::(${n},4),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row4",
+                    "h": "76pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]",
+                      "_note": "第 4 行的取数,同上。",
+                      "depends": [
+                        {
+                          "flow": "@[file://page/flow/detail.df]",
+                          "params": {
+                            "lat": "${r4lat}",
+                            "lon": "${r4lon}",
+                            "city": "${r4n}"
+                          }
+                        }
+                      ]
+                    },
+                    "events": {
+                      "onClick": "/detail?lat=${r4lat}&lon=${r4lon}&city=${r4q}"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 5 行。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(ge::(${n},5),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row5",
+                    "h": "76pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]",
+                      "_note": "第 5 行的取数,同上。",
+                      "depends": [
+                        {
+                          "flow": "@[file://page/flow/detail.df]",
+                          "params": {
+                            "lat": "${r5lat}",
+                            "lon": "${r5lon}",
+                            "city": "${r5n}"
+                          }
+                        }
+                      ]
+                    },
+                    "events": {
+                      "onClick": "/detail?lat=${r5lat}&lon=${r5lon}&city=${r5q}"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 6 行。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(ge::(${n},6),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row6",
+                    "h": "76pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]",
+                      "_note": "第 6 行的取数,同上。",
+                      "depends": [
+                        {
+                          "flow": "@[file://page/flow/detail.df]",
+                          "params": {
+                            "lat": "${r6lat}",
+                            "lon": "${r6lon}",
+                            "city": "${r6n}"
+                          }
+                        }
+                      ]
+                    },
+                    "events": {
+                      "onClick": "/detail?lat=${r6lat}&lon=${r6lon}&city=${r6q}"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 7 行。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(ge::(${n},7),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row7",
+                    "h": "76pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]",
+                      "_note": "第 7 行的取数,同上。",
+                      "depends": [
+                        {
+                          "flow": "@[file://page/flow/detail.df]",
+                          "params": {
+                            "lat": "${r7lat}",
+                            "lon": "${r7lon}",
+                            "city": "${r7n}"
+                          }
+                        }
+                      ]
+                    },
+                    "events": {
+                      "onClick": "/detail?lat=${r7lat}&lon=${r7lon}&city=${r7q}"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 8 行。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(ge::(${n},8),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row8",
+                    "h": "76pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]",
+                      "_note": "第 8 行的取数,同上。",
+                      "depends": [
+                        {
+                          "flow": "@[file://page/flow/detail.df]",
+                          "params": {
+                            "lat": "${r8lat}",
+                            "lon": "${r8lon}",
+                            "city": "${r8n}"
+                          }
+                        }
+                      ]
+                    },
+                    "events": {
+                      "onClick": "/detail?lat=${r8lat}&lon=${r8lon}&city=${r8q}"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "Canvas",
+                "id": "manage",
+                "h": "52pt",
+                "_note": "管理城市 → `/city`(增删/排序)。**放在加卡按钮之上** —— 先管内容,再谈把它放到哪儿。\n⚠️ v49 首版漏了这个入口:老首页那条 chip 条右端的 ＋/⋯ 随 chip 条一起删了,\n   于是用户看得见 8 座城市却没有一个地方能删掉其中一座。\n⚠️ v55:不能写成 `\"onClick\": \"/city\"` 的导航串 —— 常规压栈返回时首页是栈里的旧实例、`home.df` 不重跑,\n   新加的城市要下拉才出来。走 open-city.af 的 for-result 续体,返回即 `reloadPage`。",
+                "canvas": {
+                  "source": "@[file://page/rc/p-manage.rcn]"
+                },
+                "events": {
+                  "onClick": "@[file://page/flow/open-city.af]"
+                }
+              },
+              {
+                "type": "Canvas",
+                "id": "addbtn",
+                "h": "56pt",
+                "canvas": {
+                  "source": "@[file://page/rc/p-addbtn.rcn]"
+                },
+                "events": {
+                  "onClick": {
+                    "flow": "@[file://page/flow/pick.af]",
+                    "params": {}
+                  }
+                },
+                "_note": "加卡入口 —— 整页只此一个(§8.1a),版式由 tools/infosource/mk_addbtn.py 统一产出。\n⚠️ 它加的是**排在第一的城市**的卡(v66 起;此前读隐形的 `data.cityIdx`,已退役):列表页上没有「当前城市」这回事,第一座是谁由用户在 /city 里上移/下移决定。\n要加别座城市的卡,进那座城市的详情页,页脚那个按钮点名了城市(p-foot-detail.rcn)。"
+              },
+              {
+                "type": "Canvas",
+                "id": "foot",
+                "h": "92pt",
+                "canvas": {
+                  "source": "@[file://page/rc/p-foot-home.rcn]"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "_note": "未就绪态引导屏(G25 §7.1)—— 一个城市都没有时的整页替身。\n五条硬约束怎么满足的:① 不是空页、也不只是一句提示;② 这个包只差**一步**,所以刻意不做编号步骤(编号是给多步流程用的,把一步拆成三步是给自己加戏);③ 每一步都可执行 —— 搜索框输入即搜、常用城市一点即完成;④ 「直达配置入口」在这个包就是搜索框本身(第 4 条说的凭证面板对它不适用:它没有凭证);⑤ 边界写在页脚:数据来源 + 城市只存本机。\n⚠️ 完成后**不再要一次确认** —— setup-pick / setup-hot 落盘后直接 `reloadPage`,`n` 变成 1,这一整块收起、正常首页出现。\n⚠️ root 的 padding 是 0(整页天空要铺到最顶),所以这一屏自带内边距,顶部让位读 `@contentInset.top`(容器 chrome 恒浮动、不替页面 inset)。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(ge::(${n},1),0,1)]"
+        },
+        "items": [
+          {
+            "type": "container",
+            "id": "setup",
+            "layout": "list",
+            "direction": "vertical",
+            "gap": "12pt",
+            "padding": "16pt",
+            "paddingTop": "${@contentInset.top}pt",
+            "paddingBottom": "${@contentInset.bottom}pt",
+            "items": [
+              {
+                "type": "Canvas",
+                "id": "suHero",
+                "h": "78pt",
+                "canvas": {
+                  "source": "@[file://page/rc/p-setup-hero.rcn]"
+                }
+              },
+              {
+                "type": "Canvas",
+                "id": "suSec",
+                "h": "22pt",
+                "canvas": {
+                  "source": "@[file://page/rc/p-setup-sec.rcn]"
+                }
+              },
+              {
+                "_note": "搜索框 = absolute 容器里叠两层:RCN 画底(圆角 + 明暗双分支),`input` 节点只管「文本编辑 + 键盘 + 光标」(xpage-input-node.md §1「裸能力,不是控件」)。\n⚠️ `input` 左右各留 14pt —— 它自己没有 padding 属性,不留就贴着圆角边起字。\n⚠️ `changeDebounce` 交给节点属性(300ms),流里不再自己防抖:每敲一个字母打一次地理编码接口既慢又浪费。",
+                "type": "container",
+                "id": "sbox",
+                "layout": "absolute",
+                "h": "48pt",
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "sbg",
+                    "x": "0pt",
+                    "y": "0pt",
+                    "w": "{parent.w}",
+                    "h": "48pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-setup-sbg.rcn]"
+                    }
+                  },
+                  {
+                    "type": "input",
+                    "id": "kw",
+                    "x": "14pt",
+                    "y": "0pt",
+                    "w": "{parent.w}-28pt",
+                    "h": "48pt",
+                    "props": {
+                      "bindKey": "kw",
+                      "hint": "${@i18n.su_ph}",
+                      "hintColor": "#9AA0A6|#8E939B",
+                      "inputType": "text",
+                      "returnKey": "search",
+                      "fontSize": 16,
+                      "color": "#0E1116|#F3F4F6",
+                      "caretColor": "#128F66|#6FE8BE",
+                      "autocorrect": false,
+                      "autocapitalize": "none",
+                      "clearButton": true,
+                      "changeDebounce": 500
+                    },
+                    "events": {
+                      "onChange": "@[file://page/flow/setup-search.af]"
+                    },
+                    "_note": "⚠️ 防抖 500ms(原 300)。这一页**没有 JS,也就没有请求序号守卫** —— 而三路检索的耗时\n   差得很远(open-meteo 两路 ~0.8s,补 OSM 那一路 2s 上下),先发的慢请求会晚于\n   后发的快请求回来、把正确结果覆盖掉(H5 那两页实测过:打「长」→350ms→「长沙」,\n   最后停在屏幕上的是搜「长」的结果)。\n   AF 侧没法领号(`xpage.patchState` 是写、拿不到「现在输入框里是什么」),\n   只能把防抖拉到**正常打字间隔之上**:500ms > 350ms,中途那个半截词就不会单独发出去。\n   配合 setup-search.af 里的「单字不搜」,竞态窗口基本关掉。"
+                  }
+                ]
+              },
+              {
+                "_note": "第 1 条结果。整行可点 —— 事件挂在**这个 XPage 节点**上而不是 cell 上(cell 上挂事件时文字盖在底板上、只有底板收得到点击,点正中央没反应)。\n⚠️ 行文字走**节点 params**、坐标走**节点 events.params**,两者都在节点作用域求值(与 crypto/forex 首页那几行 `params: {k1: \"${k1}\"}` 同一条路)。\n⚠️ 五个槽位是**静态字面下标**:VParser 的下标寻址只认字面数字,`${s[${i}]}` 会静默求空。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(gt::(length::(${s1n}),0),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "hit1",
+                    "h": "52pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-setup-hit.rcn]"
+                    },
+                    "params": {
+                      "hn": "${s1n}",
+                      "hw": "${s1w}"
+                    },
+                    "events": {
+                      "onClick": {
+                        "flow": "@[file://page/flow/setup-pick.af]",
+                        "params": {
+                          "lat": "${s1lat}",
+                          "lon": "${s1lon}",
+                          "name": "${s1n}",
+                          "where": "${s1w}"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 2 条。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(gt::(length::(${s2n}),0),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "hit2",
+                    "h": "52pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-setup-hit.rcn]"
+                    },
+                    "params": {
+                      "hn": "${s2n}",
+                      "hw": "${s2w}"
+                    },
+                    "events": {
+                      "onClick": {
+                        "flow": "@[file://page/flow/setup-pick.af]",
+                        "params": {
+                          "lat": "${s2lat}",
+                          "lon": "${s2lon}",
+                          "name": "${s2n}",
+                          "where": "${s2w}"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 3 条。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(gt::(length::(${s3n}),0),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "hit3",
+                    "h": "52pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-setup-hit.rcn]"
+                    },
+                    "params": {
+                      "hn": "${s3n}",
+                      "hw": "${s3w}"
+                    },
+                    "events": {
+                      "onClick": {
+                        "flow": "@[file://page/flow/setup-pick.af]",
+                        "params": {
+                          "lat": "${s3lat}",
+                          "lon": "${s3lon}",
+                          "name": "${s3n}",
+                          "where": "${s3w}"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 4 条。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(gt::(length::(${s4n}),0),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "hit4",
+                    "h": "52pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-setup-hit.rcn]"
+                    },
+                    "params": {
+                      "hn": "${s4n}",
+                      "hw": "${s4w}"
+                    },
+                    "events": {
+                      "onClick": {
+                        "flow": "@[file://page/flow/setup-pick.af]",
+                        "params": {
+                          "lat": "${s4lat}",
+                          "lon": "${s4lon}",
+                          "name": "${s4n}",
+                          "where": "${s4w}"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "第 5 条。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(gt::(length::(${s5n}),0),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "hit5",
+                    "h": "52pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-setup-hit.rcn]"
+                    },
+                    "params": {
+                      "hn": "${s5n}",
+                      "hw": "${s5w}"
+                    },
+                    "events": {
+                      "onClick": {
+                        "flow": "@[file://page/flow/setup-pick.af]",
+                        "params": {
+                          "lat": "${s5lat}",
+                          "lon": "${s5lon}",
+                          "name": "${s5n}",
+                          "where": "${s5w}"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "搜到 0 条。⚠️ 条件里带着 `sQ`(有没有跑过一次检索):只有「真的搜过、且真的返回 0 条」才说没找到。请求失败时 `patchState` 压根不执行,`sQ` 停在旧值 —— 「没连上」不会被写成「没这个城市」(§7.2 的同一条纪律)。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(eq::(${sQ},1),if::(eq::(${sN},0),1,0),0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "suNone",
+                    "h": "30pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-setup-none.rcn]"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "常用城市:一点即完成。有检索结果时收起 —— 用户已经在用搜索框了,再摆一排别的城市只是噪声。",
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(eq::(${sQ},1),0,1)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "suHot",
+                    "h": "108pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-setup-hot.rcn]"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "Canvas",
+                "id": "suFoot",
+                "h": "37pt",
+                "canvas": {
+                  "source": "@[file://page/rc/p-setup-foot.rcn]"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "events": {
+      "_note": "⚠️ 首页**不接 `onLoad` 校新** —— 它自己不取数,新鲜度住在每一行的 depends 里,\n页级作用域根本拿不到 `_stale`。行级三态由 detail.df 的 10 分钟 TTL 兜,\n用户要立刻要新的就下拉(refresh.af 把每座城市的桶都删掉)。\n`onRefresh` 声明后容器不再自动 reloadPage,下拉整个由 refresh.af 负责。",
+      "onRefresh": "@[file://page/flow/refresh.af]"
+    }
+  },
+  "_note_i18n": "⚠️ 这张表是**从本页各 Canvas 资产的 `rc.i18n` 汇总**来的,不是页面自己要用的 ——\niOS 的 XPage Canvas 宿主不合并资产 A 表,只注入页级表,不复制就整块文字空白\n(而同一张卡在添加面板里正常)。平台已修(2026-08-21),这份复制是过渡期顶包,\n删除跟进 TODO §203。**别手改** —— 由 tools/infosource/gen_weather_i18n.py 生成,\n手抄的两份表必然漂移,而漂移的表现是「某个词在某一端空着」,零报错。\n本页资产: p-addbtn.rcn p-foot-home.rcn p-head.rcn p-manage.rcn p-row.rcn p-setup-foot.rcn p-setup-hero.rcn p-setup-hit.rcn p-setup-hot.rcn p-setup-none.rcn p-setup-sbg.rcn p-setup-sec.rcn  + 页面自用: su_ph"
+}

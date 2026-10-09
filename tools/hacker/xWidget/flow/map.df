@@ -1,0 +1,2100 @@
+{
+  "_note": "热度地图(map 卡):首页前 30 条的上榜时长 × 得分,圆径 = 评论数。生成器 gen_hacker.py。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "request",
+      "id": "resp",
+      "params": {
+        "url": "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30&attributesToRetrieve=title,points,num_comments,created_at_i,objectID&attributesToHighlight=none",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp.hits}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "hn_unreachable"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowS",
+        "value": "$[parseNumber::(calc::(${@time.nowMs}/1000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[length::(${resp.hits})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pmax",
+        "value": "$[max::(max::(pluck::(${resp.hits},points)),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cmax",
+        "value": "$[max::(max::(pluck::(${resp.hits},num_comments)),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h0",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[0].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v0",
+        "value": "$[if::(lt::(0,${n}),calc::(findNotEmpty::(${resp.hits[0].points},0)/${h0}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc0",
+        "value": "$[min::(${h0},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0",
+        "value": "$[if::(lt::(0,${n}),parseNumber::(calc::(6+270.0*${hc0}*60.0/(48.0*(${hc0}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q0",
+        "value": "$[findNotEmpty::(${resp.hits[0].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[if::(lt::(0,${n}),parseNumber::(calc::(172.0-164.0*${q0}*1.25*${pmax}/(${pmax}*(${q0}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0",
+        "value": "$[findNotEmpty::(${resp.hits[0].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "$[parseNumber::(calc::(5+11*${k0}*1.25/(${k0}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h1",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[1].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v1",
+        "value": "$[if::(lt::(1,${n}),calc::(findNotEmpty::(${resp.hits[1].points},0)/${h1}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc1",
+        "value": "$[min::(${h1},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1",
+        "value": "$[if::(lt::(1,${n}),parseNumber::(calc::(6+270.0*${hc1}*60.0/(48.0*(${hc1}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1",
+        "value": "$[findNotEmpty::(${resp.hits[1].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[if::(lt::(1,${n}),parseNumber::(calc::(172.0-164.0*${q1}*1.25*${pmax}/(${pmax}*(${q1}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1",
+        "value": "$[findNotEmpty::(${resp.hits[1].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s1",
+        "value": "$[parseNumber::(calc::(5+11*${k1}*1.25/(${k1}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h2",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[2].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v2",
+        "value": "$[if::(lt::(2,${n}),calc::(findNotEmpty::(${resp.hits[2].points},0)/${h2}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc2",
+        "value": "$[min::(${h2},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x2",
+        "value": "$[if::(lt::(2,${n}),parseNumber::(calc::(6+270.0*${hc2}*60.0/(48.0*(${hc2}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q2",
+        "value": "$[findNotEmpty::(${resp.hits[2].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y2",
+        "value": "$[if::(lt::(2,${n}),parseNumber::(calc::(172.0-164.0*${q2}*1.25*${pmax}/(${pmax}*(${q2}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2",
+        "value": "$[findNotEmpty::(${resp.hits[2].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s2",
+        "value": "$[parseNumber::(calc::(5+11*${k2}*1.25/(${k2}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h3",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[3].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v3",
+        "value": "$[if::(lt::(3,${n}),calc::(findNotEmpty::(${resp.hits[3].points},0)/${h3}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc3",
+        "value": "$[min::(${h3},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x3",
+        "value": "$[if::(lt::(3,${n}),parseNumber::(calc::(6+270.0*${hc3}*60.0/(48.0*(${hc3}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q3",
+        "value": "$[findNotEmpty::(${resp.hits[3].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y3",
+        "value": "$[if::(lt::(3,${n}),parseNumber::(calc::(172.0-164.0*${q3}*1.25*${pmax}/(${pmax}*(${q3}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3",
+        "value": "$[findNotEmpty::(${resp.hits[3].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s3",
+        "value": "$[parseNumber::(calc::(5+11*${k3}*1.25/(${k3}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h4",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[4].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v4",
+        "value": "$[if::(lt::(4,${n}),calc::(findNotEmpty::(${resp.hits[4].points},0)/${h4}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc4",
+        "value": "$[min::(${h4},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x4",
+        "value": "$[if::(lt::(4,${n}),parseNumber::(calc::(6+270.0*${hc4}*60.0/(48.0*(${hc4}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q4",
+        "value": "$[findNotEmpty::(${resp.hits[4].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y4",
+        "value": "$[if::(lt::(4,${n}),parseNumber::(calc::(172.0-164.0*${q4}*1.25*${pmax}/(${pmax}*(${q4}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4",
+        "value": "$[findNotEmpty::(${resp.hits[4].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s4",
+        "value": "$[parseNumber::(calc::(5+11*${k4}*1.25/(${k4}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h5",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[5].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v5",
+        "value": "$[if::(lt::(5,${n}),calc::(findNotEmpty::(${resp.hits[5].points},0)/${h5}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc5",
+        "value": "$[min::(${h5},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x5",
+        "value": "$[if::(lt::(5,${n}),parseNumber::(calc::(6+270.0*${hc5}*60.0/(48.0*(${hc5}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q5",
+        "value": "$[findNotEmpty::(${resp.hits[5].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y5",
+        "value": "$[if::(lt::(5,${n}),parseNumber::(calc::(172.0-164.0*${q5}*1.25*${pmax}/(${pmax}*(${q5}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5",
+        "value": "$[findNotEmpty::(${resp.hits[5].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s5",
+        "value": "$[parseNumber::(calc::(5+11*${k5}*1.25/(${k5}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h6",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[6].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v6",
+        "value": "$[if::(lt::(6,${n}),calc::(findNotEmpty::(${resp.hits[6].points},0)/${h6}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc6",
+        "value": "$[min::(${h6},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x6",
+        "value": "$[if::(lt::(6,${n}),parseNumber::(calc::(6+270.0*${hc6}*60.0/(48.0*(${hc6}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q6",
+        "value": "$[findNotEmpty::(${resp.hits[6].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y6",
+        "value": "$[if::(lt::(6,${n}),parseNumber::(calc::(172.0-164.0*${q6}*1.25*${pmax}/(${pmax}*(${q6}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k6",
+        "value": "$[findNotEmpty::(${resp.hits[6].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s6",
+        "value": "$[parseNumber::(calc::(5+11*${k6}*1.25/(${k6}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h7",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[7].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v7",
+        "value": "$[if::(lt::(7,${n}),calc::(findNotEmpty::(${resp.hits[7].points},0)/${h7}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc7",
+        "value": "$[min::(${h7},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x7",
+        "value": "$[if::(lt::(7,${n}),parseNumber::(calc::(6+270.0*${hc7}*60.0/(48.0*(${hc7}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q7",
+        "value": "$[findNotEmpty::(${resp.hits[7].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y7",
+        "value": "$[if::(lt::(7,${n}),parseNumber::(calc::(172.0-164.0*${q7}*1.25*${pmax}/(${pmax}*(${q7}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k7",
+        "value": "$[findNotEmpty::(${resp.hits[7].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s7",
+        "value": "$[parseNumber::(calc::(5+11*${k7}*1.25/(${k7}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h8",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[8].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v8",
+        "value": "$[if::(lt::(8,${n}),calc::(findNotEmpty::(${resp.hits[8].points},0)/${h8}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc8",
+        "value": "$[min::(${h8},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x8",
+        "value": "$[if::(lt::(8,${n}),parseNumber::(calc::(6+270.0*${hc8}*60.0/(48.0*(${hc8}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q8",
+        "value": "$[findNotEmpty::(${resp.hits[8].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y8",
+        "value": "$[if::(lt::(8,${n}),parseNumber::(calc::(172.0-164.0*${q8}*1.25*${pmax}/(${pmax}*(${q8}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k8",
+        "value": "$[findNotEmpty::(${resp.hits[8].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s8",
+        "value": "$[parseNumber::(calc::(5+11*${k8}*1.25/(${k8}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h9",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[9].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v9",
+        "value": "$[if::(lt::(9,${n}),calc::(findNotEmpty::(${resp.hits[9].points},0)/${h9}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc9",
+        "value": "$[min::(${h9},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x9",
+        "value": "$[if::(lt::(9,${n}),parseNumber::(calc::(6+270.0*${hc9}*60.0/(48.0*(${hc9}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q9",
+        "value": "$[findNotEmpty::(${resp.hits[9].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y9",
+        "value": "$[if::(lt::(9,${n}),parseNumber::(calc::(172.0-164.0*${q9}*1.25*${pmax}/(${pmax}*(${q9}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k9",
+        "value": "$[findNotEmpty::(${resp.hits[9].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s9",
+        "value": "$[parseNumber::(calc::(5+11*${k9}*1.25/(${k9}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h10",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[10].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v10",
+        "value": "$[if::(lt::(10,${n}),calc::(findNotEmpty::(${resp.hits[10].points},0)/${h10}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc10",
+        "value": "$[min::(${h10},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x10",
+        "value": "$[if::(lt::(10,${n}),parseNumber::(calc::(6+270.0*${hc10}*60.0/(48.0*(${hc10}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q10",
+        "value": "$[findNotEmpty::(${resp.hits[10].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y10",
+        "value": "$[if::(lt::(10,${n}),parseNumber::(calc::(172.0-164.0*${q10}*1.25*${pmax}/(${pmax}*(${q10}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k10",
+        "value": "$[findNotEmpty::(${resp.hits[10].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s10",
+        "value": "$[parseNumber::(calc::(5+11*${k10}*1.25/(${k10}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h11",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[11].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v11",
+        "value": "$[if::(lt::(11,${n}),calc::(findNotEmpty::(${resp.hits[11].points},0)/${h11}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc11",
+        "value": "$[min::(${h11},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x11",
+        "value": "$[if::(lt::(11,${n}),parseNumber::(calc::(6+270.0*${hc11}*60.0/(48.0*(${hc11}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q11",
+        "value": "$[findNotEmpty::(${resp.hits[11].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y11",
+        "value": "$[if::(lt::(11,${n}),parseNumber::(calc::(172.0-164.0*${q11}*1.25*${pmax}/(${pmax}*(${q11}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k11",
+        "value": "$[findNotEmpty::(${resp.hits[11].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s11",
+        "value": "$[parseNumber::(calc::(5+11*${k11}*1.25/(${k11}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h12",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[12].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v12",
+        "value": "$[if::(lt::(12,${n}),calc::(findNotEmpty::(${resp.hits[12].points},0)/${h12}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc12",
+        "value": "$[min::(${h12},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x12",
+        "value": "$[if::(lt::(12,${n}),parseNumber::(calc::(6+270.0*${hc12}*60.0/(48.0*(${hc12}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q12",
+        "value": "$[findNotEmpty::(${resp.hits[12].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y12",
+        "value": "$[if::(lt::(12,${n}),parseNumber::(calc::(172.0-164.0*${q12}*1.25*${pmax}/(${pmax}*(${q12}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k12",
+        "value": "$[findNotEmpty::(${resp.hits[12].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s12",
+        "value": "$[parseNumber::(calc::(5+11*${k12}*1.25/(${k12}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h13",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[13].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v13",
+        "value": "$[if::(lt::(13,${n}),calc::(findNotEmpty::(${resp.hits[13].points},0)/${h13}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc13",
+        "value": "$[min::(${h13},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x13",
+        "value": "$[if::(lt::(13,${n}),parseNumber::(calc::(6+270.0*${hc13}*60.0/(48.0*(${hc13}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q13",
+        "value": "$[findNotEmpty::(${resp.hits[13].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y13",
+        "value": "$[if::(lt::(13,${n}),parseNumber::(calc::(172.0-164.0*${q13}*1.25*${pmax}/(${pmax}*(${q13}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k13",
+        "value": "$[findNotEmpty::(${resp.hits[13].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s13",
+        "value": "$[parseNumber::(calc::(5+11*${k13}*1.25/(${k13}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h14",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[14].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v14",
+        "value": "$[if::(lt::(14,${n}),calc::(findNotEmpty::(${resp.hits[14].points},0)/${h14}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc14",
+        "value": "$[min::(${h14},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x14",
+        "value": "$[if::(lt::(14,${n}),parseNumber::(calc::(6+270.0*${hc14}*60.0/(48.0*(${hc14}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q14",
+        "value": "$[findNotEmpty::(${resp.hits[14].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y14",
+        "value": "$[if::(lt::(14,${n}),parseNumber::(calc::(172.0-164.0*${q14}*1.25*${pmax}/(${pmax}*(${q14}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k14",
+        "value": "$[findNotEmpty::(${resp.hits[14].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s14",
+        "value": "$[parseNumber::(calc::(5+11*${k14}*1.25/(${k14}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h15",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[15].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v15",
+        "value": "$[if::(lt::(15,${n}),calc::(findNotEmpty::(${resp.hits[15].points},0)/${h15}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc15",
+        "value": "$[min::(${h15},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x15",
+        "value": "$[if::(lt::(15,${n}),parseNumber::(calc::(6+270.0*${hc15}*60.0/(48.0*(${hc15}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q15",
+        "value": "$[findNotEmpty::(${resp.hits[15].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y15",
+        "value": "$[if::(lt::(15,${n}),parseNumber::(calc::(172.0-164.0*${q15}*1.25*${pmax}/(${pmax}*(${q15}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k15",
+        "value": "$[findNotEmpty::(${resp.hits[15].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s15",
+        "value": "$[parseNumber::(calc::(5+11*${k15}*1.25/(${k15}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h16",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[16].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v16",
+        "value": "$[if::(lt::(16,${n}),calc::(findNotEmpty::(${resp.hits[16].points},0)/${h16}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc16",
+        "value": "$[min::(${h16},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x16",
+        "value": "$[if::(lt::(16,${n}),parseNumber::(calc::(6+270.0*${hc16}*60.0/(48.0*(${hc16}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q16",
+        "value": "$[findNotEmpty::(${resp.hits[16].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y16",
+        "value": "$[if::(lt::(16,${n}),parseNumber::(calc::(172.0-164.0*${q16}*1.25*${pmax}/(${pmax}*(${q16}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k16",
+        "value": "$[findNotEmpty::(${resp.hits[16].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s16",
+        "value": "$[parseNumber::(calc::(5+11*${k16}*1.25/(${k16}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h17",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[17].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v17",
+        "value": "$[if::(lt::(17,${n}),calc::(findNotEmpty::(${resp.hits[17].points},0)/${h17}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc17",
+        "value": "$[min::(${h17},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x17",
+        "value": "$[if::(lt::(17,${n}),parseNumber::(calc::(6+270.0*${hc17}*60.0/(48.0*(${hc17}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q17",
+        "value": "$[findNotEmpty::(${resp.hits[17].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y17",
+        "value": "$[if::(lt::(17,${n}),parseNumber::(calc::(172.0-164.0*${q17}*1.25*${pmax}/(${pmax}*(${q17}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k17",
+        "value": "$[findNotEmpty::(${resp.hits[17].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s17",
+        "value": "$[parseNumber::(calc::(5+11*${k17}*1.25/(${k17}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h18",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[18].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v18",
+        "value": "$[if::(lt::(18,${n}),calc::(findNotEmpty::(${resp.hits[18].points},0)/${h18}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc18",
+        "value": "$[min::(${h18},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x18",
+        "value": "$[if::(lt::(18,${n}),parseNumber::(calc::(6+270.0*${hc18}*60.0/(48.0*(${hc18}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q18",
+        "value": "$[findNotEmpty::(${resp.hits[18].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y18",
+        "value": "$[if::(lt::(18,${n}),parseNumber::(calc::(172.0-164.0*${q18}*1.25*${pmax}/(${pmax}*(${q18}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k18",
+        "value": "$[findNotEmpty::(${resp.hits[18].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s18",
+        "value": "$[parseNumber::(calc::(5+11*${k18}*1.25/(${k18}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h19",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[19].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v19",
+        "value": "$[if::(lt::(19,${n}),calc::(findNotEmpty::(${resp.hits[19].points},0)/${h19}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc19",
+        "value": "$[min::(${h19},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x19",
+        "value": "$[if::(lt::(19,${n}),parseNumber::(calc::(6+270.0*${hc19}*60.0/(48.0*(${hc19}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q19",
+        "value": "$[findNotEmpty::(${resp.hits[19].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y19",
+        "value": "$[if::(lt::(19,${n}),parseNumber::(calc::(172.0-164.0*${q19}*1.25*${pmax}/(${pmax}*(${q19}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k19",
+        "value": "$[findNotEmpty::(${resp.hits[19].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s19",
+        "value": "$[parseNumber::(calc::(5+11*${k19}*1.25/(${k19}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h20",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[20].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v20",
+        "value": "$[if::(lt::(20,${n}),calc::(findNotEmpty::(${resp.hits[20].points},0)/${h20}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc20",
+        "value": "$[min::(${h20},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x20",
+        "value": "$[if::(lt::(20,${n}),parseNumber::(calc::(6+270.0*${hc20}*60.0/(48.0*(${hc20}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q20",
+        "value": "$[findNotEmpty::(${resp.hits[20].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y20",
+        "value": "$[if::(lt::(20,${n}),parseNumber::(calc::(172.0-164.0*${q20}*1.25*${pmax}/(${pmax}*(${q20}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k20",
+        "value": "$[findNotEmpty::(${resp.hits[20].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s20",
+        "value": "$[parseNumber::(calc::(5+11*${k20}*1.25/(${k20}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h21",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[21].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v21",
+        "value": "$[if::(lt::(21,${n}),calc::(findNotEmpty::(${resp.hits[21].points},0)/${h21}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc21",
+        "value": "$[min::(${h21},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x21",
+        "value": "$[if::(lt::(21,${n}),parseNumber::(calc::(6+270.0*${hc21}*60.0/(48.0*(${hc21}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q21",
+        "value": "$[findNotEmpty::(${resp.hits[21].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y21",
+        "value": "$[if::(lt::(21,${n}),parseNumber::(calc::(172.0-164.0*${q21}*1.25*${pmax}/(${pmax}*(${q21}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k21",
+        "value": "$[findNotEmpty::(${resp.hits[21].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s21",
+        "value": "$[parseNumber::(calc::(5+11*${k21}*1.25/(${k21}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h22",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[22].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v22",
+        "value": "$[if::(lt::(22,${n}),calc::(findNotEmpty::(${resp.hits[22].points},0)/${h22}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc22",
+        "value": "$[min::(${h22},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x22",
+        "value": "$[if::(lt::(22,${n}),parseNumber::(calc::(6+270.0*${hc22}*60.0/(48.0*(${hc22}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q22",
+        "value": "$[findNotEmpty::(${resp.hits[22].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y22",
+        "value": "$[if::(lt::(22,${n}),parseNumber::(calc::(172.0-164.0*${q22}*1.25*${pmax}/(${pmax}*(${q22}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k22",
+        "value": "$[findNotEmpty::(${resp.hits[22].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s22",
+        "value": "$[parseNumber::(calc::(5+11*${k22}*1.25/(${k22}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h23",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[23].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v23",
+        "value": "$[if::(lt::(23,${n}),calc::(findNotEmpty::(${resp.hits[23].points},0)/${h23}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc23",
+        "value": "$[min::(${h23},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x23",
+        "value": "$[if::(lt::(23,${n}),parseNumber::(calc::(6+270.0*${hc23}*60.0/(48.0*(${hc23}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q23",
+        "value": "$[findNotEmpty::(${resp.hits[23].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y23",
+        "value": "$[if::(lt::(23,${n}),parseNumber::(calc::(172.0-164.0*${q23}*1.25*${pmax}/(${pmax}*(${q23}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k23",
+        "value": "$[findNotEmpty::(${resp.hits[23].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s23",
+        "value": "$[parseNumber::(calc::(5+11*${k23}*1.25/(${k23}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h24",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[24].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v24",
+        "value": "$[if::(lt::(24,${n}),calc::(findNotEmpty::(${resp.hits[24].points},0)/${h24}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc24",
+        "value": "$[min::(${h24},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x24",
+        "value": "$[if::(lt::(24,${n}),parseNumber::(calc::(6+270.0*${hc24}*60.0/(48.0*(${hc24}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q24",
+        "value": "$[findNotEmpty::(${resp.hits[24].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y24",
+        "value": "$[if::(lt::(24,${n}),parseNumber::(calc::(172.0-164.0*${q24}*1.25*${pmax}/(${pmax}*(${q24}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k24",
+        "value": "$[findNotEmpty::(${resp.hits[24].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s24",
+        "value": "$[parseNumber::(calc::(5+11*${k24}*1.25/(${k24}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h25",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[25].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v25",
+        "value": "$[if::(lt::(25,${n}),calc::(findNotEmpty::(${resp.hits[25].points},0)/${h25}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc25",
+        "value": "$[min::(${h25},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x25",
+        "value": "$[if::(lt::(25,${n}),parseNumber::(calc::(6+270.0*${hc25}*60.0/(48.0*(${hc25}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q25",
+        "value": "$[findNotEmpty::(${resp.hits[25].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y25",
+        "value": "$[if::(lt::(25,${n}),parseNumber::(calc::(172.0-164.0*${q25}*1.25*${pmax}/(${pmax}*(${q25}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k25",
+        "value": "$[findNotEmpty::(${resp.hits[25].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s25",
+        "value": "$[parseNumber::(calc::(5+11*${k25}*1.25/(${k25}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h26",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[26].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v26",
+        "value": "$[if::(lt::(26,${n}),calc::(findNotEmpty::(${resp.hits[26].points},0)/${h26}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc26",
+        "value": "$[min::(${h26},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x26",
+        "value": "$[if::(lt::(26,${n}),parseNumber::(calc::(6+270.0*${hc26}*60.0/(48.0*(${hc26}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q26",
+        "value": "$[findNotEmpty::(${resp.hits[26].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y26",
+        "value": "$[if::(lt::(26,${n}),parseNumber::(calc::(172.0-164.0*${q26}*1.25*${pmax}/(${pmax}*(${q26}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k26",
+        "value": "$[findNotEmpty::(${resp.hits[26].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s26",
+        "value": "$[parseNumber::(calc::(5+11*${k26}*1.25/(${k26}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h27",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[27].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v27",
+        "value": "$[if::(lt::(27,${n}),calc::(findNotEmpty::(${resp.hits[27].points},0)/${h27}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc27",
+        "value": "$[min::(${h27},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x27",
+        "value": "$[if::(lt::(27,${n}),parseNumber::(calc::(6+270.0*${hc27}*60.0/(48.0*(${hc27}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q27",
+        "value": "$[findNotEmpty::(${resp.hits[27].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y27",
+        "value": "$[if::(lt::(27,${n}),parseNumber::(calc::(172.0-164.0*${q27}*1.25*${pmax}/(${pmax}*(${q27}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k27",
+        "value": "$[findNotEmpty::(${resp.hits[27].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s27",
+        "value": "$[parseNumber::(calc::(5+11*${k27}*1.25/(${k27}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h28",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[28].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v28",
+        "value": "$[if::(lt::(28,${n}),calc::(findNotEmpty::(${resp.hits[28].points},0)/${h28}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc28",
+        "value": "$[min::(${h28},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x28",
+        "value": "$[if::(lt::(28,${n}),parseNumber::(calc::(6+270.0*${hc28}*60.0/(48.0*(${hc28}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q28",
+        "value": "$[findNotEmpty::(${resp.hits[28].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y28",
+        "value": "$[if::(lt::(28,${n}),parseNumber::(calc::(172.0-164.0*${q28}*1.25*${pmax}/(${pmax}*(${q28}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k28",
+        "value": "$[findNotEmpty::(${resp.hits[28].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s28",
+        "value": "$[parseNumber::(calc::(5+11*${k28}*1.25/(${k28}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h29",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[29].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v29",
+        "value": "$[if::(lt::(29,${n}),calc::(findNotEmpty::(${resp.hits[29].points},0)/${h29}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hc29",
+        "value": "$[min::(${h29},48.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x29",
+        "value": "$[if::(lt::(29,${n}),parseNumber::(calc::(6+270.0*${hc29}*60.0/(48.0*(${hc29}+12.0))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q29",
+        "value": "$[findNotEmpty::(${resp.hits[29].points},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y29",
+        "value": "$[if::(lt::(29,${n}),parseNumber::(calc::(172.0-164.0*${q29}*1.25*${pmax}/(${pmax}*(${q29}+${pmax}/4))),0.0),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k29",
+        "value": "$[findNotEmpty::(${resp.hits[29].num_comments},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s29",
+        "value": "$[parseNumber::(calc::(5+11*${k29}*1.25/(${k29}+${cmax}/4)),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vmax",
+        "value": "$[max::(${v0},${v1},${v2},${v3},${v4},${v5},${v6},${v7},${v8},${v9},${v10},${v11},${v12},${v13},${v14},${v15},${v16},${v17},${v18},${v19},${v20},${v21},${v22},${v23},${v24},${v25},${v26},${v27},${v28},${v29})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ks",
+        "value": [
+          "$[if::(eq::(${v0},${vmax}),0,999)]",
+          "$[if::(eq::(${v1},${vmax}),1,999)]",
+          "$[if::(eq::(${v2},${vmax}),2,999)]",
+          "$[if::(eq::(${v3},${vmax}),3,999)]",
+          "$[if::(eq::(${v4},${vmax}),4,999)]",
+          "$[if::(eq::(${v5},${vmax}),5,999)]",
+          "$[if::(eq::(${v6},${vmax}),6,999)]",
+          "$[if::(eq::(${v7},${vmax}),7,999)]",
+          "$[if::(eq::(${v8},${vmax}),8,999)]",
+          "$[if::(eq::(${v9},${vmax}),9,999)]",
+          "$[if::(eq::(${v10},${vmax}),10,999)]",
+          "$[if::(eq::(${v11},${vmax}),11,999)]",
+          "$[if::(eq::(${v12},${vmax}),12,999)]",
+          "$[if::(eq::(${v13},${vmax}),13,999)]",
+          "$[if::(eq::(${v14},${vmax}),14,999)]",
+          "$[if::(eq::(${v15},${vmax}),15,999)]",
+          "$[if::(eq::(${v16},${vmax}),16,999)]",
+          "$[if::(eq::(${v17},${vmax}),17,999)]",
+          "$[if::(eq::(${v18},${vmax}),18,999)]",
+          "$[if::(eq::(${v19},${vmax}),19,999)]",
+          "$[if::(eq::(${v20},${vmax}),20,999)]",
+          "$[if::(eq::(${v21},${vmax}),21,999)]",
+          "$[if::(eq::(${v22},${vmax}),22,999)]",
+          "$[if::(eq::(${v23},${vmax}),23,999)]",
+          "$[if::(eq::(${v24},${vmax}),24,999)]",
+          "$[if::(eq::(${v25},${vmax}),25,999)]",
+          "$[if::(eq::(${v26},${vmax}),26,999)]",
+          "$[if::(eq::(${v27},${vmax}),27,999)]",
+          "$[if::(eq::(${v28},${vmax}),28,999)]",
+          "$[if::(eq::(${v29},${vmax}),29,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pick",
+        "value": "$[min::(${_ks})]"
+      },
+      "_note": "每小时得分最高的那条(并列取分数更高的,见 talk_df 的 argmax 注释)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ft",
+        "value": "$[get::(index::(${resp.hits},${pick}),title)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fp",
+        "value": "$[get::(index::(${resp.hits},${pick}),points)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fc",
+        "value": "$[get::(index::(${resp.hits},${pick}),num_comments)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fid",
+        "value": "$[get::(index::(${resp.hits},${pick}),objectID)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fv",
+        "value": "$[round::(${vmax})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xs",
+        "value": [
+          "${x0}",
+          "${x1}",
+          "${x2}",
+          "${x3}",
+          "${x4}",
+          "${x5}",
+          "${x6}",
+          "${x7}",
+          "${x8}",
+          "${x9}",
+          "${x10}",
+          "${x11}",
+          "${x12}",
+          "${x13}",
+          "${x14}",
+          "${x15}",
+          "${x16}",
+          "${x17}",
+          "${x18}",
+          "${x19}",
+          "${x20}",
+          "${x21}",
+          "${x22}",
+          "${x23}",
+          "${x24}",
+          "${x25}",
+          "${x26}",
+          "${x27}",
+          "${x28}",
+          "${x29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ys",
+        "value": [
+          "${y0}",
+          "${y1}",
+          "${y2}",
+          "${y3}",
+          "${y4}",
+          "${y5}",
+          "${y6}",
+          "${y7}",
+          "${y8}",
+          "${y9}",
+          "${y10}",
+          "${y11}",
+          "${y12}",
+          "${y13}",
+          "${y14}",
+          "${y15}",
+          "${y16}",
+          "${y17}",
+          "${y18}",
+          "${y19}",
+          "${y20}",
+          "${y21}",
+          "${y22}",
+          "${y23}",
+          "${y24}",
+          "${y25}",
+          "${y26}",
+          "${y27}",
+          "${y28}",
+          "${y29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ss",
+        "value": [
+          "${s0}",
+          "${s1}",
+          "${s2}",
+          "${s3}",
+          "${s4}",
+          "${s5}",
+          "${s6}",
+          "${s7}",
+          "${s8}",
+          "${s9}",
+          "${s10}",
+          "${s11}",
+          "${s12}",
+          "${s13}",
+          "${s14}",
+          "${s15}",
+          "${s16}",
+          "${s17}",
+          "${s18}",
+          "${s19}",
+          "${s20}",
+          "${s21}",
+          "${s22}",
+          "${s23}",
+          "${s24}",
+          "${s25}",
+          "${s26}",
+          "${s27}",
+          "${s28}",
+          "${s29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fx",
+        "value": "$[index::(${xs},${pick})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fy",
+        "value": "$[index::(${ys},${pick})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fs",
+        "value": "$[calc::(index::(${ss},${pick})+2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pq",
+        "value": "$[round::(calc::(${pmax}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fg",
+        "value": "$[parseNumber::(max::(calc::((${nowS}-get::(index::(${resp.hits},${pick}),created_at_i))/3600),1),0)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "n",
+          "ft",
+          "fp",
+          "fc",
+          "fid",
+          "fv",
+          "fx",
+          "fy",
+          "fs",
+          "pmax",
+          "pq",
+          "fg",
+          "x0",
+          "y0",
+          "s0",
+          "x1",
+          "y1",
+          "s1",
+          "x2",
+          "y2",
+          "s2",
+          "x3",
+          "y3",
+          "s3",
+          "x4",
+          "y4",
+          "s4",
+          "x5",
+          "y5",
+          "s5",
+          "x6",
+          "y6",
+          "s6",
+          "x7",
+          "y7",
+          "s7",
+          "x8",
+          "y8",
+          "s8",
+          "x9",
+          "y9",
+          "s9",
+          "x10",
+          "y10",
+          "s10",
+          "x11",
+          "y11",
+          "s11",
+          "x12",
+          "y12",
+          "s12",
+          "x13",
+          "y13",
+          "s13",
+          "x14",
+          "y14",
+          "s14",
+          "x15",
+          "y15",
+          "s15",
+          "x16",
+          "y16",
+          "s16",
+          "x17",
+          "y17",
+          "s17",
+          "x18",
+          "y18",
+          "s18",
+          "x19",
+          "y19",
+          "s19",
+          "x20",
+          "y20",
+          "s20",
+          "x21",
+          "y21",
+          "s21",
+          "x22",
+          "y22",
+          "s22",
+          "x23",
+          "y23",
+          "s23",
+          "x24",
+          "y24",
+          "s24",
+          "x25",
+          "y25",
+          "s25",
+          "x26",
+          "y26",
+          "s26",
+          "x27",
+          "y27",
+          "s27",
+          "x28",
+          "y28",
+          "s28",
+          "x29",
+          "y29",
+          "s29"
+        ]
+      }
+    }
+  ]
+}

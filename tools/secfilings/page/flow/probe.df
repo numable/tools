@@ -1,0 +1,91 @@
+{
+  "_lintCache": "exempt",
+  "_note": "用户主动触发的核验流(输入代码点「关注」时跑一次),结果不该缓存 —— 缓存会把「刚才没连上」记成「没有这家」。生成器 tools/infosource/gen_secfilings.py。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "tRaw",
+        "value": "${t}"
+      },
+      "_note": "入参落地(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tIn",
+        "value": "$[toUpperCase::(findNotEmpty::(${tRaw},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reAmp",
+        "value": "&amp;"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rpAmp",
+        "value": "&"
+      }
+    },
+    {
+      "action": "request",
+      "id": "raw",
+      "params": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${tIn}&type=&dateb=&owner=exclude&count=10&output=atom",
+        "method": "GET",
+        "formatType": "string",
+        "header": {
+          "User-Agent": "Numable support@numable.app",
+          "Accept": "application/atom+xml"
+        },
+        "timeout": "12000"
+      },
+      "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st",
+        "value": "$[if::(contains::(${raw},<feed),1,if::(contains::(${raw},<html),0,if::(contains::(${raw},<HTML),0,)))]"
+      },
+      "_note": "有 <feed = 找到;回的是 HTML = 没有这家(SEC 对不存在的代码回 200 + HTML 页);什么都没回 = 没连上(空)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm",
+        "value": "$[replaceAll::(index::(split::(index::(split::(${raw},<conformed-name>),1),<),0),${reAmp},${rpAmp})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tk",
+        "value": "${tIn}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "st",
+          "nm",
+          "tk"
+        ]
+      }
+    }
+  ]
+}

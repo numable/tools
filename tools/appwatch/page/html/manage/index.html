@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<!--
+  关注管理页(路由 /manage):搜索添加 / 删除 / 切 storefront。**只干数组增删这一件事**。
+
+  它曾经是首页(路由 /),兼着概览 + 可加卡列表;2026-08-08 首页转 XPage 后,概览与
+  「加到桌面」都搬走了 —— 概览归 xpage/home.xpage(与桌面卡同一套 RCN,不再用 DOM 仿一遍),
+  单 App 的三张卡归 xpage/app.xpage(参数由那一页的上下文确定,不再依赖隐形的「选中态」)。
+
+  留在 H5 的理由只有一条:**AF 没有数组 push/remove 原语**,增删只能在 JS 里做完、整份传给
+  apps-save.af 原样落盘(与 weather 城市管理页同一分工)。落盘三键:apps(结构化列表)/
+  ids(预拼逗号串,widget 批量 lookup 直接用)/ country(storefront)。
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Manage watchlist</title>
+    <style>
+      :root{color-scheme:light dark;
+        --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+        --accent:#128F66;--accentStrong:#128F66;--danger:#FF5C4D}
+      html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+        --line:#262A31;--accentStrong:#6FE8BE}
+      *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+      body{margin:0;background:var(--bg);color:var(--fg);
+        font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+        padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+                var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+      h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+      .sub{color:var(--sub);font-size:13px;margin-bottom:20px}
+      /* §2 段标题 = 左名字 + 右摘要/操作,13pt/sub。 */
+      .sec{display:flex;align-items:center;font-size:13px;color:var(--sub);font-weight:700;margin:20px 0 8px}
+      .sec em{font-style:normal;font-weight:400;font-size:13px}
+      .sec .grow{flex:1 1 auto}
+      /* 字号 16px 是硬下限:iOS WKWebView 聚焦 <16px 的输入控件会自动放大整页(且失焦不缩回)。
+         select 同样吃这条,不只 input。chip 视觉靠收窄 padding 找回,不靠调小字号。 */
+      select.cc{border:1px solid var(--line);background:var(--card);color:var(--fg);
+        border-radius:8px;padding:2px 6px;font-size:16px;outline:none}
+      .card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+      .card.pad{padding:14px}
+      /* 行本身不再可点(选中态已删),只剩右侧 ✕ 删除 */
+      .mine{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+      .mine:last-child{border-bottom:0}
+      .mine .grow{flex:1 1 auto;min-width:0}
+      .mine b{display:block;font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .mine small{color:var(--sub);font-size:12px}
+      .sec .n{font-size:13px;font-weight:400;color:var(--sub);margin-right:10px}
+      .del{flex:0 0 auto;border:0;background:transparent;color:var(--sub);font-size:17px;
+        line-height:1;padding:6px 4px;cursor:pointer}
+      .del:active{color:var(--danger)}
+      input.q{width:100%;border:1px solid var(--line);background:var(--card);color:var(--fg);
+        border-radius:12px;padding:11px 14px;font-size:16px;outline:none}
+      input.q:focus{border-color:var(--accent)}
+      .hit{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+      .hit:last-child{border-bottom:0}
+      .hit .grow{flex:1 1 auto;min-width:0}
+      .hit b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .hit small{color:var(--sub)}
+      .add{flex:0 0 auto;border:0;background:var(--accentStrong);color:#fff;font-size:13px;font-weight:600;
+        border-radius:12px;padding:7px 16px;cursor:pointer}
+      .add[disabled]{opacity:.4}
+      .state{color:var(--sub);font-size:13px;padding:14px;text-align:center}
+      .foot{color:var(--sub);font-size:11px;margin-top:24px;line-height:1.6}
+      .star{color:var(--accentStrong)}
+
+      /* —— 视觉统一(与本包 RCN 卡片同源)——
+         「源色」是包自己的 accent(GitHub 贡献绿 / App Store 蓝),不再借 App 的品牌薄荷绿;
+         卡片去 1px 描边改「无边 + 极浅投影」,分节标题改大写小字距,长文脚注收进一块浅底面板。
+         本段刻意放在样式表末尾作**覆盖层** —— 各页原有规则一条不动,改动集中在这里一处。
+         ⚠️ 暗色档必须把 --accentStrong 一起改:原表里 html[data-theme=dark] 的特异性高于 :root,
+         只在 :root 里改会被它盖回薄荷绿(改完看着没变的典型)。 */
+      :root{--asc:#0A7AFF;--src:#0A7AFF;--srcSoft:rgba(10,122,255,.10);--chip:#E7E9EE;--chip2:#EEF0F4;
+        --shadow:0 1px 2px rgba(22,23,27,.04),0 10px 24px -16px rgba(22,23,27,.18);
+        --accent:var(--src);--accentStrong:var(--src)}
+      html[data-theme="dark"]{--asc:#4DA0FF;--src:#4DA0FF;--srcSoft:rgba(77,160,255,.14);--chip:#20232A;--chip2:#252930;
+        --shadow:none;--accent:var(--src);--accentStrong:var(--src)}
+      h1{font-weight:700;letter-spacing:-.5px}
+      .sec{margin-top:22px}   /* 不做 uppercase:大写只作用于英文,双语两种观感 */
+      .card,.box{border:0;border-radius:14px;box-shadow:var(--shadow)}
+      input.q,input.tk,select.cc{border:1.5px solid transparent;box-shadow:var(--shadow);border-radius:14px}
+      input.q:focus,input.tk:focus{border-color:var(--src)}
+      .mine,.hit,.row{border-bottom:0}
+      .mine+.mine,.hit+.hit{border-top:1px solid var(--line)}
+      .foot{background:var(--chip2);border-radius:14px;padding:12px 14px;line-height:1.7;margin-top:20px}
+    
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.hit,.xb-tap{position:relative}
+.hit::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.hit:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.del,.add,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.del:active,.add:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+  </head>
+  <body>
+    <h1 data-i="title"></h1>
+    <div class="sub" data-i="sub"></div>
+
+    <div class="sec">
+      <span data-i="mineSec"></span><span class="grow"></span>
+      <!-- §2 右侧那一格是这一段的答案:关注了几个(上限 6)。地区选择器是这一段的操作。 -->
+      <span class="n" id="mineN"></span>
+      <select id="cc" class="cc"></select>
+    </div>
+    <div id="mine" class="card"></div>
+
+    <div class="sec" data-i="searchSec"></div>
+    <input id="q" class="q" type="search" autocomplete="off" />
+    <div id="hits" class="card" style="display:none;margin-top:10px"></div>
+
+    <div class="foot" data-i="foot"></div>
+    <script>
+      (function(){
+      var MAX = 6;   // = tools/infosource/gen_appwatch.py 的 MAX_APPS(流里的定长槽数),改一处要同改
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 地区选择器顺序与缺省按国内默认判据(doc/overseas-first.md §1):海外 US 打头,国内 CN 打头。 */
+var STORES_OVERSEAS = ["US","GB","JP","DE","FR","CA","AU","KR","BR","CN"], STORES_CN = ["CN","US","JP","GB","DE","FR","KR","CA","AU","BR"];
+      var STORES = STORES_OVERSEAS;
+      var I18N = {
+        "zh": {"title":"管理关注","sub":"增删要盯的 App，切换统计地区","subS":"已关注 {n} / 6 · 地区 {cc}",
+               "mineSec":"关注列表","searchSec":"添加 App",
+               "ph":"搜索 App，如 微信 / Instagram","add":"添加","added":"已添加",
+               "searching":"搜索中…","noHit":"没有找到匹配的 App","dup":"已在列表里","full":"最多 6 个 App",
+               "emptyMine":"还没有关注的 App，先在下方搜索添加",
+               "resolving":"正在解析要关注的 App…","resolveFail":"没解析出这个 App（bundleId 无效或未上架）",
+               "foot":"评分和版本来自 App Store 公开数据，不需要密钥。关注列表默认只存在这台设备上。评分按地区统计，右上角可切换。点行首的 ★ 标为「我的 App」，接入 App Store Connect 后它会多出下载和收益。",
+               "notX":"当前不在 XBundle 环境中"},
+        "en": {"title":"Manage watchlist","sub":"Add or remove apps, switch region","subS":"{n} of 6 watched · {cc}",
+               "mineSec":"Watchlist","searchSec":"Add an app",
+               "ph":"Search apps, e.g. Instagram","add":"Add","added":"Added",
+               "searching":"Searching…","noHit":"No matching app","dup":"Already added","full":"Up to 6 apps",
+               "emptyMine":"No apps yet — search below to add one",
+               "resolving":"Resolving the app to watch…","resolveFail":"Could not resolve that app (bad bundleId or unlisted)",
+               "foot":"Ratings and versions come from public App Store data, no key needed. Your watchlist stays on this device by default. Ratings are per region, switch it at the top right. Tap ★ to mark an app as yours: once App Store Connect is connected it gains downloads and proceeds.",
+               "notX":"Not running inside XBundle"}
+      };
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。 */
+      var LANG=nbLang(document.documentElement.getAttribute('data-lang')), CND=false, list=[], country='US', live={}, mine={};
+      function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键回落;缺键回落英文 */
+      function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+      function applyTheme(th){
+        var dark = th==='dark' || (th!=='light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+      }
+      function paint(){
+        Array.prototype.forEach.call(document.querySelectorAll('[data-i]'),function(el){
+          el.textContent = t(el.dataset.i); });
+        document.getElementById('q').placeholder = t('ph');
+      }
+      async function ready(){ for(var i=0;i<24&&!window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+        return !!window.xbridge; }
+      async function appInfo(){
+        try{ if(xbridge.appInfo) return await xbridge.appInfo(); }catch(e){}
+        return null;
+      }
+
+      // ---- 我的 App ----
+      function ids(){ return list.map(function(a){return a.id;}).join(','); }
+      function save(){
+        if(!(window.xbridge&&xbridge.runFlow)) return Promise.resolve();
+        // 整份写回:JS 这边已是最终状态,AF 只负责落盘。
+        return xbridge.runFlow('apps-save',{list:list,ids:ids(),country:country},8000);
+      }
+      // 「选中态」已随首页改造删除:它当年只为一件事存在 —— 首页那几张单 App 卡点「添加」时
+      // 用哪个 App 的参数。现在单 App 卡在各自的 /app 面板里加,参数由那一页的上下文确定,
+      // 这里就只剩一份纯粹的列表(它是什么就画什么,不再藏一个决定别处行为的隐形状态)。
+      /* §1 副标 = 这一页**此刻的状态**(关注了几个 / 哪个地区),不是「这一页能干什么」。
+         §2 段标题右侧那一格 = 这一段的答案(同一个数,一处在页头一处在段头)。 */
+      function paintState(){
+        var n = list.length;
+        var e = document.querySelector('[data-i="sub"]');
+        if(e) e.textContent = t('subS').replace('{n}', n).replace('{cc}', country||'--');
+        var m = document.getElementById('mineN');
+        if(m) m.textContent = n + ' / ' + MAX;
+      }
+      function renderMine(){
+        paintState();
+        var box = document.getElementById('mine');
+        if(!list.length){ box.innerHTML='<div class="state">'+t('emptyMine')+'</div>'; return; }
+        box.innerHTML = list.map(function(a,i){
+          var lv = live[String(a.id)];
+          var sub = lv ? ('<span class="star">★</span> '+esc(lv.r||'--')+' · v'+esc(lv.v||'--')+' · '+esc(lv.d||'--'))
+                       : esc(a.dev||'');
+          var isMine = !!mine[String(a.id)];
+          // ★ = 标为「我的 App」(单一真源 = data.* 的 mine_<id> 键,mine-save.af 写)。
+          // 亮紫用 asc 源色 —— 这个标记的意义就是「跳 Connect」。
+          return '<div class="mine">'+
+            '<button class="del" data-mk="'+i+'" style="font-size:15px;color:'+(isMine?'var(--asc)':'var(--sub)')+'">'+(isMine?'★':'☆')+'</button>'+
+            '<div class="grow"><b>'+esc(a.name)+'</b><small>'+sub+'</small></div>'+
+            '<button class="del" data-del="'+i+'">✕</button></div>';
+        }).join('');
+        Array.prototype.forEach.call(box.querySelectorAll('[data-del]'),function(b){
+          b.addEventListener('click',function(){ removeAt(+b.dataset.del); });
+        });
+        Array.prototype.forEach.call(box.querySelectorAll('[data-mk]'),function(b){
+          b.addEventListener('click',function(){ toggleMine(+b.dataset.mk); });
+        });
+      }
+      function saveMine(id, v){
+        if(!(window.xbridge&&xbridge.runFlow)) return Promise.resolve();
+        return xbridge.runFlow('mine-save',{appId:String(id),v:v?1:0},8000);
+      }
+      function toggleMine(i){
+        var id = String(list[i].id);
+        mine[id] = !mine[id];
+        renderMine();
+        saveMine(id, mine[id]);
+      }
+      function refreshMine(){
+        if(!(window.xbridge&&xbridge.runDataFlow)) return;
+        if(!list.length){ mine={}; return; }
+        xbridge.runDataFlow('mine-read',{},8000).then(function(r){
+          var d=(r&&r.code===0&&r.data)||{};
+          mine={};
+          list.forEach(function(a,i){ if(+d['m'+i]===1) mine[String(a.id)]=true; });
+          renderMine();
+        }).catch(function(){});
+      }
+      function removeAt(i){
+        var id = String(list[i].id);
+        list.splice(i,1);
+        delete mine[id];
+        saveMine(id, 0);   // 清掉孤儿标记
+        renderMine(); save().then(refreshLive);
+      }
+      function addApp(a){
+        if(list.length>=MAX) return t('full');
+        var dup = list.some(function(x){ return String(x.id)===String(a.id); });
+        if(dup) return t('dup');
+        list.push(a);
+        renderMine(); save().then(refreshLive);
+        return null;
+      }
+      function refreshLive(){
+        if(!(window.xbridge&&xbridge.runDataFlow)) return;
+        if(!list.length){ live={}; renderMine(); return; }
+        xbridge.runDataFlow('watchlist',{},10000).then(function(r){
+          var d=(r&&r.code===0&&r.data)||{};
+          live={};
+          (d.list||[]).forEach(function(row){ if(row&&row.id) live[String(row.id)]=row; });
+          renderMine();
+        }).catch(function(){});
+      }
+
+      // ---- storefront ----
+      function renderCC(){
+        var s=document.getElementById('cc');
+        s.innerHTML=STORES.map(function(c){
+          return '<option value="'+c+'"'+(c===country?' selected':'')+'>'+c+'</option>'; }).join('');
+      }
+      document.getElementById('cc').addEventListener('change',function(){
+        country=this.value;
+        save().then(refreshLive);
+      });
+
+      // ---- 搜索添加 ----
+      var timer=null;
+      document.getElementById('q').addEventListener('input',function(e){
+        var kw=e.target.value.trim(); clearTimeout(timer);
+        var box=document.getElementById('hits');
+        if(!kw){box.style.display='none';return;}
+        // 300ms 防抖:每敲一个字打一次检索接口既慢又浪费。
+        timer=setTimeout(function(){
+          box.style.display='block'; box.innerHTML='<div class="state">'+t('searching')+'</div>';
+          xbridge.runDataFlow('search',{kw:encodeURIComponent(kw),country:country},10000).then(function(r){
+            var d=(r&&r.code===0&&r.data)||{};
+            var hits=(d.list||[]).filter(function(x){return x&&x.id;});
+            if(!hits.length){box.innerHTML='<div class="state">'+t('noHit')+'</div>';return;}
+            box.innerHTML=hits.map(function(a,i){
+              var sub=[a.dev,a.g,(a.r?'★'+a.r:'')].filter(Boolean).join(' · ');
+              return '<div class="hit" data-k="'+i+'">'+
+                '<div class="grow"><b>'+esc(a.n)+'</b><small>'+esc(sub)+'</small></div>'+
+                '<button class="add">'+t('add')+'</button></div>';}).join('');
+            Array.prototype.forEach.call(box.querySelectorAll('.hit'),function(h){
+              h.addEventListener('click',function(){
+                var a=hits[+h.dataset.k];
+                var btn=h.querySelector('.add');
+                var err=addApp({id:String(a.id),name:a.n,dev:a.dev});
+                btn.textContent = err || t('added');
+                btn.disabled = true;
+              });});
+          }).catch(function(){box.innerHTML='<div class="state">'+t('noHit')+'</div>';});
+        },300);
+      });
+
+      // ---- 启动 ----
+      (async function boot(){
+        if(!(await ready())){
+          document.getElementById('mine').innerHTML='<div class="state">'+t('notX')+'</div>';
+          paint(); renderCC(); return;
+        }
+        var info0 = await nbInfo();
+        applyTheme(info0.theme);
+        LANG = nbLang(info0.language||info0.locale); CND = nbCnDefault(info0);
+        STORES = CND ? STORES_CN : STORES_OVERSEAS; country = CND ? 'CN' : 'US';
+        paint(); renderCC();
+        xbridge.runDataFlow('apps-read',{},8000).then(function(r){
+          var d=(r&&r.code===0&&r.data)||{};
+          list = Array.isArray(d.list)? d.list : [];
+          country = d.country||(CND ? 'CN' : 'US');
+          renderCC(); renderMine(); refreshLive(); refreshMine();
+          prefillFromQuery();
+        }).catch(function(){ renderMine(); });
+      })();
+
+      // ---- ?bundleId= 预填(asc「在观察哨关注」跳转链路)----
+      // asc 只有 bundleId、本包的键是 trackId,解析放这边(lookup 支持 ?bundleId= 反查)。
+      // 必须在 apps-read 回来**之后**跑:addApp 的去重/上限判据要吃到已落盘的列表。
+      function prefillFromQuery(){
+        var bid='';
+        try{ bid=new URLSearchParams(location.search).get('bundleId')||''; }catch(e){}
+        if(!bid || !(window.xbridge&&xbridge.runDataFlow)) return;
+        var box=document.getElementById('hits');
+        box.style.display='block';
+        box.innerHTML='<div class="state">'+t('resolving')+'</div>';
+        xbridge.runDataFlow('resolve',{bid:bid,country:country},10000).then(function(r){
+          var d=(r&&r.code===0&&r.data)||{};
+          if(!d.id){ box.innerHTML='<div class="state">'+t('resolveFail')+'</div>'; return; }
+          var err=addApp({id:String(d.id),name:d.n||String(d.id),dev:d.dev||''});
+          box.innerHTML='<div class="state">'+esc(d.n||'')+' · '+(err||t('added'))+'</div>';
+        }).catch(function(){ box.innerHTML='<div class="state">'+t('resolveFail')+'</div>'; });
+      }
+
+      })();
+    </script>
+  </body>
+</html>

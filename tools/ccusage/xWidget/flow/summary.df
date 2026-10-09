@@ -1,0 +1,643 @@
+{
+  "_note": "总览取数：today / totals / models / peakHour。服务端已做跨设备合并与排序(merged 视图)，这里只取值与分档格式化。凭证走 manifest credentials(nu) + request.credential 注入 Authorization: Bearer，flow 里不手拼头(credential-vault §4.1)。⚠️ 数字分档拆成 num+unit 两个键，字符串拼接留给 RCN 的 text 内插 —— VParser 的 join:: 是拼数组不是拼串。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "todayQ",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      },
+      "_note": "「今天」以看的人这台设备的日期为锚(2026-09-24)。不带它服务端只能拿「数据里最后一天」当今天 —— 今天还没用 Claude Code 时,「今日」会显示上一个活跃日的数。服务端只认离它自己 3 天以内的日期,算不出来就退回老行为,不会取不到数。"
+    },
+    {
+      "id": "resp",
+      "action": "request",
+      "params": {
+        "url": "https://usage.numable.app/s?today=${todayQ}&lite=1",
+        "method": "GET",
+        "header": {
+          "User-Agent": "Numable"
+        },
+        "formatType": "json",
+        "credential": "nu"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t",
+        "value": "${resp.merged.totals}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "td",
+        "value": "${resp.merged.today}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${resp},),1,0)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "ccusage_unreachable"
+          }
+        }
+      ],
+      "_note": "同 heatmap:令牌被拒 → 渲「未接入」;完全没响应 → 抛。\n取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)。"
+    },
+    {
+      "_note": "⚠️ 空态显式闸掉聚合值：拿不到数据时 sum 类字段恒 0，『今日 0 条消息』会被读成『今天没用』——那是骗人不是没数据(标准 §7.3)。故一律先判 resp 有没有，没有就留空让 RCN 渲 --。",
+      "op": "set",
+      "props": {
+        "key": "live",
+        "value": "$[if::(eq::(connect::(k,${resp.merged.totals.activeDays}),k),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayMsgs",
+        "value": "$[if::(eq::(${live},1),${td.msgs},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todaySess",
+        "value": "$[if::(eq::(${live},1),${td.sessions},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayOutRaw",
+        "value": "$[if::(eq::(${live},1),${td.out},)]"
+      }
+    },
+    {
+      "_note": "分档：≥1e6 走 M，≥1e3 走 k，否则原值。round 先行防 Android 上 calc 返 double 渲成 17.0(memory vparser-calc-returns-double-android)。",
+      "op": "set",
+      "props": {
+        "key": "todayOutNum",
+        "value": "$[if::(ge::(${todayOutRaw},1000000),calc::(round::(calc::(${todayOutRaw}/100000))/10),if::(ge::(${todayOutRaw},1000),calc::(round::(calc::(${todayOutRaw}/100))/10),${todayOutRaw}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayOutUnit",
+        "value": "$[if::(ge::(${todayOutRaw},1000000),M,if::(ge::(${todayOutRaw},1000),k,))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "outRaw",
+        "value": "$[if::(eq::(${live},1),${t.out},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "outNum",
+        "value": "$[if::(ge::(${outRaw},1000000),calc::(round::(calc::(${outRaw}/100000))/10),if::(ge::(${outRaw},1000),calc::(round::(calc::(${outRaw}/100))/10),${outRaw}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "outUnit",
+        "value": "$[if::(ge::(${outRaw},1000000),M,if::(ge::(${outRaw},1000),k,))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "msgsRaw",
+        "value": "$[if::(eq::(${live},1),${t.msgs},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "msgsNum",
+        "value": "$[if::(ge::(${msgsRaw},1000),calc::(round::(calc::(${msgsRaw}/100))/10),${msgsRaw})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "msgsUnit",
+        "value": "$[if::(ge::(${msgsRaw},1000),k,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sessions",
+        "value": "$[if::(eq::(${live},1),${t.sessions},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "activeDays",
+        "value": "$[if::(eq::(${live},1),${t.activeDays},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "streak",
+        "value": "$[if::(eq::(${live},1),${t.streak},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "longest",
+        "value": "$[if::(eq::(${live},1),${t.longestStreak},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "msgsAvg",
+        "value": "$[if::(ge::(${activeDays},1),round::(calc::(${msgsRaw}/${activeDays})),)]"
+      },
+      "_note": "「今天跟平常比」的数据(2026-09-09)。**零新增请求** —— 日均由同一份 totals 算出:msgsRaw(累计消息)÷ activeDays(活跃天数)。\n⚠️ `activeDays` 是**有记录的天数**不是自然日跨度,所以这个日均是「干活那天平均写多少」,不会被休息日稀释 —— 拿它跟「今天」比才是同口径。\n⚠️ 至少 3 个活跃天才给结论(dayOk):一两天的数据推不出「平常」,拿它当基线只会天天报暴涨暴跌。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dayOk",
+        "value": "$[if::(eq::(${live},1),if::(ge::(${activeDays},3),if::(ge::(${msgsAvg},1),if::(ge::(${todayMsgs},0),1,0),0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ratio",
+        "value": "$[if::(eq::(${dayOk},1),parseNumber::(calc::(${todayMsgs}/${msgsAvg}),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cmpLvl",
+        "value": "$[if::(eq::(${dayOk},1),if::(ge::(calc::(${todayMsgs}*10),calc::(${msgsAvg}*15)),2,if::(ge::(calc::(${todayMsgs}*10),calc::(${msgsAvg}*7)),1,0)),)]"
+      },
+      "_note": "三档:2 = 明显多于平常 · 1 = 差不多 · 0 = 少于平常。**阈值 = 1.5 倍 / 0.7 倍**。\n⚠️ 这三档不是对称的,渲染层对 0 档**刻意不下判断**(见 today.rcn):今天是**还没过完的一天**,上午看必然低于日均 —— 那是钟在走不是人在偷懒。而「已经到了 / 超过了日均」这两档反过来只会随时间更成立,半天数据得出的结论不会被下半天推翻,所以敢说。\n1.5 倍:日用量本身波动大(一次长会话就能翻倍),1.2 倍会天天喊「今天很多」;0.7 倍是对称位置上的下界,只用来把「差不多」那一档框出来。"
+    },
+    {
+      "_note": "峰值小时是采集机本地时，直接当标签用，绝不按手机时区重算(方案稿 §2 第 6 条)。-1 = 无数据。",
+      "op": "set",
+      "props": {
+        "key": "peakH",
+        "value": "${resp.merged.peakHour}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "peakTxt",
+        "value": "$[if::(ge::(${peakH},0),${peakH},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "models",
+        "value": "${resp.merged.models}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mCount",
+        "value": "$[length::(${models})]"
+      }
+    },
+    {
+      "_note": "时效锚(card-design-system §3)= 采集侧最后一次上传的时刻(内容时间):当天 HH:mm、跨天 MM-dd HH:mm。外层判空哨兵勿删 —— formatDate::(空,…) 在 web SDK 上渲成 epoch。",
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[if::(eq::(findNotEmpty::(${resp.updatedAt},__none__),__none__),,if::(eq::(formatDate::(${resp.updatedAt},yyyyMMdd),formatDate::(${@time.nowMs},yyyyMMdd)),formatDate::(${resp.updatedAt},HH:mm),formatDate::(${resp.updatedAt},MM-dd HH:mm)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wEnd",
+        "value": "$[findNotEmpty::(${resp.merged.window.end},0)]"
+      },
+      "_note": "5 小时窗口(2026-09-24)。服务端只在「现在正处在一个窗口里」时给 window;没有就是 null → 这里落 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wStart",
+        "value": "$[findNotEmpty::(${resp.merged.window.start},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winOn",
+        "value": "$[if::(eq::(${live},1),if::(gt::(${wEnd},${nowMs}),1,0),0)]"
+      },
+      "_note": "⚠️ 还要跟**此刻**比一次:服务端判的是它响应那一刻,而这张卡可能是 5 分钟前取的数。窗口已经过了还画「已用 $X」就是在说过去的事。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winUsd",
+        "value": "$[if::(eq::(${winOn},1),${resp.merged.window.usdS},)]"
+      },
+      "_note": "美元显示串由服务端格式化(VParser 没有保留两位小数的方法)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winProj",
+        "value": "$[if::(eq::(${winOn},1),${resp.merged.window.projS},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winReset",
+        "value": "$[if::(eq::(${winOn},1),formatDate::(${wEnd},HH:mm),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winPct",
+        "value": "$[if::(eq::(${winOn},1),if::(gt::(round::(calc::((${nowMs}-${wStart})*100/(${wEnd}-${wStart}))),100),100,round::(calc::((${nowMs}-${wStart})*100/(${wEnd}-${wStart})))),0)]"
+      },
+      "_note": "时间进度 0~100(不是额度 —— 官方剩余额度拿不到,画成额度条会被读成「还剩多少」)。\n⚠️ 恒有值(不在窗口里就是 0):这个数进进度条的宽度表达式,宽度 calc 取到空会让整张卡渲染失败(§9.5)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winOutRaw",
+        "value": "$[if::(eq::(${winOn},1),${resp.merged.window.out},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winOutNum",
+        "value": "$[if::(ge::(${winOutRaw},1000000),calc::(round::(calc::(${winOutRaw}/100000))/10),if::(ge::(${winOutRaw},1000),calc::(round::(calc::(${winOutRaw}/100))/10),${winOutRaw}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winOutUnit",
+        "value": "$[if::(ge::(${winOutRaw},1000000),M,if::(ge::(${winOutRaw},1000),k,))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "costToday",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.periods.today.usdS},),)]"
+      },
+      "_note": "费用估算(按 API 标价折算)。老服务端没有 periods → 空 → 卡上渲 --。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cost7",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.periods.d7.usdS},),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cost30",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.periods.d30.usdS},),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "costMonth",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.months.cur.usdS},),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "costPartial",
+        "value": "$[if::(eq::(${resp.merged.periods.d30.partial},true),1,0)]"
+      },
+      "_note": "近 30 天里有老插件推的日子(没有按模型明细,折算不了)→ 卡上标一句「部分未计入」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "costBars",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.costBars},[]),[])]"
+      },
+      "_note": "费用组件的 14 天迷你柱(2026-09-24 二版)。每根的 v(高度占比)/ u(1-v)/ t(是不是今天)由服务端算好 —— RCN 坐标里写不了「常量 − 数据变量」,只能乘加。老服务端没有这个键 → 空数组 → 一根不画。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cost7Chg",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.deltas.d7.usd.s},),)]"
+      },
+      "_note": "近 7 天费用对比前 7 天:服务端给好「↑12%」/「↓8%」,前 7 天为 0 时为空串。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w",
+        "value": "${resp.merged.w}"
+      },
+      "_note": "组件视图(2026-09-24 组件扩充):服务端把 14 个组件要的数都算成了能直接画的样子(显示串 / 0~1 比例 / u = 1−v / 「浅|深」颜色串),这里原样透传,RCN 按 ${w.xxx} 取。拿不到(令牌被拒 / 老服务端)就是空 → 各组件的几何都包在 op:if 里,不会拿空值进宽高表达式。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winStartTxt",
+        "value": "$[if::(eq::(${winOn},1),formatDate::(${wStart},HH:mm),)]"
+      },
+      "_note": "窗口中号:开始时刻按看的人这台设备的时区格式化(与 winReset 同法)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winLeft",
+        "value": "$[if::(eq::(${winOn},1),round::(calc::((${wEnd}-${nowMs})/60000)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winLeftH",
+        "value": "$[if::(ge::(${winLeft},60),round::(calc::((${winLeft}-30)/60)),0)]"
+      },
+      "_note": "VParser 没有 floor:⌊x/60⌋ = round((x−30)/60)(四舍五入到整数)。不足 60 分钟直接给 0,避开 round(−0.5) 各端取值不同。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winLeftM",
+        "value": "$[round::(calc::(${winLeft}-${winLeftH}*60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winNRaw",
+        "value": "$[if::(eq::(${winOn},1),${resp.merged.window.n},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "winN",
+        "value": "$[if::(ge::(${winNRaw},1000),calc::(round::(calc::(${winNRaw}/100))/10)k,${winNRaw})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_c11u",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.periods.today.usd},),)]"
+      },
+      "_note": "11 档「今日费用」(2026-10-04 追加,只加键):今天费用的数值(美元,未格式化)。取数不变,读的是 costToday 同一个响应字段的数值版。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c11",
+        "value": "$[if::(eq::(connect::(k,${_c11u}),k),,if::(lt::(${_c11u},0.005),connect::($,0),if::(lt::(${_c11u},9.995),connect::($,parseNumber::(${_c11u},0.00)),if::(lt::(${_c11u},9999.5),connect::($,parseNumber::(round::(${_c11u}),0)),connect::($,parseNumber::(round::(calc::(${_c11u}/1000)),0),K)))))]"
+      },
+      "_note": "11 档主值:≤ 5 字符(card-design-system §8.2)。为 0 写 $0;< $10 留两位小数($4.85);< $10000 取整($41 / $1234);再大写成 $12K。判空拼字母前缀(值为 0 时 eq::(x,) 会误判成空)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c11F",
+        "value": "$[if::(gt::(length::(connect::(k,${c11})),5),17,20)]"
+      },
+      "_note": "11 档主值字号:≤ 4 字符 20、5 字符 17。恒有值(c11 为空时 = 20)—— 字号字段读到空会让整张组件渲不出来。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cvS",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.composition.cost.savedS},),)]"
+      },
+      "_note": "缓存省了多少(2026-10-08 新组件 saved,零新增请求):同一个响应里的 composition(近 30 天,页面 /tokens 用的就是它)。savedS 是服务端格式化好的美元串。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cvN",
+        "value": "$[if::(eq::(connect::(k,${cvS}),k),,findNotEmpty::(${resp.merged.composition.cost.saved},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cvP",
+        "value": "$[if::(eq::(connect::(k,${_cvN}),k),,calc::(findNotEmpty::(${resp.merged.composition.cost.in},0)+findNotEmpty::(${resp.merged.composition.cost.c5},0)+findNotEmpty::(${resp.merged.composition.cost.c1},0)+findNotEmpty::(${resp.merged.composition.cost.rd},0)+findNotEmpty::(${resp.merged.composition.cost.out},0)))]"
+      },
+      "_note": "近 30 天实付(按 API 标价)= 五类 token 费用之和。不用缓存的原价 = 实付 + 省下的。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cvPaid",
+        "value": "$[if::(eq::(connect::(k,${_cvP}),k),,if::(gt::(calc::(${_cvP}+${_cvN}),0),round::(calc::(${_cvP}*100/(${_cvP}+${_cvN}))),))]"
+      },
+      "_note": "实付占原价的百分比(整数)。原价为 0 时留空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cvW",
+        "value": "$[if::(eq::(connect::(k,${cvPaid}),k),0,calc::(${cvPaid}/100))]"
+      },
+      "_note": "条宽比例 0~1;空态 0(组件里按 >0 才画填充)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cvHit",
+        "value": "$[if::(eq::(connect::(k,${cvS}),k),,round::(findNotEmpty::(${resp.merged.composition.hitRate},0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcP0",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.costModels[0].pct},),)]"
+      },
+      "_note": "按模型费用(2026-10-08 新组件 modelCost):名字 / 金额 / 颜色读 w.cost.models(服务端已排好前 3、已给显示名),这里只补 costModels 里同序的数值占比(画条)与较前 30 天的变化。两者都按近 30 天费用降序,下标对齐。mcN = 前 30 天没花过、这 30 天才用的模型(变化串为空)→ 组件写「新」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcG0",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.costModels[0].chg.s},),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcU0",
+        "value": "$[if::(gt::(findNotEmpty::(${resp.merged.costModels[0].chg.p},0),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcN0",
+        "value": "$[if::(eq::(connect::(k,${mcG0}),k),if::(gt::(findNotEmpty::(${resp.merged.costModels[0].usd},0),0),if::(eq::(findNotEmpty::(${resp.merged.costModels[0].prevUsd},0),0),1,0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcP1",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.costModels[1].pct},),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcG1",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.costModels[1].chg.s},),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcU1",
+        "value": "$[if::(gt::(findNotEmpty::(${resp.merged.costModels[1].chg.p},0),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcN1",
+        "value": "$[if::(eq::(connect::(k,${mcG1}),k),if::(gt::(findNotEmpty::(${resp.merged.costModels[1].usd},0),0),if::(eq::(findNotEmpty::(${resp.merged.costModels[1].prevUsd},0),0),1,0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcP2",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.costModels[2].pct},),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcG2",
+        "value": "$[if::(eq::(${live},1),findNotEmpty::(${resp.merged.costModels[2].chg.s},),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcU2",
+        "value": "$[if::(gt::(findNotEmpty::(${resp.merged.costModels[2].chg.p},0),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcN2",
+        "value": "$[if::(eq::(connect::(k,${mcG2}),k),if::(gt::(findNotEmpty::(${resp.merged.costModels[2].usd},0),0),if::(eq::(findNotEmpty::(${resp.merged.costModels[2].prevUsd},0),0),1,0),0),0)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "live",
+          "todayMsgs",
+          "todaySess",
+          "todayOutNum",
+          "todayOutUnit",
+          "outNum",
+          "outUnit",
+          "msgsNum",
+          "msgsUnit",
+          "sessions",
+          "activeDays",
+          "streak",
+          "longest",
+          "peakTxt",
+          "models",
+          "mCount",
+          "at",
+          "msgsAvg",
+          "dayOk",
+          "ratio",
+          "cmpLvl",
+          "winOn",
+          "winUsd",
+          "winProj",
+          "winReset",
+          "winPct",
+          "winOutNum",
+          "winOutUnit",
+          "costToday",
+          "cost7",
+          "cost30",
+          "costMonth",
+          "costPartial",
+          "costBars",
+          "cost7Chg",
+          "w",
+          "winStartTxt",
+          "winLeftH",
+          "winLeftM",
+          "winN",
+          "c11",
+          "c11F",
+          "cvS",
+          "cvPaid",
+          "cvW",
+          "cvHit",
+          "mcP0",
+          "mcG0",
+          "mcU0",
+          "mcN0",
+          "mcP1",
+          "mcG1",
+          "mcU1",
+          "mcN1",
+          "mcP2",
+          "mcG2",
+          "mcU2",
+          "mcN2"
+        ]
+      }
+    }
+  ]
+}

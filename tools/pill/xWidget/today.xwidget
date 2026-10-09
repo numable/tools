@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "title": "今天",
+  "sub": "今天记了没有",
+  "i18n": {
+    "en-US": {
+      "title": "Today",
+      "sub": "Logged today or not"
+    }
+  },
+  "layout": 22,
+  "params": {},
+  "ai": {
+    "shows": "服药记录今天记了没有（已记/未服/待记/休息）与周期第几天，点一下即可记录"
+  },
+  "events": {
+    "onClick": "@[file://flow/mark-today.af]"
+  },
+  "_note_jobs": "长按这张组件 → 「添加提醒」列出这里声明的规则(doc/alert-design.md §6 ③)。本包组件零参数,提醒的 time / name 是提醒自己的参数(见 xJob/dose.xjob 头注),故 params 映射为空,全部由用户在同意面板里填。三张组件声明的是同一条 dose.xjob,实例按参数合并、不会重复。",
+  "jobs": [
+    {
+      "id": "dose",
+      "params": {}
+    }
+  ],
+  "canvas": {
+    "source": "@[file://rc/today.rcn]",
+    "depends": [
+      {
+        "_note": "§D 纯显式:裸 `@[file://…df]` 字符串**传空入参**,卡片会渲一片 `--` 且不报错(流仍 success)。\n本卡不需要入参(w.df 自己从 data.* 读),但仍写成 {flow, params} 对象形态 —— 这条没有例外。",
+        "flow": "@[file://flow/w.df]",
+        "params": {}
+      }
+    ],
+    "refresh": {
+      "_note": "状态只在两件事上变:① 用户在 App 里标了一笔(此时 App 会主动重渲封面);② 跨天。\n所以一小时一拍足够,不需要更密。\n⚠️ 桌面卡的**数据新鲜度**不归这里管 —— 封面缓存 key 不含时间维度,\n   刷新那一拍必须由 App 侧走「刷新意图」跳过图缓存直接取数(见 memory\n   [[widget-refresh-idle-cache]])。这个包尤其吃这条:它的状态本来就是时钟的函数,\n   缓存优先会让卡永远停在「用户上次打开 App」那一刻,而链路全程空转、日志干净。",
+      "interval": [
+        "3600"
+      ]
+    }
+  },
+  "_noteEvents": "整卡点击 → mark-today.af(**不是打开 App**)。没记就记下并留撤销,记过了才打开包。\n判据与四道防误触闸见 flow/mark-today.af 的头注。"
+}

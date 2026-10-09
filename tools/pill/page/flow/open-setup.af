@@ -1,0 +1,25 @@
+{
+  "_note": "打开设置表单,带出当前值。\n\n⚠️⚠️ **值必须走 `params` 字段,不能拼进 URL 的 query** —— 2026-08-16 iOS 实测踩到。\n`nav.openForResult` 在 iOS 上落到 `presentForResult`,它把**入参 `params`** 当作 routeParams\n交给 `xformToFormConfig(raw, params:)`(`XHost.swift:284`);URL 只用来定位文件,**query 不解析**。\n写成 `?start=...` 的话表单收到空 scope → `.xform` 的 `value` 求不出值 → **该位留空**\n(xformResolve 纪律③)→ 表现是「一打开设置,活性片数显示 0、起始日空白」,\n**保存后真把 21/7 覆盖成 0** —— 这是会毁数据的那种错,而且不报错。\n(⚠️ 另一条路 `nav.open` 走常规路由压栈,那边是 `XFormRootVC` 读 `parseQuery(queryString)`,\n query 才有效。两条路读的东西不一样,别互相照抄。)\n\n用 openForResult 而不是 open:要的是「等它关掉」这个时机 —— 回传值本身不消费,\n状态已由 plan-save.af 自己写进 data.*(同 weather/add-city.af)。回来后整页重载。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "⚠️ actions[0] 恒为 ui.haptic(G22):RCN 没有动画能力,点击到浮层出现之间 ~250ms 全无反馈,用户会以为没点上、再点一次 —— 而第二下会再开一个浮层。",
+      "action": "ui.haptic"
+    },
+    {
+      "action": "nav.openForResult",
+      "params": {
+        "url": "numable://self/page/setup",
+        "params": {
+          "start": "${initStart}",
+          "active": "${active}",
+          "rest": "${rest}",
+          "alias": "${alias}"
+        }
+      }
+    },
+    {
+      "action": "xpage.reloadPage"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "_note": "全市场宏观(CoinGecko /global):总市值、24h 变化、BTC / ETH 市值占比。免费档限频 ~30 次/分钟,页面按 5 分钟缓存,不随行情那条 10 秒轮询一起打。",
+  "_lintCache": "exempt",
+  "_noteCache": "首屏缓存在 H5 页里做(G23 三态:页面把**解析后的精简模型**写进 data.*,不是这份原始响应 —— SPOT 全量行情 450KB,整份落盘每 10 秒一次是纯浪费)。本流只负责「原样取回」,所以豁免 C1。",
+  "actions": [
+    {
+      "action": "request",
+      "id": "r",
+      "params": {
+        "url": "https://api.coingecko.com/api/v3/global",
+        "method": "GET",
+        "formatType": "string",
+        "header": {
+          "accept": "application/json"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求屏障(勿删):request 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "raw",
+        "value": "${r}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "raw"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "_note": "备用行情源 Coinbase Exchange 的通用取数(doc/overseas-first.md §10):OKX 取不到时(美国等地区受其政策限制)页面改用它取现货 ticker 与 K 线。入参 `p` = `/products/` 之后的那一段(如 `BTC-USD/stats`),原样返回响应文本,换成 OKX 的形状在 H5 kit 的 cbFallback 里做。\n⚠️ host 写死在 URL 字面量里,入参只拼 path —— 页面拿它打不到别的域。",
+  "_lintCache": "exempt",
+  "_noteCache": "首屏缓存在 H5 页里做(与 okx.df 同规:页面缓存的是解析后的模型)。本流只负责「原样取回」,豁免 C1。",
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "pIn",
+        "value": "${p}"
+      },
+      "_note": "⚠️ 入参落地(勿删):URL 与方法参数里的 ${} 看不见 flow 入参(§9.5 #3)。"
+    },
+    {
+      "action": "request",
+      "id": "r",
+      "params": {
+        "url": "https://api.exchange.coinbase.com/products/${pIn}",
+        "method": "GET",
+        "formatType": "string",
+        "header": {
+          "accept": "application/json"
+        },
+        "timeout": "8000"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求屏障(勿删):request 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "raw",
+        "value": "${r}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "raw"
+        ]
+      }
+    }
+  ]
+}

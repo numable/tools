@@ -1,0 +1,3085 @@
+{
+  "version": 1,
+  "_note": "单包逐日下载(npm / PyPI / crates.io)。入参 eco、pkg、ver(1 = 顺带取最新版本与发布时间)。三个生态的响应形状各不相同,在这里归一成同一条 30 天逐日序列,渲染层不分生态。组件的流不做缓存(§5.5 契约 5)。",
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "uY",
+        "value": "亿"
+      },
+      "_note": "中文量级单位落成键再引用:表达式里不直接写汉字(与半角逗号混在一个串里,文案闸会误报)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uW",
+        "value": "万"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0",
+        "value": "$[toLowerCase::(findNotEmpty::(${eco},npm))]"
+      },
+      "_note": "⚠️ 入参落地(勿删):方法参数里的 ${} 看不见 flow 入参。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pIn",
+        "value": "${pkg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vIn",
+        "value": "$[findNotEmpty::(${ver},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isC",
+        "value": "$[if::(eq::(${e0},crates),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isP",
+        "value": "$[if::(eq::(${e0},pypi),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isN",
+        "value": "$[if::(eq::(${isC},1),0,if::(eq::(${isP},1),0,1))]"
+      },
+      "_note": "生态三选一:不认识的值一律按 npm。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p",
+        "value": "$[if::(eq::(${isN},1),${pIn},toLowerCase::(${pIn}))]"
+      },
+      "_note": "PyPI / crates.io 的包名不分大小写,统一小写;npm 保留原样(npm 本来就只允许小写,且 scoped 包带 @ 与 /)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasP",
+        "value": "$[if::(gt::(length::(${p}),0),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${hasP},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "no package selected"
+          }
+        }
+      ],
+      "_note": "没有包名 = 这个组件没法取数,让流失败,平台显示上次数据或空态。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${isN}"
+      },
+      "items": [
+        {
+          "id": "rN",
+          "action": "request",
+          "params": {
+            "url": "https://api.npmjs.org/downloads/range/last-month/${p}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "npm:last-month = 截至数据最新一天(通常是 1~4 天前)的 30 个逐日值。scoped 包的 / 原样放在路径里即可。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${isN},1),if::(eq::(${vIn},1),1,0),0)]"
+      },
+      "items": [
+        {
+          "id": "vN",
+          "action": "request",
+          "params": {
+            "url": "https://registry.npmjs.org/${p}/latest",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        },
+        {
+          "id": "sN",
+          "action": "request",
+          "params": {
+            "url": "https://registry.npmjs.org/-/v1/search",
+            "method": "GET",
+            "queryParams": {
+              "text": "${p}",
+              "size": "5"
+            },
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "版本:/latest 只有版本号没有发布时间(约 2KB);发布时间取搜索接口里「名字完全相同」那一条的 date。完整文档动辄几 MB,不用。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${isP}"
+      },
+      "items": [
+        {
+          "id": "rP",
+          "action": "request",
+          "params": {
+            "url": "https://pypistats.org/api/packages/${p}/overall",
+            "method": "GET",
+            "queryParams": {
+              "mirrors": "false"
+            },
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "PyPI:pypistats 的 overall(不含镜像)≈180 天逐日、约 13KB。不用 /recent:它只有日/周/月三个数,算不了环比。pypistats 有按 IP 的限流(429),失败走 error 出口。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${isP},1),if::(eq::(${vIn},1),1,0),0)]"
+      },
+      "items": [
+        {
+          "id": "vP",
+          "action": "request",
+          "params": {
+            "url": "https://pypi.org/rss/project/${p}/releases.xml",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable-pkgstats/1 (+https://numable.app)",
+              "Accept": "application/rss+xml"
+            },
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "PyPI 版本:发布 RSS 约 10KB,带发布时间;/pypi/<包>/json 带全部历史文件,requests 就有 190KB+,不用。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${isC}"
+      },
+      "items": [
+        {
+          "id": "rC",
+          "action": "request",
+          "params": {
+            "url": "https://crates.io/api/v1/crates/${p}/downloads",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable-pkgstats/1 (+https://numable.app)",
+              "Accept": "application/json"
+            },
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "crates.io:近 90 天逐日,按版本分行。⚠️ crates.io 要求请求带能表明来路的 User-Agent,缺了一律 403(2026-09-25 实测)——这个头是接口的生存条件,勿删。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${isC},1),if::(eq::(${vIn},1),1,0),0)]"
+      },
+      "items": [
+        {
+          "id": "vC",
+          "action": "request",
+          "params": {
+            "url": "https://crates.io/api/v1/crates/${p}",
+            "method": "GET",
+            "queryParams": {
+              "include": "default_version"
+            },
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable-pkgstats/1 (+https://numable.app)",
+              "Accept": "application/json"
+            },
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "include=default_version 把响应从 400KB+ 收到约 3KB,versions[0] 就是默认版本(带 created_at)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "miss",
+        "value": "$[if::(eq::(${isN},1),if::(gt::(length::(${rN.downloads}),0),0,1),if::(eq::(${isP},1),if::(gt::(length::(${rP.data}),0),0,1),if::(gt::(length::(${rC.meta.extra_downloads}),0),0,1)))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${miss}"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "1500"
+          },
+          "_note": "参数名是 timestamp(写 duration 不报错、直接不等)。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${isN}"
+          },
+          "items": [
+            {
+              "id": "rN",
+              "action": "request",
+              "params": {
+                "url": "https://api.npmjs.org/downloads/range/last-month/${p}",
+                "method": "GET",
+                "formatType": "json",
+                "timeout": "10000"
+              }
+            }
+          ]
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${isP}"
+          },
+          "items": [
+            {
+              "id": "rP",
+              "action": "request",
+              "params": {
+                "url": "https://pypistats.org/api/packages/${p}/overall",
+                "method": "GET",
+                "queryParams": {
+                  "mirrors": "false"
+                },
+                "formatType": "json",
+                "timeout": "10000"
+              }
+            }
+          ]
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${isC}"
+          },
+          "items": [
+            {
+              "id": "rC",
+              "action": "request",
+              "params": {
+                "url": "https://crates.io/api/v1/crates/${p}/downloads",
+                "method": "GET",
+                "formatType": "json",
+                "header": {
+                  "User-Agent": "Numable-pkgstats/1 (+https://numable.app)",
+                  "Accept": "application/json"
+                },
+                "timeout": "10000"
+              }
+            }
+          ]
+        }
+      ],
+      "_note": "只重试一次:包不存在(404)时第二次同样拿不到,流照常走 error 出口,不会无限等。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b2",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nN",
+        "value": "$[length::(${rN.downloads})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aN",
+        "value": "$[pluck::(${rN.downloads},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nP",
+        "value": "$[length::(${rP.data})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aP",
+        "value": "$[pluck::(${rP.data},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dP",
+        "value": "$[pluck::(${rP.data},date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc",
+        "value": {
+          "_": "0"
+        }
+      },
+      "_note": "按日期累加的容器(对象;键 = yyyy-MM-dd)。先放一个占位键,保证它是对象。"
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${rC.version_downloads}",
+        "key": "it",
+        "index": "i"
+      },
+      "_note": "⚠️ 首节点 _lb 是循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照,没有它 acc 的累加会丢掉同日前面几个版本(G41)。",
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cur",
+            "value": "$[calc::(findNotEmpty::(get::(${acc},${it.date}),0)+findNotEmpty::(${it.downloads},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "acc.${it.date}",
+            "value": "${cur}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dC",
+        "value": "$[pluck::(${rC.meta.extra_downloads},date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xC",
+        "value": "$[pluck::(${rC.meta.extra_downloads},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nC",
+        "value": "$[length::(${dC})]"
+      },
+      "_note": "crates.io 的最后一天是「今天(UTC)」,还没过完 —— 一律丢掉最后一天,只用完整的日子。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endD",
+        "value": "$[if::(eq::(${isC},1),index::(${dC},calc::(${nC}-2)),if::(eq::(${isP},1),index::(${dP},calc::(${nP}-1)),${rN.end}))]"
+      },
+      "_note": "数据截至日(yyyy-MM-dd)。三个源都有 1~4 天延迟,组件上显示的是它,不是取数时刻。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(gt::(length::(${endD}),0),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${ok},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "no download data"
+          }
+        }
+      ],
+      "_note": "主干 = 数据截至日。包不存在(npm 回 error 体 / PyPI 404 / crates 404)、被限流、网络失败,都会让它为空 → 抛错,平台回落上次成功的数据,不渲一份空的上去。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v0",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-31))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-31)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-30)),index::(${aN},calc::(${nN}-30))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v1",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-30))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-30)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-29)),index::(${aN},calc::(${nN}-29))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v2",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-29))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-29)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-28)),index::(${aN},calc::(${nN}-28))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v3",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-28))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-28)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-27)),index::(${aN},calc::(${nN}-27))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v4",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-27))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-27)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-26)),index::(${aN},calc::(${nN}-26))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v5",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-26))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-26)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-25)),index::(${aN},calc::(${nN}-25))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v6",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-25))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-25)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-24)),index::(${aN},calc::(${nN}-24))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v7",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-24))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-24)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-23)),index::(${aN},calc::(${nN}-23))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v8",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-23))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-23)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-22)),index::(${aN},calc::(${nN}-22))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v9",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-22))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-22)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-21)),index::(${aN},calc::(${nN}-21))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v10",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-21))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-21)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-20)),index::(${aN},calc::(${nN}-20))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v11",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-20))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-20)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-19)),index::(${aN},calc::(${nN}-19))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v12",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-19))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-19)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-18)),index::(${aN},calc::(${nN}-18))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v13",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-18))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-18)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-17)),index::(${aN},calc::(${nN}-17))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v14",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-17))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-17)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-16)),index::(${aN},calc::(${nN}-16))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v15",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-16))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-16)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-15)),index::(${aN},calc::(${nN}-15))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v16",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-15))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-15)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-14)),index::(${aN},calc::(${nN}-14))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v17",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-14))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-14)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-13)),index::(${aN},calc::(${nN}-13))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v18",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-13))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-13)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-12)),index::(${aN},calc::(${nN}-12))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v19",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-12))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-12)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-11)),index::(${aN},calc::(${nN}-11))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v20",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-11))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-11)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-10)),index::(${aN},calc::(${nN}-10))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v21",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-10))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-10)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-9)),index::(${aN},calc::(${nN}-9))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v22",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-9))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-9)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-8)),index::(${aN},calc::(${nN}-8))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v23",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-8))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-8)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-7)),index::(${aN},calc::(${nN}-7))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v24",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-7))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-7)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-6)),index::(${aN},calc::(${nN}-6))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v25",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-6))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-6)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-5)),index::(${aN},calc::(${nN}-5))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v26",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-5))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-5)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-4)),index::(${aN},calc::(${nN}-4))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v27",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-4))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-4)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-3)),index::(${aN},calc::(${nN}-3))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v28",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-3))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-3)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-2)),index::(${aN},calc::(${nN}-2))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v29",
+        "value": "$[if::(eq::(${isC},1),calc::(findNotEmpty::(get::(${acc},index::(${dC},calc::(${nC}-2))),0)+findNotEmpty::(index::(${xC},calc::(${nC}-2)),0)),if::(eq::(${isP},1),index::(${aP},calc::(${nP}-1)),index::(${aN},calc::(${nN}-1))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gnzA",
+        "value": [
+          "$[if::(gt::(${v0},0),1,0)]",
+          "$[if::(gt::(${v1},0),1,0)]",
+          "$[if::(gt::(${v2},0),1,0)]",
+          "$[if::(gt::(${v3},0),1,0)]",
+          "$[if::(gt::(${v4},0),1,0)]",
+          "$[if::(gt::(${v5},0),1,0)]",
+          "$[if::(gt::(${v6},0),1,0)]",
+          "$[if::(gt::(${v7},0),1,0)]",
+          "$[if::(gt::(${v8},0),1,0)]",
+          "$[if::(gt::(${v9},0),1,0)]",
+          "$[if::(gt::(${v10},0),1,0)]",
+          "$[if::(gt::(${v11},0),1,0)]",
+          "$[if::(gt::(${v12},0),1,0)]",
+          "$[if::(gt::(${v13},0),1,0)]",
+          "$[if::(gt::(${v14},0),1,0)]",
+          "$[if::(gt::(${v15},0),1,0)]",
+          "$[if::(gt::(${v16},0),1,0)]",
+          "$[if::(gt::(${v17},0),1,0)]",
+          "$[if::(gt::(${v18},0),1,0)]",
+          "$[if::(gt::(${v19},0),1,0)]",
+          "$[if::(gt::(${v20},0),1,0)]",
+          "$[if::(gt::(${v21},0),1,0)]",
+          "$[if::(gt::(${v22},0),1,0)]",
+          "$[if::(gt::(${v23},0),1,0)]",
+          "$[if::(gt::(${v24},0),1,0)]",
+          "$[if::(gt::(${v25},0),1,0)]",
+          "$[if::(gt::(${v26},0),1,0)]",
+          "$[if::(gt::(${v27},0),1,0)]",
+          "$[if::(gt::(${v28},0),1,0)]",
+          "$[if::(gt::(${v29},0),1,0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbgA",
+        "value": [
+          "$[if::(ge::(${v0},100),1,0)]",
+          "$[if::(ge::(${v1},100),1,0)]",
+          "$[if::(ge::(${v2},100),1,0)]",
+          "$[if::(ge::(${v3},100),1,0)]",
+          "$[if::(ge::(${v4},100),1,0)]",
+          "$[if::(ge::(${v5},100),1,0)]",
+          "$[if::(ge::(${v6},100),1,0)]",
+          "$[if::(ge::(${v7},100),1,0)]",
+          "$[if::(ge::(${v8},100),1,0)]",
+          "$[if::(ge::(${v9},100),1,0)]",
+          "$[if::(ge::(${v10},100),1,0)]",
+          "$[if::(ge::(${v11},100),1,0)]",
+          "$[if::(ge::(${v12},100),1,0)]",
+          "$[if::(ge::(${v13},100),1,0)]",
+          "$[if::(ge::(${v14},100),1,0)]",
+          "$[if::(ge::(${v15},100),1,0)]",
+          "$[if::(ge::(${v16},100),1,0)]",
+          "$[if::(ge::(${v17},100),1,0)]",
+          "$[if::(ge::(${v18},100),1,0)]",
+          "$[if::(ge::(${v19},100),1,0)]",
+          "$[if::(ge::(${v20},100),1,0)]",
+          "$[if::(ge::(${v21},100),1,0)]",
+          "$[if::(ge::(${v22},100),1,0)]",
+          "$[if::(ge::(${v23},100),1,0)]",
+          "$[if::(ge::(${v24},100),1,0)]",
+          "$[if::(ge::(${v25},100),1,0)]",
+          "$[if::(ge::(${v26},100),1,0)]",
+          "$[if::(ge::(${v27},100),1,0)]",
+          "$[if::(ge::(${v28},100),1,0)]",
+          "$[if::(ge::(${v29},100),1,0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gnz",
+        "value": "$[sum::(${gnzA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gbg",
+        "value": "$[sum::(${gbgA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ggap",
+        "value": "$[if::(gt::(calc::(${gbg}*2),${gnz}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm0",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v0},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh0",
+        "value": "$[if::(eq::(${gm0},1),0,if::(eq::(findNotEmpty::(${v0},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm1",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v1},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh1",
+        "value": "$[if::(eq::(${gm1},1),0,if::(eq::(findNotEmpty::(${v1},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm2",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v2},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh2",
+        "value": "$[if::(eq::(${gm2},1),0,if::(eq::(findNotEmpty::(${v2},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm3",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v3},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh3",
+        "value": "$[if::(eq::(${gm3},1),0,if::(eq::(findNotEmpty::(${v3},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm4",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v4},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh4",
+        "value": "$[if::(eq::(${gm4},1),0,if::(eq::(findNotEmpty::(${v4},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm5",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v5},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh5",
+        "value": "$[if::(eq::(${gm5},1),0,if::(eq::(findNotEmpty::(${v5},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm6",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v6},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh6",
+        "value": "$[if::(eq::(${gm6},1),0,if::(eq::(findNotEmpty::(${v6},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm7",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v7},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh7",
+        "value": "$[if::(eq::(${gm7},1),0,if::(eq::(findNotEmpty::(${v7},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm8",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v8},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh8",
+        "value": "$[if::(eq::(${gm8},1),0,if::(eq::(findNotEmpty::(${v8},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm9",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v9},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh9",
+        "value": "$[if::(eq::(${gm9},1),0,if::(eq::(findNotEmpty::(${v9},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm10",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v10},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh10",
+        "value": "$[if::(eq::(${gm10},1),0,if::(eq::(findNotEmpty::(${v10},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm11",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v11},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh11",
+        "value": "$[if::(eq::(${gm11},1),0,if::(eq::(findNotEmpty::(${v11},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm12",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v12},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh12",
+        "value": "$[if::(eq::(${gm12},1),0,if::(eq::(findNotEmpty::(${v12},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm13",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v13},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh13",
+        "value": "$[if::(eq::(${gm13},1),0,if::(eq::(findNotEmpty::(${v13},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm14",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v14},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh14",
+        "value": "$[if::(eq::(${gm14},1),0,if::(eq::(findNotEmpty::(${v14},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm15",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v15},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh15",
+        "value": "$[if::(eq::(${gm15},1),0,if::(eq::(findNotEmpty::(${v15},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm16",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v16},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh16",
+        "value": "$[if::(eq::(${gm16},1),0,if::(eq::(findNotEmpty::(${v16},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm17",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v17},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh17",
+        "value": "$[if::(eq::(${gm17},1),0,if::(eq::(findNotEmpty::(${v17},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm18",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v18},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh18",
+        "value": "$[if::(eq::(${gm18},1),0,if::(eq::(findNotEmpty::(${v18},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm19",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v19},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh19",
+        "value": "$[if::(eq::(${gm19},1),0,if::(eq::(findNotEmpty::(${v19},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm20",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v20},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh20",
+        "value": "$[if::(eq::(${gm20},1),0,if::(eq::(findNotEmpty::(${v20},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm21",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v21},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh21",
+        "value": "$[if::(eq::(${gm21},1),0,if::(eq::(findNotEmpty::(${v21},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm22",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v22},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh22",
+        "value": "$[if::(eq::(${gm22},1),0,if::(eq::(findNotEmpty::(${v22},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm23",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v23},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh23",
+        "value": "$[if::(eq::(${gm23},1),0,if::(eq::(findNotEmpty::(${v23},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm24",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v24},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh24",
+        "value": "$[if::(eq::(${gm24},1),0,if::(eq::(findNotEmpty::(${v24},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm25",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v25},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh25",
+        "value": "$[if::(eq::(${gm25},1),0,if::(eq::(findNotEmpty::(${v25},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm26",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v26},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh26",
+        "value": "$[if::(eq::(${gm26},1),0,if::(eq::(findNotEmpty::(${v26},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm27",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v27},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh27",
+        "value": "$[if::(eq::(${gm27},1),0,if::(eq::(findNotEmpty::(${v27},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm28",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v28},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh28",
+        "value": "$[if::(eq::(${gm28},1),0,if::(eq::(findNotEmpty::(${v28},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gm29",
+        "value": "$[if::(eq::(${ggap},1),if::(gt::(${v29},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gh29",
+        "value": "$[if::(eq::(${gm29},1),0,if::(eq::(findNotEmpty::(${v29},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gwkNA",
+        "value": [
+          "${gh23}",
+          "${gh24}",
+          "${gh25}",
+          "${gh26}",
+          "${gh27}",
+          "${gh28}",
+          "${gh29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gpwNA",
+        "value": [
+          "${gh16}",
+          "${gh17}",
+          "${gh18}",
+          "${gh19}",
+          "${gh20}",
+          "${gh21}",
+          "${gh22}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gwkN",
+        "value": "$[sum::(${gwkNA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gpwN",
+        "value": "$[sum::(${gpwNA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0",
+        "value": "$[if::(eq::(${gm0},1),if::(eq::(${gm1},1),findNotEmpty::(${v2},0),findNotEmpty::(${v1},0)),findNotEmpty::(${v0},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1",
+        "value": "$[if::(eq::(${gm1},1),${l0},findNotEmpty::(${v1},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l2",
+        "value": "$[if::(eq::(${gm2},1),${l1},findNotEmpty::(${v2},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l3",
+        "value": "$[if::(eq::(${gm3},1),${l2},findNotEmpty::(${v3},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l4",
+        "value": "$[if::(eq::(${gm4},1),${l3},findNotEmpty::(${v4},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l5",
+        "value": "$[if::(eq::(${gm5},1),${l4},findNotEmpty::(${v5},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l6",
+        "value": "$[if::(eq::(${gm6},1),${l5},findNotEmpty::(${v6},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l7",
+        "value": "$[if::(eq::(${gm7},1),${l6},findNotEmpty::(${v7},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l8",
+        "value": "$[if::(eq::(${gm8},1),${l7},findNotEmpty::(${v8},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l9",
+        "value": "$[if::(eq::(${gm9},1),${l8},findNotEmpty::(${v9},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l10",
+        "value": "$[if::(eq::(${gm10},1),${l9},findNotEmpty::(${v10},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l11",
+        "value": "$[if::(eq::(${gm11},1),${l10},findNotEmpty::(${v11},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l12",
+        "value": "$[if::(eq::(${gm12},1),${l11},findNotEmpty::(${v12},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l13",
+        "value": "$[if::(eq::(${gm13},1),${l12},findNotEmpty::(${v13},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l14",
+        "value": "$[if::(eq::(${gm14},1),${l13},findNotEmpty::(${v14},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l15",
+        "value": "$[if::(eq::(${gm15},1),${l14},findNotEmpty::(${v15},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l16",
+        "value": "$[if::(eq::(${gm16},1),${l15},findNotEmpty::(${v16},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l17",
+        "value": "$[if::(eq::(${gm17},1),${l16},findNotEmpty::(${v17},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l18",
+        "value": "$[if::(eq::(${gm18},1),${l17},findNotEmpty::(${v18},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l19",
+        "value": "$[if::(eq::(${gm19},1),${l18},findNotEmpty::(${v19},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l20",
+        "value": "$[if::(eq::(${gm20},1),${l19},findNotEmpty::(${v20},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l21",
+        "value": "$[if::(eq::(${gm21},1),${l20},findNotEmpty::(${v21},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l22",
+        "value": "$[if::(eq::(${gm22},1),${l21},findNotEmpty::(${v22},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l23",
+        "value": "$[if::(eq::(${gm23},1),${l22},findNotEmpty::(${v23},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l24",
+        "value": "$[if::(eq::(${gm24},1),${l23},findNotEmpty::(${v24},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l25",
+        "value": "$[if::(eq::(${gm25},1),${l24},findNotEmpty::(${v25},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l26",
+        "value": "$[if::(eq::(${gm26},1),${l25},findNotEmpty::(${v26},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l27",
+        "value": "$[if::(eq::(${gm27},1),${l26},findNotEmpty::(${v27},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l28",
+        "value": "$[if::(eq::(${gm28},1),${l27},findNotEmpty::(${v28},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l29",
+        "value": "$[if::(eq::(${gm29},1),${l28},findNotEmpty::(${v29},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ln",
+        "value": [
+          "${l0}",
+          "${l1}",
+          "${l2}",
+          "${l3}",
+          "${l4}",
+          "${l5}",
+          "${l6}",
+          "${l7}",
+          "${l8}",
+          "${l9}",
+          "${l10}",
+          "${l11}",
+          "${l12}",
+          "${l13}",
+          "${l14}",
+          "${l15}",
+          "${l16}",
+          "${l17}",
+          "${l18}",
+          "${l19}",
+          "${l20}",
+          "${l21}",
+          "${l22}",
+          "${l23}",
+          "${l24}",
+          "${l25}",
+          "${l26}",
+          "${l27}",
+          "${l28}",
+          "${l29}"
+        ]
+      },
+      "_note": "折线序列:缺天已沿用前一天。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ser",
+        "value": [
+          "${v0}",
+          "${v1}",
+          "${v2}",
+          "${v3}",
+          "${v4}",
+          "${v5}",
+          "${v6}",
+          "${v7}",
+          "${v8}",
+          "${v9}",
+          "${v10}",
+          "${v11}",
+          "${v12}",
+          "${v13}",
+          "${v14}",
+          "${v15}",
+          "${v16}",
+          "${v17}",
+          "${v18}",
+          "${v19}",
+          "${v20}",
+          "${v21}",
+          "${v22}",
+          "${v23}",
+          "${v24}",
+          "${v25}",
+          "${v26}",
+          "${v27}",
+          "${v28}",
+          "${v29}"
+        ]
+      },
+      "_note": "逐日序列(旧 → 新),结构化 set 造数组才喂得进 sum/max。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wkA",
+        "value": [
+          "${v23}",
+          "${v24}",
+          "${v25}",
+          "${v26}",
+          "${v27}",
+          "${v28}",
+          "${v29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pwA",
+        "value": [
+          "${v16}",
+          "${v17}",
+          "${v18}",
+          "${v19}",
+          "${v20}",
+          "${v21}",
+          "${v22}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wk",
+        "value": "$[sum::(${wkA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pw",
+        "value": "$[sum::(${pwA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mo",
+        "value": "$[sum::(${ser})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d1",
+        "value": "${v29}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wkZ",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${wk},100000000),connect::(if::(ge::(calc::(${wk}/100000000),100),parseNumber::(round::(calc::(${wk}/100000000)),0),if::(ge::(calc::(${wk}/100000000),10),parseNumber::(calc::(${wk}/100000000),0.#),parseNumber::(calc::(${wk}/100000000),0.##))),${uY}),if::(ge::(${wk},10000),connect::(if::(ge::(calc::(${wk}/10000),100),parseNumber::(round::(calc::(${wk}/10000)),0),if::(ge::(calc::(${wk}/10000),10),parseNumber::(calc::(${wk}/10000),0.#),parseNumber::(calc::(${wk}/10000),0.##))),${uW}),parseNumber::(round::(${wk}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wkE",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${wk},1000000000),connect::(if::(ge::(calc::(${wk}/1000000000),100),parseNumber::(round::(calc::(${wk}/1000000000)),0),if::(ge::(calc::(${wk}/1000000000),10),parseNumber::(calc::(${wk}/1000000000),0.#),parseNumber::(calc::(${wk}/1000000000),0.##))),B),if::(ge::(${wk},1000000),connect::(if::(ge::(calc::(${wk}/1000000),100),parseNumber::(round::(calc::(${wk}/1000000)),0),if::(ge::(calc::(${wk}/1000000),10),parseNumber::(calc::(${wk}/1000000),0.#),parseNumber::(calc::(${wk}/1000000),0.##))),M),if::(ge::(${wk},1000),connect::(if::(ge::(calc::(${wk}/1000),100),parseNumber::(round::(calc::(${wk}/1000)),0),if::(ge::(calc::(${wk}/1000),10),parseNumber::(calc::(${wk}/1000),0.#),parseNumber::(calc::(${wk}/1000),0.##))),K),parseNumber::(round::(${wk}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pwZ",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${pw},100000000),connect::(if::(ge::(calc::(${pw}/100000000),100),parseNumber::(round::(calc::(${pw}/100000000)),0),if::(ge::(calc::(${pw}/100000000),10),parseNumber::(calc::(${pw}/100000000),0.#),parseNumber::(calc::(${pw}/100000000),0.##))),${uY}),if::(ge::(${pw},10000),connect::(if::(ge::(calc::(${pw}/10000),100),parseNumber::(round::(calc::(${pw}/10000)),0),if::(ge::(calc::(${pw}/10000),10),parseNumber::(calc::(${pw}/10000),0.#),parseNumber::(calc::(${pw}/10000),0.##))),${uW}),parseNumber::(round::(${pw}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pwE",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${pw},1000000000),connect::(if::(ge::(calc::(${pw}/1000000000),100),parseNumber::(round::(calc::(${pw}/1000000000)),0),if::(ge::(calc::(${pw}/1000000000),10),parseNumber::(calc::(${pw}/1000000000),0.#),parseNumber::(calc::(${pw}/1000000000),0.##))),B),if::(ge::(${pw},1000000),connect::(if::(ge::(calc::(${pw}/1000000),100),parseNumber::(round::(calc::(${pw}/1000000)),0),if::(ge::(calc::(${pw}/1000000),10),parseNumber::(calc::(${pw}/1000000),0.#),parseNumber::(calc::(${pw}/1000000),0.##))),M),if::(ge::(${pw},1000),connect::(if::(ge::(calc::(${pw}/1000),100),parseNumber::(round::(calc::(${pw}/1000)),0),if::(ge::(calc::(${pw}/1000),10),parseNumber::(calc::(${pw}/1000),0.#),parseNumber::(calc::(${pw}/1000),0.##))),K),parseNumber::(round::(${pw}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "moZ",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${mo},100000000),connect::(if::(ge::(calc::(${mo}/100000000),100),parseNumber::(round::(calc::(${mo}/100000000)),0),if::(ge::(calc::(${mo}/100000000),10),parseNumber::(calc::(${mo}/100000000),0.#),parseNumber::(calc::(${mo}/100000000),0.##))),${uY}),if::(ge::(${mo},10000),connect::(if::(ge::(calc::(${mo}/10000),100),parseNumber::(round::(calc::(${mo}/10000)),0),if::(ge::(calc::(${mo}/10000),10),parseNumber::(calc::(${mo}/10000),0.#),parseNumber::(calc::(${mo}/10000),0.##))),${uW}),parseNumber::(round::(${mo}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "moE",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${mo},1000000000),connect::(if::(ge::(calc::(${mo}/1000000000),100),parseNumber::(round::(calc::(${mo}/1000000000)),0),if::(ge::(calc::(${mo}/1000000000),10),parseNumber::(calc::(${mo}/1000000000),0.#),parseNumber::(calc::(${mo}/1000000000),0.##))),B),if::(ge::(${mo},1000000),connect::(if::(ge::(calc::(${mo}/1000000),100),parseNumber::(round::(calc::(${mo}/1000000)),0),if::(ge::(calc::(${mo}/1000000),10),parseNumber::(calc::(${mo}/1000000),0.#),parseNumber::(calc::(${mo}/1000000),0.##))),M),if::(ge::(${mo},1000),connect::(if::(ge::(calc::(${mo}/1000),100),parseNumber::(round::(calc::(${mo}/1000)),0),if::(ge::(calc::(${mo}/1000),10),parseNumber::(calc::(${mo}/1000),0.#),parseNumber::(calc::(${mo}/1000),0.##))),K),parseNumber::(round::(${mo}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d1Z",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${d1},100000000),connect::(if::(ge::(calc::(${d1}/100000000),100),parseNumber::(round::(calc::(${d1}/100000000)),0),if::(ge::(calc::(${d1}/100000000),10),parseNumber::(calc::(${d1}/100000000),0.#),parseNumber::(calc::(${d1}/100000000),0.##))),${uY}),if::(ge::(${d1},10000),connect::(if::(ge::(calc::(${d1}/10000),100),parseNumber::(round::(calc::(${d1}/10000)),0),if::(ge::(calc::(${d1}/10000),10),parseNumber::(calc::(${d1}/10000),0.#),parseNumber::(calc::(${d1}/10000),0.##))),${uW}),parseNumber::(round::(${d1}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d1E",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${d1},1000000000),connect::(if::(ge::(calc::(${d1}/1000000000),100),parseNumber::(round::(calc::(${d1}/1000000000)),0),if::(ge::(calc::(${d1}/1000000000),10),parseNumber::(calc::(${d1}/1000000000),0.#),parseNumber::(calc::(${d1}/1000000000),0.##))),B),if::(ge::(${d1},1000000),connect::(if::(ge::(calc::(${d1}/1000000),100),parseNumber::(round::(calc::(${d1}/1000000)),0),if::(ge::(calc::(${d1}/1000000),10),parseNumber::(calc::(${d1}/1000000),0.#),parseNumber::(calc::(${d1}/1000000),0.##))),M),if::(ge::(${d1},1000),connect::(if::(ge::(calc::(${d1}/1000),100),parseNumber::(round::(calc::(${d1}/1000)),0),if::(ge::(calc::(${d1}/1000),10),parseNumber::(calc::(${d1}/1000),0.#),parseNumber::(calc::(${d1}/1000),0.##))),K),parseNumber::(round::(${d1}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chg",
+        "value": "$[if::(eq::(${ok},1),if::(ge::(${gwkN},4),if::(ge::(${gpwN},4),if::(gt::(${pw},0),parseNumber::(calc::((${wk}/${gwkN})/(${pw}/${gpwN})*100-100),0.0),),),),)]"
+      },
+      "_note": "npm 的逐日统计会整天缺失(记为 0,2026-09 实测 react 两周缺 3 天),直接拿两周合计相除会报出一个并不存在的下跌。缺天判据见 gap_block;这里只拿「有数据的日子」算日均再比。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "up",
+        "value": "$[if::(gt::(length::(${chg}),0),if::(ge::(${chg},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flat",
+        "value": "$[if::(gt::(length::(${chg}),0),if::(lt::(calc::(${chg}*${chg}),0.25),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgA",
+        "value": "$[if::(ge::(${chg},0),${chg},calc::(0-${chg}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgT",
+        "value": "$[if::(eq::(${flat},1),,if::(gt::(length::(${up}),0),connect::(if::(eq::(${up},1),+,−),${chgA},%),))]"
+      },
+      "_note": "持平时留空(渲染层写「与上周持平」,不写 +-0.0%)。带符号百分比在数据层拼好(RCN 的 $[..] 不嵌 $[..])。up 为空 → 留空,渲染层显示 --。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gapA",
+        "value": [
+          "${gm16}",
+          "${gm17}",
+          "${gm18}",
+          "${gm19}",
+          "${gm20}",
+          "${gm21}",
+          "${gm22}",
+          "${gm23}",
+          "${gm24}",
+          "${gm25}",
+          "${gm26}",
+          "${gm27}",
+          "${gm28}",
+          "${gm29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gapN",
+        "value": "$[sum::(${gapA})]"
+      },
+      "_note": "近两周缺数据的天数(页面与组件的说明用)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mAllA",
+        "value": [
+          "${gm0}",
+          "${gm1}",
+          "${gm2}",
+          "${gm3}",
+          "${gm4}",
+          "${gm5}",
+          "${gm6}",
+          "${gm7}",
+          "${gm8}",
+          "${gm9}",
+          "${gm10}",
+          "${gm11}",
+          "${gm12}",
+          "${gm13}",
+          "${gm14}",
+          "${gm15}",
+          "${gm16}",
+          "${gm17}",
+          "${gm18}",
+          "${gm19}",
+          "${gm20}",
+          "${gm21}",
+          "${gm22}",
+          "${gm23}",
+          "${gm24}",
+          "${gm25}",
+          "${gm26}",
+          "${gm27}",
+          "${gm28}",
+          "${gm29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "anyMiss",
+        "value": "$[if::(gt::(sum::(${mAllA}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "MONE",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endM",
+        "value": "$[if::(eq::(${ok},1),subString::(${endD},5,10),)]"
+      },
+      "_note": "数据截至的月日,组件右上角的数据时间锚。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startIso",
+        "value": "$[if::(eq::(${ok},1),formatDate::(calc::(parseDate::(${endD},yyyy-MM-dd)-29*86400000),yyyy-MM-dd),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startDMo",
+        "value": "$[parseNumber::(subString::(${startIso},5,7),0)]"
+      },
+      "_note": "窗口起点的月日,给 44 柱图左下角的轴标。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startDDy",
+        "value": "$[parseNumber::(subString::(${startIso},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startDMe",
+        "value": "$[index::(${MONE},calc::(${startDMo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startDZ",
+        "value": "${startDMo}月${startDDy}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startDE",
+        "value": "${startDMe} ${startDDy}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startD",
+        "value": "$[if::(eq::(${ok},1),if::(startsWith::(${@app.language},zh),${startDZ},${startDE}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endXMo",
+        "value": "$[parseNumber::(subString::(${endD},5,7),0)]"
+      },
+      "_note": "窗口终点的月日(44 柱图右下角轴标)。⚠️ 与右上角时效锚 endM(MM-dd)分开:同一条轴两端必须同一种写法(2026-10-08 前左「9月5日」右「10-04」),轴标是内容日期,照 overseas-first §5 写「10月4日 / Oct 4」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endXDy",
+        "value": "$[parseNumber::(subString::(${endD},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endXMe",
+        "value": "$[index::(${MONE},calc::(${endXMo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endXZ",
+        "value": "${endXMo}月${endXDy}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endXE",
+        "value": "${endXMe} ${endXDy}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endX",
+        "value": "$[if::(eq::(${ok},1),if::(startsWith::(${@app.language},zh),${endXZ},${endXE}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ecoL",
+        "value": "$[if::(eq::(${isC},1),crates.io,if::(eq::(${isP},1),PyPI,npm))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo",
+        "value": "0"
+      },
+      "_note": "基线恒 0:下载量看的是量,从最小值起画会把 3% 的波动画成陡坡(同 gsc)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi",
+        "value": "$[max::(calc::(max::(${ln})),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p22_a",
+        "value": [
+          "0.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},0)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "4.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},1)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "9.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},2)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "13.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},3)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "17.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},4)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "22.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},5)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "26.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},6)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "31.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},7)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "35.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},8)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "40.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},9)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "44.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},10)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "49.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},11)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "53.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},12)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "58.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},13)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "62.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},14)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "67.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},15)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "71.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},16)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "76.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},17)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "80.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},18)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "85.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},19)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "89.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},20)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "94.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},21)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "98.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},22)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "103.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},23)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "107.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},24)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "112.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},25)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "116.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},26)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "121.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},27)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "125.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},28)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]",
+          "130.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},29)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p22",
+        "value": "$[join::(${p22_a},\\,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y22",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((findNotEmpty::(index::(${ln},29),0)-${lo})/(${hi}-${lo})))*22.0+4.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p42_a",
+        "value": [
+          "0.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},0)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "4.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},1)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "9.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},2)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "14.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},3)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "19.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},4)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "23.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},5)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "28.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},6)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "33.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},7)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "38.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},8)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "42.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},9)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "47.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},10)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "52.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},11)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "57.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},12)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "61.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},13)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "66.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},14)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "71.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},15)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "76.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},16)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "80.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},17)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "85.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},18)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "90.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},19)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "95.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},20)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "99.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},21)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "104.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},22)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "109.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},23)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "114.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},24)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "119.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},25)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "123.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},26)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "128.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},27)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "133.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},28)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]",
+          "138.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},29)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p42",
+        "value": "$[join::(${p42_a},\\,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y42",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((findNotEmpty::(index::(${ln},29),0)-${lo})/(${hi}-${lo})))*66.0+6.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p21_a",
+        "value": [
+          "0.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},0)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "1.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},1)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "3.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},2)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "5.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},3)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "7.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},4)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "9.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},5)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "11.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},6)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "13.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},7)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "14.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},8)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "16.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},9)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "18.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},10)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "20.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},11)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "22.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},12)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "24.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},13)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "26.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},14)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "27.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},15)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "29.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},16)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "31.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},17)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "33.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},18)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "35.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},19)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "37.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},20)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "39.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},21)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "41.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},22)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "42.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},23)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "44.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},24)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "46.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},25)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "48.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},26)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "50.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},27)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "52.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},28)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+          "54.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln},29)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p21",
+        "value": "$[join::(${p21_a},\\,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y21",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((findNotEmpty::(index::(${ln},29),0)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b0",
+        "value": "$[if::(eq::(${gm0},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v0},0)/${hi}*102.0),0.0),109.0))]"
+      },
+      "_note": "缺天:画一截 6pt 的中性灰短桩(颜色在 .rcn 里按 gm<k> 换),不画成一根到底的 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b1",
+        "value": "$[if::(eq::(${gm1},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v1},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b2",
+        "value": "$[if::(eq::(${gm2},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v2},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b3",
+        "value": "$[if::(eq::(${gm3},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v3},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b4",
+        "value": "$[if::(eq::(${gm4},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v4},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b5",
+        "value": "$[if::(eq::(${gm5},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v5},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b6",
+        "value": "$[if::(eq::(${gm6},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v6},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b7",
+        "value": "$[if::(eq::(${gm7},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v7},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b8",
+        "value": "$[if::(eq::(${gm8},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v8},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b9",
+        "value": "$[if::(eq::(${gm9},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v9},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b10",
+        "value": "$[if::(eq::(${gm10},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v10},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b11",
+        "value": "$[if::(eq::(${gm11},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v11},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b12",
+        "value": "$[if::(eq::(${gm12},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v12},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b13",
+        "value": "$[if::(eq::(${gm13},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v13},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b14",
+        "value": "$[if::(eq::(${gm14},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v14},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b15",
+        "value": "$[if::(eq::(${gm15},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v15},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b16",
+        "value": "$[if::(eq::(${gm16},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v16},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b17",
+        "value": "$[if::(eq::(${gm17},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v17},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b18",
+        "value": "$[if::(eq::(${gm18},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v18},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b19",
+        "value": "$[if::(eq::(${gm19},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v19},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b20",
+        "value": "$[if::(eq::(${gm20},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v20},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b21",
+        "value": "$[if::(eq::(${gm21},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v21},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b22",
+        "value": "$[if::(eq::(${gm22},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v22},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b23",
+        "value": "$[if::(eq::(${gm23},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v23},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b24",
+        "value": "$[if::(eq::(${gm24},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v24},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b25",
+        "value": "$[if::(eq::(${gm25},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v25},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b26",
+        "value": "$[if::(eq::(${gm26},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v26},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b27",
+        "value": "$[if::(eq::(${gm27},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v27},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b28",
+        "value": "$[if::(eq::(${gm28},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v28},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b29",
+        "value": "$[if::(eq::(${gm29},1),103.0,findNotEmpty::(parseNumber::(calc::(109.0-findNotEmpty::(${v29},0)/${hi}*102.0),0.0),109.0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sn0",
+        "value": "$[get::(index::(${sN.objects},0),package.name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd0",
+        "value": "$[get::(index::(${sN.objects},0),package.date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sn1",
+        "value": "$[get::(index::(${sN.objects},1),package.name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd1",
+        "value": "$[get::(index::(${sN.objects},1),package.date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sn2",
+        "value": "$[get::(index::(${sN.objects},2),package.name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd2",
+        "value": "$[get::(index::(${sN.objects},2),package.date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sn3",
+        "value": "$[get::(index::(${sN.objects},3),package.name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd3",
+        "value": "$[get::(index::(${sN.objects},3),package.date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sn4",
+        "value": "$[get::(index::(${sN.objects},4),package.name)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd4",
+        "value": "$[get::(index::(${sN.objects},4),package.date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "npmD",
+        "value": "$[if::(eq::(${sn0},${p}),${sd0},if::(eq::(${sn1},${p}),${sd1},if::(eq::(${sn2},${p}),${sd2},if::(eq::(${sn3},${p}),${sd3},if::(eq::(${sn4},${p}),${sd4},)))))]"
+      },
+      "_note": "搜索接口不保证第一条就是本包(改过名 / 已下架的包会搜不到),只认名字完全相同的那一条;没有就不显示日期。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "items",
+        "value": "$[split::(${vP},<item>)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pt1",
+        "value": "$[index::(split::(index::(split::(index::(${items},1),<title>),1),</title>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pd1",
+        "value": "$[index::(split::(index::(split::(index::(${items},1),<pubDate>),1),</pubDate>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ps1",
+        "value": "$[if::(matches::(${pt1},^[0-9.]+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pt2",
+        "value": "$[index::(split::(index::(split::(index::(${items},2),<title>),1),</title>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pd2",
+        "value": "$[index::(split::(index::(split::(index::(${items},2),<pubDate>),1),</pubDate>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ps2",
+        "value": "$[if::(matches::(${pt2},^[0-9.]+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pt3",
+        "value": "$[index::(split::(index::(split::(index::(${items},3),<title>),1),</title>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pd3",
+        "value": "$[index::(split::(index::(split::(index::(${items},3),<pubDate>),1),</pubDate>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ps3",
+        "value": "$[if::(matches::(${pt3},^[0-9.]+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pt4",
+        "value": "$[index::(split::(index::(split::(index::(${items},4),<title>),1),</title>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pd4",
+        "value": "$[index::(split::(index::(split::(index::(${items},4),<pubDate>),1),</pubDate>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ps4",
+        "value": "$[if::(matches::(${pt4},^[0-9.]+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pt5",
+        "value": "$[index::(split::(index::(split::(index::(${items},5),<title>),1),</title>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pd5",
+        "value": "$[index::(split::(index::(split::(index::(${items},5),<pubDate>),1),</pubDate>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ps5",
+        "value": "$[if::(matches::(${pt5},^[0-9.]+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pt6",
+        "value": "$[index::(split::(index::(split::(index::(${items},6),<title>),1),</title>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pd6",
+        "value": "$[index::(split::(index::(split::(index::(${items},6),<pubDate>),1),</pubDate>),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ps6",
+        "value": "$[if::(matches::(${pt6},^[0-9.]+$),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pyV",
+        "value": "$[if::(eq::(${ps1},1),${pt1},if::(eq::(${ps2},1),${pt2},if::(eq::(${ps3},1),${pt3},if::(eq::(${ps4},1),${pt4},if::(eq::(${ps5},1),${pt5},if::(eq::(${ps6},1),${pt6},))))))]"
+      },
+      "_note": "只认纯数字版本号(2.34.2);2.34.0.dev1 / 3.0b2 / 1.0rc1 这类预发布跳过。RSS 按上传时间倒序,取第一个正式版。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pyD0",
+        "value": "$[if::(eq::(${ps1},1),${pd1},if::(eq::(${ps2},1),${pd2},if::(eq::(${ps3},1),${pd3},if::(eq::(${ps4},1),${pd4},if::(eq::(${ps5},1),${pd5},if::(eq::(${ps6},1),${pd6},))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "MON",
+        "value": {
+          "Jan": "01",
+          "Feb": "02",
+          "Mar": "03",
+          "Apr": "04",
+          "May": "05",
+          "Jun": "06",
+          "Jul": "07",
+          "Aug": "08",
+          "Sep": "09",
+          "Oct": "10",
+          "Nov": "11",
+          "Dec": "12"
+        }
+      },
+      "_note": "RFC 822 月份缩写 → 两位月。parseDate 吃不了带字母的格式(跨端不一致),自己换。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pyDp",
+        "value": "$[split::(${pyD0},\\s+)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pyMM",
+        "value": "$[get::(${MON},index::(${pyDp},2))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pyDD",
+        "value": "$[index::(${pyDp},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pyYY",
+        "value": "$[index::(${pyDp},3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pyD",
+        "value": "$[if::(gt::(length::(${pyMM}),0),connect::(${pyYY},-,${pyMM},-,${pyDD}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "verV",
+        "value": "$[if::(eq::(${isC},1),${vC.crate.default_version},if::(eq::(${isP},1),${pyV},${vN.version}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relD0",
+        "value": "$[if::(eq::(${isC},1),${vC.versions[0].created_at},if::(eq::(${isP},1),${pyD},${npmD}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relD",
+        "value": "$[subString::(${relD0},0,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasV",
+        "value": "$[if::(gt::(length::(${verV}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasR",
+        "value": "$[if::(eq::(length::(${relD}),10),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relT",
+        "value": "$[if::(eq::(${hasR},1),parseDate::(${relD},yyyy-MM-dd),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relAgo",
+        "value": "$[if::(eq::(${hasR},1),max::(0,floor::(calc::((${nowMs}-${relT})/86400000))),)]"
+      },
+      "_note": "发布至今的天数(按本机时区的日历日,粒度到天)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relMMo",
+        "value": "$[parseNumber::(subString::(${relD},5,7),0)]"
+      },
+      "_note": "发布月日。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relMDy",
+        "value": "$[parseNumber::(subString::(${relD},8,10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relMMe",
+        "value": "$[index::(${MONE},calc::(${relMMo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relMZ",
+        "value": "${relMMo}月${relMDy}日"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relME",
+        "value": "${relMMe} ${relMDy}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relM",
+        "value": "$[if::(eq::(${hasR},1),if::(startsWith::(${@app.language},zh),${relMZ},${relME}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relNew",
+        "value": "$[if::(eq::(${hasR},1),if::(le::(${relAgo},7),1,0),0)]"
+      },
+      "_note": "一周内发过版 = 新版本(「新版本」组件把发布天数染成源色)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relToday",
+        "value": "$[if::(eq::(${hasR},1),if::(eq::(${relAgo},0),1,0),0)]"
+      },
+      "_note": "当天发布写「今天发布」,不写「0 天前」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vLen",
+        "value": "$[if::(eq::(${hasV},1),length::(${verV}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vSz",
+        "value": "$[if::(le::(${vLen},7),0,if::(le::(${vLen},10),1,2))]"
+      },
+      "_note": "版本号字号档:≤7 字符大字 / ≤10 中字 / 更长小字(2.34.0.post1 这类)。RCN 字号只认变量,档位在这里判好,渲染层按档走 op:if。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endM",
+        "value": "$[findNotEmpty::(${endM},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startD",
+        "value": "$[findNotEmpty::(${startD},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endX",
+        "value": "$[findNotEmpty::(${endX},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wkZ",
+        "value": "$[findNotEmpty::(${wkZ},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wkE",
+        "value": "$[findNotEmpty::(${wkE},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pwZ",
+        "value": "$[findNotEmpty::(${pwZ},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pwE",
+        "value": "$[findNotEmpty::(${pwE},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "moZ",
+        "value": "$[findNotEmpty::(${moZ},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "moE",
+        "value": "$[findNotEmpty::(${moE},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d1Z",
+        "value": "$[findNotEmpty::(${d1Z},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d1E",
+        "value": "$[findNotEmpty::(${d1E},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chgT",
+        "value": "$[findNotEmpty::(${chgT},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "up",
+        "value": "$[findNotEmpty::(${up},x)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "flat",
+        "value": "$[findNotEmpty::(${flat},x)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "verV",
+        "value": "$[findNotEmpty::(${verV},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relD",
+        "value": "$[findNotEmpty::(${relD},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relM",
+        "value": "$[findNotEmpty::(${relM},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relAgo",
+        "value": "$[findNotEmpty::(${relAgo},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relNew",
+        "value": "$[findNotEmpty::(${relNew},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "relToday",
+        "value": "$[findNotEmpty::(${relToday},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vSz",
+        "value": "$[findNotEmpty::(${vSz},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w11Z",
+        "value": "$[if::(eq::(findNotEmpty::(${wk},__none__),__none__),${wkZ},if::(ge::(${wk},10000000),connect::(if::(lt::(calc::(${wk}/100000000),1),parseNumber::(calc::(round::(calc::(calc::(${wk}/100000000)*100))/100),0.##),if::(lt::(calc::(${wk}/100000000),10),parseNumber::(calc::(round::(calc::(calc::(${wk}/100000000)*10))/10),0.#),parseNumber::(round::(calc::(${wk}/100000000)),0))),${uY}),if::(ge::(${wk},10000),connect::(if::(lt::(calc::(${wk}/10000),1),parseNumber::(calc::(round::(calc::(calc::(${wk}/10000)*100))/100),0.##),if::(lt::(calc::(${wk}/10000),10),parseNumber::(calc::(round::(calc::(calc::(${wk}/10000)*10))/10),0.#),parseNumber::(round::(calc::(${wk}/10000)),0))),${uW}),parseNumber::(round::(${wk}),0))))]"
+      },
+      "_note": "中文 11 微档主值:两位有效数字,≥ 1000 万记成「0.33亿」(比「3300万」窄)。先 round 再 parseNumber(网页引擎 parseNumber 是截断)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reDg",
+        "value": "[^0-9]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reDt",
+        "value": "[^.]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reLt",
+        "value": "[^A-Za-z]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reAs",
+        "value": "[ -~]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ewvfZ",
+        "value": "$[calc::(length::(replaceAll::(${w11Z},${reDg},))*0.64+length::(replaceAll::(${w11Z},${reDt},))*0.3+length::(replaceAll::(${w11Z},${reAs},))*1.0+length::(replaceAll::(${w11Z},${reLt},))*0.85)]"
+      },
+      "_note": "估算墨迹宽(em)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vfZ",
+        "value": "$[if::(le::(calc::(${ewvfZ}*20),50),20,if::(le::(calc::(${ewvfZ}*17),51),17,if::(le::(calc::(${ewvfZ}*15),52),15,13)))]"
+      },
+      "_note": "字号:放得进 54pt 宽(留 2–4pt 余量)的最大一档。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ewvfE",
+        "value": "$[calc::(length::(replaceAll::(${wkE},${reDg},))*0.64+length::(replaceAll::(${wkE},${reDt},))*0.3+length::(replaceAll::(${wkE},${reAs},))*1.0+length::(replaceAll::(${wkE},${reLt},))*0.85)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vfE",
+        "value": "$[if::(le::(calc::(${ewvfE}*20),50),20,if::(le::(calc::(${ewvfE}*17),51),17,if::(le::(calc::(${ewvfE}*15),52),15,13)))]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ok",
+          "endM",
+          "startD",
+          "endX",
+          "ecoL",
+          "p",
+          "wkZ",
+          "wkE",
+          "pwZ",
+          "pwE",
+          "moZ",
+          "moE",
+          "d1Z",
+          "d1E",
+          "chgT",
+          "up",
+          "flat",
+          "p22",
+          "y22",
+          "p42",
+          "y42",
+          "hasV",
+          "verV",
+          "hasR",
+          "relD",
+          "relM",
+          "relAgo",
+          "relNew",
+          "relToday",
+          "vSz",
+          "b0",
+          "b1",
+          "b2",
+          "b3",
+          "b4",
+          "b5",
+          "b6",
+          "b7",
+          "b8",
+          "b9",
+          "b10",
+          "b11",
+          "b12",
+          "b13",
+          "b14",
+          "b15",
+          "b16",
+          "b17",
+          "b18",
+          "b19",
+          "b20",
+          "b21",
+          "b22",
+          "b23",
+          "b24",
+          "b25",
+          "b26",
+          "b27",
+          "b28",
+          "b29",
+          "gm0",
+          "gm1",
+          "gm2",
+          "gm3",
+          "gm4",
+          "gm5",
+          "gm6",
+          "gm7",
+          "gm8",
+          "gm9",
+          "gm10",
+          "gm11",
+          "gm12",
+          "gm13",
+          "gm14",
+          "gm15",
+          "gm16",
+          "gm17",
+          "gm18",
+          "gm19",
+          "gm20",
+          "gm21",
+          "gm22",
+          "gm23",
+          "gm24",
+          "gm25",
+          "gm26",
+          "gm27",
+          "gm28",
+          "gm29",
+          "gapN",
+          "anyMiss",
+          "p21",
+          "y21",
+          "w11Z",
+          "vfZ",
+          "vfE"
+        ]
+      }
+    }
+  ]
+}

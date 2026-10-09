@@ -1,0 +1,608 @@
+{
+  "rc": {
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FAFCFE\\,#EFF5FD)@90|linear(#15171A\\,#171A1E\\,#1B1F26)@90"
+      },
+      {
+        "id": "dot",
+        "type": "layer",
+        "x": "14.0pt",
+        "y": "{site.y}+({site.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#1A73E8|#8AB4F8",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "id": "site",
+        "type": "txt",
+        "x": "23.0pt",
+        "y": "12pt",
+        "w": "170pt",
+        "h": "-1",
+        "maxLines": "1",
+        "text": "$[if::(eq::(findNotEmpty::(${hasSite},__none__),__none__),${@i18n.fnT},if::(eq::(${hasSite},1),${siteLabel},${@i18n.noSite}))]",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6"
+      },
+      {
+        "_note": "取数时刻锚点(标准 §4.4)。这一格原来渲的是窗口标签「近 28 天」——**卡上一个时间戳都没有**,而 traffic.df 早就算好了 `at` 并过了 resultFilter,只是没人渲。窗口标签挪到折线下面的 #win(它标的是折线,不是取数时刻)。\n⚠️ 判据写成 `eq::(ok,1)` 而不是 sites.rcn 那样的 `eq::(ok,0)`:未选站点时 `ok` 压根没被 set(它在 `if hasSite` 分支里),而 VParser 的 eq 是数字化比较、空串跟 0 会判等 —— 拿 `eq::(ok,0)` 当判据会让「还没选站点」那一态渲出「暂时取不到」。",
+        "id": "at",
+        "type": "txt",
+        "x": "14.0pt",
+        "y": "15pt",
+        "w": "310.0pt",
+        "h": "-1",
+        "alignmentH": "2",
+        "maxLines": "1",
+        "text": "$[if::(eq::(${hasSite},1),if::(eq::(${ok},1),${at},${@i18n.err}),)]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${nd},0),1),1,0)]"
+        },
+        "_note": "新站点还没数据(nd=1):一句话替掉大数字、涨跌与折线 —— 不渲「0」(那是假的零)。",
+        "react": [
+          {
+            "id": "nd1",
+            "type": "txt",
+            "x": "14.0pt",
+            "y": "36pt",
+            "w": "160pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "${@i18n.noData}",
+            "fontSize": "15pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          },
+          {
+            "id": "nd2",
+            "type": "txt",
+            "x": "14.0pt",
+            "y": "58pt",
+            "w": "160pt",
+            "h": "-1",
+            "maxLines": "2",
+            "lineSpacing": "2pt",
+            "text": "${@i18n.noDataS}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${clicksS},--),--),0,1)]"
+        },
+        "react": [
+          {
+            "id": "num",
+            "type": "richText",
+            "x": "14.0pt",
+            "y": "32pt",
+            "w": "160pt",
+            "h": "-1",
+            "maxLines": "1",
+            "hide": "$[if::(eq::(findNotEmpty::(${nd},0),1),1,0)]",
+            "spans": [
+              {
+                "text": "$[findNotEmpty::(${clicksS},--)]",
+                "fontSize": "34pt",
+                "typeface": "System-Bold",
+                "textColor": "#0E1116|#F3F4F6"
+              },
+              {
+                "text": "${@i18n.nbsp}",
+                "fontSize": "20pt"
+              },
+              {
+                "text": "${@i18n.clicks}",
+                "fontSize": "11pt",
+                "textColor": "#6B7280|#8E939B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${clicksS},--),--),1,0)]"
+        },
+        "react": [
+          {
+            "id": "numE",
+            "type": "richText",
+            "x": "14.0pt",
+            "y": "42pt",
+            "w": "160pt",
+            "h": "-1",
+            "maxLines": "1",
+            "hide": "$[if::(eq::(findNotEmpty::(${nd},0),1),1,0)]",
+            "spans": [
+              {
+                "text": "--",
+                "fontSize": "34pt",
+                "typeface": "System-Bold",
+                "textColor": "#0E1116|#F3F4F6"
+              },
+              {
+                "text": "${@i18n.nbsp}",
+                "fontSize": "20pt"
+              },
+              {
+                "text": "${@i18n.clicks}",
+                "fontSize": "11pt",
+                "textColor": "#6B7280|#8E939B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "tri",
+        "type": "path",
+        "x": "14.0pt",
+        "y": "73.3pt",
+        "w": "8pt",
+        "h": "5.28pt",
+        "d": "$[if::(eq::(${up},1),M128 64 L240 192 L16 192 Z,M128 192 L16 64 L240 64 Z)]",
+        "viewBox": "0 0 256 256",
+        "fillColor": "$[if::(eq::(${flat},1),#9AA0A6,if::(eq::(findNotEmpty::(${up},__none__),__none__),#9AA0A6,if::(eq::(${up},1),if::(eq::(${up},1),#1FC77D,#FF5C4D),if::(eq::(${up},0),if::(eq::(${up},1),#1FC77D,#FF5C4D),#9AA0A6))))]",
+        "hide": "$[if::(eq::(${flat},1),1,if::(gt::(length::(${up}),0),0,1))]"
+      },
+      {
+        "id": "flatBar",
+        "type": "layer",
+        "x": "14.0pt",
+        "y": "75.25pt",
+        "w": "7pt",
+        "h": "1.5pt",
+        "bgColor": "#9AA0A6|#8E939B",
+        "hide": "$[if::(eq::(${flat},1),0,1)]"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${flat},1),0,if::(gt::(length::(${up}),0),1,0))]"
+        },
+        "react": [
+          {
+            "id": "chg",
+            "type": "txt",
+            "x": "26.0pt",
+            "y": "72pt",
+            "w": "148pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "${chgTxt} ${@i18n.vs}",
+            "fontSize": "11pt",
+            "typeface": "System-Bold",
+            "textColor": "$[if::(eq::(${flat},1),#9AA0A6,if::(eq::(findNotEmpty::(${up},__none__),__none__),#9AA0A6,if::(eq::(${up},1),if::(eq::(${up},1),#1FC77D,#FF5C4D),if::(eq::(${up},0),if::(eq::(${up},1),#1FC77D,#FF5C4D),#9AA0A6))))]"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${flat},1)]"
+        },
+        "react": [
+          {
+            "id": "chgFlat",
+            "type": "txt",
+            "x": "26.0pt",
+            "y": "72pt",
+            "w": "148pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "${@i18n.flatMsg}",
+            "fontSize": "11pt",
+            "typeface": "System-Bold",
+            "textColor": "$[if::(eq::(${flat},1),#9AA0A6,if::(eq::(findNotEmpty::(${up},__none__),__none__),#9AA0A6,if::(eq::(${up},1),if::(eq::(${up},1),#1FC77D,#FF5C4D),if::(eq::(${up},0),if::(eq::(${up},1),#1FC77D,#FF5C4D),#9AA0A6))))]"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${nd},0),1),0,1)]"
+        },
+        "react": [
+          {
+            "id": "sparkAxis",
+            "type": "line",
+            "points": "[0,47.0,150.0,47.0]",
+            "lineWidth": "1pt",
+            "strokeColor": "#1A0E1116|#1AF3F4F6",
+            "x": "174pt",
+            "y": "26pt",
+            "w": "150.0pt",
+            "h": "48.0pt"
+          },
+          {
+            "id": "spark",
+            "type": "line",
+            "points": "[${pts}]",
+            "lineWidth": "1.8pt",
+            "lineCap": "round",
+            "lineJoin": "round",
+            "strokeColor": "#1A73E8|#8AB4F8",
+            "coverageColor": "linear(#4A1A73E8\\,#001A73E8)@90|linear(#4A8AB4F8\\,#008AB4F8)@90",
+            "x": "174pt",
+            "y": "26pt",
+            "w": "150.0pt",
+            "h": "48.0pt",
+            "_note": "折线本体 + coverageColor 渐变面积。coverageColor 与 bgColor 走同一个 paint 构建器,所以面积可以是渐变、不必是平涂;它也能脱离可见描边单独存在(水印卡就是这么用的)。"
+          },
+          {
+            "id": "sparkHalo",
+            "type": "line",
+            "points": "[143.99,$[findNotEmpty::(${lastY},-99)],144.0,$[findNotEmpty::(${lastY},-99)]]",
+            "lineWidth": "12.0pt",
+            "lineCap": "round",
+            "strokeColor": "#2E1A73E8|#2E8AB4F8",
+            "x": "174pt",
+            "y": "26pt",
+            "w": "150.0pt",
+            "h": "48.0pt"
+          },
+          {
+            "id": "sparkRing",
+            "type": "line",
+            "points": "[143.99,$[findNotEmpty::(${lastY},-99)],144.0,$[findNotEmpty::(${lastY},-99)]]",
+            "lineWidth": "7.9pt",
+            "lineCap": "round",
+            "strokeColor": "#FFFFFF|#15171A",
+            "x": "174pt",
+            "y": "26pt",
+            "w": "150.0pt",
+            "h": "48.0pt"
+          },
+          {
+            "id": "sparkDot",
+            "type": "line",
+            "points": "[143.99,$[findNotEmpty::(${lastY},-99)],144.0,$[findNotEmpty::(${lastY},-99)]]",
+            "lineWidth": "5.3pt",
+            "lineCap": "round",
+            "strokeColor": "#1A73E8|#8AB4F8",
+            "x": "174pt",
+            "y": "26pt",
+            "w": "150.0pt",
+            "h": "48.0pt"
+          }
+        ]
+      },
+      {
+        "_note": "折线的窗口标签。**必须写出「截至 3 天前」**:traffic.df 的窗口是 `dFrom=now-31d ~ dTo=now-3d`(Search Console 数据本身滞后 2–3 天,窗口没错),但卡上只写「近 28 天」会被读成「到今天为止」—— 用户按这个数字判断「昨天发的那篇有没有量」就必然判错。窗口是事实,不说出来就是数据在骗人。",
+        "id": "win",
+        "type": "txt",
+        "x": "174pt",
+        "y": "77pt",
+        "w": "150.0pt",
+        "h": "-1",
+        "alignmentH": "2",
+        "maxLines": "1",
+        "text": "${@i18n.win}",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "hide": "$[if::(eq::(if::(eq::(findNotEmpty::(${hasSite},0),1),if::(eq::(findNotEmpty::(${ok},0),1),1,0),0),1),0,2)]"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${hasSite},__none__),__none__),1,0)]"
+        },
+        "react": [
+          {
+            "id": "stN",
+            "type": "txt",
+            "x": "14.0pt",
+            "y": "73pt",
+            "w": "160pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "${@i18n.unbound}",
+            "fontSize": "10.5pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${hasSite},0),1),if::(eq::(findNotEmpty::(${ok},0),1),0,1),0)]"
+        },
+        "react": [
+          {
+            "id": "stF",
+            "type": "txt",
+            "x": "14.0pt",
+            "y": "73pt",
+            "w": "160pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "${@i18n.failed}",
+            "fontSize": "10.5pt",
+            "textColor": "#6B7280|#8E939B"
+          }
+        ]
+      },
+      {
+        "id": "tl0",
+        "type": "layer",
+        "x": "14.0pt",
+        "y": "92pt",
+        "w": "99.33333333333333pt",
+        "h": "52pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "tk0",
+        "type": "txt",
+        "x": "24.0pt",
+        "y": "103pt",
+        "w": "79.33333333333333pt",
+        "h": "-1",
+        "maxLines": "1",
+        "text": "${@i18n.imps}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${impsS},--)),--),0,1)]"
+        },
+        "react": [
+          {
+            "id": "tv0",
+            "type": "txt",
+            "x": "24.0pt",
+            "y": "118pt",
+            "w": "79.33333333333333pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "$[if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${impsS},--))]",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${impsS},--)),--),1,0)]"
+        },
+        "react": [
+          {
+            "id": "tv0E",
+            "type": "txt",
+            "x": "24.0pt",
+            "y": "124pt",
+            "w": "79.33333333333333pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "--",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          }
+        ]
+      },
+      {
+        "id": "tl1",
+        "type": "layer",
+        "x": "119.33333333333333pt",
+        "y": "92pt",
+        "w": "99.33333333333333pt",
+        "h": "52pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "tk1",
+        "type": "txt",
+        "x": "129.33333333333331pt",
+        "y": "103pt",
+        "w": "79.33333333333333pt",
+        "h": "-1",
+        "maxLines": "1",
+        "text": "${@i18n.ctr}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${ctrTxt},--)),--),0,1)]"
+        },
+        "react": [
+          {
+            "id": "tv1",
+            "type": "txt",
+            "x": "129.33333333333331pt",
+            "y": "118pt",
+            "w": "79.33333333333333pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "$[if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${ctrTxt},--))]",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${ctrTxt},--)),--),1,0)]"
+        },
+        "react": [
+          {
+            "id": "tv1E",
+            "type": "txt",
+            "x": "129.33333333333331pt",
+            "y": "124pt",
+            "w": "79.33333333333333pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "--",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          }
+        ]
+      },
+      {
+        "id": "tl2",
+        "type": "layer",
+        "x": "224.66666666666666pt",
+        "y": "92pt",
+        "w": "99.33333333333333pt",
+        "h": "52pt",
+        "bgColor": "#E7E9EE|#20232A",
+        "cornerRadius": {
+          "leftT": "12pt",
+          "leftB": "12pt",
+          "rightT": "12pt",
+          "rightB": "12pt"
+        }
+      },
+      {
+        "id": "tk2",
+        "type": "txt",
+        "x": "234.66666666666666pt",
+        "y": "103pt",
+        "w": "79.33333333333333pt",
+        "h": "-1",
+        "maxLines": "1",
+        "text": "${@i18n.pos}",
+        "fontSize": "10.5pt",
+        "textColor": "#6B7280|#8E939B"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${pos},--)),--),0,1)]"
+        },
+        "react": [
+          {
+            "id": "tv2",
+            "type": "txt",
+            "x": "234.66666666666666pt",
+            "y": "118pt",
+            "w": "79.33333333333333pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "$[if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${pos},--))]",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(if::(eq::(findNotEmpty::(${nd},0),1),--,findNotEmpty::(${pos},--)),--),1,0)]"
+        },
+        "react": [
+          {
+            "id": "tv2E",
+            "type": "txt",
+            "x": "234.66666666666666pt",
+            "y": "124pt",
+            "w": "79.33333333333333pt",
+            "h": "-1",
+            "maxLines": "1",
+            "text": "--",
+            "fontSize": "20pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "clicks": "点击",
+        "imps": "曝光",
+        "pos": "平均排名",
+        "ctr": "点击率",
+        "win": "近 28 天 · 截至 3 天前",
+        "vs": "较前 14 天",
+        "flatMsg": "与前 14 天基本持平",
+        "noSite": "点按选择站点",
+        "err": "暂时取不到",
+        "noData": "还没有搜索数据",
+        "noDataS": "新验证的站点通常 2–3 天后开始有数据",
+        "unbound": "还没连接 Google 账号",
+        "failed": "暂时取不到数据",
+        "fnT": "搜索表现",
+        "nbsp": " "
+      },
+      "en-US": {
+        "clicks": "Clicks",
+        "imps": "Impressions",
+        "pos": "Avg. position",
+        "ctr": "CTR",
+        "win": "Last 28 days · ending 3 days ago",
+        "vs": "vs prev 14 days",
+        "flatMsg": "Flat vs prev 14 days",
+        "noSite": "Pick a site",
+        "err": "Unavailable",
+        "noData": "No search data yet",
+        "noDataS": "Newly verified sites usually get data in 2–3 days",
+        "unbound": "Google not linked",
+        "failed": "Couldn't get data right now",
+        "fnT": "Search performance",
+        "nbsp": " "
+      }
+    }
+  }
+}

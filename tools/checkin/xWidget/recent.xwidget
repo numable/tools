@@ -1,0 +1,55 @@
+{
+  "version": 2,
+  "title": "近 30 天",
+  "sub": "一件事 · 近 30 天打了几天",
+  "i18n": {
+    "en-US": {
+      "title": "Last 30 days",
+      "sub": "One habit · days checked in the last 30"
+    }
+  },
+  "layout": 22,
+  "params": {
+    "itemId": "",
+    "mask": "0"
+  },
+  "ai": {
+    "shows": "一件事项近 30 天里打了几天,附今天是否达标",
+    "params": {
+      "itemId": {
+        "kind": "user",
+        "hint": "用户的一件打卡事项 id;留空时组件显示「选择事项」,装上后长按「编辑参数」挑一件"
+      },
+      "mask": {
+        "kind": "enum",
+        "values": {
+          "0": "正常显示",
+          "1": "打码:数字与格子隐去,只在 App 内能看"
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "numable://self/page/item?id=${itemId}",
+    "onEdit": "/edit?cur=${itemId}"
+  },
+  "canvas": {
+    "source": "@[file://rc/recent.rcn]",
+    "depends": [
+      {
+        "_note": "§D 纯显式：裸 `@[file://…df]` 字符串绑定**传空入参** —— flow 里的 ${itemId} 取到空、键落成 `stat_`、卡片渲一片 `--` 且**不报错**（流仍 success）。要把 widget params 喂给 flow，必须在绑定处显式写 {flow, params}（标准 §9.5 / lint G12c）。",
+        "flow": "@[file://flow/days.df]",
+        "params": {
+          "itemId": "${itemId}",
+          "mask": "${mask}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "3600"
+      ]
+    }
+  },
+  "_note": "⚠️ `itemId` 指明这张卡跟着**哪件事** —— 长按卡「编辑参数」可改（onEdit → /edit，updateParams 回写）。\n卡上的名字与图标取自事项本身(flow 透出的 iname / icon,事项改名卡片自动跟上),没有改名参数(`alias` 只有 trend 读,2026-10-06 从其余卡删掉)；`mask`=1 把数值渲成 ••，给「旁人瞟一眼」这条次要防线。"
+}

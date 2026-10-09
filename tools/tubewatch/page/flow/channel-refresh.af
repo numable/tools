@@ -1,0 +1,40 @@
+{
+  "_note": "下拉刷新 = 穿透缓存真取数。只删**当前这一个**对象的键 —— 别的对象的缓存与这次下拉无关,\n顺手清空等于让下次切过去又干等一次网络。\n⚠️ 键读 `.df` 写下的 `c.tw.ch._cur`,**不在这里重算** —— 判据抄两份就会有一天「删的键」和「渲的键」\n不是同一个,那时下拉会安静地刷不动(日志还全绿),正是 [[widget-refresh-idle-cache]] 那次的形状。\n⚠️ `onRefresh` 一旦声明就完全接管下拉,容器不再自动 reloadPage —— 那句必须自己写,漏了就永远刷不动。\n(tubewatch channel 详情页版:_cur 由 channel.df 的 wrap(--state c.tw.ch)写下,删它指的键再重载。)",
+  "version": 1,
+  "actions": [
+    {
+      "id": "curKey",
+      "action": "data.get",
+      "params": {
+        "key": "c.tw.ch._cur",
+        "default": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "${curKey}"
+      }
+    },
+    {
+      "_note": "空键 = .df 还没跑完过一次(那时盘上也没有缓存),不删也照样是真取数,直接落到下面的 reloadPage。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${k}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "${k}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "无条件重载:上面删没删键都要刷。",
+      "action": "xpage.reloadPage"
+    }
+  ]
+}

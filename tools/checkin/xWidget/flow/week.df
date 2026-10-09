@@ -1,0 +1,449 @@
+{
+  "_note": "**本周节奏(42)** —— 近 7 天,每天跨所有事项达标了几件。入参 {mask}。\n浓淡分四档而不是画变高的柱:RCN 的 `{}` 布局表达式里混不进 `${}` 数据变量,\n柱高只能在 df 里拼布局串,没有先例。四档色与 days.df 同构(用乘法比较代替除法,\n避开 calc 跨端返回类型不一的坑)。\n⚠️ 最后一格恒是**今天** —— 日期由卡片用 @time.nowMs 现算,不从盘上读。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "入参先落地成 data 域的键(§9.5 #3),再由 resultFilter 透出去 —— **RCN 只看得见 flow 的输出**,shell params 不进渲染域。`mask` 决定卡上打不打码(打码开关在事项页,经 pickWidgets 的 per-item params 传进来)。",
+      "op": "set",
+      "props": {
+        "key": "mask",
+        "value": "${mask}"
+      }
+    },
+    {
+      "_note": "跨事项聚合的真源 agg={total,byDay},由页面 JS 的 computeAgg() 落盘。",
+      "id": "agg",
+      "action": "data.get",
+      "params": {
+        "key": "agg",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "total",
+        "value": "$[findNotEmpty::(${agg.total},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "byDay",
+        "value": "${agg.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(formatDate::(${nowMs},yyyy-MM-dd),yyyy-MM-dd)]"
+      },
+      "_note": "按自然日归零再相减 —— 直接拿 nowMs 减 86400000,同一天的上午/下午会算出不同的「昨天」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0",
+        "value": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#EDEEF0|#20232A)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p1",
+        "value": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#7ABEA0|#3A896C)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p2",
+        "value": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#54AE86|#40A880)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p3",
+        "value": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#2E9E6B|#45C793)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0",
+        "value": "$[formatDate::(calc::(${todayMs}-518400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v0",
+        "value": "$[findNotEmpty::(get::(${byDay},${k0}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[if::(eq::(${v0},0),${e0},if::(ge::(calc::(${v0}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v0}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d0",
+        "value": "$[formatDate::(calc::(${todayMs}-518400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1",
+        "value": "$[formatDate::(calc::(${todayMs}-432000000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v1",
+        "value": "$[findNotEmpty::(get::(${byDay},${k1}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[if::(eq::(${v1},0),${e0},if::(ge::(calc::(${v1}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v1}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d1",
+        "value": "$[formatDate::(calc::(${todayMs}-432000000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2",
+        "value": "$[formatDate::(calc::(${todayMs}-345600000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v2",
+        "value": "$[findNotEmpty::(get::(${byDay},${k2}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "$[if::(eq::(${v2},0),${e0},if::(ge::(calc::(${v2}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v2}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d2",
+        "value": "$[formatDate::(calc::(${todayMs}-345600000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3",
+        "value": "$[formatDate::(calc::(${todayMs}-259200000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v3",
+        "value": "$[findNotEmpty::(get::(${byDay},${k3}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "$[if::(eq::(${v3},0),${e0},if::(ge::(calc::(${v3}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v3}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d3",
+        "value": "$[formatDate::(calc::(${todayMs}-259200000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4",
+        "value": "$[formatDate::(calc::(${todayMs}-172800000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v4",
+        "value": "$[findNotEmpty::(get::(${byDay},${k4}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c4",
+        "value": "$[if::(eq::(${v4},0),${e0},if::(ge::(calc::(${v4}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v4}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d4",
+        "value": "$[formatDate::(calc::(${todayMs}-172800000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5",
+        "value": "$[formatDate::(calc::(${todayMs}-86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v5",
+        "value": "$[findNotEmpty::(get::(${byDay},${k5}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c5",
+        "value": "$[if::(eq::(${v5},0),${e0},if::(ge::(calc::(${v5}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v5}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d5",
+        "value": "$[formatDate::(calc::(${todayMs}-86400000),dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k6",
+        "value": "$[formatDate::(${todayMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v6",
+        "value": "$[findNotEmpty::(get::(${byDay},${k6}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c6",
+        "value": "$[if::(eq::(${v6},0),${e0},if::(ge::(calc::(${v6}*4),calc::(${total}*3)),${p3},if::(ge::(calc::(${v6}*2),${total}),${p2},${p1})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d6",
+        "value": "$[formatDate::(${todayMs},dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayKey",
+        "value": "$[formatDate::(${todayMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "doneToday",
+        "value": "$[findNotEmpty::(get::(${byDay},${todayKey}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_MON",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "_note": "日期锚(标准 §4.4)。轴上那七个标只有**日号**(dd),跨月时「01」到底是这个月还是上个月读不出来;而桌面小组件的封面缓存 key 不含时间维度,整张卡停在上周也不报错。故在副标行右端补一段 MM-dd → MM-dd 的窗口。",
+      "op": "set",
+      "props": {
+        "key": "wStart",
+        "value": "$[formatDate::(calc::(${todayMs}-518400000),MM-dd)]"
+      }
+    },
+    {
+      "_note": "「wStart」按语言出:中文 9月25日 / 英文 Sep 25(doc/overseas-first.md §5,英文不再出现 09-25)。",
+      "op": "set",
+      "props": {
+        "key": "_m_wStart",
+        "value": "$[parseNumber::(formatDate::(calc::(${todayMs}-518400000),MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d_wStart",
+        "value": "$[parseNumber::(formatDate::(calc::(${todayMs}-518400000),dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wStart",
+        "value": "${_m_wStart}月${_d_wStart}日"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_e_wStart",
+            "value": "$[index::(${_MON},calc::(${_m_wStart}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wStart",
+            "value": "${_e_wStart} ${_d_wStart}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wEnd",
+        "value": "$[formatDate::(${todayMs},MM-dd)]"
+      }
+    },
+    {
+      "_note": "「wEnd」按语言出:中文 9月25日 / 英文 Sep 25(doc/overseas-first.md §5,英文不再出现 09-25)。",
+      "op": "set",
+      "props": {
+        "key": "_m_wEnd",
+        "value": "$[parseNumber::(formatDate::(${todayMs},MM),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_d_wEnd",
+        "value": "$[parseNumber::(formatDate::(${todayMs},dd),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wEnd",
+        "value": "${_m_wEnd}月${_d_wEnd}日"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(startsWith::(${@app.language},zh),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_e_wEnd",
+            "value": "$[index::(${_MON},calc::(${_m_wEnd}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wEnd",
+            "value": "${_e_wEnd} ${_d_wEnd}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "时效锚(card-design-system §3,MM-dd 不本地化),给 week21 用;week 42 仍用 wStart – wEnd 窗口。",
+      "op": "set",
+      "props": {
+        "key": "atLbl",
+        "value": "$[formatDate::(${todayMs},MM-dd)]"
+      }
+    },
+    {
+      "_note": "只透出 RCN 读的键(G44):入参注入(@i18n/@app)与中间量(agg/nowMs/k*/v*/e0/p*)不进渲染域、不落盘。2026-09-13。",
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "atLbl",
+          "c0",
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "d0",
+          "d1",
+          "d2",
+          "d3",
+          "d4",
+          "d5",
+          "d6",
+          "doneToday",
+          "mask",
+          "total",
+          "wEnd",
+          "wStart"
+        ]
+      }
+    }
+  ]
+}

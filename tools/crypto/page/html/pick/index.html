@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<!--
+  加密货币 · 组件换币(路由 /pick,各 `.xwidget` 的 events.onEdit)。由 gen_crypto_h5.py 从 crypto_h5/pick.html 生成 —— 改产物无效。
+  两种形态,由 query 的 `ref` 决定:
+    · 缺省 = 单币组件(coin / detail / deriv / kday / kmid):点一个就 updateParams({pair,name}),当前项高亮;
+    · ref=top = 五币组件:最多 5 个,增删即写 p1…p5 / n1…n5(不足五个循环补齐 —— .df 的槽数是静态的,空槽会打空请求)。
+    · ref=k = K 线组件(kday / kmid):单币之外多一排周期分段(1 小时 / 4 小时 / 日 / 周),写回 `step`(秒)。
+  ⚠️ 没有 brickId(宿主通过 query 注入)就什么都不写:updateParams 会静默失败,而用户以为改好了。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pick a coin</title>
+<style>
+/* ── cx kit(crypto 四页共用,由 tools/infosource/gen_crypto_h5.py 注入,别在产物里手改) ── */
+/* hidden 属性必须压过一切 display —— 否则 `.subseg{display:flex}` 这类规则让 `el.hidden=true` 失效(首页「最高 / 最低」曾因此漏到别的 tab 上点不动)。 */
+[hidden]{display:none!important}
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--faint:#9AA0A6;--line:#E4E7EC;
+  --tile:#EEF0F3;--rail:#D6DAE1;--ident:#3A3F47;--src:#F0972A;--srcSoft:rgba(240,151,42,.14);
+  --up:#FF5C4D;--dn:#1FC77D;--grey:#9AA0A6;
+  --upBg:rgba(255,92,77,.13);--dnBg:rgba(31,199,125,.13);
+  --accent:#128F66;--accentSoft:rgba(18,143,102,.12);
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--faint:#5E636B;
+  --line:#262A31;--tile:#20232A;--rail:#2C313A;--ident:#9BA3AF;--src:#FFB454;--srcSoft:rgba(255,180,84,.16);
+  --upBg:rgba(255,92,77,.17);--dnBg:rgba(31,199,125,.17);--accent:#6FE8BE;--accentSoft:rgba(111,232,190,.14);
+  --shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* clip 不建滚动容器:hidden 会让 body 成为滚动容器、页内 sticky 全部失效(§0.2d);hidden 留给不认 clip 的老 WebView 兜底 */
+html,body{overflow-x:hidden;overflow-x:clip}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;
+  padding:calc(var(--xb-content-top) + 14px) 14px calc(var(--xb-content-bottom) + 28px)}
+input,select,textarea{font-size:16px}
+button{font:inherit;color:inherit}
+.hd{display:flex;align-items:center;gap:8px;min-height:32px}
+.hd h1{font-size:22px;margin:0;letter-spacing:-.3px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 时效锚(home / coin 页头右上角的 `.xb-at` 胶囊):样式 / 实时绿点 / 转圈全在 xb:anchor 块
+   (tools/infosource/mk_anchor.py,gen_crypto_h5 只给有锚的页注入),本包只管给它时间。 */
+.card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:14px}
+.sec{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);font-weight:700;margin:22px 2px 9px;letter-spacing:.2px}
+.sec .grow{flex:1 1 auto;min-width:0}
+.sec small{font-weight:500;font-size:11px}
+.seg{display:inline-flex;background:var(--tile);border-radius:9px;padding:2px;gap:2px;flex:0 0 auto}
+.seg button{font-size:11.5px;font-weight:600;border:0;background:none;color:var(--sub);cursor:pointer;padding:4px 9px;border-radius:7px;white-space:nowrap}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(15,20,30,.12)}
+html[data-theme="dark"] .seg button.on{background:var(--rail);box-shadow:none}
+.pill{display:inline-block;font-size:12.5px;font-weight:700;padding:3px 8px;border-radius:8px;min-width:64px;text-align:center}
+.av{position:relative;flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--srcSoft);color:var(--src);
+  font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:var(--card)}
+.state{color:var(--sub);font-size:13px;padding:20px 12px;text-align:center}
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.7}
+.sk{display:block;border-radius:6px;background:var(--tile)}
+@keyframes skv{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.skv{animation:skv 1.4s linear infinite}
+@media (prefers-reduced-motion:reduce){.skv{animation:none}}
+.up{color:var(--cu)}.dn{color:var(--cd)}
+/* 2026-09-30 删掉了「价格一跳就铺一层涨跌底色」的 flashU/flashD:2 秒轮询下 BTC 几乎每轮都在跳,
+   详情页的大价格与首页每一行就每 2 秒闪一次底色 —— 用户看到的是「页面在闪」,不是「价格在动」。
+   方向已经由价格字色 + 涨跌胶囊表达,不需要第三遍(同 v55「实时轮询页不许整块闪」一条纪律)。 */
+.toast{position:fixed;left:50%;bottom:calc(var(--xb-content-bottom) + 24px);transform:translateX(-50%);background:rgba(20,22,26,.9);
+  color:#fff;font-size:13px;padding:8px 14px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:90;max-width:80%}
+.toast.on{opacity:1}
+.hit{display:flex;align-items:center;gap:10px;padding:9px 12px;min-height:54px;cursor:pointer}
+.hit+.hit{border-top:1px solid var(--line)}
+.g{flex:1 1 auto;min-width:0}
+.g b{display:block;font-size:15px;font-weight:750}
+.g b small{font-size:11px;color:var(--sub);font-weight:600;margin-left:4px}
+.g .m{display:block;font-size:11.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{flex:0 0 auto;font-size:11.5px;font-weight:700;color:var(--accent);background:var(--accentSoft);border-radius:8px;padding:4px 8px}
+.ib{flex:0 0 auto;width:32px;height:32px;border:0;border-radius:9px;background:var(--tile);color:var(--sub);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.btn{flex:0 0 auto;min-width:58px;height:30px;padding:0 10px;border:0;border-radius:9px;background:var(--accentSoft);color:var(--accent);font-weight:700;font-size:12.5px;cursor:pointer}
+.btn.on{background:var(--tile);color:var(--sub)}
+.sbox{position:sticky;top:var(--xb-bar-bottom,0px);z-index:4;background:var(--bg);margin:0 -14px;padding:8px 14px}
+.sbox input{width:100%;height:40px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);padding:0 12px;outline:none}
+.list{padding:2px 0;overflow:hidden}
+#per{display:flex;width:100%}
+#per button{flex:1;padding:7px 0;font-size:13px}
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.hit,.xb-tap{position:relative}
+.hit::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.hit:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.ib,.btn,.seg button:not(.on),.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.ib:active,.btn:active,.seg button:not(.on):active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+</head>
+<body>
+  <div class="hd"><h1 id="ttl"></h1></div>
+  <div class="lede" id="sub" style="color:var(--sub);font-size:12.5px;margin-top:2px"></div>
+  <div id="perw" hidden><div class="sec"><span class="grow" data-i="per"></span></div><span class="seg" id="per"></span></div>
+  <div class="sec"><span class="grow" data-i="cur"></span><small id="cnt"></small></div>
+  <div class="card list" id="sel"></div>
+  <div class="sec"><span class="grow" data-i="all"></span><small id="hint"></small></div>
+  <div class="sbox"><input id="q" type="search" autocomplete="off" spellcheck="false"></div>
+  <div class="card list" id="hits"></div>
+  <div class="toast" id="toast"></div>
+<script>
+/* ── cx kit(crypto 四页共用,由 tools/infosource/gen_crypto_h5.py 注入,别在产物里手改) ──
+   数据全部来自 OKX 公开接口,经 page/flow/okx.df 原样取回(CSP connect-src 'none',页面不能直连)。 */
+var LANG="en", RED=false, KIT_I18N={
+ zh:{notX:"当前不在 Numable 中打开，无法取数",fail:"更新失败，显示的是上次的数据",failCold:"取不到行情。行情服务在你所在的地区可能不可用，点右上角重试",
+  wan:"万",yi:"亿",wanyi:"万亿",now:"刚刚",secAgo:"%s 秒前",minAgo:"%s 分钟前"},
+ en:{notX:"Open this inside Numable to load data",fail:"Update failed — showing the last data",failCold:"Can't load quotes. Market data may not be available in your region. Tap the time to retry",
+  now:"just now",secAgo:"%ss ago",minAgo:"%sm ago"}};
+var I18N={zh:{},en:{}};
+function i18n(o){ for(var l in o){ I18N[l]=I18N[l]||{}; for(var k in o[l]) I18N[l][k]=o[l][k]; } }
+i18n(KIT_I18N);
+function t(k,a){ var s=I18N[LANG]&&I18N[LANG][k]; if(s==null) s=I18N.en[k]; if(s==null) s=k;
+  if(a!=null) s=String(s).replace("%s",a); return s; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function $(id){ return document.getElementById(id); }
+/* 内容没变就不重写:轮询页每轮都会重画一遍按钮 / tab,按下与抬起之间元素被换掉,这一下点击就丢了。 */
+function setHTML(el,h){ if(el&&el.__h!==h){ el.innerHTML=h; el.__h=h; } }
+
+async function ready(){ for(var i=0;i<30&&!window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+  return !!window.xbridge; }
+/* G49:call 型方法回的是信封 {code,msg,data},一律经它拆。 */
+async function call(p){ var r=await p; if(!r||r.code!==0) throw new Error((r&&r.msg)||"bridge"); return r.data; }
+async function sGet(k){ try{ var v=await call(xbridge.getData(k)); return (v==null||v==="")?null:String(v); }catch(e){ return null; } }
+async function sGetJ(k){ var v=await sGet(k); if(v==null) return null; try{ return JSON.parse(v); }catch(e){ return null; } }
+function sSet(k,v){ try{ xbridge.setData(k, typeof v==="string"?v:JSON.stringify(v)); }catch(e){} }
+var _tm; function toast(m){ var el=$("toast"); if(!el){ try{ xbridge.toast(m); }catch(e){} return; }
+  el.textContent=m; el.classList.add("on"); clearTimeout(_tm); _tm=setTimeout(function(){ el.classList.remove("on"); },1700); }
+function haptic(k){ try{ xbridge.haptic(k||"selection"); }catch(e){} }
+function go(path){ try{ xbridge.route("numable://self/page"+path); }catch(e){} }
+
+/* 语言 / 主题:容器在 <html> 上打 data-lang / data-theme,切换时派发事件、不重载页面。
+   appInfo 只作老宿主兜底(⚠️ 必须 await,同步读拿到的是 Promise)。 */
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 涨跌色(overseas-first §4):宿主给了 upColor(App 设置「涨跌颜色」)就照它,没给(老宿主)再回落语言。 */
+var ENV={};
+function redUp(){ return ENV.upColor ? ENV.upColor==="red" : LANG==="zh"; }
+function applyPolarity(){ var s=document.documentElement.style, zh=RED=redUp();
+  s.setProperty("--cu", zh?"var(--up)":"var(--dn)"); s.setProperty("--cd", zh?"var(--dn)":"var(--up)");
+  s.setProperty("--cuBg", zh?"var(--upBg)":"var(--dnBg)"); s.setProperty("--cdBg", zh?"var(--dnBg)":"var(--upBg)"); }
+async function bootEnv(onChange){
+  var de=document.documentElement, d={};
+  if(window.xbridge){ try{ d=(await call(xbridge.appInfo()))||{}; }catch(e){} }
+  ENV=d||{};
+  if(!de.getAttribute("data-theme") && d.theme) de.setAttribute("data-theme", d.theme==="dark"?"dark":"light");
+  /* 先认宿主 documentStart 写好的 data-lang,再 appInfo;都没有 = 英文(只有 zh* 是中文,overseas-first §2)。 */
+  LANG=nbLang(de.getAttribute("data-lang")||d.language||d.locale);
+  de.lang=LANG==="zh"?"zh-CN":"en"; applyPolarity();
+  addEventListener("languagechange",function(e){ LANG=nbLang((e&&e.detail&&e.detail.language)||de.getAttribute("data-lang"));
+    de.lang=LANG==="zh"?"zh-CN":"en"; applyPolarity(); onChange&&onChange("lang"); });
+  addEventListener("themechange",function(){ onChange&&onChange("theme"); });
+}
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function upC(){ return cssVar(RED?"--up":"--dn"); }
+function dnC(){ return cssVar(RED?"--dn":"--up"); }
+
+/* ── 取数 ── */
+async function okxOnly(path, to){
+  var d=await call(xbridge.runDataFlow("okx",{p:path},to||15000));
+  var j=null; try{ j=JSON.parse(String(d&&d.raw||"")); }catch(e){}
+  if(!j||String(j.code)!=="0") throw new Error("okx "+(j?j.code+" "+j.msg:"parse")+" · "+path.split("?")[0]);
+  return j.data||[];
+}
+/* OKX 取不到(美国等地区受其政策限制 / 超时)→ 备用源 Coinbase Exchange(doc/overseas-first.md §10)。
+   只兜现货 ticker、全市场 SPOT 行情与 K 线(1m/5m/15m/1H/1D 原生,4H 由 1H、1W 由 1D 按 UTC 聚合);
+   合约数据(资金费率 / 持仓 / 多空比 / 盘口 / 逐笔)没有可比的备用源,照旧失败。返回值换成 OKX 的形状,页面无感。 */
+async function okx(path, to){
+  try{ return await okxOnly(path, to); }
+  catch(e){ var fb=null; try{ fb=await cbFallback(path, to); }catch(e2){} if(fb) return fb; throw e; }
+}
+function cbProd(inst){ return String(inst||"").replace(/-SWAP$/,"").replace(/-(USDT|USDC)$/,"-USD"); }
+async function cbRaw(p, to){ var d=await call(xbridge.runDataFlow("cb",{p:p},to||15000)); return JSON.parse(String(d&&d.raw||"null")); }
+function qsOf(path){ var o={}; (String(path).split("?")[1]||"").split("&").forEach(function(kv){ var i=kv.indexOf("=");
+  if(i>0) o[kv.slice(0,i)]=decodeURIComponent(kv.slice(i+1)); }); return o; }
+function cbTicker(inst, s){ var l=num(s.last), v=num(s.volume);
+  return {instId:inst, last:s.last, open24h:s.open, high24h:s.high, low24h:s.low, vol24h:s.volume,
+    volCcy24h:isSwap(inst)?s.volume:String((v||0)*(l||0)), ts:String(Date.now())}; }
+var CB_G={"1m":60,"5m":300,"15m":900,"1H":3600,"4H":3600,"1D":86400,"1Dutc":86400,"1Wutc":86400};
+async function cbFallback(path, to){
+  var api=String(path).split("?")[0], q=qsOf(path);
+  if(api==="market/ticker"&&q.instId){
+    var s=await cbRaw(cbProd(q.instId)+"/stats",to); if(!s||s.last==null) return null; return [cbTicker(q.instId,s)]; }
+  if(api==="market/tickers"&&q.instType==="SPOT"){
+    var all=await cbRaw("stats",to), out=[]; if(!all||typeof all!=="object") return null;
+    Object.keys(all).forEach(function(k){ var m=/^(.+)-USD$/.exec(k), st=all[k]&&all[k].stats_24hour;
+      if(m&&st&&st.last!=null) out.push(cbTicker(m[1]+"-USDT",st)); });
+    return out.length?out:null; }
+  if(api==="market/candles"&&q.instId){
+    if(q.after) return [];                    /* 往前翻页:备用源不翻,显示到哪是哪 */
+    var bar=q.bar||"1H", g=CB_G[bar]; if(!g) return null;
+    var rows=await cbRaw(cbProd(q.instId)+"/candles?granularity="+g,to); if(!Array.isArray(rows)||!rows.length) return null;
+    /* Coinbase 行 = [秒, 低, 高, 开, 收, 量],新的在前 → OKX 行 = [毫秒, 开, 高, 低, 收, 量, 额, 额, confirm] */
+    var b=rows.map(function(r){ return {t:r[0]*1000,o:+r[3],h:+r[2],l:+r[1],c:+r[4],v:+r[5]}; });
+    var span=bar==="4H"?144e5:(bar==="1Wutc"?6048e5:0);
+    if(span){ var agg=[], cur=null;
+      b.slice().reverse().forEach(function(x){
+        var k=bar==="4H" ? x.t-x.t%span : x.t-(((Math.floor(x.t/864e5)+3)%7)*864e5);   /* 周 = UTC 周一 */
+        if(!cur||cur.t!==k){ cur={t:k,o:x.o,h:x.h,l:x.l,c:x.c,v:x.v}; agg.push(cur); }
+        else { cur.h=Math.max(cur.h,x.h); cur.l=Math.min(cur.l,x.l); cur.c=x.c; cur.v+=x.v; } });
+      b=agg.reverse(); }
+    var lim=parseInt(q.limit,10)||300;
+    return b.slice(0,lim).map(function(x,i){ var a=String(x.v*x.c);
+      return [String(x.t),String(x.o),String(x.h),String(x.l),String(x.c),String(x.v),a,a,i?"1":"0"]; }); }
+  return null;
+}
+async function rawFlow(flow, to){
+  var d=await call(xbridge.runDataFlow(flow,{},to||15000));
+  return JSON.parse(String(d&&d.raw||"null"));
+}
+/* G23 首屏缓存:存的是**解析后的精简模型**(不是原始响应),s = 结构版本,对不上当没有。 */
+var SCHEMA=2;
+async function cacheGet(k){ var o=await sGetJ(k); return (o&&o.s===SCHEMA&&o.t&&o.d)?o:null; }
+function cachePut(k,d){ sSet(k,{s:SCHEMA,t:Date.now(),d:d}); }
+
+/* 可见才轮询:隐藏时不打网络;离开本页(压栈进详情)后降频到 60 秒,
+   回来时靠 visibilitychange / focus / pageshow / 任何一次触摸恢复原速 ——
+   有的宿主在栈底页上不派发可见性事件,那就退到「慢慢刷」,而不是一直全速或永远停住。 */
+function Poller(fn, ms){
+  var timer=null, busy=false, away=false, base=ms;
+  async function tick(force){ if(busy) return; if(!force&&document.visibilityState==="hidden") return;
+    busy=true; try{ await fn(force); }catch(e){} busy=false; }
+  function arm(){ if(timer) clearInterval(timer); timer=setInterval(tick, away?Math.max(60000,base):base); }
+  function back(){ if(away){ away=false; arm(); tick(); } }
+  document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible"){ back(); tick(); } });
+  addEventListener("focus",back); addEventListener("pageshow",back);
+  document.addEventListener("pointerdown",back,true);
+  return {start:function(){ arm(); }, tick:tick, leave:function(){ away=true; arm(); },
+          setMs:function(m){ base=m; arm(); }};
+}
+
+/* ── 格式化 ── */
+function num(v){ var n=parseFloat(v); return isFinite(n)?n:null; }
+function pxDp(p){ var a=Math.abs(p); if(a>=1000) return 1; if(a>=100) return 2; if(a>=1) return 3;
+  if(a>=0.1) return 4; if(a>=0.01) return 5; if(a>=0.001) return 6; if(a>=0.0001) return 7; return 9; }
+function grp(n,dp){ return n.toLocaleString("en-US",{minimumFractionDigits:dp,maximumFractionDigits:dp}); }
+/* 价格按量级给小数位:BTC 84,012.4、SOL 142.37、DOGE 0.15321、PEPE 0.0000091 —— 一个固定 2 位会把山寨币全抹成 0.00。 */
+function fpx(v,dp){ var n=num(v); if(n===null) return "--"; return grp(n, dp==null?pxDp(n):dp); }
+function signed(v,dp,unit){ var n=num(v); if(n===null) return "--";
+  return (n>0?"+":n<0?"−":"")+Math.abs(n).toFixed(dp)+(unit||""); }
+function pct(v,dp){ return signed(v,dp==null?2:dp,"%"); }
+/* 大数:中文收成「万 / 亿 / 万亿」,英文按千进制 K/M/B/T(⚠️ 不能直译:1 亿 = 100M)。 */
+function big(v,cur){ var n=num(v); if(n===null) return "--"; var a=Math.abs(n), s=n<0?"−":"", c=cur||"";
+  if(LANG!=="zh"){ if(a>=1e12) return s+c+(a/1e12).toFixed(2)+"T"; if(a>=1e9) return s+c+(a/1e9).toFixed(2)+"B";
+    if(a>=1e6) return s+c+(a/1e6).toFixed(2)+"M"; if(a>=1e3) return s+c+(a/1e3).toFixed(1)+"K"; return s+c+a.toFixed(a<10?2:0); }
+  if(a>=1e12) return s+c+(a/1e12).toFixed(2)+t("wanyi"); if(a>=1e8) return s+c+(a/1e8).toFixed(2)+t("yi");
+  if(a>=1e4) return s+c+(a/1e4).toFixed(a>=1e6?0:1)+t("wan"); return s+c+a.toFixed(a<10?2:0); }
+function cls(v){ var n=num(v); if(n===null||Math.abs(n)<0.005) return ""; return n>0?"up":"dn"; }
+function pillStyle(v){ var n=num(v); if(n===null||Math.abs(n)<0.005) return "background:var(--tile);color:var(--sub)";
+  return n>0?"background:var(--cuBg);color:var(--cu)":"background:var(--cdBg);color:var(--cd)"; }
+function hhmm(ms){ var d=new Date(+ms); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
+function hhmmss(ms){ var d=new Date(+ms); return hhmm(ms)+":"+("0"+d.getSeconds()).slice(-2); }
+var MON_EN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+/* 月日(overseas-first §5):中文「10月1日」、英文「Oct 1」。utc=true 按 UTC 日历日(日 / 周 K 的 ts 是 UTC 零点)。 */
+function mdOf(mo,dd){ return LANG==="zh" ? (mo+1)+"月"+dd+"日" : MON_EN[mo]+" "+dd; }
+function mmdd(ms,utc){ var d=new Date(+ms); return utc ? mdOf(d.getUTCMonth(),d.getUTCDate()) : mdOf(d.getMonth(),d.getDate()); }
+function ymd(ms,utc){ var d=new Date(+ms), y=utc?d.getUTCFullYear():d.getFullYear();
+  return LANG==="zh" ? y+"年"+mmdd(ms,utc) : mmdd(ms,utc)+", "+y; }
+function ago(ms){ var s=Math.max(0,Math.round((Date.now()-ms)/1000)); if(s<5) return t("now");
+  if(s<60) return t("secAgo",s); return t("minAgo",Math.round(s/60)); }
+
+/* ── 币对 ── */
+/* 老版本(Bitstamp)写下的是 `btcusd` 这种形状;OKX 是 `BTC-USDT`。两种都认,USD 一律落到 USDT。 */
+function normInst(p){ p=String(p||"").trim(); if(!p) return ""; if(p.indexOf("-")>=0) return p.toUpperCase();
+  var s=p.toLowerCase(), q="USDT", b=s, m;
+  if((m=/^(.+?)(usdt|usdc)$/.exec(s))){ b=m[1]; q=m[2].toUpperCase(); }
+  else if((m=/^(.+?)usd$/.exec(s))){ b=m[1]; }
+  else if((m=/^(.+?)(eur|btc|eth)$/.exec(s))){ b=m[1]; q=m[2].toUpperCase(); }
+  return b.toUpperCase()+"-"+q; }
+/* 稳定币不进涨跌 / 成交额榜与「热门」:USDC 永远 ±0.01%,却能排进成交额第二,占掉一个真正在动的币的位置。 */
+var STABLE=/^(USDC|USDT|DAI|FDUSD|TUSD|USDG|PYUSD|USDE|RLUSD|EURC|USD1|USDS|FRAX|BUSD|USDP|USDD|USTC|GUSD|LUSD|SUSD|CRVUSD|USDX|USDB)$/;
+function isStable(id){ return STABLE.test(baseOf(id)); }
+function baseOf(id){ return String(id||"").split("-")[0]; }
+function quoteOf(id){ return String(id||"").split("-")[1]||"USDT"; }
+function isSwap(id){ return /-SWAP$/.test(id); }
+function spotOf(id){ return isSwap(id)?id.replace(/-SWAP$/,""):id; }
+function swapOf(id){ return isSwap(id)?id:(baseOf(id)+"-"+(quoteOf(id)==="USDC"?"USDC":"USDT")+"-SWAP"); }
+/* 头像 = 字母兜底 + OKX 币种图标叠加(取不到 onerror 自摘、字母仍在)。图标域 = www.okx.com,已在 manifest.network(img-src 由它拼出)。 */
+function avEl(id,sz){ var b=baseOf(id), st=sz?' style="width:'+sz+'px;height:'+sz+'px"':"";
+  return '<span class="av"'+st+'>'+esc(b.charAt(0))+'<img loading="lazy" alt="" src="https://www.okx.com/cdn/oksupport/asset/currency/icon/'+
+    esc(b.toLowerCase())+'.png" onerror="this.remove()"></span>'; }
+
+/* ── 自选 ── */
+/* 真源 = data.wl(JSON 数组,OKX instId,≤30)。另镜像到老槽位 w.p1…w.p8 / w.n* / w.total / w.ids ——
+   `top`、`heat` 两个组件的取数流按槽位读(.df 没有数组迭代),不镜像它们就停在旧自选上。 */
+var WL_MAX=30, WL_DEF=["BTC-USDT","ETH-USDT","SOL-USDT","XRP-USDT","DOGE-USDT","ADA-USDT"];
+async function wlLoad(){
+  var a=await sGetJ("wl"), out=[];
+  if(!(Array.isArray(a)&&a.length)){
+    a=[]; var n=parseInt(await sGet("w.total"),10)||0;
+    for(var i=1;i<=Math.min(6,n||6);i++){ var p=await sGet("w.p"+i); if(p) a.push(p); }
+    if(!a.length) a=WL_DEF.slice();
+  }
+  a.forEach(function(x){ x=normInst(x); if(x&&out.indexOf(x)<0) out.push(x); });
+  return out.slice(0,WL_MAX);
+}
+function wlSave(a){
+  sSet("wl",JSON.stringify(a));
+  var n=a.length||1;
+  for(var i=0;i<8;i++){ var id=a[i]||a[i%n]||"BTC-USDT"; sSet("w.p"+(i+1),id); sSet("w.n"+(i+1),baseOf(id)); }
+  sSet("w.total",String(a.length)); sSet("w.ids",a.join(","));
+  try{ xbridge.refreshWidget(); }catch(e){}
+}
+
+/* ── 可选币对全集(管理页 / 换币页的搜索用)── 现货 USDT 优先,只有永续的币补进来;按 24h 成交额排序。
+   存 c.cx.uni(精简成 [id, 成交额, 最新价, 24h%]),6 小时内直接用 —— 搜索框不该每开一次就拉 170KB。 */
+async function loadUniverse(force){
+  var c=await cacheGet("c.cx.uni");
+  if(c&&!force&&Date.now()-c.t<6*3600e3) return c.d;
+  try{
+    var r=await Promise.all([okx("market/tickers?instType=SPOT",20000), okx("market/tickers?instType=SWAP",20000).catch(function(){ return []; })]);
+    var seen={}, out=[];
+    r[0].forEach(function(x){ if(!/-USDT$/.test(x.instId)) return; var l=num(x.last), o=num(x.open24h);
+      seen[baseOf(x.instId)]=1; out.push([x.instId, Math.round(num(x.volCcy24h)||0), l, (l!=null&&o)?+((l-o)/o*100).toFixed(2):null]); });
+    r[1].forEach(function(x){ if(!/-USDT-SWAP$/.test(x.instId)||seen[baseOf(x.instId)]) return; var l=num(x.last), o=num(x.open24h);
+      out.push([x.instId, Math.round((num(x.volCcy24h)||0)*(l||0)), l, (l!=null&&o)?+((l-o)/o*100).toFixed(2):null]); });
+    out.sort(function(a,b){ return b[1]-a[1]; });
+    cachePut("c.cx.uni",out); return out;
+  }catch(e){ return c?c.d:[]; }
+}
+/* 搜索:符号前缀命中排最前,其次包含;空关键词 = 成交额前 40(「热门」)。 */
+function searchUni(uni,kw){
+  kw=String(kw||"").trim().toUpperCase().replace(/[\s\/]/g,"").replace(/-?USDT?$/,"");
+  if(!kw) return uni.filter(function(u){ return !isStable(u[0]); }).slice(0,40);
+  var a=[],b=[]; uni.forEach(function(u){ var s=baseOf(u[0]); if(s.indexOf(kw)===0) a.push(u); else if(s.indexOf(kw)>0) b.push(u); });
+  return a.concat(b).slice(0,60);
+}
+(function(){
+i18n({zh:{t1:"换一个币",t5:"选择五个币",s1:"点一下即生效，组件会马上重新取数",s5:"最多 5 个，增删即生效",cur:"当前",all:"全部币种",
+   hot:"按 24h 成交额",found:"%s 个结果",ph:"搜索币种，如 BTC、SOL、PEPE",none:"没有找到这个币",on:"使用中",add:"添加",
+   done:"已更新组件",per:"K 线周期",p3600:"1 小时",p14400:"4 小时",p86400:"日",p604800:"周",full:"最多 5 个",last:"至少留一个",noBrick:"请从组件的「编辑」打开这一页",perp:"永续",vol:"额 %s"},
+ en:{t1:"Change coin",t5:"Pick five coins",s1:"Tap one — the widget refreshes right away",s5:"Up to 5; changes apply instantly",cur:"Current",all:"All coins",
+   hot:"by 24h volume",found:"%s results",ph:"Search coins, e.g. BTC, SOL, PEPE",none:"No coin matches",on:"In use",add:"Add",
+   done:"Widget updated",per:"Candle interval",p3600:"1H",p14400:"4H",p86400:"1D",p604800:"1W",full:"Up to 5",last:"Keep at least one",noBrick:"Open this page from the widget's Edit",perp:"Perp",vol:"Vol %s"}});
+var STEPS=["3600","14400","86400","604800"];
+var Q=new URLSearchParams(location.search), FIVE=Q.get("ref")==="top", KL=Q.get("ref")==="k",
+    STEP=STEPS.indexOf(String(Q.get("step")))>=0?String(Q.get("step")):"86400", brickId=String(Q.get("brickId")||""), SEL=[], UNI=[], IDX={};
+if(FIVE){ for(var i=1;i<=5;i++){ var p=normInst(Q.get("p"+i)); if(p&&SEL.indexOf(p)<0) SEL.push(p); } }
+else { var p0=normInst(Q.get("pair")); if(p0) SEL=[p0]; }
+var X='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+function meta(id){ var u=IDX[id]; if(!u) return esc(id); return fpx(u[2])+' · <span class="'+cls(u[3])+'">'+pct(u[3])+'</span> · '+esc(t("vol",big(u[1],"$"))); }
+function name(id){ return esc(baseOf(id))+'<small>'+esc(isSwap(id)?t("perp"):"/"+quoteOf(id))+'</small>'; }
+async function commit(){
+  if(!(window.xbridge&&brickId)){ toast(t("noBrick")); return false; }
+  var p={};
+  if(FIVE){ for(var i=0;i<5;i++){ var id=SEL[i]||SEL[i%SEL.length]; p["p"+(i+1)]=id; p["n"+(i+1)]=baseOf(id); } }
+  else { p.pair=SEL[0]; p.name=baseOf(SEL[0]); if(KL) p.step=STEP; }
+  try{ await call(xbridge.updateParams(brickId,p)); try{ await call(xbridge.refreshWidget()); }catch(e){} toast(t("done")); haptic("success"); return true; }
+  catch(e){ toast(t("noBrick")); return false; }
+}
+function paint(){
+  document.querySelectorAll("[data-i]").forEach(function(e){ e.textContent=t(e.getAttribute("data-i")); });
+  $("ttl").textContent=t(FIVE?"t5":"t1"); $("sub").textContent=t(FIVE?"s5":"s1"); $("q").placeholder=t("ph");
+  $("cnt").textContent=FIVE?SEL.length+" / 5":"";
+  $("perw").hidden=!KL;
+  if(KL) $("per").innerHTML=STEPS.map(function(v){ return '<button data-step="'+v+'" class="'+(v===STEP?"on":"")+'">'+esc(t("p"+v))+'</button>'; }).join("");
+  $("sel").innerHTML=SEL.map(function(id,i){ return '<div class="hit">'+avEl(id)+'<div class="g"><b>'+name(id)+'</b><span class="m">'+meta(id)+'</span></div>'+
+    (FIVE?'<button class="ib" data-del="'+i+'">'+X+'</button>':'<span class="tag">'+esc(t("on"))+'</span>')+'</div>'; }).join("")||'<div class="state">--</div>';
+  var kw=$("q").value, a=searchUni(UNI,kw); $("hint").textContent=kw.trim()?t("found",a.length):t("hot");
+  if(!UNI.length){ $("hits").innerHTML='<div class="state">'+esc(window.xbridge?t("failCold"):t("notX"))+'</div>'; return; }
+  $("hits").innerHTML=a.length?a.map(function(u){ var on=SEL.indexOf(u[0])>=0;
+    return '<div class="hit" data-pick="'+esc(u[0])+'">'+avEl(u[0])+'<div class="g"><b>'+name(u[0])+'</b><span class="m">'+meta(u[0])+'</span></div>'+
+      (on?'<span class="tag">'+esc(t("on"))+'</span>':(FIVE?'<button class="btn">'+esc(t("add"))+'</button>':''))+'</div>'; }).join(""):'<div class="state">'+esc(t("none"))+'</div>';
+}
+document.addEventListener("click",function(e){
+  var st=e.target.closest("[data-step]"); if(st){ var v=st.getAttribute("data-step"); if(v!==STEP){ STEP=v; commit(); paint(); } return; }
+  var d=e.target.closest("[data-del]"), pk=e.target.closest("[data-pick]");
+  if(d){ if(SEL.length<=1){ toast(t("last")); return; } SEL.splice(+d.getAttribute("data-del"),1); commit(); paint(); return; }
+  if(pk){ var id=pk.getAttribute("data-pick");
+    if(FIVE){ if(SEL.indexOf(id)>=0) return; if(SEL.length>=5){ toast(t("full")); return; } SEL.push(id); }
+    else { if(SEL[0]===id) return; SEL=[id]; }
+    commit(); paint(); }
+});
+$("q").addEventListener("input",paint);
+(async function(){
+  var has=await ready(); await bootEnv(paint); paint(); if(!has) return;
+  UNI=await loadUniverse(); UNI.forEach(function(u){ IDX[u[0]]=u; }); paint();
+})();
+})();
+</script>
+</body></html>

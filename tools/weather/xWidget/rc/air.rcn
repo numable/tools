@@ -1,0 +1,420 @@
+{
+  "_note": "空气质量(22)。US AQI 仪表弧(240°,300 封顶,颜色随六档变)+ 等级词 + PM2.5/PM10。底色与另外几张卡同一套天空(v64 起;此前是中性浅卡,在一组天空卡里像另一个包),等级颜色只由仪表弧承担、字一律白。生成器 gen_weather_more.py。",
+  "rc": {
+    "cells": [
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_sky",
+          "value": "$[findNotEmpty::(${sky},overcast)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},clear)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#2F7FC4\\,#6FB4E0\\,#A9D2EC)@90|linear(#1F5C90\\,#487F9E\\,#6E9AB0)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},overcast)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#6B7E8E\\,#93A5B2\\,#B9C6CF)@90|linear(#4A5763\\,#6A7783\\,#8A96A0)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},rain)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#3E5A73\\,#5C7B93\\,#89A3B5)@90|linear(#2A3F52\\,#42596C\\,#647D8C)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},snow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#7C93A8\\,#A8BCCB\\,#D6E3EC)@90|linear(#586A7A\\,#7B8D9B\\,#9FB0BC)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},night)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "linear(#101A2E\\,#1C2A44\\,#33465F)@90|linear(#0A1220\\,#141F33\\,#25344A)@90"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_decor",
+          "value": "$[if::(eq::(${_sky},clear),glow,if::(eq::(${_sky},overcast),fog,none))]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_decor},glow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "radial(#8CFFFFFF\\,#00FFFFFF)@0.8\\,0.16\\,0.6|radial(#66FFFFFF\\,#00FFFFFF)@0.8\\,0.16\\,0.6"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_decor},fog)]"
+        },
+        "react": [
+          {
+            "_note": "⚠️ 雾必须是**一层柔光**,不能是「一条 16pt 高、装着横向渐变的 layer」。\n那种写法横向是渐变(两端透明)、**纵向却是硬边**,于是渲出来是一道齐刷刷的白杠 ——\n用户 2026-08-21 真机反馈的「顶部和小组件有白色横条」就是它,而且因为阴天档最常见,\n页头与四张卡会同时出现。radial 四周都柔,没有任何一条边可以被读成线。\n落点定在偏上(cy=0.34):底部有 DIM 压暗层,雾放下面会被压没。",
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "radial(#2BFFFFFF\\,#00FFFFFF)@0.5\\,0.34\\,0.78|radial(#1EFFFFFF\\,#00FFFFFF)@0.5\\,0.34\\,0.78"
+          }
+        ]
+      },
+      {
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#00000000\\,#4D000000)@90|linear(#00000000\\,#59000000)@90"
+      },
+      {
+        "id": "srcDot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#7FC4F5|#7FC4F5"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-69pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${city},--)]",
+        "fontSize": "13pt",
+        "textColor": "#FFFFFF|#FFFFFF",
+        "maxLines": "1",
+        "typeface": "System-Bold"
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-52pt",
+        "y": "14pt",
+        "w": "40pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${at},--)]",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1",
+        "alignmentH": "2"
+      },
+      {
+        "id": "aqArcBg",
+        "type": "arc",
+        "x": "0pt+31pt",
+        "y": "36pt",
+        "w": "96pt",
+        "h": "96pt",
+        "startAngle": "150",
+        "sweepAngle": "240",
+        "useCenter": "0",
+        "lineWidth": "9pt",
+        "lineCap": "round",
+        "strokeColor": "#33FFFFFF|#29FFFFFF"
+      },
+      {
+        "id": "aqArc",
+        "type": "arc",
+        "x": "0pt+31pt",
+        "y": "36pt",
+        "w": "96pt",
+        "h": "96pt",
+        "startAngle": "150",
+        "sweepAngle": "$[findNotEmpty::(${sw},0)]",
+        "useCenter": "0",
+        "lineWidth": "9pt",
+        "lineCap": "round",
+        "strokeColor": "$[findNotEmpty::(${aqC},#9AA0A6)]"
+      },
+      {
+        "id": "aqV",
+        "type": "txt",
+        "x": "0pt+31pt",
+        "y": "62pt",
+        "w": "96pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${aqi},--)]",
+        "fontSize": "26pt",
+        "textColor": "#FFFFFF|#FFFFFF",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "alignmentH": "1"
+      },
+      {
+        "id": "aqU",
+        "type": "txt",
+        "x": "0pt+31pt",
+        "y": "94pt",
+        "w": "96pt",
+        "h": "-1",
+        "text": "US AQI",
+        "fontSize": "8.5pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1",
+        "alignmentH": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${lv},0),1)]"
+        },
+        "react": [
+          {
+            "id": "aqL0",
+            "type": "txt",
+            "x": "0pt+12pt",
+            "y": "118pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_aq1}",
+            "fontSize": "12pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${lv},0),2)]"
+        },
+        "react": [
+          {
+            "id": "aqL1",
+            "type": "txt",
+            "x": "0pt+12pt",
+            "y": "118pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_aq2}",
+            "fontSize": "12pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${lv},0),3)]"
+        },
+        "react": [
+          {
+            "id": "aqL2",
+            "type": "txt",
+            "x": "0pt+12pt",
+            "y": "118pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_aq3}",
+            "fontSize": "12pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${lv},0),4)]"
+        },
+        "react": [
+          {
+            "id": "aqL3",
+            "type": "txt",
+            "x": "0pt+12pt",
+            "y": "118pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_aq4}",
+            "fontSize": "12pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${lv},0),5)]"
+        },
+        "react": [
+          {
+            "id": "aqL4",
+            "type": "txt",
+            "x": "0pt+12pt",
+            "y": "118pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_aq5}",
+            "fontSize": "12pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(findNotEmpty::(${lv},0),6)]"
+        },
+        "react": [
+          {
+            "id": "aqL5",
+            "type": "txt",
+            "x": "0pt+12pt",
+            "y": "118pt",
+            "w": "134pt",
+            "h": "-1",
+            "text": "${@i18n.w_aq6}",
+            "fontSize": "12pt",
+            "textColor": "#FFFFFF|#FFFFFF",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "alignmentH": "1"
+          }
+        ]
+      },
+      {
+        "id": "aqPm",
+        "type": "txt",
+        "x": "0pt+12pt",
+        "y": "136pt",
+        "w": "134pt",
+        "h": "-1",
+        "text": "${@i18n.w_pm25} $[findNotEmpty::(${pm25},--)] · ${@i18n.w_pm10} $[findNotEmpty::(${pm10},--)]",
+        "fontSize": "9pt",
+        "textColor": "#B3FFFFFF|#A6FFFFFF",
+        "maxLines": "1",
+        "alignmentH": "1"
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "w_pm25": "PM2.5",
+        "w_pm10": "PM10",
+        "w_aq1": "优",
+        "w_aq2": "良",
+        "w_aq3": "轻度污染",
+        "w_aq4": "中度污染",
+        "w_aq5": "重度污染",
+        "w_aq6": "严重污染"
+      },
+      "en-US": {
+        "w_pm25": "PM2.5",
+        "w_pm10": "PM10",
+        "w_aq1": "Good",
+        "w_aq2": "Moderate",
+        "w_aq3": "Sensitive",
+        "w_aq4": "Unhealthy",
+        "w_aq5": "Very unhealthy",
+        "w_aq6": "Hazardous"
+      }
+    }
+  }
+}

@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Story</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --accent:#128F66;--accentStrong:#128F66;--skeleton:#E4E7EC}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--accentStrong:#6FE8BE;--skeleton:#15171A}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,16px) 14px var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+.brand{font-size:10px;font-weight:700;letter-spacing:.6px;color:var(--accentStrong);margin-bottom:10px}
+h1{font-size:21px;line-height:1.35;margin:0 0 14px;letter-spacing:-.2px}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.chip{font-size:12px;color:var(--sub);border:1px solid var(--line);border-radius:7px;padding:3px 8px;
+  background:var(--card);font-variant-numeric:tabular-nums}
+.chip b{color:var(--fg);font-weight:600}
+a.btn{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+  margin-bottom:10px;text-decoration:none;color:var(--fg)}
+a.btn .t{display:block;font-size:15px;font-weight:600}
+a.btn .d{font-size:12px;color:var(--sub);margin-top:2px;word-break:break-all}
+a.btn .arrow{color:var(--sub);flex:0 0 auto;font-size:18px}
+a.btn.primary{border-color:var(--accent)}
+.body{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;
+  margin-bottom:14px;font-size:14px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
+.state{color:var(--sub);text-align:center;margin-top:56px;font-size:14px;line-height:1.9}
+.retry{display:inline-block;margin-top:12px;border:1px solid var(--line);background:var(--card);
+  color:var(--fg);border-radius:16px;padding:7px 18px;font-size:13px;cursor:pointer}
+.sk{background:var(--card);border:1px solid var(--line);border-radius:12px;height:18px;margin-bottom:10px;}
+.sk.w70{width:70%} .sk.w45{width:45%} .sk.tall{height:56px;border-radius:14px}
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.7}
+/* 评论区:每条正文默认收到 5 行,超出才出「展开」;回复默认折叠。 */
+.sec{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:22px 0 10px}
+.sec b{font-size:15px;font-weight:700}
+.sec span{font-size:11.5px;color:var(--sub)}
+.cm{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:8px}
+.cm .who{display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--sub);margin-bottom:4px}
+.cm .who b{color:var(--fg);font-weight:600;font-size:12.5px}
+.cm .tx{font-size:14px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.cm .tx.clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}
+.cm .rp .tx.clamp{-webkit-line-clamp:4}
+.cm .acts{display:flex;gap:16px;margin-top:6px}
+.lk{font-size:12.5px;color:var(--accentStrong);font-weight:600;background:none;border:0;padding:4px 0;cursor:pointer;
+  font-family:inherit;text-decoration:none}
+.lk[hidden]{display:none}
+/* 双态文案同时在 DOM 里、靠 .on 切显示:切换只改 class,不动文本节点 ——
+   本页的 xbMotion 只盯 childList,文本一变就会把整页当「换了数据」淡入一次。 */
+.lk .c{display:none}.lk.on .o{display:none}.lk.on .c{display:inline}
+.cm .rps{margin-top:8px;border-left:2px solid var(--line);padding-left:12px}
+.cm .rp{padding:6px 0}
+.cm .rp+.rp{border-top:1px solid var(--line)}
+.more{display:block;width:100%;text-align:center;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:14px;padding:11px 0;font-size:13.5px;font-weight:600;margin:4px 0 14px;cursor:pointer;font-family:inherit}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+a.btn,.xb-tap{position:relative}
+a.btn::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+a.btn:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.sk,.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .sk,.xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#root";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+</head>
+<body>
+  <div id="root"></div>
+<script>
+var I18N = {
+  zh: { brand:"HACKER NEWS", pts:"分", cmt:"条评论", by:"作者",
+        read:"阅读原文", readD:"在应用内打开来源页面",
+        discuss:"在 HN 上讨论", discussD:"news.ycombinator.com",
+        failed:"加载失败，请稍后重试", retry:"重试", noId:"缺少帖子 id",
+        foot:"链接将在应用内打开。内容版权归原作者所有。",
+        cmts:"评论", cmtsHint:"按回复数排序", expand:"展开", collapse:"收起",
+        replies:"条回复", hideReplies:"收起回复", moreN:"再看 {n} 条评论",
+        onHn:"在 HN 上看这条", allOnHn:"在 HN 上看全部 {n} 条评论", allOnHn0:"在 HN 上看全部评论",
+        justNow:"刚刚", minAgo:"分钟前", hrAgo:"小时前", dayAgo:"天前" },
+  en: { brand:"HACKER NEWS", pts:"points", cmt:"comments", by:"by",
+        read:"Read the article", readD:"Opens the source page in-app",
+        discuss:"Discuss on HN", discussD:"news.ycombinator.com",
+        failed:"Couldn't load this story", retry:"Retry", noId:"Missing story id",
+        foot:"Links open in-app. Content belongs to its authors.",
+        cmts:"Comments", cmtsHint:"Sorted by replies", expand:"More", collapse:"Less",
+        replies:"replies", hideReplies:"Hide replies", moreN:"Show {n} more",
+        onHn:"View on HN", allOnHn:"All {n} comments on HN", allOnHn0:"All comments on HN",
+        justNow:"just now", minAgo:"m ago", hrAgo:"h ago", dayAgo:"d ago" }
+};
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。 */
+var LANG = nbLang(document.documentElement.getAttribute("data-lang"));
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键回落;缺键回落英文 */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"})[c]; }); }
+function applyTheme(th){ var d = th ? th==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", d?"dark":"light"); }
+function hostOf(u){ try { return new URL(u).host.replace(/^www\./,""); } catch(e){ return u || ""; } }
+/* 帖子正文(Ask/Show HN 的 text):HN 允许的富文本只有 p/i/a/pre 几种,这里统一降成纯文本段落 ——
+   剥标签 → 解实体 → 再 esc 渲染,API 里混进什么都注入不了(本页有桥,不能 innerHTML 直贴)。 */
+function bodyHtml(raw){
+  if (raw == null) return "";
+  var s = String(raw);
+  if (!s || s === "null" || s === "undefined") return "";
+  s = s.replace(/<\s*p[^>]*>/gi,"\n\n").replace(/<\s*br[^>]*\/?>/gi,"\n").replace(/<[^>]+>/g,"");
+  var ta = document.createElement("textarea"); ta.innerHTML = s; s = ta.value;
+  s = s.replace(/\n{3,}/g,"\n\n").trim();
+  return s ? '<div class="body">'+esc(s)+'</div>' : "";
+}
+function qs(k){ return new URLSearchParams(location.search).get(k); }
+/* HN 评论正文同 bodyHtml:剥标签 → 解实体 → 纯文本,渲染时再 esc。 */
+function plain(raw){
+  if (raw == null) return "";
+  var s = String(raw);
+  if (!s || s === "null" || s === "undefined") return "";
+  s = s.replace(/<\s*p[^>]*>/gi,"\n\n").replace(/<\s*br[^>]*\/?>/gi,"\n").replace(/<[^>]+>/g,"");
+  var ta = document.createElement("textarea"); ta.innerHTML = s; s = ta.value;
+  return s.replace(/\n{3,}/g,"\n\n").trim();
+}
+function ok(v){ return v != null && v !== "" && v !== "null" && v !== "undefined"; }
+function ago(at){
+  var s = Number(at); if (!s) return "";
+  var d = Math.max(0, Date.now()/1000 - s);
+  if (d < 60) return t("justNow");
+  if (d < 3600) return Math.floor(d/60) + (LANG==="zh"?" ":"") + t("minAgo");
+  if (d < 86400) return Math.floor(d/3600) + (LANG==="zh"?" ":"") + t("hrAgo");
+  return Math.floor(d/86400) + (LANG==="zh"?" ":"") + t("dayAgo");
+}
+/* 评论:流给的是按时间排的前 20 条顶层评论(越界/已删除的项作者或正文为空,滤掉),
+   这里按直接回复数重排作热度近似(同数保持时间序)。 */
+function pickComments(raw){
+  if (!Array.isArray(raw)) return [];
+  var out = [];
+  raw.forEach(function(c, i){
+    if (!c || !ok(c.a)) return;
+    var tx = plain(c.t); if (!tx) return;
+    var rs = (Array.isArray(c.r) ? c.r : []).filter(function(r){ return r && ok(r.a) && plain(r.t); });
+    out.push({ i:i, id: ok(c.id) ? String(c.id) : "", a:String(c.a), t:tx, at:c.at, n:Number(c.n)||rs.length, r:rs });
+  });
+  out.sort(function(x,y){ return (y.n - x.n) || (x.i - y.i); });
+  return out;
+}
+/* 展开状态跨重绘保留(三态缓存会先渲旧货、再原地替换成新数据,不能把用户点开的又合上)。 */
+var UI = { all:false, open:{}, reps:{} };
+var SHOW = 5;
+/* 折叠栏标题(container-model §0.2d):容器只认 DOMContentLoaded 之后改出来的 document.title,
+   解析期(含先渲缓存)的调用推迟到其后再写,否则会被记成「静态值」而不采用。 */
+var xbTitle=(function(){ var ok=document.readyState!=="loading", v="";
+  if(!ok) document.addEventListener("DOMContentLoaded",function(){ setTimeout(function(){ ok=true; if(v) document.title=v; },0); });
+  return function(s){ s=String(s==null?"":s).trim(); if(!s||s==="--"||s==="—") return; v=s; if(ok) document.title=s; }; })();
+function cmItem(c, k){
+  var key = c.id || ("i"+c.i);
+  var reps = "";
+  if (c.r.length){
+    var ro = !!UI.reps[key];
+    reps = '<div class="rps"'+(ro?"":" hidden")+'>'+c.r.map(function(r, j){
+      var rk = key+"-"+j;
+      return '<div class="rp"><div class="who"><b>'+esc(r.a)+'</b><span>'+esc(ago(r.at))+'</span></div>'+
+        '<div class="tx'+(UI.open[rk]?"":" clamp")+'" data-k="'+esc(rk)+'">'+esc(plain(r.t))+'</div>'+
+        '<div class="acts">'+dual('data-tg="'+esc(rk)+'" hidden', UI.open[rk], t("expand"), t("collapse"))+'</div></div>';
+    }).join("")+'</div>';
+  }
+  var acts = dual('data-tg="'+esc(key)+'" hidden', UI.open[key], t("expand"), t("collapse"));
+  if (c.r.length){
+    acts += dual('data-rp="'+esc(key)+'"', UI.reps[key], c.n + " " + t("replies"), t("hideReplies"));
+  }
+  if (c.id) acts += '<a class="lk" href="https://news.ycombinator.com/item?id='+encodeURIComponent(c.id)+'">'+t("onHn")+'</a>';
+  return '<div class="cm"'+(k >= SHOW && !UI.all ? " hidden" : "")+'>'+
+    '<div class="who"><b>'+esc(c.a)+'</b><span>'+esc(ago(c.at))+'</span></div>'+
+    '<div class="tx'+(UI.open[key]?"":" clamp")+'" data-k="'+esc(key)+'">'+esc(c.t)+'</div>'+
+    '<div class="acts">'+acts+'</div>'+reps+'</div>';
+}
+function dual(attrs, on, off, onTxt){
+  return '<button class="lk xb-press'+(on?" on":"")+'" '+attrs+'><span class="o">'+esc(off)+'</span><span class="c">'+esc(onTxt)+'</span></button>';
+}
+function commentsHtml(d){
+  var cs = pickComments(d.comments);
+  if (!cs.length) return "";
+  var h = '<div class="sec"><b>'+t("cmts")+'</b><span>'+t("cmtsHint")+'</span></div>' +
+    cs.map(cmItem).join("");
+  if (cs.length > SHOW)
+    h += '<button class="more xb-press" id="moreCm"'+(UI.all?" hidden":"")+'>'+t("moreN").replace("{n}", cs.length - SHOW)+'</button>';
+  return h;
+}
+/* 「展开」只在真被截断的正文上出现:渲完量一次 scrollHeight(收起态)决定显不显。 */
+function syncClamp(){
+  document.querySelectorAll(".cm .tx").forEach(function(el){
+    var b = el.parentNode.querySelector('.acts > [data-tg="'+CSS.escape(el.dataset.k)+'"]');
+    if (!b) return;
+    var open = !!UI.open[el.dataset.k];
+    b.hidden = !(open || el.scrollHeight > el.clientHeight + 2);
+  });
+}
+
+function skeleton(){
+  document.getElementById("root").innerHTML =
+    '<div class="brand">'+t("brand")+'</div>'+
+    '<div class="sk"></div><div class="sk w70"></div>'+
+    '<div class="sk w45" style="margin-bottom:20px"></div>'+
+    '<div class="sk tall"></div><div class="sk tall"></div>';
+}
+function failState(msg){
+  document.getElementById("root").innerHTML =
+    '<div class="state">'+esc(msg||t("failed"))+'<br><button class="retry" id="rt">'+t("retry")+'</button></div>';
+  var b = document.getElementById("rt"); if (b) b.addEventListener("click", load);
+}
+
+function render(d){
+  var chips = [];
+  if (d.points != null && d.points !== "") chips.push('<span class="chip"><b>'+esc(d.points)+'</b> '+t("pts")+'</span>');
+  /* 评论总数只认列表带过来的 c:流里的 nComments 只是顶层评论数(417 条的帖子只有 57 条顶层),写成「条评论」是错的。 */
+  var total = Number(qs("c"));
+  if (total > 0) chips.push('<span class="chip"><b>'+total+'</b> '+t("cmt")+'</span>');
+  if (d.author) chips.push('<span class="chip">'+t("by")+' <b>'+esc(d.author)+'</b></span>');
+  if (d.createdAt) chips.push('<span class="chip">'+esc(d.createdAt)+'</span>');
+  // 外链交给容器:H5 里的 <a href="https://…"> 会被当作「下一页」push 进容器栈
+  // （PageWebVC.openAsNextPage 的 http/https 分支），只展示、不注入桥。
+  var buttons = "", discuss = "";
+  if (d.url) {
+    buttons += '<a class="btn primary" href="'+esc(d.url)+'"><span><span class="t">'+t("read")+'</span>'+
+      '<span class="d">'+esc(hostOf(d.url))+'</span></span><span class="arrow">›</span></a>';
+  }
+  var cm = commentsHtml(d);
+  if (d.hnUrl) {
+    var label = cm ? (total > 0 ? t("allOnHn").replace("{n}", total) : t("allOnHn0")) : t("discuss");
+    discuss = '<a class="btn" href="'+esc(d.hnUrl)+'"><span><span class="t">'+label+'</span>'+
+      '<span class="d">'+t("discussD")+'</span></span><span class="arrow">›</span></a>';
+  }
+  xbTitle(d.title);
+  document.getElementById("root").innerHTML =
+    '<div class="brand">'+t("brand")+'</div>'+
+    '<h1>'+esc(d.title||"—")+'</h1>'+
+    '<div class="meta">'+chips.join("")+'</div>'+
+    bodyHtml(d.body) +
+    buttons + cm + discuss +
+    '<div class="foot">'+t("foot")+'</div>';
+  requestAnimationFrame(syncClamp);
+}
+document.addEventListener("click", function(e){
+  var el = e.target.closest && e.target.closest("[data-tg],[data-rp],#moreCm");
+  if (!el) return;
+  /* 只改 class / hidden 属性,不重绘(理由见 .lk .c 那段 CSS 注释)。 */
+  if (el.id === "moreCm"){
+    UI.all = true; el.hidden = true;
+    document.querySelectorAll(".cm[hidden]").forEach(function(c){ c.hidden = false; });
+  } else if (el.dataset.tg){
+    var k = el.dataset.tg, on = UI.open[k] = !UI.open[k];
+    el.classList.toggle("on", on);
+    var tx = document.querySelector('.tx[data-k="'+CSS.escape(k)+'"]');
+    if (tx) tx.classList.toggle("clamp", !on);
+    return;
+  } else {
+    var r = el.dataset.rp, ro = UI.reps[r] = !UI.reps[r];
+    el.classList.toggle("on", ro);
+    var box = el.closest(".cm").querySelector(".rps");
+    if (box) box.hidden = !ro;
+  }
+  syncClamp();   /* 刚露出来的正文此前 display:none、量出来是 0,露出后重量一次 */
+});
+
+/* ── G23 首屏缓存的页面侧三件套(doc/infosource-standard.md §5.5.6,与 home 页同构)──
+   ① `_cache` 开关:首屏走 .df 三态(命中即 3ms),force 穿透必打网络;
+   ② 骨架延迟 150ms:命中缓存整条链 3ms,先铺骨架再瞬换比不铺更糟;已有内容不铺(旧货比骨架强);
+   ③ 时间锚兼刷新入口:H5 拿不到容器下拉,穿透路径挂在「HH:MM ↻」上(契约 2+3)。 */
+async function fetchStory(id, useCache){
+  try{
+    var r = await xbridge.runDataFlow("story", { id: id, _cache: useCache?1:0 }, 12000);
+    return (r && r.code === 0) ? r.data : null;
+  }catch(e){ return null; }
+}
+function paintAt(d){
+  var el = document.getElementById("xbAt");
+  if (!el){
+    el = document.createElement("span"); el.id = "xbAt";
+    el.style.cssText = "position:absolute;top:14px;right:16px;font-size:12px;opacity:.55;cursor:pointer;"+
+                       "padding:6px 4px;margin:-6px -4px;-webkit-tap-highlight-color:transparent";
+    el.setAttribute("role","button");
+    el.addEventListener("click", function(){ load(true); });
+    document.body.appendChild(el);
+  }
+  /* 锚 = 取数那一刻(nowS 随 pack 进缓存,跟数据一起变旧)—— 帖子本身有 createdAt,别拿它当锚:那是发帖时间。 */
+  var s = d && d.nowS ? new Date(Number(d.nowS)*1000) : null;
+  el.textContent = s ? (("0"+s.getHours()).slice(-2)+":"+("0"+s.getMinutes()).slice(-2)+" ↻") : "";
+}
+var seq = 0, HAS = false;
+async function load(force){
+  var id = qs("id");
+  if (!id) return failState(t("noId"));
+  var my = ++seq, done = false;
+  setTimeout(function(){ if (!done && my===seq && !HAS) skeleton(); }, 150);
+  var d = await fetchStory(id, !force);
+  done = true;
+  if (my !== seq) return;
+  if (!d && !HAS) return failState(t("failed"));
+  if (d){ render(d); paintAt(d); HAS = true; }
+  /* 三态中间行:刚渲的是旧货 → 后台真取一次,回来原地替换 */
+  if (!force && d && String(d._stale) === "1"){
+    var f = await fetchStory(id, false);
+    if (my === seq && f){ render(f); paintAt(f); }
+  }
+}
+
+(async function boot(){
+  var d = await nbInfo();
+  applyTheme(d.theme);
+  LANG = nbLang(d.language || d.locale);
+  if (!window.xbridge) return failState(t("failed"));
+  load();
+})();
+</script>
+</body></html>

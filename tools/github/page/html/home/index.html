@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<!--
+  首页(路由 /)。v41「GitHub 待办」—— 等你动手的事,每一行都能点、点了就是去处理它。
+
+  一屏四段,按「需要我做什么」递减:
+    ① 等你 review    —— 别人在等你
+    ② 我的 PR         —— 状态标签:有冲突 / CI 未通过 / 需修改 / 可合并 / CI 运行中 / 草稿 / 等待 review
+    ③ 指派给你        —— issue
+    ④ 关注的仓库      —— 默认分支 CI + 最新版本;没设关注位时显示「你最近推送的仓库」
+
+  数据:page/flow/home.df 一条 GraphQL 取完(cost 1~2 点,配额 5000 点/小时),
+        套了 G23 三态缓存(键 = 凭证指纹 + 关注位签名),首屏先渲缓存、旧了后台校新。
+  凭证:manifest 里 gh 是 required。未绑 → 整页换成绑定引导;已过期 → 顶部横幅 + 照渲缓存。
+
+  ⚠️ 写盘恒补齐到 6 槽且真实项在前(空槽垫后):repos.df 按下标别名 r0..r5 查,空槽只让那个别名为 null。
+  ⚠️ 外链走 page/flow/open.af(nav.open),不走桥的 route —— 原生端 route 只认 numable://;只放行 https://github.com/ 前缀。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>GitHub Inbox</title>
+<style>
+/* 源色 = GitHub 贡献绿,只标「跟你有关」的那一层;其余中性色取 design-tokens.md §1「电光」。
+   状态色(红 / 琥珀 / 绿 / 蓝 / 紫)与组件里那套是同一组值,卡与页读起来是一个东西。 */
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;--tile:#E7E9EE;
+  --src:#2DA44E;--srcSoft:rgba(45,164,78,.11);--onSrc:#fff;
+  --red:#CF3A2F;--amber:#A86E00;--green:#1F883D;--blue:#2F6FDB;--purple:#8250DF;--grey:#6B7280;
+  --redS:rgba(207,58,47,.12);--amberS:rgba(168,110,0,.13);--greenS:rgba(31,136,61,.12);
+  --blueS:rgba(47,111,219,.12);--purpleS:rgba(130,80,223,.12);
+  --h0:#E7E9EE;--h1:#BFE6C9;--h2:#7FCE97;--h3:#3FA45E;--h4:#1A7F37;
+  --hair:transparent;--sh:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--tile:#20232A;--src:#3FB950;--srcSoft:rgba(63,185,80,.15);--onSrc:#0B0C0E;
+  --red:#F47067;--amber:#E0A93A;--green:#57C46B;--blue:#6CA4F8;--purple:#B58CF6;--grey:#8E939B;
+  --redS:rgba(244,112,103,.16);--amberS:rgba(224,169,58,.16);--greenS:rgba(87,196,107,.16);
+  --blueS:rgba(108,164,248,.16);--purpleS:rgba(181,140,246,.16);
+  --h0:#20232A;--h1:#12421F;--h2:#1D6E2C;--h3:#2EA043;--h4:#56D364;
+  --hair:rgba(255,255,255,.09);--sh:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.55 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC",sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+svg{display:block}
+.grp{background:var(--card);border-radius:14px;box-shadow:var(--sh);border:1px solid var(--hair);overflow:hidden}
+.hd{display:flex;align-items:center;gap:11px;margin-bottom:4px}
+.hd .grow{flex:1 1 auto;min-width:0}
+.ava{width:40px;height:40px;border-radius:14px;flex:0 0 auto;color:#fff;font-weight:700;font-size:17px;
+  display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
+  background:linear-gradient(140deg,#3FB950,#1A7F37)}
+.ava img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+h1{font-size:24px;margin:0;letter-spacing:-.6px;font-weight:700}
+.who{font-size:12.5px;color:var(--sub);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 段标题 = 左名字 + 右摘要/动作。⚠️ 不做 uppercase(只作用于英文,两个语言长成两种东西)。 */
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:22px 0 8px;
+  display:flex;align-items:center;gap:8px}
+.sec .n{font-weight:600;font-size:12px;color:var(--sub);background:var(--tile);border-radius:999px;
+  padding:0 7px;line-height:19px}
+.sec .n.hot{color:var(--onSrc);background:var(--src)}
+.sec .sp{flex:1}
+.sec button{border:0;background:transparent;color:var(--src);font-weight:700;font-size:13px;
+  cursor:pointer;padding:2px 4px}
+/* 右侧动作的字右缘对齐卡片右缘(按钮留着 4px 点按余量,用负边距抵掉) */
+.sec button:last-child{margin-right:-4px}
+/* 一行 = 一件可以去处理的事。整行可点(→ GitHub),故右侧补 ›(可点与不可点必须能区分)。 */
+.row{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;cursor:pointer}
+.row+.row{border-top:1px solid var(--line)}
+.row .grow{flex:1;min-width:0}
+.row b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  font-weight:600;font-size:14px;line-height:1.4;word-break:break-word}
+.row small{display:block;color:var(--sub);font-size:11.5px;margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* PR / 提交的附加信息(增删 · 评论 · 检查 · 评审 · 时间)最多两行:单行在 375 宽下把后半截全吃掉了 */
+.row small.meta{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.45}
+.row .go{flex:0 0 auto;font-style:normal;color:var(--sub);opacity:.5;font-size:15px;align-self:center}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;
+  margin-right:6px;vertical-align:1px;white-space:nowrap}
+.t-red{color:var(--red);background:var(--redS)}
+.t-amber{color:var(--amber);background:var(--amberS)}
+.t-green{color:var(--green);background:var(--greenS)}
+.t-blue{color:var(--blue);background:var(--blueS)}
+.t-purple{color:var(--purple);background:var(--purpleS)}
+.t-grey{color:var(--grey);background:var(--tile)}
+.more{display:block;padding:11px 14px;border-top:1px solid var(--line);color:var(--src);
+  font-size:12.5px;font-weight:600;cursor:pointer}
+/* 关注的仓库:CI 灯 + 名字 / 「CI 状态 · 最新版本」 */
+/* 没配 CI / 仓库没了 = 中性灰。原来用 --line(#E4E7EC)压在白卡上几乎看不见 —— 与组件同值 #9AA0A6|#8E939B(2026-09-25 体检) */
+.dot{width:9px;height:9px;border-radius:5px;flex:0 0 auto;margin-top:6px;background:#9AA0A6}
+html[data-theme="dark"] .dot{background:#8E939B}
+.d-red{background:var(--red)}.d-amber{background:var(--amber)}.d-green{background:var(--green)}
+.rm{flex:0 0 auto;align-self:center;border:0;border-radius:8px;background:var(--tile);color:var(--sub);
+  font-size:12px;font-weight:600;padding:5px 9px;cursor:pointer}
+.note{padding:10px 14px;border-top:1px solid var(--line);color:var(--sub);font-size:11.5px;line-height:1.55}
+/* 全部处理完 = 好消息,不是一块「暂无数据」 */
+.clear{display:flex;align-items:center;gap:12px;padding:16px 14px}
+.clear .ok{width:34px;height:34px;border-radius:17px;background:var(--srcSoft);color:var(--src);
+  flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:700}
+.clear b{display:block;font-size:14.5px;font-weight:600}
+.clear small{color:var(--sub);font-size:12px}
+.empty{color:var(--sub);font-size:12.5px;padding:13px 14px}
+.state{color:var(--sub);font-size:13px;padding:18px;text-align:center}
+.banner{display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:14px;
+  background:var(--amberS);margin-top:14px;cursor:pointer}
+.banner .grow{flex:1;min-width:0}
+.banner b{display:block;font-size:13.5px;font-weight:600}
+.banner small{color:var(--sub);font-size:11.5px}
+.banner .go{color:var(--amber);font-weight:700;font-size:16px}
+/* —— 绑定引导(未绑令牌时整页就是它)—— */
+.on{padding-top:56px}
+.on .mark{width:66px;height:66px;border-radius:22px;background:var(--srcSoft);color:var(--src);
+  margin:0 auto 18px;display:flex;align-items:center;justify-content:center}
+.on h2{font-size:25px;margin:0 0 8px;letter-spacing:-.6px;font-weight:700;text-align:center}
+.on p.lead{color:var(--sub);font-size:13.5px;margin:0 0 22px;padding:0 8px;line-height:1.6;text-align:center}
+.gets{padding:6px 0}
+.get{display:flex;gap:10px;align-items:center;padding:9px 14px;font-size:13.5px}
+.get .tag{margin:0;min-width:74px;text-align:center}
+.step{display:flex;gap:12px;padding:14px;align-items:flex-start}
+.step+.step{border-top:1px solid var(--line)}
+.step .no{width:24px;height:24px;border-radius:12px;background:var(--src);color:var(--onSrc);
+  flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700}
+.step .grow{flex:1;min-width:0}
+.step b{display:block;font-size:14px;font-weight:600}
+.step small{display:block;color:var(--sub);font-size:12px;line-height:1.55;margin-top:2px}
+.btn{display:inline-block;margin-top:10px;border:0;border-radius:11px;padding:9px 14px;font-size:13px;
+  font-weight:600;background:var(--tile);color:var(--fg);cursor:pointer}
+.btn.pri{background:var(--src);color:var(--onSrc)}
+.hint{color:var(--sub);font-size:11.5px;margin-top:16px;line-height:1.7;padding:0 4px}
+/* —— 添加关注的仓库(贴底 sheet)—— */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.36);z-index:20}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--card);
+  border-radius:22px 22px 0 0;padding:8px 16px calc(26px + env(safe-area-inset-bottom));
+  box-shadow:0 -12px 40px rgba(0,0,0,.25);max-height:82%;overflow:auto}
+.grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:6px auto 14px}
+.sheet h3{font-size:18px;margin:0 0 3px;letter-spacing:-.3px}
+.sheet .sh{color:var(--sub);font-size:12.5px;margin:0 0 16px}
+.srcpick{display:flex;gap:8px;margin-bottom:14px}
+.srcpick div{flex:1;text-align:center;padding:9px 6px;border-radius:12px;background:var(--tile);
+  font-size:12.5px;font-weight:600;color:var(--sub);cursor:pointer}
+.srcpick div.on{background:var(--srcSoft);color:var(--src)}
+/* 输入字号必须 ≥16px:iOS WKWebView 聚焦会放大整页(G15) */
+.q{width:100%;border:0;background:var(--tile);color:var(--fg);border-radius:12px;
+  padding:11px 14px;font-size:16px;outline:none;margin-bottom:12px}
+.slot{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.slot+.slot{border-top:1px solid var(--line)}
+.slot .grow{flex:1;min-width:0}
+.slot b{font-weight:600;font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot small{color:var(--sub);font-size:11.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.add{width:30px;height:30px;border-radius:15px;background:var(--srcSoft);color:var(--src);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;border:0;cursor:pointer}
+.add[disabled]{background:var(--tile);color:var(--sub);font-size:11px;font-weight:500;width:auto;padding:0 9px;border-radius:8px}
+/* 本周提交:左边总数 + 比上周,右边 7 根柱(今天最右、源色);下面按仓库的横条 */
+/* ⚠️ 全局 .hint(绑定引导页的脚注)带 margin-top:16px + padding 0 4px,会漏到段标题右侧这颗 em.hint 上 ——
+   它被顶下去 8px、右缘又比卡片右缘缩进 4px(2026-09-25 体检)。这里显式清掉。 */
+.sec .hint{font-style:normal;font-weight:400;font-size:11.5px;color:var(--sub);margin:0;padding:0;line-height:inherit}
+.act .ah{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:14px 14px 10px}
+.act .big{font-size:30px;font-weight:700;letter-spacing:-1px;line-height:1.1}
+.act .big i{font-style:normal;font-size:13px;font-weight:600;color:var(--sub);margin-left:2px;letter-spacing:0}
+.act .dl{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:var(--sub)}
+.act .dl.up{color:var(--src)}
+.bars{display:flex;align-items:flex-end;gap:5px;height:98px}
+.bc{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:22px;height:100%}
+.bc s{display:block;width:13px;border-radius:3px;background:var(--greenS);text-decoration:none}
+.bc.now s{background:var(--src)}
+.bc em{font-style:normal;font-size:9.5px;color:var(--sub);margin-bottom:3px}
+.bc i{font-style:normal;font-size:10px;color:var(--sub);margin-top:4px}
+.bc.now i,.bc.now em{color:var(--src);font-weight:700}
+.arows{border-top:1px solid var(--line);padding:6px 0}
+.ar{display:flex;align-items:center;gap:10px;padding:6px 14px;cursor:pointer}
+.ar b{flex:0 0 38%;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar .track{flex:1;height:6px;border-radius:3px;background:var(--tile);overflow:hidden}
+.ar .track s{display:block;height:100%;border-radius:3px;background:var(--src);text-decoration:none}
+.ar em{flex:0 0 auto;font-style:normal;font-size:12px;color:var(--sub);min-width:28px;text-align:right}
+.dadd{color:var(--green);font-weight:600}.ddel{color:var(--red);font-weight:600}
+.rn{color:var(--src);font-weight:600}
+.row small.hl{color:var(--fg);opacity:.85;font-size:12.5px}
+/* 年视图:53 周 × 7 天,格 10px、横向可滚,打开时滚到最右(最新一周) */
+.yv .tabs{display:flex;gap:6px;padding:12px 14px 0}
+.yv .tabs button{flex:1;border:0;border-radius:9px;padding:7px 4px;background:var(--tile);color:var(--sub);
+  font-weight:600;font-size:12.5px;cursor:pointer}
+.yv .tabs button.on{background:var(--srcSoft);color:var(--src)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:10px 14px 0;scrollbar-width:none}
+.chips::-webkit-scrollbar,.ygrid::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;border:0;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:600;
+  background:var(--tile);color:var(--sub);cursor:pointer}
+.chip.on{background:var(--src);color:var(--onSrc)}
+.ygrid{overflow-x:auto;padding:12px 14px 6px;scrollbar-width:none}
+.ym,.yc{display:grid;grid-template-columns:repeat(53,10px);column-gap:2px;width:max-content}
+.ym{height:15px;font-size:9.5px;color:var(--sub)}
+.ym span{white-space:nowrap;overflow:visible}
+.yc{grid-template-rows:repeat(7,10px);grid-auto-flow:column;row-gap:2px}
+.yc s,.ylg s{display:block;width:10px;height:10px;border-radius:2px;background:var(--h0);text-decoration:none}
+.yc s.x{visibility:hidden}
+.yc s.l1,.ylg s.l1{background:var(--h1)}.yc s.l2,.ylg s.l2{background:var(--h2)}
+.yc s.l3,.ylg s.l3{background:var(--h3)}.yc s.l4,.ylg s.l4{background:var(--h4)}
+.ylg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 14px 10px;
+  font-size:11px;color:var(--sub)}
+.ylg span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ylg .sc{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+.ystats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line)}
+.ys{padding:11px 6px 10px;text-align:center}
+.ys+.ys{border-left:1px solid var(--line)}
+.ys b{display:block;font-size:17px;font-weight:700;letter-spacing:-.4px}
+.ys b i{font-style:normal;font-size:11px;font-weight:600;color:var(--sub);margin-left:1px}
+.ys small{display:block;font-size:10.5px;color:var(--sub);margin-top:1px}
+.foot{color:var(--sub);font-size:11px;margin-top:18px;line-height:1.7;background:var(--tile);
+  border-radius:14px;padding:12px 14px}
+.foot a{color:var(--src);font-weight:600;cursor:pointer;text-decoration:none}
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.row,.ar,.more,.banner,.xb-tap{position:relative}
+.row::after,.ar::after,.more::after,.banner::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.row:active::after,.ar:active::after,.more:active::after,.banner:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.btn,#addSlot,#edit,.rm,.add,.chip,.yv .tabs button,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.btn:active,#addSlot:active,#edit:active,.rm:active,.add:active,.chip:active,.yv .tabs button:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+<div id="app"></div>
+<div id="layer"></div>
+<script>
+(function(){
+"use strict";
+var MAX = 6, SHOW = 5;
+var BUNDLE = "01KZGDDA96VW07WKQAK2SQ9HWA";   // manifest.id —— 页面拿不到 manifest,绑定深链要它直达这一条凭证
+var BIND = "numable://app/mine?section=credentials&bundle=" + BUNDLE + "&bind=gh";
+var NEW_TOKEN = "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Numable";
+
+var I18N = {
+ zh:{
+  title:"GitHub 待办",
+  subWait:" 件事等你处理", subClean:"没有等你处理的事",
+  secRv:"等你 review", secMy:"我的 PR", secAs:"指派给你", secRepo:"关注的仓库",
+  flat:"和前 7 天持平", time1:" 次提交", cmt1:" 条评论", ckBad1:" 项检查失败",
+  iss1:" 个 issue", issN:" 个 issue", pr1:" 个 PR", prN:" 个 PR", day1:" 天", yTime1:" 次",
+  yErr:"年视图没取到，可能是网络不稳定。检查网络后点「重试」。",
+  gone:"无法访问，可能已删除或改为私有", expS0:"重新绑定后才能看到内容",
+  mineErr:"没取到你的仓库，可能是网络不稳定。检查网络后重新打开这个面板。", mineNone:"你名下还没有仓库",
+  searching:"正在搜索…",
+  secYear:"年视图", yC:"仓库提交", yG:"GitHub 贡献", yAll:"全部",
+  yTot:"过去一年", yAct:"活跃天数", yLong:"最长连续", yCur:"当前连续", yTimes:" 次", yDays:" 天",
+  yMax:"最多的一天：", yLoading:"正在读取…", yWait:"有几个仓库这次没取到，下面的数字不完整，点右上角刷新再试一次。",
+  yNoteC:"你名下最近推送的 6 个仓库", yNoteG:"与 github.com 个人页同源", less:"少", more:"多",
+  mon:["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
+  secAct:"近 7 天提交", secCommits:"最近提交", actHint:"你名下最近推送的 6 个仓库", times:" 次提交",
+  upA:"比前 7 天多 ", upB:"%", dnA:"比前 7 天少 ", dnB:"%", wk0:"近 7 天没有新提交",
+  cmts:" 条评论", ckA:"检查 ", ckB:" 通过", ckBadA:"", ckBadB:" 项检查失败",
+  rvOk:" 已批准", rvChg:" 要求修改", rvCmt:" 已评审",
+  edit:"编辑", done:"完成", addRepo:"＋ 添加",
+  allRv:"在 GitHub 查看全部 ", allMy:"在 GitHub 查看全部 ", allAs:"在 GitHub 查看全部 ", allB:" 个 ›",
+  noRv:"没有人在等你 review", noMy:"没有打开的 PR", noAs:"没有指派给你的 issue",
+  clearT:"都处理完了", clearS:"没有等你 review 的 PR，你的 PR 也都没卡住",
+  sConf:"有冲突", sFail:"CI 未通过", sChg:"需修改", sDraft:"草稿", sReady:"可合并", sRun:"CI 运行中", sWait:"等待 review",
+  ciOk:"CI 通过", ciFail:"CI 未通过", ciRun:"CI 运行中", ciNone:"未配置 CI",
+  relB:" 发布于 ", noRel:"暂无发布",
+  fallback:"还没有添加关注的仓库，先显示你最近有推送的几个仓库。添加一个之后这里只显示你选的；移除其中一个，会先把其余几个固定下来。",
+  repoEmpty:"还没有可显示的仓库，点「添加」选几个要关注的仓库",
+  remove:"移除",
+  minAgo:" 分钟前", hourAgo:" 小时前", dayAgo:" 天前", justNow:"刚刚",
+    expT:"令牌已失效", expS:"重新绑定后才能更新，下面是上次的内容",
+  errT:"没连上 GitHub，可能是网络不稳定。检查网络后点「重试」。", retry:"重试",
+  onT:"连接你的 GitHub",
+  onP:"绑定一个访问令牌，这里就会列出等你 review 的 PR、你的 PR 卡在哪一步、指派给你的 issue，以及关注仓库的 CI 和新版本。",
+  s1T:"在 GitHub 新建一个令牌", s1S:"已帮你勾好 repo 和 read:org 两项权限：前者用来读私有仓库，后者用来看到发给你所在团队的 review 请求。只看公开仓库的话可以都不勾。",
+  s1B:"打开 GitHub",
+  s2T:"复制令牌，回来绑定", s2S:"在「我的 › 凭证管理」里粘贴即可，绑定后回到这一页。", s2B:"去绑定",
+  onHint:"令牌保存在设备的系统安全存储中，只发送给 api.github.com，不会写入备份。只有你在多设备同步里打开「同步密钥与凭证」，才会加密后同步到你的其他设备。",
+  deskT:"添加组件", deskS:"在面板里挑，确认后加到仪表盘",
+  pickT:"添加关注的仓库", pickS:"最多 6 个，还能添加 ", pickS2:" 个。",
+  srcMine:"我的仓库", srcAll:"搜索全站", searchPh:"搜索仓库，例如 react 或 vercel/next.js",
+  noHit:"没有找到匹配的仓库", added:"已关注", full:"已满", loading:"正在读取…", priv:"私有",
+  foot:"数据由你的设备直接从 api.github.com 获取，不经过任何中转。打开本页时自动更新，点右上角的时间可以立即更新。",
+  settings:"令牌与额度 ›",
+  notX:"当前不在 App 中"
+ },
+ en:{
+  title:"GitHub Inbox",
+  subWait:" waiting on you", subClean:"Nothing waiting on you",
+  secRv:"Review requests", secMy:"My pull requests", secAs:"Assigned to you", secRepo:"Watched repos",
+  flat:"Same as the 7 days before", time1:" commit", cmt1:" comment", ckBad1:" check failed",
+  iss1:" issue", issN:" issues", pr1:" PR", prN:" PRs", day1:" day", yTime1:"",
+  yErr:"Couldn't load the year view. Check your connection and tap Retry.",
+  gone:"Can't access it — it may have been deleted or made private", expS0:"Reconnect to see your inbox",
+  mineErr:"Couldn't load your repos. Check your connection and open this panel again.", mineNone:"You don't own any repos yet",
+  searching:"Searching…",
+  secYear:"Year", yC:"Commits", yG:"GitHub contributions", yAll:"All",
+  yTot:"Past year", yAct:"Active days", yLong:"Longest run", yCur:"Current run", yTimes:"", yDays:" days",
+  yMax:"Busiest day: ", yLoading:"Loading…", yWait:"Some repos didn't load this time, so the numbers below are incomplete. Tap refresh at the top to try again.",
+  yNoteC:"Your 6 most recently pushed repos", yNoteG:"Same as your github.com profile", less:"Less", more:"More",
+  mon:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+  secAct:"Last 7 days", secCommits:"Recent commits", actHint:"Your 6 most recently pushed repos", times:" commits",
+  upA:"", upB:"% more than the 7 days before", dnA:"", dnB:"% fewer than the 7 days before", wk0:"No commits in the last 7 days",
+  cmts:" comments", ckA:"", ckB:" checks passed", ckBadA:"", ckBadB:" checks failed",
+  rvOk:" approved", rvChg:" requested changes", rvCmt:" reviewed",
+  edit:"Edit", done:"Done", addRepo:"＋ Add",
+  allRv:"See all ", allMy:"See all ", allAs:"See all ", allB:" on GitHub ›",
+  noRv:"No one is waiting on your review", noMy:"No open pull requests", noAs:"No issues assigned to you",
+  clearT:"All caught up", clearS:"No reviews waiting and none of your PRs are stuck",
+  sConf:"Conflict", sFail:"CI failed", sChg:"Changes", sDraft:"Draft", sReady:"Ready", sRun:"CI running", sWait:"In review",
+  ciOk:"CI passing", ciFail:"CI failed", ciRun:"CI running", ciNone:"No CI",
+  relB:" released ", noRel:"No releases",
+  fallback:"You haven't added any repos yet, so these are the ones with the most recent pushes. Add one and only your picks show here; remove one and the rest stay pinned.",
+  repoEmpty:"No repos to show yet. Tap Add to pick some to watch.",
+  remove:"Remove",
+  minAgo:"m ago", hourAgo:"h ago", dayAgo:"d ago", justNow:"just now",
+    expT:"Your token has expired", expS:"Reconnect to update. Showing what was loaded last time.",
+  errT:"Couldn't reach GitHub. Check your connection and tap Retry.", retry:"Retry",
+  onT:"Connect your GitHub",
+  onP:"Add an access token and this page will list the reviews waiting on you, where each of your PRs is stuck, issues assigned to you, and CI and releases for the repos you watch.",
+  s1T:"Create a token on GitHub", s1S:"The repo and read:org scopes are pre-selected: the first lets it read private repos, the second shows review requests sent to your teams. For public repos only, you can clear both.",
+  s1B:"Open GitHub",
+  s2T:"Copy it and come back", s2S:"Paste it under Me › Credentials, then return to this page.", s2B:"Connect",
+  onHint:"Your token stays in your device's secure storage, is sent only to api.github.com, and is never included in backups. It syncs to your other devices, encrypted, only if you turn on Sync keys and credentials in multi-device sync.",
+  deskT:"Add widgets", deskS:"Pick in the panel, then confirm",
+  pickT:"Add a repo to watch", pickS:"Up to 6 — ", pickS2:" left.",
+  srcMine:"My repos", srcAll:"Search all", searchPh:"Search repos, e.g. react or vercel/next.js",
+  noHit:"No matching repositories", added:"Watching", full:"Full", loading:"Loading…", priv:"private",
+  foot:"Your device fetches this straight from api.github.com — nothing is proxied. It updates when you open this page; tap the time at the top right to update now.",
+  settings:"Token and quota ›",
+  notX:"Not running inside the app"
+ }
+};
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。 */
+var LANG = nbLang(document.documentElement.getAttribute('data-lang'));
+function t(k){ var v = (I18N[LANG]||I18N.en)[k]; if (v==null) v = I18N.en[k]; return v==null ? k : v; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+// ── 状态 ────────────────────────────────────────────────────
+var S = { d:null, slots:[], busy:false, err:false, edit:false, at:"",
+          y:null, yBusy:false, yErr:false, yTab:'c', yRepo:'', ySeq:0,   // yRepo = 筛选的仓库全名('' = 全部)
+          pend:false, pendYear:false, saving:false };
+
+// ── 桥 ──────────────────────────────────────────────────────
+function ready(){ return new Promise(function(res){
+  var n=0; (function tick(){ if(window.xbridge) return res(true);
+    if(++n>24) return res(false); setTimeout(tick,50); })(); }); }
+/* ⚠️ 桥调用在手机上默认 10 秒超时。home.df 一条大 GraphQL、year.df 是 1 + 6 个请求,冷启动慢网很容易超 ——
+   超时 = 返回 null,页面会一直停在「正在读取」。所以按流给超时:首页 25 秒、年视图 45 秒。 */
+var TMO = {home:25000, year:45000};
+function df(name,p){ return xbridge.runDataFlow(name,p||{},TMO[name]||15000).then(function(r){
+  return (r && r.code===0 && r.data) ? r.data : null; }).catch(function(){ return null; }); }
+/* 写盘要知道成没成:失败时页面不能假装已经存上了(内存与盘上的关注位会就此分叉)。 */
+function af(name,p){ return xbridge.runActionFlow(name,p||{}).then(function(r){
+  return !r || r.code==null || r.code===0; }).catch(function(){ return false; }); }
+/* 导航分两路:`numable://` 与包内相对路径走桥的 route;http(s) 外链**必须**走 page/flow/open.af(nav.open)——
+   iOS / Android 的 route 只认 numable://,https 会弹「链接无效」(2026-09-25 用户实报),鸿蒙会打开错的页面。 */
+function nav(url){
+  url = String(url||'');
+  if(/^https?:\/\//i.test(url)){ af('open', {url: url}); return; }
+  try{ if(xbridge.route) return xbridge.route(url); }catch(e){}
+}
+/* ⚠️ 只放行 GitHub 自己的 https 链接 —— 链接来自接口返回,不做校验就等于把导航交给了数据。 */
+function openGh(url){ if(/^https:\/\/github\.com\//.test(String(url||''))) nav(url); }
+
+// ── 时间 ────────────────────────────────────────────────────
+function ago(iso){
+  var ms = Date.parse(iso||''); if(!ms) return '';
+  var d = Date.now()-ms;
+  if(d<60000) return t('justNow');
+  if(d<3600000) return Math.floor(d/60000)+t('minAgo');
+  if(d<86400000) return Math.floor(d/3600000)+t('hourAgo');
+  return Math.floor(d/86400000)+t('dayAgo');
+}
+
+// ── 数据整形(流给的是平行数组,按下标 zip)──────────────────
+function zip(d, L, keys){
+  var a = d[L+'_t'] || [], out = [];
+  for(var i=0;i<a.length;i++){
+    var o = {}; keys.forEach(function(k){ var arr = d[L+'_'+k] || []; o[k] = arr[i]; });
+    if(o.t) out.push(o);
+  }
+  return out;
+}
+/* 与 xWidget/flow/todo.df 的状态码同一张优先级表(冲突 > CI 挂 > 需修改 > 草稿 > 可合并 > CI 在跑 > 等 review)。
+   act = 要你动手的四种;列表里它们排在前面。 */
+function prStatus(p){
+  var st = p.st||'', rd = p.rd||'', mg = p.mg||'', dr = String(p.dr)==='true';
+  if(mg==='CONFLICTING') return {k:'sConf', c:'red', act:1};
+  if(st==='FAILURE'||st==='ERROR') return {k:'sFail', c:'red', act:1};
+  if(rd==='CHANGES_REQUESTED') return {k:'sChg', c:'amber', act:1};
+  if(dr) return {k:'sDraft', c:'grey', act:0};
+  /* 与 todo.df 同一条规则:已批准,或仓库没开必需 review(reviewDecision 为空)且 GitHub 判定可合并。 */
+  if((rd==='APPROVED' || (!rd && mg==='MERGEABLE')) && (st==='SUCCESS'||!st)) return {k:'sReady', c:'green', act:1};
+  if(st==='PENDING'||st==='EXPECTED') return {k:'sRun', c:'amber', act:0};
+  return {k:'sWait', c:'grey', act:0};
+}
+function ciOf(st){
+  if(!st) return {k:'ciNone', c:''};
+  if(st==='FAILURE'||st==='ERROR') return {k:'ciFail', c:'red'};
+  if(st==='PENDING'||st==='EXPECTED') return {k:'ciRun', c:'amber'};
+  return {k:'ciOk', c:'green'};
+}
+function num(v){ var n = Number(v); return isFinite(n) ? n : 0; }
+
+// ── 渲染 ────────────────────────────────────────────────────
+function row(o, tag, meta){
+  return '<div class="row" data-u="'+esc(o.u)+'"><div class="grow"><b>'+
+    (tag ? '<span class="tag t-'+tag.c+'">'+esc(t(tag.k))+'</span>' : '')+esc(o.t)+'</b>'+
+    '<small>'+esc(meta)+'</small></div><i class="go">›</i></div>';
+}
+/* meta 里有着色片段(+62 −4)时用这一版:meta 由调用方拼好且已 esc。 */
+function rowH(o, tag, metaHtml){
+  return '<div class="row" data-u="'+esc(o.u)+'"><div class="grow"><b>'+
+    (tag ? '<span class="tag t-'+tag.c+'">'+esc(t(tag.k))+'</span>' : '')+esc(o.t)+'</b>'+
+    '<small class="meta">'+metaHtml+'</small></div><i class="go">›</i></div>';
+}
+function diffH(a, x){
+  if(a==null || a==='') return '';
+  return '<span class="dadd">+'+num(a)+'</span> <span class="ddel">−'+num(x)+'</span>';
+}
+/* 英文单复数:「1 commit」不是「1 commits」。中文词表里 one / other 同值。 */
+function pl(n, one, other){ return num(n)===1 ? t(one) : t(other); }
+function kfmt(n){ n = num(n); return n>=10000 ? Math.round(n/1000)+'k' : n>=1000 ? (Math.round(n/100)/10)+'k' : String(n); }
+/* 检查计数:GitHub 按状态给两组计数(check run / 旧式 status),合在一起算「过了几项、挂了几项」。 */
+function checks(cr, cs, total){
+  var ok = 0, bad = 0, run = 0;
+  (cr||[]).forEach(function(c){ var n = num(c && c.count), st = c && c.state;
+    if(st==='SUCCESS'||st==='NEUTRAL'||st==='SKIPPED') ok += n;
+    else if(st==='FAILURE'||st==='TIMED_OUT'||st==='CANCELLED'||st==='STARTUP_FAILURE'||st==='ACTION_REQUIRED') bad += n;
+    else run += n; });
+  (cs||[]).forEach(function(c){ var n = num(c && c.count), st = c && c.state;
+    if(st==='SUCCESS') ok += n; else if(st==='FAILURE'||st==='ERROR') bad += n; else run += n; });
+  total = num(total) || (ok+bad+run);
+  if(!total) return '';
+  if(bad) return bad+pl(bad,'ckBad1','ckBadB');
+  return t('ckA')+ok+'/'+total+t('ckB');
+}
+function reviewer(ov){
+  var r = (ov||[]).filter(function(x){ return x && x.author && x.author.login; })[0];
+  if(!r) return '';
+  var k = r.state==='APPROVED' ? 'rvOk' : r.state==='CHANGES_REQUESTED' ? 'rvChg' : 'rvCmt';
+  return '@'+r.author.login+t(k);
+}
+function prMeta(o, withAuthor){
+  var parts = [esc(o.r+'#'+o.n)];
+  if(withAuthor && o.w) parts.push('@'+esc(o.w));
+  var df = diffH(o.a, o.x); if(df) parts.push(df);
+  if(num(o.m)) parts.push(num(o.m)+pl(o.m,'cmt1','cmts'));
+  var ck = checks(o.cr, o.cs, o.ct); if(ck) parts.push(esc(ck));
+  var rw = reviewer(o.ov); if(rw) parts.push(esc(rw));
+  parts.push(esc(ago(o.d)));
+  return parts.join(' · ');
+}
+function more(n, shown, key, url){
+  return n > shown ? '<a class="more" data-u="'+url+'">'+t(key)+n+t('allB')+'</a>' : '';
+}
+function secHead(key, n, hot, extra){
+  return '<div class="sec">'+t(key)+(n!=null ? '<span class="n'+(hot&&n?' hot':'')+'">'+n+'</span>' : '')+
+    '<span class="sp"></span>'+(extra||'')+'</div>';
+}
+function viewTodo(d){
+  var rv = zip(d,'rv',['t','n','u','d','r','w','a','x','m']),
+      my = zip(d,'my',['t','n','u','d','r','st','rd','mg','dr','a','x','m','ct','cr','cs','ov']),
+      as = zip(d,'as',['t','n','u','d','r']);
+  var nRv = num(d.rvN), nMy = num(d.myN), nAs = num(d.asN);
+  my.forEach(function(p,i){ p.s = prStatus(p); p.i = i; });
+  my.sort(function(a,b){ return (b.s.act-a.s.act) || (a.i-b.i); });
+  if(!nRv && !nMy && !nAs){
+    return '<div class="grp" style="margin-top:18px"><div class="clear"><div class="ok">✓</div><div>'+
+      '<b>'+t('clearT')+'</b><small>'+t('clearS')+'</small></div></div></div>';
+  }
+  var h = '';
+  h += secHead('secRv', nRv, true)+'<div class="grp">'+
+    (rv.length ? rv.slice(0,SHOW).map(function(o){
+      return rowH(o, null, prMeta(o, true));
+    }).join('') : '<div class="empty">'+t('noRv')+'</div>')+
+    more(nRv, Math.min(rv.length,SHOW), 'allRv', 'https://github.com/pulls/review-requested')+'</div>';
+  h += secHead('secMy', nMy, false)+'<div class="grp">'+
+    (my.length ? my.slice(0,SHOW).map(function(o){
+      return rowH(o, o.s, prMeta(o, false));
+    }).join('') : '<div class="empty">'+t('noMy')+'</div>')+
+    more(nMy, Math.min(my.length,SHOW), 'allMy', 'https://github.com/pulls')+'</div>';
+  h += secHead('secAs', nAs, true)+'<div class="grp">'+
+    (as.length ? as.slice(0,SHOW).map(function(o){
+      return row(o, null, o.r+'#'+o.n+' · '+ago(o.d));
+    }).join('') : '<div class="empty">'+t('noAs')+'</div>')+
+    more(nAs, Math.min(as.length,SHOW), 'allAs', 'https://github.com/issues/assigned')+'</div>';
+  return h;
+}
+/* 本周提交:你名下最近推送的 6 个仓库,按本地日历日(act[i].d[0] = 今天)。数的是仓库里的提交,
+   不是贡献图 —— 提交邮箱没关联到 GitHub 账号时,贡献图会严重少算(见 home.df 的注释)。 */
+function viewActivity(d){
+  var act = (d.act||[]).filter(function(x){ return x && x.nm; });
+  if(!act.length) return '';
+  var D = [0,0,0,0,0,0,0], pw = 0;
+  act.forEach(function(x){ (x.d||[]).forEach(function(v,k){ if(k<7) D[k] += num(v); }); pw += num(x.pw); });
+  var wk = D.reduce(function(a,b){ return a+b; }, 0), mx = Math.max.apply(null, D) || 1;
+  var delta = '';
+  if(pw){ var pct = Math.round(Math.abs(wk-pw)*100/pw);
+    delta = '<span class="dl'+(wk>=pw?' up':'')+'">'+(!pct ? t('flat') : wk>=pw ? t('upA')+pct+t('upB') : t('dnA')+pct+t('dnB'))+'</span>'; }
+  /* 柱下的日期按**取数那天**标,不按现在:显示的可能是昨天的缓存,按现在标会整排错一天。 */
+  var base = d.qd ? new Date(d.qd+'T00:00:00') : new Date(), bars = '';
+  for(var k=6;k>=0;k--){
+    var day = new Date(base.getFullYear(), base.getMonth(), base.getDate()-k);
+    var h = D[k] ? Math.max(6, Math.round(D[k]*64/mx)) : 3;
+    bars += '<div class="bc'+(k===0?' now':'')+'"><em>'+(D[k]||'')+'</em><s style="height:'+h+'px"></s><i>'+day.getDate()+'</i></div>';
+  }
+  var repos = act.map(function(x){ var w = (x.d||[]).reduce(function(a,b){ return a+num(b); },0);
+      return {nm:x.nm, u:x.u, w:w}; })
+    .filter(function(x){ return x.w; }).sort(function(a,b){ return b.w-a.w; });
+  var rmax = repos.length ? repos[0].w : 1;
+  var rrows = repos.map(function(x){
+    return '<div class="ar" data-u="'+esc(x.u)+'"><b>'+esc(x.nm.split('/')[1]||x.nm)+'</b>'+
+      '<span class="track"><s style="width:'+Math.max(2, Math.round(x.w*100/rmax))+'%"></s></span><em>'+x.w+'</em></div>';
+  }).join('');
+  var cs = [];
+  act.forEach(function(x){ (x.c||[]).forEach(function(c){ if(c && c.h) cs.push({h:c.h, t:c.t, a:c.a, x:c.x, u:c.u,
+    sn:(x.nm.split('/')[1]||x.nm)}); }); });
+  cs.sort(function(a,b){ return Date.parse(b.t||0) - Date.parse(a.t||0); });
+  var crows = cs.slice(0, SHOW).map(function(c){
+    return '<div class="row" data-u="'+esc(c.u)+'"><div class="grow"><b>'+esc(c.h)+'</b>'+
+      '<small class="meta">'+['<span class="rn">'+esc(c.sn)+'</span>', diffH(c.a, c.x), esc(ago(c.t))]
+        .filter(Boolean).join(' · ')+'</small></div><i class="go">›</i></div>';
+  }).join('');
+  return secHead('secAct', null, false, '<em class="hint">'+t('actHint')+'</em>')+
+    '<div class="grp act"><div class="ah"><div><div class="big">'+wk+'<i>'+pl(wk,'time1','times')+'</i></div>'+delta+'</div>'+
+      '<div class="bars">'+bars+'</div></div>'+
+      (rrows ? '<div class="arows">'+rrows+'</div>' : '<div class="empty">'+t('wk0')+'</div>')+'</div>'+
+    (crows ? secHead('secCommits', null, false)+'<div class="grp">'+crows+'</div>' : '');
+}
+/* ── 年视图 ─────────────────────────────────────────────────
+   两路数据并列、由页签切换,不二选一:
+   · 仓库提交 = 各仓库 stats/commit_activity(所有作者),周与天按 GitHub 给的 UTC 周日零点落格;
+   · GitHub 贡献 = 官方贡献日历(只认邮箱关联到账号的提交,另含 PR / review / issue)。 */
+var NYD = 371;   // 53 周 × 7 天
+function pad2(n){ return (n<10?'0':'')+n; }
+function ymdL(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }   // 本地日期
+function dayAgo(base, k){ return new Date(base.getFullYear(), base.getMonth(), base.getDate()-k); }
+function tzStr(d){ var o = -d.getTimezoneOffset(), a = Math.abs(o);
+  return (o>=0?'+':'-')+pad2(Math.floor(a/60))+':'+pad2(a%60); }
+/* 按天的 history 片段:d{k} = k 天前那一个本地日历日。引号要转义 —— 它会被流原样嵌进 GraphQL 请求体的 JSON 字符串里。 */
+function yearDays(today){
+  var parts = [];
+  for(var k=0;k<NYD;k++){
+    var s = dayAgo(today,k), e = dayAgo(today,k-1);
+    parts.push('d'+k+':history(since:\\"'+ymdL(s)+'T00:00:00'+tzStr(s)+'\\"'+
+      (k ? ',until:\\"'+ymdL(e)+'T00:00:00'+tzStr(e)+'\\"' : '')+'){totalCount}');
+  }
+  return parts.join(' ');
+}
+function yearBase(y){ return y && y.QD ? new Date(y.QD+'T00:00:00') : new Date(); }
+function yearCommits(y, only){
+  var m = {}, per = [], base = y.QD ? new Date(y.QD+'T00:00:00') : new Date();
+  for(var i=0;i<6;i++){
+    var tg = y['tg'+i] || {}, tot = 0;
+    for(var k=0;k<NYD;k++){
+      var v = num(tg['d'+k] && tg['d'+k].totalCount); tot += v;
+      if(v && (!only || only===y['p'+i])){ var key = ymdL(dayAgo(base,k)); m[key] = (m[key]||0) + v; }
+    }
+    per.push(tot);
+  }
+  return {m:m, per:per};
+}
+function yearContrib(y){
+  var m = {};
+  (y.cal||[]).forEach(function(week){ (week||[]).forEach(function(c){ if(c && c.date) m[c.date] = num(c.contributionCount); }); });
+  return m;
+}
+function heat(m, endDay){
+  var now = endDay || new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var start = dayAgo(end, 52*7 + end.getDay());
+  var vals = [], cells = '', months = '', lastM = -1, total = 0, act = 0, best = 0, bestD = '', run = 0, longest = 0;
+  Object.keys(m).forEach(function(k){ if(m[k]>0) vals.push(m[k]); });
+  vals.sort(function(a,b){ return a-b; });
+  var q = function(p){ return vals.length ? vals[Math.min(vals.length-1, Math.floor(vals.length*p))] : 1; };
+  var q1 = q(.25), q2 = q(.5), q3 = q(.75);
+  for(var c=0;c<53;c++){
+    var colFirst = dayAgo(start, -c*7), mo = colFirst.getMonth();
+    months += '<span>'+(mo!==lastM && c<51 ? t('mon')[mo] : '')+'</span>'; lastM = mo;
+    for(var r=0;r<7;r++){
+      var d = dayAgo(start, -(c*7+r));
+      if(d > end){ cells += '<s class="x"></s>'; continue; }
+      var k = ymdL(d), v = m[k]||0;
+      total += v; if(v){ act++; run++; if(run>longest) longest = run; } else run = 0;
+      if(v > best){ best = v; bestD = k; }
+      var L = !v ? 0 : v<=q1 ? 1 : v<=q2 ? 2 : v<=q3 ? 3 : 4;
+      cells += '<s class="'+(L?'l'+L:'')+'" title="'+k+' · '+v+'"></s>';
+    }
+  }
+  var cur = 0;
+  for(var b=0;b<400;b++){
+    var dv = m[ymdL(dayAgo(end,b))]||0;
+    if(dv) cur++; else if(b>0) break;          // 今天还没有提交不算断
+  }
+  return {cells:cells, months:months, total:total, act:act, longest:longest, cur:cur, best:best, bestD:bestD};
+}
+function viewYear(){
+  var y = S.y;
+  var head = secHead('secYear', null, false, S.yBusy ? '<em class="hint">'+t('yLoading')+'</em>' : '');
+  if(!y || num(y.ok)!==1){
+    if(S.yBusy && !y) return head+'<div class="grp"><div class="state">'+t('yLoading')+'</div></div>';
+    if(S.yErr || (y && num(y.ok)!==1))
+      return head+'<div class="grp"><div class="state">'+t('yErr')+'<br><button class="btn" id="yRetry">'+t('retry')+'</button></div></div>';
+    return '';
+  }
+  var isC = S.yTab==='c', data, chips = '';
+  if(isC){
+    var yc = yearCommits(y, S.yRepo); data = yc.m;
+    chips = '<div class="chips"><button class="chip'+(!S.yRepo?' on':'')+'" data-yr="">'+t('yAll')+'</button>'+
+      [0,1,2,3,4,5].map(function(i){ var nm = y['p'+i];
+        return nm && yc.per[i] ? '<button class="chip'+(S.yRepo===nm?' on':'')+'" data-yr="'+esc(nm)+'">'+
+          esc(nm.split('/')[1]||nm)+' '+yc.per[i]+'</button>' : ''; }).join('')+'</div>';
+  } else data = yearContrib(y);
+  var h = heat(data, yearBase(y));
+  var stat = function(v, k, one, other){ return '<div class="ys"><b>'+v+'<i>'+pl(v, one, other)+'</i></b><small>'+t(k)+'</small></div>'; };
+  return head+'<div class="grp yv">'+
+    '<div class="tabs"><button class="'+(isC?'on':'')+'" data-yt="c">'+t('yC')+'</button>'+
+      '<button class="'+(isC?'':'on')+'" data-yt="g">'+t('yG')+'</button></div>'+chips+
+    '<div class="ygrid"><div class="ym">'+h.months+'</div><div class="yc">'+h.cells+'</div></div>'+
+    '<div class="ylg"><span>'+esc(t(isC?'yNoteC':'yNoteG'))+'</span><span class="sc">'+t('less')+
+      ' <s></s><s class="l1"></s><s class="l2"></s><s class="l3"></s><s class="l4"></s> '+t('more')+'</span></div>'+
+    '<div class="ystats">'+stat(h.total,'yTot','time1','yTimes')+stat(h.act,'yAct','day1','yDays')+
+      stat(h.longest,'yLong','day1','yDays')+stat(h.cur,'yCur','day1','yDays')+'</div>'+
+    (h.best ? '<div class="note">'+t('yMax')+h.bestD+' · '+h.best+pl(h.best,'yTime1','yTimes')+'</div>' : '')+
+    (isC && String(y.done)!=='1' ? '<div class="note">'+t('yWait')+'</div>' : '')+
+  '</div>';
+}
+/* 年视图与关注位无关(数的是你名下最近推送的 6 个仓库),所以改关注位不重取它。
+   每次请求领一个序号,只认最新那一个 —— 手动刷新叠在上一轮还没回来时,晚到的旧结果不能盖掉新的。 */
+function loadYear(force){
+  if(!S.d || S.d.cst!=='bound') return;
+  var today = new Date(), my = ++S.ySeq;
+  var p = {_cache: force ? 0 : 1, days: yearDays(today), qd: ymdL(today)};
+  S.yBusy = true; S.yErr = false; render();
+  df('year', p).then(function(y){
+    if(my!==S.ySeq) return;
+    if(y) S.y = y; else if(!S.y) S.yErr = true;
+    if(!force && y && String(y._stale)==='1'){ p._cache = 0; render();
+      return df('year', p).then(function(y2){ if(my===S.ySeq && y2) S.y = y2; }); }
+  }).then(function(){ if(my===S.ySeq){ S.yBusy = false; render(); } });
+}
+/* 关注的仓库列表。有关注位时**按槽**出:repos.df 按下标别名查,第 i 项就是第 i 个关注位;
+   仓库被删除 / 改成私有无权访问时那一项的 nm 为空 —— 仍要列出来(显示「无法访问」+ 移除),
+   不列就等于占着一个槽、而且永远删不掉。回落态(没设关注位)只列查到的。
+   i = 槽下标。删除按下标而不是按名字:仓库改过名时接口返回的是新名字,按名字比永远对不上。 */
+function repoList(){
+  var d = S.d; if(!d || !d.repos) return [];
+  if(String(d.hasS)==='1'){
+    return S.slots.map(function(sl, i){
+      var x = d.repos[i] || {};
+      return x.nm ? Object.assign({i:i}, x) : {i:i, nm:sl.o+'/'+sl.r, gone:1};
+    });
+  }
+  return d.repos.map(function(x,i){ return x && x.nm ? Object.assign({i:i}, x) : null; }).filter(Boolean);
+}
+function viewRepos(){
+  var d = S.d, list = repoList(), fallback = d && String(d.hasS)!=='1';
+  var head = secHead('secRepo', null, false,
+    '<button id="edit">'+t(S.edit?'done':'edit')+'</button>'+
+    (S.slots.length<MAX || fallback ? '<button id="addSlot">'+t('addRepo')+'</button>' : ''));
+  if(!list.length) return head+'<div class="grp"><div class="empty">'+t('repoEmpty')+'</div></div>';
+  var rows = list.map(function(x){
+    if(x.gone) return '<div class="row rr"><s class="dot"></s><div class="grow"><b>'+esc(x.nm)+'</b>'+
+      '<small>'+t('gone')+'</small></div><button class="rm" data-i="'+x.i+'" data-nm="'+esc(x.nm)+'"'+
+      (S.saving?' disabled':'')+'>'+t('remove')+'</button></div>';
+    var ci = ciOf(x.st);
+    var last = x.hd ? x.hd+(x.cd ? ' · '+ago(x.cd) : '') : '';
+    var meta = [t(ci.k), kfmt(x.is)+pl(x.is,'iss1','issN'), kfmt(x.pq)+pl(x.pq,'pr1','prN'), '★ '+kfmt(x.sg),
+                x.tg ? x.tg+t('relB')+ago(x.pb) : t('noRel')].join(' · ');
+    return '<div class="row rr" data-u="'+esc(x.u)+'"><s class="dot'+(ci.c?' d-'+ci.c:'')+'"></s>'+
+      '<div class="grow"><b>'+esc(x.nm)+'</b>'+(last ? '<small class="hl">'+esc(last)+'</small>' : '')+
+      '<small>'+esc(meta)+'</small></div>'+
+      (S.edit ? '<button class="rm" data-i="'+x.i+'" data-nm="'+esc(x.nm)+'"'+(S.saving?' disabled':'')+'>'+t('remove')+'</button>' : '<i class="go">›</i>')+
+      '</div>';
+  }).join('');
+  return head+'<div class="grp">'+rows+(fallback ? '<div class="note">'+t('fallback')+'</div>' : '')+'</div>';
+}
+function subState(d){
+  var nRv = num(d.rvN), nAs = num(d.asN), act = 0;
+  zip(d,'my',['t','st','rd','mg','dr']).forEach(function(p){ act += prStatus(p).act; });
+  var n = nRv + nAs + act;
+  return n ? n + t('subWait') : t('subClean');
+}
+function viewOnboard(){
+  var gh = '<svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2A10 10 0 0 0 8.84 21.5c.5.08.68-.22.68-.48v-1.7C6.73 19.91 6.14 18 6.14 18a2.7 2.7 0 0 0-1.13-1.49c-.92-.63.07-.62.07-.62a2.14 2.14 0 0 1 1.56 1.05 2.17 2.17 0 0 0 2.96.85 2.18 2.18 0 0 1 .65-1.37c-2.22-.25-4.55-1.11-4.55-4.94a3.87 3.87 0 0 1 1.03-2.68 3.6 3.6 0 0 1 .1-2.64s.84-.27 2.75 1.02a9.4 9.4 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02a3.6 3.6 0 0 1 .1 2.64 3.87 3.87 0 0 1 1.03 2.68c0 3.84-2.34 4.69-4.57 4.94a2.43 2.43 0 0 1 .69 1.88v2.79c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>';
+  return '<div class="on"><div class="mark">'+gh+'</div><h2>'+t('onT')+'</h2><p class="lead">'+t('onP')+'</p>'+
+    '<div class="grp">'+
+      '<div class="step"><div class="no">1</div><div class="grow"><b>'+t('s1T')+'</b><small>'+t('s1S')+'</small>'+
+        '<button class="btn" id="newTok">'+t('s1B')+'</button></div></div>'+
+      '<div class="step"><div class="no">2</div><div class="grow"><b>'+t('s2T')+'</b><small>'+t('s2S')+'</small>'+
+        '<button class="btn pri" id="bind">'+t('s2B')+'</button></div></div>'+
+    '</div><div class="hint">'+t('onHint')+'</div></div>';
+}
+function render(){
+  var app = document.getElementById('app'), d = S.d;
+  if(d && d.cst==='unbound'){ app.innerHTML = viewOnboard(); bindOnboard(); return; }
+  var login = d && d.login || '';
+  var av = d && d.av || '';
+  var h = '<div class="hd">'+
+      '<div class="ava">'+esc((login[0]||'G').toUpperCase())+(av?'<img src="'+esc(av)+'" alt="" onerror="this.remove()">':'')+'</div>'+
+      '<div class="grow"><h1>'+t('title')+'</h1><div class="who">'+
+        (login ? '@'+esc(login)+(num(d.ok)===1 ? ' · '+esc(subState(d)) : '') : '&nbsp;')+'</div></div>'+
+      '<button class="xb-at" id="xbAt" type="button"></button></div>';
+  var expired = d && d.cst==='expired', has = d && num(d.ok)===1;
+  if(expired){
+    h += '<div class="banner" id="rebind"><div class="grow"><b>'+t('expT')+'</b><small>'+t(has?'expS':'expS0')+'</small></div><span class="go">›</span></div>';
+  }
+  if(!d){
+    h += S.err ? '<div class="grp" style="margin-top:18px"><div class="state">'+t('errT')+
+                 '<br><button class="btn" id="retry">'+t('retry')+'</button></div></div>'
+               : '<div class="state">'+t('loading')+'</div>';
+  } else if(!has){
+    /* 过期且没有缓存:流根本不发请求,「重试」永远没用 —— 只留上面那条横幅,它就是下一步。 */
+    if(!expired) h += '<div class="grp" style="margin-top:18px"><div class="state">'+t('errT')+
+      '<br><button class="btn" id="retry">'+t('retry')+'</button></div></div>';
+  } else {
+    h += viewTodo(d) + viewActivity(d) + viewYear() + viewRepos();
+  }
+  h += '<button class="pickb" id="desk"><span class="pk">＋</span><span class="pg">'+
+      '<b>'+t('deskT')+'</b><span class="d">'+t('deskS')+'</span></span></button>'+
+    '<div class="foot">'+t('foot')+' <a id="settings">'+t('settings')+'</a></div>';
+  var yg0 = document.querySelector('.ygrid'), ysl = yg0 ? yg0.scrollWidth - yg0.scrollLeft : null;
+  app.innerHTML = h;
+  bindMain(ysl);
+  /* 时效锚 = 这份数据真正取回来的时间(pack 的 ts),不是「现在」:命中缓存 / 后台校新失败 / 令牌过期
+     都在显示旧数据,写「现在」等于告诉用户这是刚取的。 */
+  if(window.xbAt){ xbAt.set('xbAt', has && d.ts ? Number(d.ts) : null); xbAt.busy('xbAt', S.busy); }
+}
+function on(id, fn){ var el = document.getElementById(id); if(el) el.addEventListener('click', fn); }
+function bindOnboard(){
+  on('newTok', function(){ nav(NEW_TOKEN); });
+  on('bind', function(){ nav(BIND); });
+}
+function bindMain(ysl){
+  on('xbAt', function(){ refresh(true); });
+  on('yRetry', function(){ loadYear(true); });
+  on('retry', function(){ refresh(true); });
+  on('rebind', function(){ nav(BIND); });
+  on('settings', function(){ nav('/settings'); });
+  on('desk', function(){ if(window.xbridge && xbridge.pickWidgets) xbridge.pickWidgets(); });
+  on('edit', function(){ S.edit = !S.edit; render(); });
+  on('addSlot', openPicker);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-u]'), function(el){
+    el.addEventListener('click', function(){ if(S.edit && el.classList.contains('rr')) return; openGh(el.dataset.u); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-yt]'), function(b){
+    b.addEventListener('click', function(){ S.yTab = b.dataset.yt; render(); }); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-yr]'), function(b){
+    b.addEventListener('click', function(){ S.yRepo = b.dataset.yr; render(); }); });
+  /* 热力格:第一次画滚到最右(最新一周);之后重画保持用户滚到的位置(按离右端的距离还原)。 */
+  var yg = document.querySelector('.ygrid'); if(yg) yg.scrollLeft = ysl==null ? yg.scrollWidth : yg.scrollWidth - ysl;
+  Array.prototype.forEach.call(document.querySelectorAll('.rm'), function(b){
+    b.addEventListener('click', function(e){ e.stopPropagation(); removeRepo(+b.dataset.i, b.dataset.nm); });
+  });
+}
+
+// ── 取数 ────────────────────────────────────────────────────
+/* G23 三态:先 _cache:1(命中就零网络出首屏,旧了会带 _stale=1),再按需 _cache:0 真取一次。
+   手动刷新 / 改完关注位直接 _cache:0 —— 下拉必须穿透。 */
+function load(useCache){
+  return df('home', {_cache: useCache ? 1 : 0}).then(function(d){
+    if(d){ S.d = d; S.err = false; } else if(!S.d) S.err = true;
+    return d;
+  });
+}
+/* 刷新。忙时不叠第二轮,而是记一笔,当前这轮结束后补跑一次 —— 连着加几个仓库时,
+   后几次写盘的结果不能因为「上一轮还在跑」就丢了。withYear=false:改关注位不重取年视图。 */
+function refresh(force, withYear){
+  if(withYear==null) withYear = true;
+  if(S.busy){ S.pend = true; S.pendYear = S.pendYear || withYear; return; }
+  S.busy = true; S.err = false; render();
+  load(!force).then(function(d){
+    /* 年视图与首页校新互不依赖,拿到首帧(知道已绑定)就并行起跑,不等首页那趟网络。 */
+    if(withYear) loadYear(!!force);
+    /* ⚠️ 旧货先画出来再去校新 —— 不在这里 render,首屏就要等校新那趟网络回来,
+       缓存一过 ttl(5 分钟)就跟没缓存一样。busy 仍为 true,时效锚照转。 */
+    if(!force && d && String(d._stale)==='1' && d.cst==='bound'){ render(); return load(false); }
+  }).then(function(){
+    S.busy = false; S.saving = false; render();
+    if(S.pend){ var y = S.pendYear; S.pend = false; S.pendYear = false; refresh(true, y); }
+  });
+}
+
+// ── 关注的仓库 ──────────────────────────────────────────────
+/* ⚠️ 写盘恒补齐到 6 槽,真实项在前、空槽垫后(repos.df 按下标别名 r0..r5 查)。 */
+function pad(a){
+  var out = a.slice(0,MAX).map(function(x){ return {o:x.o, r:x.r, m:x.m||'0'}; });
+  while(out.length<MAX) out.push({o:'',r:'',m:'0'});
+  return out;
+}
+/* 回落态(没设关注位,显示的是「你最近推送的仓库」)下:
+   · 「移除」= 先把眼前这几个固定成关注位,再删掉点的那个 —— 否则删一个,其余几个也跟着消失;
+   · 「添加」= 从零开始,只显示你选的(页面那句说明就是这么写的)。刻意不先固定:回落列表恒有 6 个,
+     先固定就一个都加不进去了。 */
+function seedFromFallback(){
+  if(S.slots.length || !S.d || String(S.d.hasS)==='1') return;
+  S.slots = repoList().slice(0,MAX).map(function(x){
+    var p = x.nm.split('/'); return {o:p[0], r:p[1], m:'1'}; });
+}
+function save(prev){
+  S.saving = true; render();
+  return af('save', {slots: pad(S.slots)}).then(function(ok){
+    if(!ok){ S.slots = prev; S.saving = false; render(); return; }
+    refresh(true, false);
+  });
+}
+/* 删除先在屏上立刻生效(乐观更新),写盘期间所有「移除」禁用 —— 否则连点两行时第二下拿的是旧下标,
+   会删错一个或什么都没删。写盘失败就回滚。 */
+function removeRepo(i, nm){
+  var prev = S.slots.slice();
+  if(S.d && String(S.d.hasS)!=='1'){
+    seedFromFallback();   // 回落态:眼前这几个是按名字固定下来的,名字就是新名字,按名字删
+    S.slots = S.slots.filter(function(x){ return (x.o+'/'+x.r).toLowerCase() !== String(nm).toLowerCase(); });
+  } else {
+    S.slots = S.slots.filter(function(_, k){ return k !== i; });
+    if(S.d && S.d.repos){ S.d = Object.assign({}, S.d, {repos: S.d.repos.filter(function(_, k){ return k !== i; })}); }
+  }
+  save(prev);
+}
+function slotHas(o,r){
+  return S.slots.some(function(x){ return (x.o+'/'+x.r).toLowerCase()===(o+'/'+r).toLowerCase(); });
+}
+function addSlot(o,r,mine){
+  if(slotHas(o,r)) return 'added';
+  if(S.slots.length>=MAX) return 'full';
+  var prev = S.slots.slice();
+  S.slots.push({o:o, r:r, m: mine?'1':'0'});
+  save(prev);
+  return 'ok';
+}
+var PK = { src:'mine', hits:[], mine:null, mineErr:false, timer:null, kw:'', searching:false };
+function closeLayer(){ document.getElementById('layer').innerHTML=''; }
+function openPicker(){ PK.src='mine'; PK.hits=[]; PK.kw=''; paintPicker(); if(!PK.mine) loadMine(); }
+/* 面板骨架只在打开 / 切来源时整个画一次;结果区单独重画 —— 整张重建会把输入框换掉,
+   光标跳位、中文拼音输入到一半被打断。 */
+function paintPicker(){
+  document.getElementById('layer').innerHTML =
+    '<div class="scrim" id="scrim"></div><div class="sheet">'+
+    '<div class="grab"></div><h3>'+t('pickT')+'</h3>'+
+    '<p class="sh" id="pkLeft"></p>'+
+    '<div class="srcpick"><div class="'+(PK.src==='mine'?'on':'')+'" data-s="mine">'+t('srcMine')+'</div>'+
+      '<div class="'+(PK.src==='all'?'on':'')+'" data-s="all">'+t('srcAll')+'</div></div>'+
+    (PK.src==='all' ? '<input class="q" id="q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="'+esc(t('searchPh'))+'">' : '')+
+    '<div class="grp" id="pkRes"></div></div>';
+  on('scrim', closeLayer);
+  Array.prototype.forEach.call(document.querySelectorAll('.srcpick div'), function(el){
+    el.addEventListener('click', function(){ PK.src = el.dataset.s; PK.kw=''; PK.hits=[]; ++SEQ; paintPicker();
+      if(PK.src==='mine' && !PK.mine) loadMine(); });
+  });
+  var q = document.getElementById('q');
+  if(q){ q.value = PK.kw; q.addEventListener('input', onSearch); }
+  paintResults();
+}
+function paintResults(){
+  var box = document.getElementById('pkRes'); if(!box) return;
+  var lf = document.getElementById('pkLeft');
+  if(lf) lf.textContent = t('pickS')+Math.max(0, MAX - S.slots.length)+t('pickS2');
+  var rows;
+  if(PK.src==='mine'){
+    rows = PK.mineErr ? '<div class="state">'+t('mineErr')+'</div>'
+      : PK.mine==null ? '<div class="state">'+t('loading')+'</div>'
+      : (PK.mine.length ? PK.mine.map(function(x,i){ return pickRow(x,i); }).join('') : '<div class="state">'+t('mineNone')+'</div>');
+  } else {
+    rows = !PK.kw ? '' : PK.searching && !PK.hits.length ? '<div class="state">'+t('searching')+'</div>'
+      : (PK.hits.length ? PK.hits.map(function(x,i){ return pickRow(x,i); }).join('') : '<div class="state">'+t('noHit')+'</div>');
+  }
+  box.innerHTML = rows;
+  box.style.display = rows ? '' : 'none';
+  Array.prototype.forEach.call(box.querySelectorAll('.add'), function(b){
+    b.addEventListener('click', function(){
+      if(b.disabled) return;
+      var src = PK.src==='mine' ? PK.mine : PK.hits;
+      var x = src[+b.dataset.k]; if(!x) return;
+      addSlot(x.o, x.r, PK.src==='mine');
+      paintResults();   // 「还能添加 N 个」与其余行的「已满」一起更新
+    });
+  });
+}
+function pickRow(x,i){
+  var has = slotHas(x.o,x.r), full = S.slots.length>=MAX;
+  var meta = [x.g, x.s!=null ? '★ '+x.s : null, x.p ? t('priv') : null, x.d].filter(Boolean).join(' · ');
+  return '<div class="slot"><div class="grow"><b>'+esc(x.o+'/'+x.r)+'</b><small>'+esc(meta)+'</small></div>'+
+    '<button class="add" data-k="'+i+'"'+((has||full)?' disabled':'')+'>'+
+      (has ? t('added') : (full ? t('full') : '＋'))+'</button></div>';
+}
+function loadMine(){
+  PK.mineErr = false;
+  df('myrepos',{}).then(function(d){
+    if(!d){ PK.mineErr = true; PK.mine = null; }
+    else {
+      var names=d.names||[], owners=d.owners||[], langs=d.langs||[], stars=d.stars||[], privs=d.privs||[];
+      PK.mine = names.map(function(nm,i){
+        return { o:owners[i]||'', r:nm, g:langs[i]||'', s:stars[i], p:String(privs[i])==='true' };
+      }).filter(function(x){ return x.o && x.r; });
+    }
+    if(PK.src==='mine') paintResults();
+  });
+}
+/* 搜索走 GitHub 的 search 配额(10 次/分钟)→ 400ms 防抖是硬要求;
+   慢请求晚回会把新结果盖掉,所以每次请求领一个序号,只认最新那一个(清空输入也作废在途请求)。 */
+var SEQ = 0;
+function onSearch(e){
+  var kw = e.target.value.trim();
+  clearTimeout(PK.timer); PK.kw = kw;
+  if(!kw){ ++SEQ; PK.hits=[]; PK.searching=false; paintResults(); return; }
+  PK.searching = true; paintResults();
+  PK.timer = setTimeout(function(){
+    var my = ++SEQ;
+    df('search',{kw:encodeURIComponent(kw)}).then(function(d){
+      if(my!==SEQ) return;
+      PK.searching = false;
+      PK.hits = ((d&&d.list)||[]).filter(function(x){ return x && x.o && x.r; });
+      if(PK.src==='all') paintResults();
+    });
+  }, 400);
+}
+
+// ── 启动 ────────────────────────────────────────────────────
+function applyTheme(th){
+  var dark = th==='dark' || (th!=='light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+}
+(async function boot(){
+  if(!(await ready())){
+    document.getElementById('app').innerHTML='<div class="state">'+t('notX')+'</div>'; return;
+  }
+  var d = await nbInfo();
+  applyTheme(d.theme);
+  LANG = nbLang(d.language||d.locale);
+  document.documentElement.lang = LANG==='zh' ? 'zh' : 'en';
+  var b = await df('boot',{});
+  S.slots = (((b&&b.list)||[])).filter(function(x){ return x && x.o && x.r; });
+  render();
+  refresh(false);
+  /* 在 App 里绑完令牌回来,这一页要跟上(引导文案就是「绑定后回到这一页」)。 */
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden && !S.busy) refresh(false); });
+  window.addEventListener('languagechange', function(e){
+    LANG = nbLang((e && e.detail && e.detail.language) || document.documentElement.getAttribute('data-lang'));
+    document.documentElement.lang = LANG==='zh' ? 'zh' : 'en'; render();
+  });
+})();
+})();
+</script>
+</body></html>

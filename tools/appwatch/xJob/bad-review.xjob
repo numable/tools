@@ -1,0 +1,54 @@
+{
+ "_note_gen": "tools/infosource/gen_appstore.py",
+ "_note": "动态提醒(§7):盯着的 App 来了新的 1–2 星评论。按评论 id 去重,首次运行只建基线。\n`appId` 空 = 账号里按名字排第一个的 App(与组件同一条规则);从 review / insights 组件长按添加时预填。appId 是隐藏参数:只放 params 不放 form(管理页里建的实例盯账号第一个 App)。",
+ "version": 1,
+ "id": "bad-review",
+ "title": "差评提醒",
+ "sub": "有新的 1–2 星评论时告诉你",
+ "i18n": {
+  "en-US": {
+   "title": "Low-rating alert",
+   "sub": "Tells you when a new 1–2★ review arrives",
+   "message": {
+    "title": "${name}: ${nNew} new 1–2★ reviews",
+    "body": "${tt0}"
+   }
+  }
+ },
+ "params": {
+  "appId": ""
+ },
+ "events": {
+  "onClick": "/reviews?appId=${appId}&country="
+ },
+ "task": {
+  "depends": [
+   {
+    "flow": "@[file://xJob/flow/lowrv.df]",
+    "params": {
+     "appId": "${appId}"
+    }
+   }
+  ],
+  "then": {
+   "flow": "@[file://xJob/flow/bad-review.df]",
+   "params": {
+    "aid": "${aid}",
+    "ids": "${ids}",
+    "ok": "${ok}"
+   }
+  },
+  "refresh": {
+   "interval": [
+    "1800"
+   ]
+  }
+ },
+ "alert": {
+  "level": "normal",
+  "message": {
+   "title": "${name} 有 ${nNew} 条新差评",
+   "body": "${tt0}"
+  }
+ }
+}

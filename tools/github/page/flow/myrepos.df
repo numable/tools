@@ -1,0 +1,90 @@
+{
+ "_note": "「从我的仓库挑」:令牌主人最近推送的 30 个仓库(含协作 / 组织成员),供首页添加关注位。只在用户打开添加面板时调。\n⚠️ 刻意不整份透传:pluck 成平行数组,页面按下标 zip(VParser 没有 map)。30 个完整仓库对象约 90KB,页面只用 5 个字段。\n【G23 豁免】添加面板里的一次性列表,用户点开就是要看此刻的仓库,缓存与目的相悖。",
+ "version": 1,
+ "_lintCache": "exempt",
+ "actions": [
+  {
+   "op": "set",
+   "props": {
+    "key": "hdr",
+    "value": {
+     "Accept": "application/vnd.github+json",
+     "User-Agent": "Numable"
+    }
+   }
+  },
+  {
+   "id": "resp",
+   "action": "request",
+   "params": {
+    "url": "https://api.github.com/user/repos?sort=pushed&per_page=30&affiliation=owner,collaborator,organization_member",
+    "method": "GET",
+    "header": "${hdr}",
+    "formatType": "json",
+    "credential": "gh"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "_b",
+    "value": "1"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "n",
+    "value": "$[length::(${resp})]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "names",
+    "value": "$[pluck::(${resp},name)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "owners",
+    "value": "$[pluck::(${resp},owner.login)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "langs",
+    "value": "$[pluck::(${resp},language)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "stars",
+    "value": "$[pluck::(${resp},stargazers_count)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "privs",
+    "value": "$[pluck::(${resp},private)]"
+   }
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "n",
+     "names",
+     "owners",
+     "langs",
+     "stars",
+     "privs"
+    ]
+   }
+  }
+ ]
+}

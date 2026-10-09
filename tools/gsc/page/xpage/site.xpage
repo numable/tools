@@ -1,0 +1,169 @@
+{
+  "_note": "单站点详情:大字点击 → 28 天大图 → 四指标 → **热门搜索词 Top 8** → 这个站点的三张真卡。\n热门搜索词是 v9 整包都没有的东西 —— 它恰恰是 Search Console 最有价值的那一维(「别人搜什么找到我」),而三张卡都装不下一张表。\n⚠️ root **不写同名 `params` 兜底**:节点显式 params 覆盖继承作用域,而路由 query 走的是最低优先级的 ambient scope —— 写了兜底就是「点谁进来都渲同一个站」,且不报错。",
+  "type": "page",
+  "id": "gsc-site",
+  "root": {
+    "type": "container",
+    "id": "root",
+    "title": "${label}",
+    "layout": "list",
+    "direction": "vertical",
+    "gap": "10pt",
+    "_notePad": "左右内边距恒 **14pt**(page-design-system.md §5)。上下留白读 `@contentInset`(= @safeArea + 容器 chrome 占位 + 键盘),不是写死的数 —— 容器的 ···/✕ 胶囊**浮在内容之上**。",
+    "padding": "14pt",
+    "paddingTop": "${@contentInset.top}pt",
+    "paddingBottom": "24pt",
+    "_note": "页面级 depends:一个站点五连发(汇总 + 逐日 + 热门词 + 环比两段),四块面板与查询表共用。",
+    "depends": [
+      {
+        "flow": "@[file://page/flow/site.df]",
+        "params": {
+          "u": "${u}",
+          "_cache": 1
+        },
+        "_note": "§D 纯显式:裸 `@[file://…]` 字符串绑定**传空入参**。`_cache:1` = 开首屏缓存(§5.5 / G23),开关默认关故必须显式写。"
+      }
+    ],
+    "items": [
+      {
+        "type": "Canvas",
+        "id": "head",
+        "h": "62pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-shead.rcn]"
+        }
+      },
+      {
+        "_note": "空参兜底(2026-08-27 深链评审第二批;2026-09-01 收进生成器 —— 0530f3f 那轮是手改产物,被 3496988 的生成器重跑盖掉过一次,真源必须在这里):组件卡未绑定对象时点进来路由参数为空 —— 此前整页对着空参取数,是一页空骨架的死页。判据直接吃路由 query(展开期可用,不依赖 depends 时序,无闪现;web 引擎 depends 未回时子树本就不渲):为空渲 p-unbound 提示(结构照 G9,整卡可点回首页),非空走原内容。⚠️ 判空用 gt::(length::(x),0) —— 路由 query 恒是字符串,length:: 对字符串四端一致(对数字才分叉,memory [[vparser-engine-pitfalls]]);卡片深链恒带空值键(如 ?u=),不会落进「键整个缺席 → ${} 原样透传」那个形态。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(gt::(length::(${u}),0),0,1)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "unbound",
+            "h": "132pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-unbound.rcn]"
+            },
+            "events": {
+              "onClick": "numable://self"
+            }
+          }
+        ]
+      },
+      {
+        "op": "if",
+        "props": {
+          "cond": "$[if::(gt::(length::(${u}),0),1,0)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "chero",
+            "h": "132pt",
+            "canvas": {
+              "source": "@[file://page/rc/c-hero.rcn]"
+            }
+          },
+          {
+            "type": "Canvas",
+            "id": "cchart",
+            "h": "164pt",
+            "canvas": {
+              "source": "@[file://page/rc/c-chart.rcn]"
+            }
+          },
+          {
+            "type": "Canvas",
+            "id": "cstats",
+            "h": "104pt",
+            "canvas": {
+              "source": "@[file://page/rc/c-stats.rcn]"
+            }
+          },
+          {
+            "type": "Canvas",
+            "id": "secQuery",
+            "h": "28pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-sec-query.rcn]"
+            }
+          },
+          {
+            "_note": "定长 8 行按 qn 截断。热度条的宽度已在 `.df` 里算成像素 —— 尺寸字段吃不下方法(memory [[rcn-size-fields-no-methods]])。",
+            "op": "forEach",
+            "props": {
+              "items": "${qlist}",
+              "key": "q",
+              "index": "i"
+            },
+            "items": [
+              {
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(lt::(${i},${qn}),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "q-${i}",
+                    "h": "42pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/c-query.rcn]"
+                    },
+                    "params": {
+                      "k": "${q.k}",
+                      "c": "${q.c}",
+                      "w": "${q.w}"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "_note": "加卡入口 = **一个按钮**(§8.1a):这一页讲的就是这个对象,候选**逐项**带上它 —— 一份共享 override 只喂给面板当前那一张。",
+            "type": "Canvas",
+            "id": "addBtn",
+            "h": "56pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-addbtn.rcn]"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/pick-site.af]",
+                "params": {
+                  "site": "${site}",
+                  "label": "${label}"
+                }
+              }
+            }
+          },
+          {
+            "type": "Canvas",
+            "id": "foot",
+            "h": "132pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-foot.rcn]"
+            }
+          }
+        ]
+      }
+    ],
+    "events": {
+      "_note": "`onLoad`:三态的中间那一行 —— 首屏若渲的是旧货就后台校新一次(gate 全生命周期恰好一次、软重载不重置,不会自激;⚠️ 别改挂 onVisible)。",
+      "onLoad": [
+        {
+          "flow": "@[file://page/flow/site-revalidate.af]",
+          "params": {
+            "stale": "${_stale}",
+            "ckey": "${ckey}"
+          }
+        }
+      ],
+      "onRefresh": "@[file://page/flow/site-refresh.af]"
+    }
+  }
+}

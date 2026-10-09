@@ -1,0 +1,1874 @@
+{
+  "_note": "**整盒点阵**(v2,2026-08-21 取代 p-week.rcn 的「最近七天」,并把 /pack 整页收编回首页)。\n\n【为什么把整盒搬回首页】\n上一版把 28 格下沉到 /pack、首页只留七天,理由是「整盒每盒真正被看一两次」。\n但那样一来七天条与整盒页就是**同一份点阵画两遍**(一份能点、一份只读),改一处必忘另一处;\n而整盒本身就是这个包的形状 —— 用户想看的从来不是「最近七天」,是「这一盒吃到哪儿了」。\nv2 起:首页 = 今天那一颗 + 这一盒,`/pack` 整页删除,翻盒与补录收进这张卡的标题行。\n\n【它凭什么能点,而 /pack 那版不能】\n/pack 的点阵是 **XPage grid 容器 + op:for 生成 N 个 Canvas 节点**,而 grid 容器里的子 Canvas\n**点击根本不派发**(2026-08-16 实测,连空参数的调用都没有)—— 那是平台缺口,包内绕不过去。\n这张卡走的是另一条路:**整块点阵是一张 Canvas**,视觉在 RCN 循环里画,点击靶手写在循环之外。\n七天条已经用这条路跑通过,v2 只是把 7 个靶扩成 35 个。\n\n【横向走布局表达式,不再是固定 pt】\n格宽写成 `({parent.w}-72pt)/7`、每列 x 写成 `18pt+((...)+6pt)*col` —— 布局字段支持 `+ - * / %` 与括号\n(`xbundle-staticcanvas/docs/legacy/layout-measure-spec.md`),于是**任何卡宽上左右边距都恒等于 18**。\n⚠️ 上一版是按 390 屏烤死的固定 pt(起始 14、步进 48),在别的宽度上右边距会比左边多出一截 ——\n   这正是旧点阵、七天条那条「大屏偏左」分叉的根,现在从根上没了。\n⚠️ **但纵向仍是固定 pt**(格高 48、行步进 54、起始 y=52):卡高由 home.df 的 `hPack` 给,\n   它是数据域算的,而数据域碰不到 `{parent.h}` —— 两边必须用同一组常数,改一处就得改另一处。\n⚠️ `${_col}` / `${_row}` 是 VParser 先替换成数字、再交给布局引擎解析的,所以能嵌进布局表达式;\n   而 `{parent.w}` 反过来塞进 `$[calc]` 不行(节点会静默不画)。这条分界见 memory\n   [[rcn-layout-expr-arithmetic]]。",
+  "rc": {
+    "cells": [
+      {
+        "type": "layer",
+        "id": "card",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}-12pt",
+        "bgColor": "#FFFFFF|#15171A",
+        "cornerRadius": {
+          "leftT": "14pt",
+          "leftB": "14pt",
+          "rightT": "14pt",
+          "rightB": "14pt"
+        }
+      },
+      {
+        "type": "txt",
+        "id": "title",
+        "x": "18pt",
+        "y": "14pt",
+        "w": "{parent.w}-176pt",
+        "h": "-1",
+        "text": "$[connect::(${@i18n.packPre},${packNo},${@i18n.packPost},${@i18n.sep},${firstMd},${@i18n.arrow},${lastMd})]",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1"
+      },
+      {
+        "_note": "翻盒。**三个符号统一 40×40 靶 + 24pt 字 + 同一条基线 y=10**(v8.2 起;先由 32/17 放大到 40/20:标题行那三个符号在真机上偏小,\n            够不着也读不清;40 是触摸靶的常规下限,再把 `+` 从 26 收回 24 与两个箭头**同号同基线** ——\n            `+` 是这三个里唯一的动作入口,但「重要」不该靠尺寸不齐来表达)。`+` 的右边距与卡内边距同为 18。\n**不可用时画成灰字、不挂靶**,不是整个消失 —— 按钮消失会让标题行左右跳。\n⚠️ `canNext` 恒不越过当前盒:能翻到「未来的盒」等于给用户一个只能写错数据的地方。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${canPrev},1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}-102pt",
+            "y": "10pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "‹",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "layer",
+            "x": "{parent.w}-102pt",
+            "y": "2pt",
+            "w": "40pt",
+            "h": "40pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "10pt",
+              "leftB": "10pt",
+              "rightT": "10pt",
+              "rightB": "10pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/pack-go.af]",
+                "params": {
+                  "to": "${prevPack}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${canPrev},0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}-102pt",
+            "y": "10pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "‹",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#D0D3D8|#3A3D42",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${canNext},1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}-58pt",
+            "y": "10pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "›",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "layer",
+            "x": "{parent.w}-58pt",
+            "y": "2pt",
+            "w": "40pt",
+            "h": "40pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "10pt",
+              "leftB": "10pt",
+              "rightT": "10pt",
+              "rightB": "10pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/pack-go.af]",
+                "params": {
+                  "to": "${nextPack}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${canNext},0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}-58pt",
+            "y": "10pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "›",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#D0D3D8|#3A3D42",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "补录入口 `+`(v15 起**只在 cycle > 35 时出现**):格子本就可点,常规周期(21+7 / 24+4)下\n它与点格子完全重复,用户反馈「没有太大意义」——删。唯一还需要它的场景是 cycle > 35:\n点击靶是手写的、只有 35 个(见下),第 36 格起视觉照画但点不动,那些日子只能走表单补录。\n于是它的出现条件 = 它被需要的条件,平时不占标题行。⚠️ 随之 ‹ › 右移补位(-102/-58),\n`+` 罕见现身时落在 -146(‹ 左侧)。\n⚠️ 用 `+` 不用铅笔字形:后者在四端是不同的字体资源(有的落成彩色 emoji),`+` 是纯 ASCII、字形一致。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(gt::(${cycle},35),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "id": "addSign",
+            "x": "{parent.w}-146pt",
+            "y": "10pt",
+            "w": "40pt",
+            "h": "-1",
+            "text": "+",
+            "fontSize": "24pt",
+            "alignmentH": "1",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "layer",
+            "id": "addHit",
+            "x": "{parent.w}-146pt",
+            "y": "2pt",
+            "w": "40pt",
+            "h": "40pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "10pt",
+              "leftB": "10pt",
+              "rightT": "10pt",
+              "rightB": "10pt"
+            },
+            "events": {
+              "onClick": "@[file://page/flow/open-log.af]"
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "${hasPlan}"
+        },
+        "react": [
+          {
+            "type": "op",
+            "action": "for",
+            "props": {
+              "count": "${cycle}",
+              "index": "_i"
+            },
+            "react": [
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_col",
+                  "value": "$[calc::(${_i}%7)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_row",
+                  "value": "$[floor::(calc::(${_i}/7))]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_ms",
+                  "value": "$[calc::(${baseMs}+${_i}*86400000)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_d",
+                  "value": "$[formatDate::(${_ms},yyyy-MM-dd)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_n",
+                  "value": "$[formatDate::(${_ms},dd)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_tag",
+                  "value": "$[connect::(_,${_d},_)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_isT",
+                  "value": "$[if::(contains::(${taken},${_tag}),1,0)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_isS",
+                  "value": "$[if::(contains::(${skipped},${_tag}),1,0)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_rest",
+                  "value": "$[if::(lt::(${_i},${active}),0,1)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_gt",
+                  "value": "$[if::(gt::(${_i},${todayIdx}),1,0)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_fut",
+                  "value": "$[calc::(${isCur}*${_gt})]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_un",
+                  "value": "$[calc::((1-${_isT})*(1-${_isS}))]"
+                }
+              },
+              {
+                "_note": "⚠️ 停药格从 ⑤「还没到」里整个摘出来(v14):停药日没有「还没到要做的事」,\n过去与未来画同一档「空槽」才对 —— 否则本盒最后一行在到期前长得和活性格一模一样。",
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_unF",
+                  "value": "$[calc::(${_un}*${_fut}*(1-${_rest}))]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_unA",
+                  "value": "$[calc::(${_un}*(1-${_fut})*(1-${_rest}))]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_unB",
+                  "value": "$[calc::(${_un}*${_rest})]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_isToday",
+                  "value": "$[if::(eq::(${_i},${todayIdx}),1,0)]"
+                }
+              },
+              {
+                "type": "op",
+                "action": "set",
+                "props": {
+                  "key": "_ring",
+                  "value": "$[calc::(${isCur}*${_isToday})]"
+                }
+              },
+              {
+                "_note": "① 已服用:实心 accent。⚠️ accent 实底上用 onAccent 不用白字(design-tokens §1)。",
+                "type": "op",
+                "action": "if",
+                "props": {
+                  "val": "${_isT}"
+                },
+                "react": [
+                  {
+                    "type": "txt",
+                    "x": "18pt+(({parent.w}-72pt)/7+6pt)*${_col}",
+                    "y": "52pt+54pt*${_row}",
+                    "w": "({parent.w}-72pt)/7",
+                    "h": "48pt",
+                    "text": "${_n}",
+                    "fontSize": "14pt",
+                    "typeface": "System-Bold",
+                    "alignmentH": "1",
+                    "alignmentV": "1",
+                    "textColor": "#FFFFFF|#0B0C0E",
+                    "maxLines": "1",
+                    "bgColor": "#128F66|#6FE8BE",
+                    "cornerRadius": {
+                      "leftT": "13pt",
+                      "leftB": "13pt",
+                      "rightT": "13pt",
+                      "rightB": "13pt"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "② 记为未服:同样有份量,只换色相 —— 不用 destructive 红。「那天没吃」是用户陈述的事实,不是我们判定的过错。",
+                "type": "op",
+                "action": "if",
+                "props": {
+                  "val": "${_isS}"
+                },
+                "react": [
+                  {
+                    "type": "txt",
+                    "x": "18pt+(({parent.w}-72pt)/7+6pt)*${_col}",
+                    "y": "52pt+54pt*${_row}",
+                    "w": "({parent.w}-72pt)/7",
+                    "h": "48pt",
+                    "text": "${_n}",
+                    "fontSize": "14pt",
+                    "typeface": "System-Bold",
+                    "alignmentH": "1",
+                    "alignmentV": "1",
+                    "textColor": "#FFFFFF|#F3F4F6",
+                    "maxLines": "1",
+                    "bgColor": "#6B7280|#5A5C63",
+                    "cornerRadius": {
+                      "leftT": "13pt",
+                      "leftB": "13pt",
+                      "rightT": "13pt",
+                      "rightB": "13pt"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "③ 未标记 · 活性期。**未标记 ≠ 未服**,这两者的区分是这个包全部的信息量所在。\n⚠️ 条件用**纯乘法**合成不用 and:: —— calc 四端一致,布尔方法的跨端语义这个包一直没逐字对拍过。",
+                "type": "op",
+                "action": "if",
+                "props": {
+                  "val": "${_unA}"
+                },
+                "react": [
+                  {
+                    "type": "txt",
+                    "x": "18pt+(({parent.w}-72pt)/7+6pt)*${_col}",
+                    "y": "52pt+54pt*${_row}",
+                    "w": "({parent.w}-72pt)/7",
+                    "h": "48pt",
+                    "text": "${_n}",
+                    "fontSize": "14pt",
+                    "typeface": "System-Bold",
+                    "alignmentH": "1",
+                    "alignmentV": "1",
+                    "textColor": "#6B7280|#8E939B",
+                    "maxLines": "1",
+                    "bgColor": "#F5F6F8|#1B1D22",
+                    "cornerRadius": {
+                      "leftT": "13pt",
+                      "leftB": "13pt",
+                      "rightT": "13pt",
+                      "rightB": "13pt"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "④ 停药期(未标记,不分过去/未来):**空槽** —— 透明底 + 细描边,与所有实心格材质不同。\nv13 前它是 `#F7F8FA` 实心底,与 ③ 的 `#F5F6F8` 只差 2 个色阶、肉眼不可分 → 用户反馈\n「停药期没有标识出来」。换材质(实心 vs 描边)而不是再调色阶:色阶差在不同屏上会被抹平,\n材质差不会。已补录过的停药日仍走 ①/② —— 记录优先于日历,安慰剂方案的记录是有效的。",
+                "type": "op",
+                "action": "if",
+                "props": {
+                  "val": "${_unB}"
+                },
+                "react": [
+                  {
+                    "type": "txt",
+                    "x": "18pt+(({parent.w}-72pt)/7+6pt)*${_col}",
+                    "y": "52pt+54pt*${_row}",
+                    "w": "({parent.w}-72pt)/7",
+                    "h": "48pt",
+                    "text": "${_n}",
+                    "fontSize": "14pt",
+                    "typeface": "System-Bold",
+                    "alignmentH": "1",
+                    "alignmentV": "1",
+                    "textColor": "#B6BAC0|#5C6167",
+                    "maxLines": "1",
+                    "bgColor": "#00FFFFFF|#00000000",
+                    "cornerRadius": {
+                      "leftT": "13pt",
+                      "leftB": "13pt",
+                      "rightT": "13pt",
+                      "rightB": "13pt"
+                    },
+                    "borderColor": "#B7BEC8|#4A525C",
+                    "borderWidth": "1pt"
+                  }
+                ]
+              },
+              {
+                "_note": "⑤ 还没到的**活性**日:**照画不留空**。盒子有多长本身是信息,画成空洞会被读成「漏了几格」。\n⚠️ v14 起只剩活性日(`1-_rest`)—— 停药日不分过去/未来,恒走 ④ 的空槽。",
+                "type": "op",
+                "action": "if",
+                "props": {
+                  "val": "${_unF}"
+                },
+                "react": [
+                  {
+                    "type": "txt",
+                    "x": "18pt+(({parent.w}-72pt)/7+6pt)*${_col}",
+                    "y": "52pt+54pt*${_row}",
+                    "w": "({parent.w}-72pt)/7",
+                    "h": "48pt",
+                    "text": "${_n}",
+                    "fontSize": "14pt",
+                    "typeface": "System-Bold",
+                    "alignmentH": "1",
+                    "alignmentV": "1",
+                    "textColor": "#D6D9DE|#2F3237",
+                    "maxLines": "1",
+                    "bgColor": "#F7F8FA|#17191D",
+                    "cornerRadius": {
+                      "leftT": "13pt",
+                      "leftB": "13pt",
+                      "rightT": "13pt",
+                      "rightB": "13pt"
+                    }
+                  }
+                ]
+              },
+              {
+                "_note": "⑥ 「今天」外圈。⚠️ **不挂 events** —— 它盖在格子上面,挂了就抢走点击(靶在下面统一给)。\n⚠️ 画在格子外沿而不是内描:实心 accent 的格子上,内描的圈看不见。\n⚠️ 只在看当前盒(`isCur`)时画 —— 翻到旧盒时那一格不是今天。",
+                "type": "op",
+                "action": "if",
+                "props": {
+                  "val": "${_ring}"
+                },
+                "react": [
+                  {
+                    "type": "layer",
+                    "x": "18pt+(({parent.w}-72pt)/7+6pt)*${_col}-3pt",
+                    "y": "52pt+54pt*${_row}-3pt",
+                    "w": "({parent.w}-72pt)/7+6pt",
+                    "h": "54pt",
+                    "bgColor": "#00FFFFFF|#00000000",
+                    "cornerRadius": {
+                      "leftT": "16pt",
+                      "leftB": "16pt",
+                      "rightT": "16pt",
+                      "rightB": "16pt"
+                    },
+                    "borderColor": "#128F66|#6FE8BE",
+                    "borderWidth": "2pt"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "_note": "**点击靶**:35 个透明层,盖在格子上。这是整块点阵能点的全部原因。\n⚠️ RCN 内循环产生的 `${_i}` 在 events 求值时取不到(宿主在 **XPage 节点作用域**里求 events.params,\n   2026-08-16 iOS 实测探针实收 `i=[${_i}]` 原样透传),而**环境值(顶层键)能传**。\n   于是分工:**视觉在循环里算,点击靶手写** —— 每个靶传一个**字面量序号** + 环境值 `${baseMs}`,\n   日期由 toggle.af 自己算(它早就写着 `findNotEmpty(day, formatDate(base + i*86400000))`)。\n   ⚠️ 传序号而不是传日期,是为了不让 home.df 为此多算 35 个顶层键。\n⚠️ 底色是 alpha=0 的透明(`#00FFFFFF`)而不是省略 `bgColor`:要的是「参与命中但不可见」,\n   省略底色的层各端是否接命中没有对拍过。\n⚠️ 每个靶各自包一层 `op:if (i < cycle)` —— 周期短于 35 天时(如 21+0),多出来的靶会落在卡外的空白上,\n   点下去就是往不存在的格子写记录。\n⚠️ **靶只有 35 个,视觉却按 cycle 画满**:cycle > 35 的极端设置(活性 90 + 停药 30 是上限)下,\n   第 36 格之后照画但点不动,补录走 `+`。21+7 / 24+4 都是 28,是这个包的主场景。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(0,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit0",
+            "x": "18pt",
+            "y": "52pt",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "0",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(1,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit1",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*1",
+            "y": "52pt",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "1",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(2,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit2",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*2",
+            "y": "52pt",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "2",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(3,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit3",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*3",
+            "y": "52pt",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "3",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(4,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit4",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*4",
+            "y": "52pt",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "4",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(5,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit5",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*5",
+            "y": "52pt",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "5",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(6,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit6",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*6",
+            "y": "52pt",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "6",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(7,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit7",
+            "x": "18pt",
+            "y": "52pt+54pt*1",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "7",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(8,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit8",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*1",
+            "y": "52pt+54pt*1",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "8",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(9,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit9",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*2",
+            "y": "52pt+54pt*1",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "9",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(10,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit10",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*3",
+            "y": "52pt+54pt*1",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "10",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(11,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit11",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*4",
+            "y": "52pt+54pt*1",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "11",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(12,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit12",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*5",
+            "y": "52pt+54pt*1",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "12",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(13,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit13",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*6",
+            "y": "52pt+54pt*1",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "13",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(14,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit14",
+            "x": "18pt",
+            "y": "52pt+54pt*2",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "14",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(15,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit15",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*1",
+            "y": "52pt+54pt*2",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "15",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(16,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit16",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*2",
+            "y": "52pt+54pt*2",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "16",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(17,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit17",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*3",
+            "y": "52pt+54pt*2",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "17",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(18,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit18",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*4",
+            "y": "52pt+54pt*2",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "18",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(19,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit19",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*5",
+            "y": "52pt+54pt*2",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "19",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(20,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit20",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*6",
+            "y": "52pt+54pt*2",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "20",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(21,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit21",
+            "x": "18pt",
+            "y": "52pt+54pt*3",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "21",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(22,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit22",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*1",
+            "y": "52pt+54pt*3",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "22",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(23,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit23",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*2",
+            "y": "52pt+54pt*3",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "23",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(24,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit24",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*3",
+            "y": "52pt+54pt*3",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "24",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(25,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit25",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*4",
+            "y": "52pt+54pt*3",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "25",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(26,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit26",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*5",
+            "y": "52pt+54pt*3",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "26",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(27,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit27",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*6",
+            "y": "52pt+54pt*3",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "27",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(28,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit28",
+            "x": "18pt",
+            "y": "52pt+54pt*4",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "28",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(29,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit29",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*1",
+            "y": "52pt+54pt*4",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "29",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(30,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit30",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*2",
+            "y": "52pt+54pt*4",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "30",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(31,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit31",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*3",
+            "y": "52pt+54pt*4",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "31",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(32,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit32",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*4",
+            "y": "52pt+54pt*4",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "32",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(33,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit33",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*5",
+            "y": "52pt+54pt*4",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "33",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(lt::(34,${cycle}),1,0)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "id": "hit34",
+            "x": "18pt+(({parent.w}-72pt)/7+6pt)*6",
+            "y": "52pt+54pt*4",
+            "w": "({parent.w}-72pt)/7",
+            "h": "48pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "cornerRadius": {
+              "leftT": "13pt",
+              "leftB": "13pt",
+              "rightT": "13pt",
+              "rightB": "13pt"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/toggle.af]",
+                "params": {
+                  "i": "34",
+                  "base": "${baseMs}"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "_note": "图例 + 累计。y 由 home.df 算(`legY` / `legDotY`)—— 行数随周期变(21 天 3 行 / 28 天 4 行),\n而 RCN 这一层拿不到「卡有多高」(`{parent.h}` 是布局锚点,进不了数据域算术)。\n⚠️ 累计只报「已服用」一个数:「记为未服」的累计在回顾时没有行动含义,摆两个数只会让人去做减法。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "${hasPlan}"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "18pt",
+            "y": "${legDotY}pt",
+            "w": "9pt",
+            "h": "9pt",
+            "bgColor": "#128F66|#6FE8BE",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            }
+          },
+          {
+            "type": "txt",
+            "x": "31pt",
+            "y": "${legY}pt",
+            "w": "62pt",
+            "h": "-1",
+            "text": "${@i18n.lgTaken}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "layer",
+            "x": "94pt",
+            "y": "${legDotY}pt",
+            "w": "9pt",
+            "h": "9pt",
+            "bgColor": "#6B7280|#5A5C63",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            }
+          },
+          {
+            "type": "txt",
+            "x": "107pt",
+            "y": "${legY}pt",
+            "w": "62pt",
+            "h": "-1",
+            "text": "${@i18n.lgSkipped}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "layer",
+            "x": "170pt",
+            "y": "${legDotY}pt",
+            "w": "9pt",
+            "h": "9pt",
+            "bgColor": "#F5F6F8|#1B1D22",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            },
+            "borderColor": "#DDE0E5|#2E3138",
+            "borderWidth": "1pt"
+          },
+          {
+            "type": "txt",
+            "x": "183pt",
+            "y": "${legY}pt",
+            "w": "62pt",
+            "h": "-1",
+            "text": "${@i18n.lgNone}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "type": "txt",
+            "x": "{parent.w}-124pt",
+            "y": "${legY}pt",
+            "w": "106pt",
+            "h": "-1",
+            "text": "$[connect::(${@i18n.cntPre},${totalTaken},${@i18n.cntUnit})]",
+            "fontSize": "11pt",
+            "alignmentH": "1",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          },
+          {
+            "_note": "图例第二行的两个 y 先落地(G32):尺寸串里的 $[方法] 一旦求空就是裸 \"pt\",StaticCanvas 整卡布局失败;兜底值取第一行的位置。",
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "legDotY2",
+              "value": "$[findNotEmpty::(calc::(${legDotY}+21),${legDotY})]"
+            }
+          },
+          {
+            "type": "op",
+            "action": "set",
+            "props": {
+              "key": "legY2",
+              "value": "$[findNotEmpty::(calc::(${legY}+21),${legY})]"
+            }
+          },
+          {
+            "_note": "图例第二行(v14):停药期空槽 + 一句「无需记录」。单开一行而不是挤进第一行:\n三个实心档 + 计数已把第一行占满(最窄卡宽 288 时本就贴着),en 文案更长。\ny 用 `$[calc::(${legY}+…)]` 从 legY 推 —— legY 随行数变,只能在 df 里算,\n但行内偏移是常数,数据域 calc 在位置字段里可用(同 cycle.rcn 的 `${_x}-2` 先例)。\n卡高的 +20 在 home.df 的 hPack 里,两边一起改。",
+            "type": "layer",
+            "x": "18pt",
+            "y": "${legDotY2}pt",
+            "w": "9pt",
+            "h": "9pt",
+            "bgColor": "#00FFFFFF|#00000000",
+            "borderColor": "#B7BEC8|#4A525C",
+            "borderWidth": "1pt",
+            "cornerRadius": {
+              "leftT": "3pt",
+              "leftB": "3pt",
+              "rightT": "3pt",
+              "rightB": "3pt"
+            }
+          },
+          {
+            "type": "txt",
+            "x": "31pt",
+            "y": "${legY2}pt",
+            "w": "{parent.w}-49pt",
+            "h": "-1",
+            "text": "${@i18n.lgRest}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "packPre": "第 ",
+        "packPost": " 盒",
+        "sep": " · ",
+        "arrow": " → ",
+        "lgTaken": "已服用",
+        "lgSkipped": "未服用",
+        "lgNone": "未标记",
+        "lgRest": "停药期 · 无需记录",
+        "cntPre": "累计 ",
+        "cntUnit": " 天"
+      },
+      "en-US": {
+        "packPre": "Pack ",
+        "packPost": "",
+        "sep": " · ",
+        "arrow": " → ",
+        "lgTaken": "Taken",
+        "lgSkipped": "Not taken",
+        "lgNone": "Unmarked",
+        "lgRest": "Break — no log needed",
+        "cntPre": "Days taken: ",
+        "cntUnit": ""
+      }
+    },
+    "i18nEmptyOk": [
+      "packPost",
+      "cntUnit"
+    ]
+  }
+}

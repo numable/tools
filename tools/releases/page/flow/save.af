@@ -1,0 +1,51 @@
+{
+  "_note": "关注列表写回:整份数组一起落盘(增删在首页 JS 里做完再整份传进来 —— AF 没有数组追加 / 删除原语)。组件与提醒用 data.get 读同一个键,所以必须存结构化数组。drop = 刚移除的那个仓库(o/r),顺手清掉它的首页缓存与提醒基线(§5.5.7「写操作之后的读」;不清的话以后重新关注,会把这期间发的版本当新版本报)。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "data.set",
+      "params": {
+        "key": "rl_list",
+        "value": "${list}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dropIn",
+        "value": "$[findNotEmpty::(${drop},)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${dropIn}),0),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "dropL",
+            "value": "$[toLowerCase::(${dropIn})]"
+          }
+        },
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "$[connect::(c.rl.,replaceAll::(${dropL},/,~))]"
+          }
+        },
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "$[connect::(rl.last.,${dropL})]"
+          }
+        }
+      ]
+    },
+    {
+      "action": "widget.refresh",
+      "_note": "落盘后让本包的组件真取数重渲(节拍 15 分钟,不踢它要等一轮才看得到刚加的仓库)。必须在 data.set 之后。"
+    }
+  ]
+}

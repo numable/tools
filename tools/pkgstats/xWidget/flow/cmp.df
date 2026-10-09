@@ -1,0 +1,3380 @@
+{
+  "version": 1,
+  "_note": "两包对比:入参 eco / pkg(A)、eco2 / pkg2(B)。两个包各取 30 天逐日(同关注列表的取数槽),折线共用纵轴。只挂一个照常出数。组件的流不做缓存(§5.5 契约 5)。",
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "uY",
+        "value": "亿"
+      },
+      "_note": "中文量级单位落成键再引用:表达式里不直接写汉字(与半角逗号混在一个串里,文案闸会误报)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uW",
+        "value": "万"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0e",
+        "value": "${eco}"
+      },
+      "_note": "⚠️ 入参落地(勿删):方法参数里的 ${} 看不见 flow 入参。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0n",
+        "value": "${pkg}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1e",
+        "value": "${eco2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1n",
+        "value": "${pkg2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e0",
+        "value": "$[toLowerCase::(findNotEmpty::(${i0e},npm))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n0",
+        "value": "${i0n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "has0",
+        "value": "$[if::(gt::(length::(${n0}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "$[if::(eq::(${has0},1),if::(eq::(${e0},crates),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y0",
+        "value": "$[if::(eq::(${has0},1),if::(eq::(${e0},pypi),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m0",
+        "value": "$[if::(eq::(${has0},1),if::(eq::(${c0},1),0,if::(eq::(${y0},1),0,1)),0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${m0}"
+      },
+      "items": [
+        {
+          "id": "rN0",
+          "action": "request",
+          "params": {
+            "url": "https://api.npmjs.org/downloads/range/last-year/${n0}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${y0}"
+      },
+      "items": [
+        {
+          "id": "rP0",
+          "action": "request",
+          "params": {
+            "url": "https://pypistats.org/api/packages/$[toLowerCase::(${n0})]/overall",
+            "method": "GET",
+            "queryParams": {
+              "mirrors": "false"
+            },
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${c0}"
+      },
+      "items": [
+        {
+          "id": "rC0",
+          "action": "request",
+          "params": {
+            "url": "https://crates.io/api/v1/crates/$[toLowerCase::(${n0})]/downloads",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable-pkgstats/1 (+https://numable.app)",
+              "Accept": "application/json"
+            },
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${y0},1),if::(gt::(length::(${rP0.data}),0),0,1),0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "1500"
+          }
+        },
+        {
+          "id": "rP0",
+          "action": "request",
+          "params": {
+            "url": "https://pypistats.org/api/packages/$[toLowerCase::(${n0})]/overall",
+            "method": "GET",
+            "queryParams": {
+              "mirrors": "false"
+            },
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ],
+      "_note": "pypistats 偶发 429:隔 1.5 秒重试一次。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_c0",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e1",
+        "value": "$[toLowerCase::(findNotEmpty::(${i1e},npm))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n1",
+        "value": "${i1n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "has1",
+        "value": "$[if::(gt::(length::(${n1}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[if::(eq::(${has1},1),if::(eq::(${e1},crates),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y1",
+        "value": "$[if::(eq::(${has1},1),if::(eq::(${e1},pypi),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m1",
+        "value": "$[if::(eq::(${has1},1),if::(eq::(${c1},1),0,if::(eq::(${y1},1),0,1)),0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${m1}"
+      },
+      "items": [
+        {
+          "id": "rN1",
+          "action": "request",
+          "params": {
+            "url": "https://api.npmjs.org/downloads/range/last-year/${n1}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${y1}"
+      },
+      "items": [
+        {
+          "id": "rP1",
+          "action": "request",
+          "params": {
+            "url": "https://pypistats.org/api/packages/$[toLowerCase::(${n1})]/overall",
+            "method": "GET",
+            "queryParams": {
+              "mirrors": "false"
+            },
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${c1}"
+      },
+      "items": [
+        {
+          "id": "rC1",
+          "action": "request",
+          "params": {
+            "url": "https://crates.io/api/v1/crates/$[toLowerCase::(${n1})]/downloads",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable-pkgstats/1 (+https://numable.app)",
+              "Accept": "application/json"
+            },
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${y1},1),if::(gt::(length::(${rP1.data}),0),0,1),0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "1500"
+          }
+        },
+        {
+          "id": "rP1",
+          "action": "request",
+          "params": {
+            "url": "https://pypistats.org/api/packages/$[toLowerCase::(${n1})]/overall",
+            "method": "GET",
+            "queryParams": {
+              "mirrors": "false"
+            },
+            "formatType": "json",
+            "timeout": "10000"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_c1",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc0",
+        "value": {
+          "_": "0"
+        }
+      },
+      "_note": "按日期累加的容器(对象;键 = yyyy-MM-dd)。先放一个占位键,保证它是对象。"
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${rC0.version_downloads}",
+        "key": "it",
+        "index": "i"
+      },
+      "_note": "⚠️ 首节点 _lb 是循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照,没有它 acc 的累加会丢掉同日前面几个版本(G41)。",
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cur",
+            "value": "$[calc::(findNotEmpty::(get::(${acc0},${it.date}),0)+findNotEmpty::(${it.downloads},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "acc0.${it.date}",
+            "value": "${cur}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nN0",
+        "value": "$[length::(${rN0.downloads})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aN0",
+        "value": "$[pluck::(${rN0.downloads},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nP0",
+        "value": "$[length::(${rP0.data})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aP0",
+        "value": "$[pluck::(${rP0.data},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dC0",
+        "value": "$[pluck::(${rC0.meta.extra_downloads},date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xC0",
+        "value": "$[pluck::(${rC0.meta.extra_downloads},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nC0",
+        "value": "$[length::(${dC0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "end0",
+        "value": "$[if::(eq::(${c0},1),index::(${dC0},calc::(${nC0}-2)),if::(eq::(${y0},1),get::(index::(${rP0.data},calc::(${nP0}-1)),date),${rN0.end}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok0",
+        "value": "$[if::(gt::(length::(${end0}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "acc1",
+        "value": {
+          "_": "0"
+        }
+      },
+      "_note": "按日期累加的容器(对象;键 = yyyy-MM-dd)。先放一个占位键,保证它是对象。"
+    },
+    {
+      "op": "forEach",
+      "props": {
+        "items": "${rC1.version_downloads}",
+        "key": "it",
+        "index": "i"
+      },
+      "_note": "⚠️ 首节点 _lb 是循环屏障(勿删):每轮第一个节点读的是进循环那一刻的快照,没有它 acc 的累加会丢掉同日前面几个版本(G41)。",
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "_lb",
+            "value": "1"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cur",
+            "value": "$[calc::(findNotEmpty::(get::(${acc1},${it.date}),0)+findNotEmpty::(${it.downloads},0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "acc1.${it.date}",
+            "value": "${cur}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nN1",
+        "value": "$[length::(${rN1.downloads})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aN1",
+        "value": "$[pluck::(${rN1.downloads},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nP1",
+        "value": "$[length::(${rP1.data})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aP1",
+        "value": "$[pluck::(${rP1.data},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dC1",
+        "value": "$[pluck::(${rC1.meta.extra_downloads},date)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xC1",
+        "value": "$[pluck::(${rC1.meta.extra_downloads},downloads)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nC1",
+        "value": "$[length::(${dC1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "end1",
+        "value": "$[if::(eq::(${c1},1),index::(${dC1},calc::(${nC1}-2)),if::(eq::(${y1},1),get::(index::(${rP1.data},calc::(${nP1}-1)),date),${rN1.end}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok1",
+        "value": "$[if::(gt::(length::(${end1}),0),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(if::(or::(eq::(${ok0},1),eq::(${ok1},1)),1,0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "no download data"
+          }
+        }
+      ],
+      "_note": "两个包一个都没取到 = 取数失败(限流 / 断网 / 两个名字都不存在)→ 抛错,平台回落上次成功的数据。只挂一个时照常出数,挂掉的那一边显示 --。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[if::(eq::(${ok0},1),parseDate::(${end0},yyyy-MM-dd),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1",
+        "value": "$[if::(eq::(${ok1},1),parseDate::(${end1},yyyy-MM-dd),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tc",
+        "value": "$[min::(findNotEmpty::(${t0},${t1}),findNotEmpty::(${t1},${t0}))]"
+      },
+      "_note": "共同终点(毫秒):两边都有取较早者;只有一边就是那一边。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sh0",
+        "value": "$[if::(eq::(${ok0},1),max::(0,round::(calc::((${t0}-${tc})/86400000))),0)]"
+      },
+      "_note": "往前挪的天数。按本地零点解析的两个日期相减,夏令时切换那天差 1 小时,round 吸收。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sh1",
+        "value": "$[if::(eq::(${ok1},1),max::(0,round::(calc::((${t1}-${tc})/86400000))),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endC",
+        "value": "$[formatDate::(${tc},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_29",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-2-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-2-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-1-${sh0})),index::(${aN0},calc::(${nN0}-1-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_28",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-3-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-3-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-2-${sh0})),index::(${aN0},calc::(${nN0}-2-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_27",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-4-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-4-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-3-${sh0})),index::(${aN0},calc::(${nN0}-3-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_26",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-5-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-5-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-4-${sh0})),index::(${aN0},calc::(${nN0}-4-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_25",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-6-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-6-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-5-${sh0})),index::(${aN0},calc::(${nN0}-5-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_24",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-7-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-7-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-6-${sh0})),index::(${aN0},calc::(${nN0}-6-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_23",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-8-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-8-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-7-${sh0})),index::(${aN0},calc::(${nN0}-7-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_22",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-9-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-9-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-8-${sh0})),index::(${aN0},calc::(${nN0}-8-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_21",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-10-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-10-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-9-${sh0})),index::(${aN0},calc::(${nN0}-9-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_20",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-11-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-11-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-10-${sh0})),index::(${aN0},calc::(${nN0}-10-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_19",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-12-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-12-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-11-${sh0})),index::(${aN0},calc::(${nN0}-11-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_18",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-13-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-13-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-12-${sh0})),index::(${aN0},calc::(${nN0}-12-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_17",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-14-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-14-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-13-${sh0})),index::(${aN0},calc::(${nN0}-13-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_16",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-15-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-15-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-14-${sh0})),index::(${aN0},calc::(${nN0}-14-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_15",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-16-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-16-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-15-${sh0})),index::(${aN0},calc::(${nN0}-15-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_14",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-17-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-17-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-16-${sh0})),index::(${aN0},calc::(${nN0}-16-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_13",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-18-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-18-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-17-${sh0})),index::(${aN0},calc::(${nN0}-17-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_12",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-19-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-19-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-18-${sh0})),index::(${aN0},calc::(${nN0}-18-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_11",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-20-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-20-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-19-${sh0})),index::(${aN0},calc::(${nN0}-19-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_10",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-21-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-21-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-20-${sh0})),index::(${aN0},calc::(${nN0}-20-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_9",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-22-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-22-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-21-${sh0})),index::(${aN0},calc::(${nN0}-21-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_8",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-23-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-23-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-22-${sh0})),index::(${aN0},calc::(${nN0}-22-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_7",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-24-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-24-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-23-${sh0})),index::(${aN0},calc::(${nN0}-23-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_6",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-25-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-25-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-24-${sh0})),index::(${aN0},calc::(${nN0}-24-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_5",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-26-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-26-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-25-${sh0})),index::(${aN0},calc::(${nN0}-25-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_4",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-27-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-27-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-26-${sh0})),index::(${aN0},calc::(${nN0}-26-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_3",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-28-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-28-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-27-${sh0})),index::(${aN0},calc::(${nN0}-27-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_2",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-29-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-29-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-28-${sh0})),index::(${aN0},calc::(${nN0}-28-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_1",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-30-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-30-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-29-${sh0})),index::(${aN0},calc::(${nN0}-29-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x0_0",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${c0},1),calc::(findNotEmpty::(get::(${acc0},index::(${dC0},calc::(${nC0}-31-${sh0}))),0)+findNotEmpty::(index::(${xC0},calc::(${nC0}-31-${sh0})),0)),if::(eq::(${y0},1),index::(${aP0},calc::(${nP0}-30-${sh0})),index::(${aN0},calc::(${nN0}-30-${sh0})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0nzA",
+        "value": [
+          "$[if::(gt::(${x0_0},0),1,0)]",
+          "$[if::(gt::(${x0_1},0),1,0)]",
+          "$[if::(gt::(${x0_2},0),1,0)]",
+          "$[if::(gt::(${x0_3},0),1,0)]",
+          "$[if::(gt::(${x0_4},0),1,0)]",
+          "$[if::(gt::(${x0_5},0),1,0)]",
+          "$[if::(gt::(${x0_6},0),1,0)]",
+          "$[if::(gt::(${x0_7},0),1,0)]",
+          "$[if::(gt::(${x0_8},0),1,0)]",
+          "$[if::(gt::(${x0_9},0),1,0)]",
+          "$[if::(gt::(${x0_10},0),1,0)]",
+          "$[if::(gt::(${x0_11},0),1,0)]",
+          "$[if::(gt::(${x0_12},0),1,0)]",
+          "$[if::(gt::(${x0_13},0),1,0)]",
+          "$[if::(gt::(${x0_14},0),1,0)]",
+          "$[if::(gt::(${x0_15},0),1,0)]",
+          "$[if::(gt::(${x0_16},0),1,0)]",
+          "$[if::(gt::(${x0_17},0),1,0)]",
+          "$[if::(gt::(${x0_18},0),1,0)]",
+          "$[if::(gt::(${x0_19},0),1,0)]",
+          "$[if::(gt::(${x0_20},0),1,0)]",
+          "$[if::(gt::(${x0_21},0),1,0)]",
+          "$[if::(gt::(${x0_22},0),1,0)]",
+          "$[if::(gt::(${x0_23},0),1,0)]",
+          "$[if::(gt::(${x0_24},0),1,0)]",
+          "$[if::(gt::(${x0_25},0),1,0)]",
+          "$[if::(gt::(${x0_26},0),1,0)]",
+          "$[if::(gt::(${x0_27},0),1,0)]",
+          "$[if::(gt::(${x0_28},0),1,0)]",
+          "$[if::(gt::(${x0_29},0),1,0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0bgA",
+        "value": [
+          "$[if::(ge::(${x0_0},100),1,0)]",
+          "$[if::(ge::(${x0_1},100),1,0)]",
+          "$[if::(ge::(${x0_2},100),1,0)]",
+          "$[if::(ge::(${x0_3},100),1,0)]",
+          "$[if::(ge::(${x0_4},100),1,0)]",
+          "$[if::(ge::(${x0_5},100),1,0)]",
+          "$[if::(ge::(${x0_6},100),1,0)]",
+          "$[if::(ge::(${x0_7},100),1,0)]",
+          "$[if::(ge::(${x0_8},100),1,0)]",
+          "$[if::(ge::(${x0_9},100),1,0)]",
+          "$[if::(ge::(${x0_10},100),1,0)]",
+          "$[if::(ge::(${x0_11},100),1,0)]",
+          "$[if::(ge::(${x0_12},100),1,0)]",
+          "$[if::(ge::(${x0_13},100),1,0)]",
+          "$[if::(ge::(${x0_14},100),1,0)]",
+          "$[if::(ge::(${x0_15},100),1,0)]",
+          "$[if::(ge::(${x0_16},100),1,0)]",
+          "$[if::(ge::(${x0_17},100),1,0)]",
+          "$[if::(ge::(${x0_18},100),1,0)]",
+          "$[if::(ge::(${x0_19},100),1,0)]",
+          "$[if::(ge::(${x0_20},100),1,0)]",
+          "$[if::(ge::(${x0_21},100),1,0)]",
+          "$[if::(ge::(${x0_22},100),1,0)]",
+          "$[if::(ge::(${x0_23},100),1,0)]",
+          "$[if::(ge::(${x0_24},100),1,0)]",
+          "$[if::(ge::(${x0_25},100),1,0)]",
+          "$[if::(ge::(${x0_26},100),1,0)]",
+          "$[if::(ge::(${x0_27},100),1,0)]",
+          "$[if::(ge::(${x0_28},100),1,0)]",
+          "$[if::(ge::(${x0_29},100),1,0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0nz",
+        "value": "$[sum::(${G0nzA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0bg",
+        "value": "$[sum::(${G0bgA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0gap",
+        "value": "$[if::(gt::(calc::(${G0bg}*2),${G0nz}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m0",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_0},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h0",
+        "value": "$[if::(eq::(${G0m0},1),0,if::(eq::(findNotEmpty::(${x0_0},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m1",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_1},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h1",
+        "value": "$[if::(eq::(${G0m1},1),0,if::(eq::(findNotEmpty::(${x0_1},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m2",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_2},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h2",
+        "value": "$[if::(eq::(${G0m2},1),0,if::(eq::(findNotEmpty::(${x0_2},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m3",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_3},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h3",
+        "value": "$[if::(eq::(${G0m3},1),0,if::(eq::(findNotEmpty::(${x0_3},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m4",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_4},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h4",
+        "value": "$[if::(eq::(${G0m4},1),0,if::(eq::(findNotEmpty::(${x0_4},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m5",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_5},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h5",
+        "value": "$[if::(eq::(${G0m5},1),0,if::(eq::(findNotEmpty::(${x0_5},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m6",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_6},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h6",
+        "value": "$[if::(eq::(${G0m6},1),0,if::(eq::(findNotEmpty::(${x0_6},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m7",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_7},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h7",
+        "value": "$[if::(eq::(${G0m7},1),0,if::(eq::(findNotEmpty::(${x0_7},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m8",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_8},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h8",
+        "value": "$[if::(eq::(${G0m8},1),0,if::(eq::(findNotEmpty::(${x0_8},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m9",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_9},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h9",
+        "value": "$[if::(eq::(${G0m9},1),0,if::(eq::(findNotEmpty::(${x0_9},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m10",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_10},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h10",
+        "value": "$[if::(eq::(${G0m10},1),0,if::(eq::(findNotEmpty::(${x0_10},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m11",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_11},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h11",
+        "value": "$[if::(eq::(${G0m11},1),0,if::(eq::(findNotEmpty::(${x0_11},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m12",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_12},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h12",
+        "value": "$[if::(eq::(${G0m12},1),0,if::(eq::(findNotEmpty::(${x0_12},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m13",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_13},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h13",
+        "value": "$[if::(eq::(${G0m13},1),0,if::(eq::(findNotEmpty::(${x0_13},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m14",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_14},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h14",
+        "value": "$[if::(eq::(${G0m14},1),0,if::(eq::(findNotEmpty::(${x0_14},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m15",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_15},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h15",
+        "value": "$[if::(eq::(${G0m15},1),0,if::(eq::(findNotEmpty::(${x0_15},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m16",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_16},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h16",
+        "value": "$[if::(eq::(${G0m16},1),0,if::(eq::(findNotEmpty::(${x0_16},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m17",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_17},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h17",
+        "value": "$[if::(eq::(${G0m17},1),0,if::(eq::(findNotEmpty::(${x0_17},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m18",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_18},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h18",
+        "value": "$[if::(eq::(${G0m18},1),0,if::(eq::(findNotEmpty::(${x0_18},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m19",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_19},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h19",
+        "value": "$[if::(eq::(${G0m19},1),0,if::(eq::(findNotEmpty::(${x0_19},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m20",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_20},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h20",
+        "value": "$[if::(eq::(${G0m20},1),0,if::(eq::(findNotEmpty::(${x0_20},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m21",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_21},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h21",
+        "value": "$[if::(eq::(${G0m21},1),0,if::(eq::(findNotEmpty::(${x0_21},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m22",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_22},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h22",
+        "value": "$[if::(eq::(${G0m22},1),0,if::(eq::(findNotEmpty::(${x0_22},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m23",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_23},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h23",
+        "value": "$[if::(eq::(${G0m23},1),0,if::(eq::(findNotEmpty::(${x0_23},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m24",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_24},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h24",
+        "value": "$[if::(eq::(${G0m24},1),0,if::(eq::(findNotEmpty::(${x0_24},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m25",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_25},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h25",
+        "value": "$[if::(eq::(${G0m25},1),0,if::(eq::(findNotEmpty::(${x0_25},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m26",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_26},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h26",
+        "value": "$[if::(eq::(${G0m26},1),0,if::(eq::(findNotEmpty::(${x0_26},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m27",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_27},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h27",
+        "value": "$[if::(eq::(${G0m27},1),0,if::(eq::(findNotEmpty::(${x0_27},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m28",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_28},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h28",
+        "value": "$[if::(eq::(${G0m28},1),0,if::(eq::(findNotEmpty::(${x0_28},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0m29",
+        "value": "$[if::(eq::(${G0gap},1),if::(gt::(${x0_29},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0h29",
+        "value": "$[if::(eq::(${G0m29},1),0,if::(eq::(findNotEmpty::(${x0_29},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0wkNA",
+        "value": [
+          "${G0h23}",
+          "${G0h24}",
+          "${G0h25}",
+          "${G0h26}",
+          "${G0h27}",
+          "${G0h28}",
+          "${G0h29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0pwNA",
+        "value": [
+          "${G0h16}",
+          "${G0h17}",
+          "${G0h18}",
+          "${G0h19}",
+          "${G0h20}",
+          "${G0h21}",
+          "${G0h22}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0wkN",
+        "value": "$[sum::(${G0wkNA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G0pwN",
+        "value": "$[sum::(${G0pwNA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0A",
+        "value": [
+          "${x0_23}",
+          "${x0_24}",
+          "${x0_25}",
+          "${x0_26}",
+          "${x0_27}",
+          "${x0_28}",
+          "${x0_29}"
+        ]
+      },
+      "_note": "近 7 天(官方合计口径)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q0A",
+        "value": [
+          "${x0_16}",
+          "${x0_17}",
+          "${x0_18}",
+          "${x0_19}",
+          "${x0_20}",
+          "${x0_21}",
+          "${x0_22}"
+        ]
+      },
+      "_note": "前 7 天"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0",
+        "value": "$[if::(eq::(${ok0},1),sum::(${w0A}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q0",
+        "value": "$[if::(eq::(${ok0},1),sum::(${q0A}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0Z",
+        "value": "$[if::(eq::(${ok0},1),if::(ge::(${w0},100000000),connect::(if::(ge::(calc::(${w0}/100000000),100),parseNumber::(round::(calc::(${w0}/100000000)),0),if::(ge::(calc::(${w0}/100000000),10),parseNumber::(calc::(${w0}/100000000),0.#),parseNumber::(calc::(${w0}/100000000),0.##))),${uY}),if::(ge::(${w0},10000),connect::(if::(ge::(calc::(${w0}/10000),100),parseNumber::(round::(calc::(${w0}/10000)),0),if::(ge::(calc::(${w0}/10000),10),parseNumber::(calc::(${w0}/10000),0.#),parseNumber::(calc::(${w0}/10000),0.##))),${uW}),parseNumber::(round::(${w0}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0E",
+        "value": "$[if::(eq::(${ok0},1),if::(ge::(${w0},1000000000),connect::(if::(ge::(calc::(${w0}/1000000000),100),parseNumber::(round::(calc::(${w0}/1000000000)),0),if::(ge::(calc::(${w0}/1000000000),10),parseNumber::(calc::(${w0}/1000000000),0.#),parseNumber::(calc::(${w0}/1000000000),0.##))),B),if::(ge::(${w0},1000000),connect::(if::(ge::(calc::(${w0}/1000000),100),parseNumber::(round::(calc::(${w0}/1000000)),0),if::(ge::(calc::(${w0}/1000000),10),parseNumber::(calc::(${w0}/1000000),0.#),parseNumber::(calc::(${w0}/1000000),0.##))),M),if::(ge::(${w0},1000),connect::(if::(ge::(calc::(${w0}/1000),100),parseNumber::(round::(calc::(${w0}/1000)),0),if::(ge::(calc::(${w0}/1000),10),parseNumber::(calc::(${w0}/1000),0.#),parseNumber::(calc::(${w0}/1000),0.##))),K),parseNumber::(round::(${w0}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0chg",
+        "value": "$[if::(eq::(${ok0},1),if::(ge::(${G0wkN},4),if::(ge::(${G0pwN},4),if::(gt::(${q0},0),parseNumber::(calc::((${w0}/${G0wkN})/(${q0}/${G0pwN})*100-100),0.0),),),),)]"
+      },
+      "_note": "npm 的逐日统计会整天缺失(记为 0,2026-09 实测 react 两周缺 3 天),直接拿两周合计相除会报出一个并不存在的下跌。缺天判据见 gap_block;这里只拿「有数据的日子」算日均再比。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0up",
+        "value": "$[if::(gt::(length::(${k0chg}),0),if::(ge::(${k0chg},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0flat",
+        "value": "$[if::(gt::(length::(${k0chg}),0),if::(lt::(calc::(${k0chg}*${k0chg}),0.25),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0chgA",
+        "value": "$[if::(ge::(${k0chg},0),${k0chg},calc::(0-${k0chg}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0chgT",
+        "value": "$[if::(eq::(${k0flat},1),,if::(gt::(length::(${k0up}),0),connect::(if::(eq::(${k0up},1),+,−),${k0chgA},%),))]"
+      },
+      "_note": "持平时留空(渲染层写「与上周持平」,不写 +-0.0%)。带符号百分比在数据层拼好(RCN 的 $[..] 不嵌 $[..])。up 为空 → 留空,渲染层显示 --。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L0",
+        "value": "$[if::(eq::(${c0},1),crates.io,if::(eq::(${y0},1),PyPI,npm))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_29",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-2-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-2-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-1-${sh1})),index::(${aN1},calc::(${nN1}-1-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_28",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-3-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-3-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-2-${sh1})),index::(${aN1},calc::(${nN1}-2-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_27",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-4-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-4-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-3-${sh1})),index::(${aN1},calc::(${nN1}-3-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_26",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-5-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-5-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-4-${sh1})),index::(${aN1},calc::(${nN1}-4-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_25",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-6-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-6-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-5-${sh1})),index::(${aN1},calc::(${nN1}-5-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_24",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-7-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-7-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-6-${sh1})),index::(${aN1},calc::(${nN1}-6-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_23",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-8-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-8-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-7-${sh1})),index::(${aN1},calc::(${nN1}-7-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_22",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-9-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-9-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-8-${sh1})),index::(${aN1},calc::(${nN1}-8-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_21",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-10-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-10-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-9-${sh1})),index::(${aN1},calc::(${nN1}-9-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_20",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-11-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-11-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-10-${sh1})),index::(${aN1},calc::(${nN1}-10-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_19",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-12-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-12-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-11-${sh1})),index::(${aN1},calc::(${nN1}-11-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_18",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-13-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-13-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-12-${sh1})),index::(${aN1},calc::(${nN1}-12-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_17",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-14-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-14-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-13-${sh1})),index::(${aN1},calc::(${nN1}-13-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_16",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-15-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-15-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-14-${sh1})),index::(${aN1},calc::(${nN1}-14-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_15",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-16-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-16-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-15-${sh1})),index::(${aN1},calc::(${nN1}-15-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_14",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-17-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-17-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-16-${sh1})),index::(${aN1},calc::(${nN1}-16-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_13",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-18-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-18-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-17-${sh1})),index::(${aN1},calc::(${nN1}-17-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_12",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-19-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-19-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-18-${sh1})),index::(${aN1},calc::(${nN1}-18-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_11",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-20-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-20-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-19-${sh1})),index::(${aN1},calc::(${nN1}-19-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_10",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-21-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-21-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-20-${sh1})),index::(${aN1},calc::(${nN1}-20-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_9",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-22-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-22-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-21-${sh1})),index::(${aN1},calc::(${nN1}-21-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_8",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-23-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-23-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-22-${sh1})),index::(${aN1},calc::(${nN1}-22-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_7",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-24-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-24-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-23-${sh1})),index::(${aN1},calc::(${nN1}-23-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_6",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-25-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-25-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-24-${sh1})),index::(${aN1},calc::(${nN1}-24-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_5",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-26-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-26-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-25-${sh1})),index::(${aN1},calc::(${nN1}-25-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_4",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-27-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-27-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-26-${sh1})),index::(${aN1},calc::(${nN1}-26-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_3",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-28-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-28-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-27-${sh1})),index::(${aN1},calc::(${nN1}-27-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_2",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-29-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-29-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-28-${sh1})),index::(${aN1},calc::(${nN1}-28-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_1",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-30-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-30-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-29-${sh1})),index::(${aN1},calc::(${nN1}-29-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "x1_0",
+        "value": "$[if::(eq::(${ok1},1),if::(eq::(${c1},1),calc::(findNotEmpty::(get::(${acc1},index::(${dC1},calc::(${nC1}-31-${sh1}))),0)+findNotEmpty::(index::(${xC1},calc::(${nC1}-31-${sh1})),0)),if::(eq::(${y1},1),index::(${aP1},calc::(${nP1}-30-${sh1})),index::(${aN1},calc::(${nN1}-30-${sh1})))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1nzA",
+        "value": [
+          "$[if::(gt::(${x1_0},0),1,0)]",
+          "$[if::(gt::(${x1_1},0),1,0)]",
+          "$[if::(gt::(${x1_2},0),1,0)]",
+          "$[if::(gt::(${x1_3},0),1,0)]",
+          "$[if::(gt::(${x1_4},0),1,0)]",
+          "$[if::(gt::(${x1_5},0),1,0)]",
+          "$[if::(gt::(${x1_6},0),1,0)]",
+          "$[if::(gt::(${x1_7},0),1,0)]",
+          "$[if::(gt::(${x1_8},0),1,0)]",
+          "$[if::(gt::(${x1_9},0),1,0)]",
+          "$[if::(gt::(${x1_10},0),1,0)]",
+          "$[if::(gt::(${x1_11},0),1,0)]",
+          "$[if::(gt::(${x1_12},0),1,0)]",
+          "$[if::(gt::(${x1_13},0),1,0)]",
+          "$[if::(gt::(${x1_14},0),1,0)]",
+          "$[if::(gt::(${x1_15},0),1,0)]",
+          "$[if::(gt::(${x1_16},0),1,0)]",
+          "$[if::(gt::(${x1_17},0),1,0)]",
+          "$[if::(gt::(${x1_18},0),1,0)]",
+          "$[if::(gt::(${x1_19},0),1,0)]",
+          "$[if::(gt::(${x1_20},0),1,0)]",
+          "$[if::(gt::(${x1_21},0),1,0)]",
+          "$[if::(gt::(${x1_22},0),1,0)]",
+          "$[if::(gt::(${x1_23},0),1,0)]",
+          "$[if::(gt::(${x1_24},0),1,0)]",
+          "$[if::(gt::(${x1_25},0),1,0)]",
+          "$[if::(gt::(${x1_26},0),1,0)]",
+          "$[if::(gt::(${x1_27},0),1,0)]",
+          "$[if::(gt::(${x1_28},0),1,0)]",
+          "$[if::(gt::(${x1_29},0),1,0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1bgA",
+        "value": [
+          "$[if::(ge::(${x1_0},100),1,0)]",
+          "$[if::(ge::(${x1_1},100),1,0)]",
+          "$[if::(ge::(${x1_2},100),1,0)]",
+          "$[if::(ge::(${x1_3},100),1,0)]",
+          "$[if::(ge::(${x1_4},100),1,0)]",
+          "$[if::(ge::(${x1_5},100),1,0)]",
+          "$[if::(ge::(${x1_6},100),1,0)]",
+          "$[if::(ge::(${x1_7},100),1,0)]",
+          "$[if::(ge::(${x1_8},100),1,0)]",
+          "$[if::(ge::(${x1_9},100),1,0)]",
+          "$[if::(ge::(${x1_10},100),1,0)]",
+          "$[if::(ge::(${x1_11},100),1,0)]",
+          "$[if::(ge::(${x1_12},100),1,0)]",
+          "$[if::(ge::(${x1_13},100),1,0)]",
+          "$[if::(ge::(${x1_14},100),1,0)]",
+          "$[if::(ge::(${x1_15},100),1,0)]",
+          "$[if::(ge::(${x1_16},100),1,0)]",
+          "$[if::(ge::(${x1_17},100),1,0)]",
+          "$[if::(ge::(${x1_18},100),1,0)]",
+          "$[if::(ge::(${x1_19},100),1,0)]",
+          "$[if::(ge::(${x1_20},100),1,0)]",
+          "$[if::(ge::(${x1_21},100),1,0)]",
+          "$[if::(ge::(${x1_22},100),1,0)]",
+          "$[if::(ge::(${x1_23},100),1,0)]",
+          "$[if::(ge::(${x1_24},100),1,0)]",
+          "$[if::(ge::(${x1_25},100),1,0)]",
+          "$[if::(ge::(${x1_26},100),1,0)]",
+          "$[if::(ge::(${x1_27},100),1,0)]",
+          "$[if::(ge::(${x1_28},100),1,0)]",
+          "$[if::(ge::(${x1_29},100),1,0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1nz",
+        "value": "$[sum::(${G1nzA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1bg",
+        "value": "$[sum::(${G1bgA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1gap",
+        "value": "$[if::(gt::(calc::(${G1bg}*2),${G1nz}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m0",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_0},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h0",
+        "value": "$[if::(eq::(${G1m0},1),0,if::(eq::(findNotEmpty::(${x1_0},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m1",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_1},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h1",
+        "value": "$[if::(eq::(${G1m1},1),0,if::(eq::(findNotEmpty::(${x1_1},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m2",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_2},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h2",
+        "value": "$[if::(eq::(${G1m2},1),0,if::(eq::(findNotEmpty::(${x1_2},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m3",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_3},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h3",
+        "value": "$[if::(eq::(${G1m3},1),0,if::(eq::(findNotEmpty::(${x1_3},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m4",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_4},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h4",
+        "value": "$[if::(eq::(${G1m4},1),0,if::(eq::(findNotEmpty::(${x1_4},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m5",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_5},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h5",
+        "value": "$[if::(eq::(${G1m5},1),0,if::(eq::(findNotEmpty::(${x1_5},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m6",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_6},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h6",
+        "value": "$[if::(eq::(${G1m6},1),0,if::(eq::(findNotEmpty::(${x1_6},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m7",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_7},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h7",
+        "value": "$[if::(eq::(${G1m7},1),0,if::(eq::(findNotEmpty::(${x1_7},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m8",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_8},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h8",
+        "value": "$[if::(eq::(${G1m8},1),0,if::(eq::(findNotEmpty::(${x1_8},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m9",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_9},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h9",
+        "value": "$[if::(eq::(${G1m9},1),0,if::(eq::(findNotEmpty::(${x1_9},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m10",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_10},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h10",
+        "value": "$[if::(eq::(${G1m10},1),0,if::(eq::(findNotEmpty::(${x1_10},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m11",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_11},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h11",
+        "value": "$[if::(eq::(${G1m11},1),0,if::(eq::(findNotEmpty::(${x1_11},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m12",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_12},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h12",
+        "value": "$[if::(eq::(${G1m12},1),0,if::(eq::(findNotEmpty::(${x1_12},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m13",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_13},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h13",
+        "value": "$[if::(eq::(${G1m13},1),0,if::(eq::(findNotEmpty::(${x1_13},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m14",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_14},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h14",
+        "value": "$[if::(eq::(${G1m14},1),0,if::(eq::(findNotEmpty::(${x1_14},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m15",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_15},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h15",
+        "value": "$[if::(eq::(${G1m15},1),0,if::(eq::(findNotEmpty::(${x1_15},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m16",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_16},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h16",
+        "value": "$[if::(eq::(${G1m16},1),0,if::(eq::(findNotEmpty::(${x1_16},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m17",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_17},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h17",
+        "value": "$[if::(eq::(${G1m17},1),0,if::(eq::(findNotEmpty::(${x1_17},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m18",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_18},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h18",
+        "value": "$[if::(eq::(${G1m18},1),0,if::(eq::(findNotEmpty::(${x1_18},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m19",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_19},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h19",
+        "value": "$[if::(eq::(${G1m19},1),0,if::(eq::(findNotEmpty::(${x1_19},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m20",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_20},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h20",
+        "value": "$[if::(eq::(${G1m20},1),0,if::(eq::(findNotEmpty::(${x1_20},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m21",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_21},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h21",
+        "value": "$[if::(eq::(${G1m21},1),0,if::(eq::(findNotEmpty::(${x1_21},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m22",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_22},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h22",
+        "value": "$[if::(eq::(${G1m22},1),0,if::(eq::(findNotEmpty::(${x1_22},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m23",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_23},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h23",
+        "value": "$[if::(eq::(${G1m23},1),0,if::(eq::(findNotEmpty::(${x1_23},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m24",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_24},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h24",
+        "value": "$[if::(eq::(${G1m24},1),0,if::(eq::(findNotEmpty::(${x1_24},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m25",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_25},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h25",
+        "value": "$[if::(eq::(${G1m25},1),0,if::(eq::(findNotEmpty::(${x1_25},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m26",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_26},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h26",
+        "value": "$[if::(eq::(${G1m26},1),0,if::(eq::(findNotEmpty::(${x1_26},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m27",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_27},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h27",
+        "value": "$[if::(eq::(${G1m27},1),0,if::(eq::(findNotEmpty::(${x1_27},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m28",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_28},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h28",
+        "value": "$[if::(eq::(${G1m28},1),0,if::(eq::(findNotEmpty::(${x1_28},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1m29",
+        "value": "$[if::(eq::(${G1gap},1),if::(gt::(${x1_29},0),0,1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1h29",
+        "value": "$[if::(eq::(${G1m29},1),0,if::(eq::(findNotEmpty::(${x1_29},__n),__n),0,1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1wkNA",
+        "value": [
+          "${G1h23}",
+          "${G1h24}",
+          "${G1h25}",
+          "${G1h26}",
+          "${G1h27}",
+          "${G1h28}",
+          "${G1h29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1pwNA",
+        "value": [
+          "${G1h16}",
+          "${G1h17}",
+          "${G1h18}",
+          "${G1h19}",
+          "${G1h20}",
+          "${G1h21}",
+          "${G1h22}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1wkN",
+        "value": "$[sum::(${G1wkNA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G1pwN",
+        "value": "$[sum::(${G1pwNA})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1A",
+        "value": [
+          "${x1_23}",
+          "${x1_24}",
+          "${x1_25}",
+          "${x1_26}",
+          "${x1_27}",
+          "${x1_28}",
+          "${x1_29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1A",
+        "value": [
+          "${x1_16}",
+          "${x1_17}",
+          "${x1_18}",
+          "${x1_19}",
+          "${x1_20}",
+          "${x1_21}",
+          "${x1_22}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1",
+        "value": "$[if::(eq::(${ok1},1),sum::(${w1A}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1",
+        "value": "$[if::(eq::(${ok1},1),sum::(${q1A}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1Z",
+        "value": "$[if::(eq::(${ok1},1),if::(ge::(${w1},100000000),connect::(if::(ge::(calc::(${w1}/100000000),100),parseNumber::(round::(calc::(${w1}/100000000)),0),if::(ge::(calc::(${w1}/100000000),10),parseNumber::(calc::(${w1}/100000000),0.#),parseNumber::(calc::(${w1}/100000000),0.##))),${uY}),if::(ge::(${w1},10000),connect::(if::(ge::(calc::(${w1}/10000),100),parseNumber::(round::(calc::(${w1}/10000)),0),if::(ge::(calc::(${w1}/10000),10),parseNumber::(calc::(${w1}/10000),0.#),parseNumber::(calc::(${w1}/10000),0.##))),${uW}),parseNumber::(round::(${w1}),0))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1E",
+        "value": "$[if::(eq::(${ok1},1),if::(ge::(${w1},1000000000),connect::(if::(ge::(calc::(${w1}/1000000000),100),parseNumber::(round::(calc::(${w1}/1000000000)),0),if::(ge::(calc::(${w1}/1000000000),10),parseNumber::(calc::(${w1}/1000000000),0.#),parseNumber::(calc::(${w1}/1000000000),0.##))),B),if::(ge::(${w1},1000000),connect::(if::(ge::(calc::(${w1}/1000000),100),parseNumber::(round::(calc::(${w1}/1000000)),0),if::(ge::(calc::(${w1}/1000000),10),parseNumber::(calc::(${w1}/1000000),0.#),parseNumber::(calc::(${w1}/1000000),0.##))),M),if::(ge::(${w1},1000),connect::(if::(ge::(calc::(${w1}/1000),100),parseNumber::(round::(calc::(${w1}/1000)),0),if::(ge::(calc::(${w1}/1000),10),parseNumber::(calc::(${w1}/1000),0.#),parseNumber::(calc::(${w1}/1000),0.##))),K),parseNumber::(round::(${w1}),0)))),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1chg",
+        "value": "$[if::(eq::(${ok1},1),if::(ge::(${G1wkN},4),if::(ge::(${G1pwN},4),if::(gt::(${q1},0),parseNumber::(calc::((${w1}/${G1wkN})/(${q1}/${G1pwN})*100-100),0.0),),),),)]"
+      },
+      "_note": "npm 的逐日统计会整天缺失(记为 0,2026-09 实测 react 两周缺 3 天),直接拿两周合计相除会报出一个并不存在的下跌。缺天判据见 gap_block;这里只拿「有数据的日子」算日均再比。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1up",
+        "value": "$[if::(gt::(length::(${k1chg}),0),if::(ge::(${k1chg},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1flat",
+        "value": "$[if::(gt::(length::(${k1chg}),0),if::(lt::(calc::(${k1chg}*${k1chg}),0.25),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1chgA",
+        "value": "$[if::(ge::(${k1chg},0),${k1chg},calc::(0-${k1chg}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1chgT",
+        "value": "$[if::(eq::(${k1flat},1),,if::(gt::(length::(${k1up}),0),connect::(if::(eq::(${k1up},1),+,−),${k1chgA},%),))]"
+      },
+      "_note": "持平时留空(渲染层写「与上周持平」,不写 +-0.0%)。带符号百分比在数据层拼好(RCN 的 $[..] 不嵌 $[..])。up 为空 → 留空,渲染层显示 --。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L1",
+        "value": "$[if::(eq::(${c1},1),crates.io,if::(eq::(${y1},1),PyPI,npm))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_0",
+        "value": "$[if::(eq::(${G0m0},1),if::(eq::(${G0m1},1),findNotEmpty::(${x0_2},0),findNotEmpty::(${x0_1},0)),findNotEmpty::(${x0_0},0))]"
+      },
+      "_note": "折线序列:缺天沿用前一天(与单包组件同一条判据)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_1",
+        "value": "$[if::(eq::(${G0m1},1),${l0_0},findNotEmpty::(${x0_1},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_2",
+        "value": "$[if::(eq::(${G0m2},1),${l0_1},findNotEmpty::(${x0_2},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_3",
+        "value": "$[if::(eq::(${G0m3},1),${l0_2},findNotEmpty::(${x0_3},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_4",
+        "value": "$[if::(eq::(${G0m4},1),${l0_3},findNotEmpty::(${x0_4},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_5",
+        "value": "$[if::(eq::(${G0m5},1),${l0_4},findNotEmpty::(${x0_5},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_6",
+        "value": "$[if::(eq::(${G0m6},1),${l0_5},findNotEmpty::(${x0_6},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_7",
+        "value": "$[if::(eq::(${G0m7},1),${l0_6},findNotEmpty::(${x0_7},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_8",
+        "value": "$[if::(eq::(${G0m8},1),${l0_7},findNotEmpty::(${x0_8},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_9",
+        "value": "$[if::(eq::(${G0m9},1),${l0_8},findNotEmpty::(${x0_9},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_10",
+        "value": "$[if::(eq::(${G0m10},1),${l0_9},findNotEmpty::(${x0_10},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_11",
+        "value": "$[if::(eq::(${G0m11},1),${l0_10},findNotEmpty::(${x0_11},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_12",
+        "value": "$[if::(eq::(${G0m12},1),${l0_11},findNotEmpty::(${x0_12},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_13",
+        "value": "$[if::(eq::(${G0m13},1),${l0_12},findNotEmpty::(${x0_13},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_14",
+        "value": "$[if::(eq::(${G0m14},1),${l0_13},findNotEmpty::(${x0_14},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_15",
+        "value": "$[if::(eq::(${G0m15},1),${l0_14},findNotEmpty::(${x0_15},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_16",
+        "value": "$[if::(eq::(${G0m16},1),${l0_15},findNotEmpty::(${x0_16},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_17",
+        "value": "$[if::(eq::(${G0m17},1),${l0_16},findNotEmpty::(${x0_17},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_18",
+        "value": "$[if::(eq::(${G0m18},1),${l0_17},findNotEmpty::(${x0_18},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_19",
+        "value": "$[if::(eq::(${G0m19},1),${l0_18},findNotEmpty::(${x0_19},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_20",
+        "value": "$[if::(eq::(${G0m20},1),${l0_19},findNotEmpty::(${x0_20},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_21",
+        "value": "$[if::(eq::(${G0m21},1),${l0_20},findNotEmpty::(${x0_21},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_22",
+        "value": "$[if::(eq::(${G0m22},1),${l0_21},findNotEmpty::(${x0_22},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_23",
+        "value": "$[if::(eq::(${G0m23},1),${l0_22},findNotEmpty::(${x0_23},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_24",
+        "value": "$[if::(eq::(${G0m24},1),${l0_23},findNotEmpty::(${x0_24},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_25",
+        "value": "$[if::(eq::(${G0m25},1),${l0_24},findNotEmpty::(${x0_25},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_26",
+        "value": "$[if::(eq::(${G0m26},1),${l0_25},findNotEmpty::(${x0_26},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_27",
+        "value": "$[if::(eq::(${G0m27},1),${l0_26},findNotEmpty::(${x0_27},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_28",
+        "value": "$[if::(eq::(${G0m28},1),${l0_27},findNotEmpty::(${x0_28},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l0_29",
+        "value": "$[if::(eq::(${G0m29},1),${l0_28},findNotEmpty::(${x0_29},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ln0",
+        "value": [
+          "${l0_0}",
+          "${l0_1}",
+          "${l0_2}",
+          "${l0_3}",
+          "${l0_4}",
+          "${l0_5}",
+          "${l0_6}",
+          "${l0_7}",
+          "${l0_8}",
+          "${l0_9}",
+          "${l0_10}",
+          "${l0_11}",
+          "${l0_12}",
+          "${l0_13}",
+          "${l0_14}",
+          "${l0_15}",
+          "${l0_16}",
+          "${l0_17}",
+          "${l0_18}",
+          "${l0_19}",
+          "${l0_20}",
+          "${l0_21}",
+          "${l0_22}",
+          "${l0_23}",
+          "${l0_24}",
+          "${l0_25}",
+          "${l0_26}",
+          "${l0_27}",
+          "${l0_28}",
+          "${l0_29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mn0",
+        "value": "$[if::(eq::(${ok0},1),calc::(min::(${ln0})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mx0",
+        "value": "$[if::(eq::(${ok0},1),calc::(max::(${ln0})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_0",
+        "value": "$[if::(eq::(${G1m0},1),if::(eq::(${G1m1},1),findNotEmpty::(${x1_2},0),findNotEmpty::(${x1_1},0)),findNotEmpty::(${x1_0},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_1",
+        "value": "$[if::(eq::(${G1m1},1),${l1_0},findNotEmpty::(${x1_1},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_2",
+        "value": "$[if::(eq::(${G1m2},1),${l1_1},findNotEmpty::(${x1_2},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_3",
+        "value": "$[if::(eq::(${G1m3},1),${l1_2},findNotEmpty::(${x1_3},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_4",
+        "value": "$[if::(eq::(${G1m4},1),${l1_3},findNotEmpty::(${x1_4},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_5",
+        "value": "$[if::(eq::(${G1m5},1),${l1_4},findNotEmpty::(${x1_5},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_6",
+        "value": "$[if::(eq::(${G1m6},1),${l1_5},findNotEmpty::(${x1_6},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_7",
+        "value": "$[if::(eq::(${G1m7},1),${l1_6},findNotEmpty::(${x1_7},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_8",
+        "value": "$[if::(eq::(${G1m8},1),${l1_7},findNotEmpty::(${x1_8},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_9",
+        "value": "$[if::(eq::(${G1m9},1),${l1_8},findNotEmpty::(${x1_9},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_10",
+        "value": "$[if::(eq::(${G1m10},1),${l1_9},findNotEmpty::(${x1_10},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_11",
+        "value": "$[if::(eq::(${G1m11},1),${l1_10},findNotEmpty::(${x1_11},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_12",
+        "value": "$[if::(eq::(${G1m12},1),${l1_11},findNotEmpty::(${x1_12},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_13",
+        "value": "$[if::(eq::(${G1m13},1),${l1_12},findNotEmpty::(${x1_13},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_14",
+        "value": "$[if::(eq::(${G1m14},1),${l1_13},findNotEmpty::(${x1_14},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_15",
+        "value": "$[if::(eq::(${G1m15},1),${l1_14},findNotEmpty::(${x1_15},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_16",
+        "value": "$[if::(eq::(${G1m16},1),${l1_15},findNotEmpty::(${x1_16},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_17",
+        "value": "$[if::(eq::(${G1m17},1),${l1_16},findNotEmpty::(${x1_17},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_18",
+        "value": "$[if::(eq::(${G1m18},1),${l1_17},findNotEmpty::(${x1_18},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_19",
+        "value": "$[if::(eq::(${G1m19},1),${l1_18},findNotEmpty::(${x1_19},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_20",
+        "value": "$[if::(eq::(${G1m20},1),${l1_19},findNotEmpty::(${x1_20},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_21",
+        "value": "$[if::(eq::(${G1m21},1),${l1_20},findNotEmpty::(${x1_21},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_22",
+        "value": "$[if::(eq::(${G1m22},1),${l1_21},findNotEmpty::(${x1_22},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_23",
+        "value": "$[if::(eq::(${G1m23},1),${l1_22},findNotEmpty::(${x1_23},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_24",
+        "value": "$[if::(eq::(${G1m24},1),${l1_23},findNotEmpty::(${x1_24},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_25",
+        "value": "$[if::(eq::(${G1m25},1),${l1_24},findNotEmpty::(${x1_25},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_26",
+        "value": "$[if::(eq::(${G1m26},1),${l1_25},findNotEmpty::(${x1_26},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_27",
+        "value": "$[if::(eq::(${G1m27},1),${l1_26},findNotEmpty::(${x1_27},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_28",
+        "value": "$[if::(eq::(${G1m28},1),${l1_27},findNotEmpty::(${x1_28},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "l1_29",
+        "value": "$[if::(eq::(${G1m29},1),${l1_28},findNotEmpty::(${x1_29},0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ln1",
+        "value": [
+          "${l1_0}",
+          "${l1_1}",
+          "${l1_2}",
+          "${l1_3}",
+          "${l1_4}",
+          "${l1_5}",
+          "${l1_6}",
+          "${l1_7}",
+          "${l1_8}",
+          "${l1_9}",
+          "${l1_10}",
+          "${l1_11}",
+          "${l1_12}",
+          "${l1_13}",
+          "${l1_14}",
+          "${l1_15}",
+          "${l1_16}",
+          "${l1_17}",
+          "${l1_18}",
+          "${l1_19}",
+          "${l1_20}",
+          "${l1_21}",
+          "${l1_22}",
+          "${l1_23}",
+          "${l1_24}",
+          "${l1_25}",
+          "${l1_26}",
+          "${l1_27}",
+          "${l1_28}",
+          "${l1_29}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mn1",
+        "value": "$[if::(eq::(${ok1},1),calc::(min::(${ln1})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mx1",
+        "value": "$[if::(eq::(${ok1},1),calc::(max::(${ln1})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vsp0",
+        "value": "$[max::(calc::(findNotEmpty::(${mx0},1)-findNotEmpty::(${mn0},0)),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "clo0",
+        "value": "$[max::(0,calc::(findNotEmpty::(${mn0},0)-${vsp0}*0.12))]"
+      },
+      "_note": "下沿取自己的最小值再往下留 12%,不从 0 起(从 0 起周末起伏看不见)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chi0",
+        "value": "$[calc::(findNotEmpty::(${mx0},1)+${vsp0}*0.06)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc0_a",
+        "value": [
+          "0.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},0)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "5.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},1)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "10.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},2)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "16.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},3)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "21.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},4)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "27.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},5)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "32.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},6)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "38.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},7)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "43.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},8)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "49.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},9)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "54.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},10)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "59.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},11)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "65.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},12)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "70.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},13)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "76.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},14)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "81.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},15)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "87.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},16)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "92.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},17)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "98.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},18)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "103.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},19)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "109.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},20)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "114.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},21)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "119.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},22)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "125.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},23)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "130.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},24)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "136.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},25)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "141.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},26)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "147.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},27)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "152.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},28)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]",
+          "158.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln0},29)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc0",
+        "value": "$[join::(${pc0_a},\\,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc0",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((findNotEmpty::(index::(${ln0},29),0)-${clo0})/(${chi0}-${clo0})))*78.0+6.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vsp1",
+        "value": "$[max::(calc::(findNotEmpty::(${mx1},1)-findNotEmpty::(${mn1},0)),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "clo1",
+        "value": "$[max::(0,calc::(findNotEmpty::(${mn1},0)-${vsp1}*0.12))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "chi1",
+        "value": "$[calc::(findNotEmpty::(${mx1},1)+${vsp1}*0.06)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc1_a",
+        "value": [
+          "0.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},0)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "5.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},1)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "10.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},2)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "16.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},3)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "21.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},4)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "27.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},5)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "32.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},6)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "38.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},7)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "43.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},8)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "49.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},9)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "54.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},10)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "59.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},11)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "65.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},12)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "70.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},13)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "76.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},14)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "81.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},15)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "87.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},16)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "92.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},17)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "98.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},18)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "103.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},19)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "109.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},20)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "114.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},21)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "119.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},22)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "125.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},23)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "130.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},24)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "136.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},25)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "141.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},26)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "147.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},27)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "152.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},28)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]",
+          "158.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ln1},29)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc1",
+        "value": "$[join::(${pc1_a},\\,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yc1",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((findNotEmpty::(index::(${ln1},29),0)-${clo1})/(${chi1}-${clo1})))*78.0+6.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtOk",
+        "value": "$[if::(eq::(${ok0},1),if::(eq::(${ok1},1),if::(gt::(${w0},0),if::(gt::(${w1},0),1,0),0),0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "big0",
+        "value": "$[if::(eq::(${rtOk},1),if::(ge::(${w0},${w1}),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtV",
+        "value": "$[if::(eq::(${rtOk},1),if::(eq::(${big0},1),calc::(${w0}/${w1}),calc::(${w1}/${w0})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtSame",
+        "value": "$[if::(eq::(${rtOk},1),if::(lt::(${rtV},1.1),1,0),0)]"
+      },
+      "_note": "差不到 10% 就说「差不多」,不报 1.03 倍这种噪声。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtT",
+        "value": "$[if::(eq::(${rtOk},1),if::(ge::(${rtV},10),parseNumber::(round::(${rtV}),0),parseNumber::(${rtV},0.#)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtBig",
+        "value": "$[if::(eq::(${big0},1),${n0},${n1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtSmall",
+        "value": "$[if::(eq::(${big0},1),${n1},${n0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "MONE",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endCok",
+        "value": "$[if::(gt::(length::(${endC}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endM",
+        "value": "$[if::(eq::(${endCok},1),subString::(${endC},5,10),)]"
+      },
+      "_note": "右上角时间锚 = 共同终点(两条线、两个周下载都截到这一天)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "endM",
+        "value": "$[findNotEmpty::(${endM},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sh0",
+        "value": "$[findNotEmpty::(${sh0},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sh1",
+        "value": "$[findNotEmpty::(${sh1},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok0",
+        "value": "$[findNotEmpty::(${ok0},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok1",
+        "value": "$[findNotEmpty::(${ok1},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n0",
+        "value": "$[findNotEmpty::(${n0},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n1",
+        "value": "$[findNotEmpty::(${n1},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L0",
+        "value": "$[findNotEmpty::(${L0},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "L1",
+        "value": "$[findNotEmpty::(${L1},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0Z",
+        "value": "$[findNotEmpty::(${w0Z},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0E",
+        "value": "$[findNotEmpty::(${w0E},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1Z",
+        "value": "$[findNotEmpty::(${w1Z},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1E",
+        "value": "$[findNotEmpty::(${w1E},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0chgT",
+        "value": "$[findNotEmpty::(${k0chgT},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0up",
+        "value": "$[findNotEmpty::(${k0up},x)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0flat",
+        "value": "$[findNotEmpty::(${k0flat},x)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1chgT",
+        "value": "$[findNotEmpty::(${k1chgT},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1up",
+        "value": "$[findNotEmpty::(${k1up},x)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1flat",
+        "value": "$[findNotEmpty::(${k1flat},x)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtOk",
+        "value": "$[findNotEmpty::(${rtOk},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtSame",
+        "value": "$[findNotEmpty::(${rtSame},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtT",
+        "value": "$[findNotEmpty::(${rtT},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtBig",
+        "value": "$[findNotEmpty::(${rtBig},--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rtSmall",
+        "value": "$[findNotEmpty::(${rtSmall},--)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "endM",
+          "sh0",
+          "sh1",
+          "ok0",
+          "ok1",
+          "n0",
+          "n1",
+          "L0",
+          "L1",
+          "w0Z",
+          "w0E",
+          "w1Z",
+          "w1E",
+          "k0chgT",
+          "k0up",
+          "k0flat",
+          "k1chgT",
+          "k1up",
+          "k1flat",
+          "pc0",
+          "pc1",
+          "yc0",
+          "yc1",
+          "rtOk",
+          "rtSame",
+          "rtT",
+          "rtBig",
+          "rtSmall"
+        ]
+      }
+    }
+  ]
+}

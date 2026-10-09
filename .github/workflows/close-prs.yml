@@ -1,0 +1,21 @@
+name: close-prs
+# This repo is a mirror: tools/ is overwritten by every sync, so pull requests cannot be merged.
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr close "$PR" --repo "$REPO" --comment "Thanks! This repository is a read-only mirror of the published tools — every sync overwrites \`tools/\`, so pull requests can't be merged here. Please open an issue instead, or derive your own copy with \`npx numable init my-tool --from tools/<name>\`.
+
+          感谢！这个仓库是已发布工具的只读镜像，每次同步都会覆盖 \`tools/\`，所以这里没法合并 PR。请改开 issue，或者用 \`npx numable init my-tool --from tools/<名字>\` 派生一份自己的。"

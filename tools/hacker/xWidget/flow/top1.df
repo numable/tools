@@ -1,0 +1,419 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "action": "request",
+      "id": "resp",
+      "params": {
+        "url": "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=10&attributesToRetrieve=title,url,points,num_comments,author,created_at_i,objectID&attributesToHighlight=none",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp.hits}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "hn_unreachable"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowS",
+        "value": "$[parseNumber::(calc::(${@time.nowMs}/1000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      },
+      "_note": "榜单本身没有「数据时间」字段,用取数时刻兜底 —— 没有时间锚点的榜单看不出是不是几小时前的旧数据(标准 §4.4)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h0",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[0].created_at_i})/3600),1)]"
+      },
+      "_note": "上榜小时数下限钳 1:刚上榜几分钟的帖子除出来的速率会是几千,把整条比例尺拉爆,别的行全变成一根针。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v0",
+        "value": "$[parseNumber::(calc::(${resp.hits[0].points}/${h0}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h1",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[1].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v1",
+        "value": "$[parseNumber::(calc::(${resp.hits[1].points}/${h1}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h2",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[2].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v2",
+        "value": "$[parseNumber::(calc::(${resp.hits[2].points}/${h2}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h3",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[3].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v3",
+        "value": "$[parseNumber::(calc::(${resp.hits[3].points}/${h3}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h4",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[4].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v4",
+        "value": "$[parseNumber::(calc::(${resp.hits[4].points}/${h4}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h5",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[5].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v5",
+        "value": "$[parseNumber::(calc::(${resp.hits[5].points}/${h5}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h6",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[6].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v6",
+        "value": "$[parseNumber::(calc::(${resp.hits[6].points}/${h6}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h7",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[7].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v7",
+        "value": "$[parseNumber::(calc::(${resp.hits[7].points}/${h7}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h8",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[8].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v8",
+        "value": "$[parseNumber::(calc::(${resp.hits[8].points}/${h8}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h9",
+        "value": "$[max::(calc::((${nowS}-${resp.hits[9].created_at_i})/3600),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v9",
+        "value": "$[parseNumber::(calc::(${resp.hits[9].points}/${h9}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_vs",
+        "value": [
+          "$[findNotEmpty::(${v0},0)]",
+          "$[findNotEmpty::(${v1},0)]",
+          "$[findNotEmpty::(${v2},0)]",
+          "$[findNotEmpty::(${v3},0)]",
+          "$[findNotEmpty::(${v4},0)]",
+          "$[findNotEmpty::(${v5},0)]",
+          "$[findNotEmpty::(${v6},0)]",
+          "$[findNotEmpty::(${v7},0)]",
+          "$[findNotEmpty::(${v8},0)]",
+          "$[findNotEmpty::(${v9},0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vmax",
+        "value": "$[max::(calc::(max::(${_vs})),1)]"
+      },
+      "_note": "归一化分母 = 前十里最快的那条。⚠️ 下限 1(勿删):首页整体极冷时 vmax 可能是 0,除零会让所有条宽变成非数 → points 串解析失败 → **整卡**渲染返回 null。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reTl",
+        "value": "[ ]+[^ ]*$"
+      },
+      "_note": "截断后退到上一个词边界(英文)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reTp",
+        "value": "[-,;:.–—/ ]+$"
+      },
+      "_note": "截断处的句尾标点 / 空格剥掉再补省略号。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reAs",
+        "value": "[ -~]"
+      },
+      "_note": "可打印 ASCII —— 剥掉它们剩下的就是宽字符(中日韩)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tr0",
+        "value": "${resp.hits[0].title}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p0",
+        "value": "${resp.hits[0].points}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "${resp.hits[0].num_comments}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0",
+        "value": "$[parseNumber::(${h0},0)]"
+      },
+      "_note": "上榜小时数取整(结论行「最近 24 小时新上榜」按它数)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b0",
+        "value": "$[parseNumber::(max::(calc::(findNotEmpty::(${v0},0)*1.25*134.0/(findNotEmpty::(${v0},0)+${vmax}/4)),6),0.0)]"
+      },
+      "_note": "热度条像素宽 = 饱和比例 f(v)=1.25·v/(v+峰值/4)(2026-10-08 由线性改):f(峰值)=1、f(峰值/4)=0.625 ——与 √ 一样把挤在低端的大多数摊开。线性时 Ask HN 第 1 条 546 分,第 2–5 条只剩 3–5px,条就失去了作用。下限 6 = 一个圆头的直径。134.0 与 .rcn 逐字对应。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "id0",
+        "value": "${resp.hits[0].objectID}"
+      },
+      "_note": "⚠️ 提成**顶层标量**:整卡 onClick 的插值只认顶层标量键,嵌套路径 ${resp.hits[0].objectID} 一律取空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0L",
+        "value": "$[length::(${tr0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0N",
+        "value": "$[length::(replaceAll::(${tr0},${reAs},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0W",
+        "value": "$[round::(calc::(${t0L}+${t0N}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0K",
+        "value": "$[round::(min::(floor::(calc::(${t0L}*50/max::(${t0W},1))),${t0L}))]"
+      },
+      "_note": "截到第几个字:按本条的平均字宽把预算折成字数。round 是为了 Android 上 floor 返回 double。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[if::(gt::(${t0W},50),connect::(replaceAll::(replaceAll::(subString::(${tr0},0,${t0K}),${reTl},),${reTp},),…),${tr0})]"
+      },
+      "_note": "超出 50 个宽度单位才截:按词退一格、剥句尾标点、补「…」(线上宿主的文本节点出不了省略号)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "am0",
+        "value": "$[max::(floor::(calc::((${nowS}-${resp.hits[0].created_at_i})/60)),1)]"
+      },
+      "_note": "发帖距今分钟数 → 「N 小时前 / Nh ago」(与 lobsters / v2ex / hfpapers 同一种写法)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a0",
+        "value": "$[round::(if::(lt::(${am0},60),${am0},if::(lt::(${am0},2880),floor::(calc::(${am0}/60)),floor::(calc::(${am0}/1440)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u0",
+        "value": "$[if::(lt::(${am0},60),1,if::(lt::(${am0},2880),2,3))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0L",
+        "value": "$[length::(${tr0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0N",
+        "value": "$[length::(replaceAll::(${tr0},${reAs},))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0W",
+        "value": "$[round::(calc::(${tm0L}+${tm0N}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0K",
+        "value": "$[round::(min::(floor::(calc::(${tm0L}*38/max::(${tm0W},1))),${tm0L}))]"
+      },
+      "_note": "截到第几个字:按本条的平均字宽把预算折成字数。round 是为了 Android 上 floor 返回 double。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tm0",
+        "value": "$[if::(gt::(${tm0W},38),connect::(replaceAll::(replaceAll::(subString::(${tr0},0,${tm0K}),${reTl},),${reTp},),…),${tr0})]"
+      },
+      "_note": "21 迷你的标题(两行)单独一份更短的截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r0",
+        "value": "$[if::(lt::(${v0},10),parseNumber::(${v0},0.0),round::(${v0}))]"
+      },
+      "_note": "每小时得分取整(v0 是浮点)。⚠️ `parseNumber` 的**默认值类型决定解析类型** —— 写 `0` 取整、写 `0.0` 留小数,与 g0 同一条约定。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ctx0",
+        "value": "$[if::(gt::(${g0},0),if::(gt::(${p0},0),1,0),0)]"
+      },
+      "_note": "时间语境行的出场闸:g0/p0 任一缺就整行不出现。⚠️ 不能省 —— `parseNumber::` 吃空串返回 **0**,少了这道闸,取不到数时会渲出「上榜 0 小时 · 每小时 0 分」,而那是一句**编出来的**事实,不是「没数据」。h0 恒钳 ≥1,故 g0>0 等价于「这条有效」。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "t0",
+          "p0",
+          "c0",
+          "g0",
+          "b0",
+          "id0",
+          "a0",
+          "u0",
+          "tm0",
+          "r0",
+          "ctx0"
+        ]
+      }
+    }
+  ]
+}

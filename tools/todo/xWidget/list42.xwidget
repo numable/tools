@@ -1,0 +1,68 @@
+{
+  "version": 2,
+  "title": "待办清单 · 小",
+  "sub": "某个范围的前 3 件（可换范围）",
+  "i18n": {
+    "en-US": {
+      "title": "To-do list · small",
+      "sub": "Top 3 of a view (switchable)"
+    }
+  },
+  "layout": 42,
+  "params": {
+    "scope": "today"
+  },
+  "ai": {
+    "shows": "所选范围(今天 / 全部 / 某清单等)的前 3 件待办与总件数",
+    "params": {
+      "scope": {
+        "kind": "enum",
+        "values": {
+          "today": "今天(含逾期)",
+          "over": "已逾期",
+          "all": "全部未完成",
+          "doing": "进行中(有进度)",
+          "star": "高优先级",
+          "nodate": "没有日期",
+          "inbox": "收件箱(未归入清单)"
+        },
+        "hint": "另有 L<清单 id> / G<标签 id> 指向用户自己的清单或标签,模型不要填这两种;空值按 all"
+      }
+    }
+  },
+  "events": {
+    "onClick": "numable://self/page/view?f=${scope}",
+    "onEdit": "/edit"
+  },
+  "_note_jobs": "长按组件 →「添加提醒」列出这两条(doc/alert-design.md §6 ③)。两条都没有参数映射:每日提醒的时间由用户在面板里填,到点提醒是包级单实例。",
+  "jobs": [
+    {
+      "id": "daily",
+      "params": {}
+    },
+    {
+      "id": "due",
+      "params": {}
+    }
+  ],
+  "canvas": {
+    "source": "@[file://rc/list42.rcn]",
+    "depends": [
+      {
+        "flow": "@[file://flow/list.df]",
+        "params": {
+          "scope": "${scope}"
+        }
+      }
+    ],
+    "refresh": {
+      "_note": "数据只在两件事上变:① 用户在页面里改了(页面写完会主动刷新本包组件);② 跨过零点(今天 / 逾期 / 七日窗口挪一格)。所以半小时一拍足够;零点那一拍由 at 钉住,不等下一个半小时。",
+      "interval": [
+        "1800"
+      ],
+      "at": [
+        "00:01"
+      ]
+    }
+  }
+}

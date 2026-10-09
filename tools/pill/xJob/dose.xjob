@@ -1,0 +1,58 @@
+{
+  "_note": "**静态提醒打样**(doc/alert-design.md §2.1 / §12,施工单 B1)——四端 N1 的验收靶。\n\n型是**组合判**出来的,文件里没有 `type`:有 `alert`、`task` 里没有 `depends` = **静态提醒**\n(布防那一刻就把消息渲好交给系统定时,到点响不响与 App 有没有在跑无关)。\n这个包零网络、数据全在 `data.*`,本来也没有任何可取的数 —— 静态正是它该用的型。\n\n⚠️ **`time` / `name` 是提醒自己的参数,不是包的设置**(§12):实例 = (包, 规则 id, 参数),\n   同一个人可以为两种药各建一条,互不相干;包里 `data.*` 一个字节都不为它们改。\n   所以这两个键**不进** `page/xform/setup.xform`,别顺手加。\n\n⚠️ **`name` 会出现在锁屏通知里**。本包刻意中性(见 manifest 头注:包名、桌面别名都躲开了\n   「这个人在吃什么药」),提醒是**第三个**会被别人瞥见的地方 —— 所以字段占位写的是\n   「你认得的叫法即可」而不是「请输入药名」:用户填别名同样能用,填真名是他自己的选择。\n   默认值恒空 = 必填(§3),不给「合理默认」。\n\n⚠️ `at: [\"${time}\"]` 里的 `${}` **只有没有 depends 的静态提醒才允许写**(G45.at-param):\n   布防时代入用户参数;动态的评估节律归宿主,写了就是 E。\n\n⚠️ `events.onClick` 写**包内路由**(`/` = 首页今日视图),不写 `numable://self` ——\n   点通知是冷启动,与 `flow/mark-today.af` 头注里那条坑同源:`self` 在包外入口没有\n   「当前是哪个包」的上下文。包内路由由宿主在**布防那一刻**解析好写进通知随身数据,\n   这条路是安全的。\n\n**这条提醒怎么闭环**:到点响 → 用户吃了药 → 在卡片 / 页内 / 补录任一处记下「已服」→\n那三条 `.af` 各自调 `alert.skip {id:\"dose\", until:\"today\"}` 撤掉当天剩下的那几发。\n`params` 省略 = 本规则**全部实例**(流不知道用户设了几点、叫什么,也不该知道)。\n\n**`alert.level: urgent` 的理由**:漏一次服药是这类提醒最糟的失败方向(§5.8「真的不能等」那一档\n就是为它留的)。⚠️ 本包只有这一条提醒,所以 publish 档的 `G45.all-urgent`(「一包全 urgent\n等于没分档」)必然对它出一条 W —— 那条闸看的是**包级比例**,单规则的包一定命中,不是这份文件写错了。\n\n⚠️ **注释写在顶层 `_note`,别写进 `alert` 里**:node 侧 lint(lint-core.mjs)放行 `_note` 前缀的键,\n   而编辑器侧的 TS 参考实现 `validateXJob`(xbundle-container/src/jobs/kind.ts)会把 `alert._note`\n   判成 `G45.alert-keys` 的未知键 —— 同一条闸两份实现此处分叉(2026-09-15 实测),\n   在两边收口之前,`alert` 块里就保持只有 message / activeCondition / level 三个键。",
+  "version": 1,
+  "id": "dose",
+  "title": "服药提醒",
+  "sub": "到点提醒；当天记过就不再响",
+  "i18n": {
+    "en-US": {
+      "title": "Dose reminder",
+      "sub": "Rings at your time; stays quiet once today is logged",
+      "message": {
+        "title": "Time for ${name}",
+        "body": "Take it, then log today in the app"
+      },
+      "form": {
+        "time": { "title": "Remind me at" },
+        "name": { "title": "Name", "component": { "props": { "placeholder": "Whatever you call it" } } }
+      }
+    }
+  },
+  "params": {
+    "time": "08:00",
+    "name": ""
+  },
+  "form": {
+    "time": {
+      "title": "提醒时间",
+      "component": {
+        "type": "timePicker"
+      }
+    },
+    "name": {
+      "title": "名称",
+      "required": true,
+      "component": {
+        "type": "textInput",
+        "props": {
+          "placeholder": "你认得的叫法即可"
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "/"
+  },
+  "task": {
+    "refresh": {
+      "at": ["${time}"]
+    }
+  },
+  "alert": {
+    "level": "urgent",
+    "message": {
+      "title": "该吃 ${name} 了",
+      "body": "吃完记得记一笔"
+    }
+  }
+}

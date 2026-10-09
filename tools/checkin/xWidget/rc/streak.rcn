@@ -1,0 +1,600 @@
+{
+  "rc": {
+    "i18n": {
+      "zh-CN": {
+        "streak": "连续打卡",
+        "days": "天",
+        "doneToday": "今天已达标",
+        "todayIs": "今天",
+        "never": "还没有记录",
+        "pickItem": "选择事项",
+        "gapLbl": "距最佳纪录还差",
+        "atBest": "已是你的最佳纪录",
+        "bestLbl": "最佳纪录",
+        "notToday": "今天还没打卡",
+        "dU": " 天",
+        "masked": "已隐藏"
+      },
+      "en-US": {
+        "streak": "Current streak",
+        "days": "d",
+        "doneToday": "Goal met",
+        "todayIs": "Today",
+        "never": "No entries yet",
+        "pickItem": "Pick a habit",
+        "gapLbl": "To your best:",
+        "atBest": "Your best streak yet",
+        "bestLbl": "Best streak",
+        "notToday": "Not logged today",
+        "dU": " d",
+        "masked": "Hidden"
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#F9FCFB\\,#EEF7F3)@90|linear(#15171A\\,#161B1D\\,#182221)@90"
+      },
+      {
+        "_note": "源色点(card-design-system §2):5pt 圆点 / 卡名左侧 / 间距 9pt / 每张卡恰好一次。⚠️ 色值恒 #2E9E6B|#45C793,**不跟事项的调色板走** —— 这颗点答的是「这是 checkin 的卡」,不是「这件事是紫色的」;跟着 pal 变会让同一个包在盘上看着像六个源。⚠️ y 引用顶层的 nm2(不带图标那份名字,带图标时 hide 但照样布局,与 nm1 同 y 同字号):锚点不能落进 op:if 分支,否则另一档整卡算不出来(2026-10-03 第一行统一)。",
+        "id": "dot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{nm2.y}+({nm2.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#2E9E6B|#45C793",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${hicon},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "ic",
+            "type": "img",
+            "x": "21pt",
+            "y": "9pt",
+            "w": "16pt",
+            "h": "16pt",
+            "url": "@[file://xWidget/assets/ic/${icon}.$[if::(eq::(${theme},dark),d,l)].uri]"
+          },
+          {
+            "id": "nm1",
+            "type": "txt",
+            "x": "{ic.r}+5pt",
+            "y": "11pt",
+            "w": "{parent.w}-83pt-{ic.w}-5pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${iname},${@i18n.pickItem})]",
+            "fontSize": "13pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold"
+          }
+        ]
+      },
+      {
+        "id": "nm2",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-83pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${iname},${@i18n.pickItem})]",
+        "fontSize": "13pt",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1",
+        "typeface": "System-Bold",
+        "hide": "$[if::(eq::(${hicon},1),1,0)]"
+      },
+      {
+        "_note": "标签 + 数字 + 单位三件必须连起来读得通(A1「卡面自解释」):「连续打卡」在上、「12 天」在下。光一个 12 时,这张卡和 recent(30 天里 18 天)在加卡面板里长得一模一样。",
+        "id": "lbl",
+        "type": "txt",
+        "x": "12pt",
+        "y": "33pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "${@i18n.streak}",
+        "fontSize": "11pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "_note": "时效锚移到标题行右上(2026-10-08 评审 checkin-7,card-design-system §3:锚 y = 名 y + 3),与同包其他组件一致。",
+        "id": "date",
+        "type": "txt",
+        "x": "{parent.w}-58pt",
+        "y": "14pt",
+        "w": "46pt",
+        "h": "-1",
+        "text": "$[if::(eq::(${mask},1),${@i18n.masked},findNotEmpty::(${d1Lbl},--))]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "alignmentH": "2"
+      },
+      {
+        "_note": "数字与单位的对齐(2026-09-07,与 intimacy v31 同一轮):StaticCanvas 的 txt 盒顶 = 该行字形 ink 顶(不是盒顶+字体 ascent),44pt 粗体数字基线在 y+31、12pt 汉字基线在 y+9.5 → 单位盒顶放 y+21.5(40pt 数字则 +20.5);老写法 82/80 是按 ascent 猜的,汉字比数字低 11pt。`••` 打码也是紧排会被顶到盒顶,故单独分支压到基线(y = 基线 − 11pt)。量法见 Numable-bundles/tools/rcnrender。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),0,1)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "11pt",
+            "w": "-1",
+            "h": "-1",
+            "fontSize": "44pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "id": "num",
+            "y": "50pt",
+            "text": "$[findNotEmpty::(${streak},0)]"
+          },
+          {
+            "type": "txt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${@i18n.days}",
+            "fontSize": "12pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1",
+            "id": "unit",
+            "x": "{num.r}+5pt",
+            "y": "71.5pt"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "11pt",
+            "w": "-1",
+            "h": "-1",
+            "fontSize": "44pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1",
+            "typeface": "System-Bold",
+            "id": "numM",
+            "y": "70pt",
+            "text": "••"
+          },
+          {
+            "type": "txt",
+            "w": "-1",
+            "h": "-1",
+            "text": "${@i18n.days}",
+            "fontSize": "12pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1",
+            "id": "unitM",
+            "x": "{numM.r}+5pt",
+            "y": "71.5pt"
+          }
+        ]
+      },
+      {
+        "_note": "第二行语境(2026-09-09)。位置 = 大数字(ink 50–81)与底部脚注(124)之间那段空带,不动任何既有锚点。四档由 flow 的 `skind` 单一判据切,RCN 这边不做布尔乘法 —— 同一张卡上两处各判一遍必然漂移。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${skind},1)]"
+        },
+        "react": [
+          {
+            "id": "ctx1",
+            "type": "txt",
+            "x": "12pt",
+            "y": "97pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.gapLbl} $[findNotEmpty::(${gap},--)]${@i18n.dU}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${skind},2)]"
+        },
+        "react": [
+          {
+            "id": "ctx2",
+            "type": "txt",
+            "x": "12pt",
+            "y": "97pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.atBest}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${skind},3)]"
+        },
+        "react": [
+          {
+            "id": "ctx3",
+            "type": "txt",
+            "x": "12pt",
+            "y": "97pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.bestLbl} $[findNotEmpty::(${best},--)]${@i18n.dU}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${skind},4)]"
+        },
+        "react": [
+          {
+            "id": "ctx4",
+            "type": "txt",
+            "x": "12pt",
+            "y": "97pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.notToday}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "形态 1 = 刻度链(最佳纪录 ≤ 13 天,数得清)。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${chMode},1)]"
+        },
+        "react": [
+          {
+            "_note": "一格一天,格数 = 最佳纪录,亮格 = 当前连续。这条链同时答掉这张卡的两个问题:**亮格数 = 连了几天**、**暗格数 = 离纪录多远**,而且都能数。追平纪录那天链会整条亮起来 —— 那是一个只有图形给得出的时刻,大数字给不了。\n⚠️ 格宽 `chW` 由数据层算,因为**尺寸字段只认 `${变量}`**,写 `$[方法]` 整卡白块;链恒占满内容宽,所以格数越多格越细。\n⚠️ 第 2 格起用 `{k(i-1).r}+2pt` 顺着上一格的右缘接,不各算各的 x —— chW 带一位小数,13 段各乘一遍误差会在链尾攒出半格。\n⚠️ 超出 chN 的格子渲透明而不是删掉:节点在、锚链才不断;而它们的宽仍是 chW(非零),零宽的圆角矩形几何构建失败 = 整卡白屏。",
+            "id": "k0",
+            "type": "layer",
+            "x": "12pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},0),${mc},if::(gt::(${chN},0),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k1",
+            "type": "layer",
+            "x": "{k0.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},1),${mc},if::(gt::(${chN},1),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k2",
+            "type": "layer",
+            "x": "{k1.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},2),${mc},if::(gt::(${chN},2),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k3",
+            "type": "layer",
+            "x": "{k2.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},3),${mc},if::(gt::(${chN},3),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k4",
+            "type": "layer",
+            "x": "{k3.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},4),${mc},if::(gt::(${chN},4),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k5",
+            "type": "layer",
+            "x": "{k4.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},5),${mc},if::(gt::(${chN},5),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k6",
+            "type": "layer",
+            "x": "{k5.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},6),${mc},if::(gt::(${chN},6),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k7",
+            "type": "layer",
+            "x": "{k6.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},7),${mc},if::(gt::(${chN},7),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k8",
+            "type": "layer",
+            "x": "{k7.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},8),${mc},if::(gt::(${chN},8),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k9",
+            "type": "layer",
+            "x": "{k8.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},9),${mc},if::(gt::(${chN},9),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k10",
+            "type": "layer",
+            "x": "{k9.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},10),${mc},if::(gt::(${chN},10),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k11",
+            "type": "layer",
+            "x": "{k10.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},11),${mc},if::(gt::(${chN},11),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          },
+          {
+            "id": "k12",
+            "type": "layer",
+            "x": "{k11.r}+2pt",
+            "y": "110pt",
+            "w": "${chW}pt",
+            "h": "8pt",
+            "bgColor": "$[if::(gt::(${chLit},12),${mc},if::(gt::(${chN},12),#EDEEF0|#20232A,#00000000|#00000000))]",
+            "cornerRadius": {
+              "leftT": "2.5pt",
+              "leftB": "2.5pt",
+              "rightT": "2.5pt",
+              "rightB": "2.5pt"
+            }
+          }
+        ]
+      },
+      {
+        "_note": "形态 2 = 整轨(最佳纪录 > 13 天,格已细过 8.5pt,数格子不再成立)。同一条 134×8 的横杠,只是不分格 —— 它只答比例:填满 = 追平纪录。\n⚠️ 必须是 line + lineCap:round,不能用 layer 的 w:数据驱动宽度的圆角矩形在宽度趋零时几何构建失败 = 整卡白屏,而 line 的 points 还能兜底。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${chMode},2)]"
+        },
+        "react": [
+          {
+            "id": "trk",
+            "type": "line",
+            "points": "[4,4,130,4]",
+            "x": "12pt",
+            "y": "110pt",
+            "w": "134pt",
+            "h": "8pt",
+            "lineWidth": "8pt",
+            "lineCap": "round",
+            "strokeColor": "#EDEEF0|#20232A"
+          },
+          {
+            "id": "fil",
+            "type": "line",
+            "points": "[4,4,$[findNotEmpty::(${fPx},4)],4]",
+            "x": "12pt",
+            "y": "110pt",
+            "w": "134pt",
+            "h": "8pt",
+            "lineWidth": "8pt",
+            "lineCap": "round",
+            "strokeColor": "${mc}"
+          }
+        ]
+      },
+      {
+        "_note": "底部脚注不要胶囊底(2026-08-27 用户拍板,与 gold banks 基准价同规则)。此层保留为纯锚点:cT/cN 等以 {chip.x/y/w} 定位,删层会断锚 → 透明化即可。",
+        "id": "chip",
+        "type": "layer",
+        "x": "12pt",
+        "y": "124pt",
+        "w": "{parent.w}-24pt",
+        "h": "22pt",
+        "bgColor": "#00000000|#00000000"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${done},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "cD",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.doneToday}",
+            "fontSize": "11pt",
+            "textColor": "${mc}",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${has},1),if::(eq::(${done},0),1,0),0)]"
+        },
+        "react": [
+          {
+            "id": "cT",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.todayIs} $[findNotEmpty::(${todayCnt},0)]/$[findNotEmpty::(${goal},1)]",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${has},1),0,1)]"
+        },
+        "react": [
+          {
+            "id": "cN",
+            "type": "txt",
+            "x": "{chip.x}",
+            "y": "{chip.y}+5pt",
+            "w": "{chip.w}",
+            "h": "-1",
+            "text": "${@i18n.never}",
+            "fontSize": "11pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ]
+  }
+}

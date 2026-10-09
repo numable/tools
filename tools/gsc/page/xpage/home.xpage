@@ -1,0 +1,200 @@
+{
+  "_note": "v10 首页 = 站点概览。主站点 hero(28 天点击 + 曲线 + 环比) → 四指标 → 我的站点(点行进详情) → 加卡一行 → 页脚。\nv9 的首页是一张纯货架:标题 + 一段接入说明 + 三张「添加」按钮,**一个数字都没有**,而且接了 Google 账号之后它也不会变 —— 那一页从头到尾不取数。",
+  "type": "page",
+  "id": "gsc-home",
+  "root": {
+    "type": "container",
+    "id": "root",
+    "layout": "list",
+    "direction": "vertical",
+    "gap": "10pt",
+    "_notePad": "左右内边距恒 **14pt**(page-design-system.md §5)。上下留白读 `@contentInset`(= @safeArea + 容器 chrome 占位 + 键盘),不是写死的数 —— 容器的 ···/✕ 胶囊**浮在内容之上**。",
+    "padding": "14pt",
+    "paddingTop": "${@contentInset.top}pt",
+    "paddingBottom": "24pt",
+    "_note": "页面级 depends 取一次:先 GET /sites,barrier 之后才拼得出六个 siteUrl,再 concurrent 打各站点汇总 + 主站点逐日 + 环比两段。hero / 四指标 / 每一行共用同一份。",
+    "depends": [
+      {
+        "flow": "@[file://page/flow/home.df]",
+        "params": {
+          "_cache": 1
+        },
+        "_note": "§D 纯显式:裸 `@[file://…]` 字符串绑定**传空入参**。`_cache:1` = 开首屏缓存(§5.5 / G23),开关默认关故必须显式写。"
+      }
+    ],
+    "items": [
+      {
+        "type": "Canvas",
+        "id": "head",
+        "h": "62pt",
+        "canvas": {
+          "source": "@[file://page/rc/p-head.rcn]"
+        }
+      },
+      {
+        "_note": "① 正常态。`op:if` 的 cond 用 `$[if::(…,1,0)]` 兜成 1/0 —— evalBool 只认 boolean / 数字非零 / 字符串 \"true\"|\"1\"。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(eq::(${ok},1),if::(ge::(${total},1),1,0),0)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "hero",
+            "h": "190pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-hero.rcn]"
+            },
+            "events": {
+              "onClick": "numable://self/page/site?u=${k1}"
+            },
+            "_note": "主站点 = `/sites` 列表第一个。整块可点 → 详情页。"
+          },
+          {
+            "type": "Canvas",
+            "id": "stats",
+            "h": "104pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-stats.rcn]"
+            }
+          },
+          {
+            "type": "Canvas",
+            "id": "secMine",
+            "h": "28pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-sec-mine.rcn]"
+            }
+          },
+          {
+            "_note": "定长 6 槽按 tShow 截断(账号里站点可能多于 6 个,`total` 是真实总数)。\n⚠️ 每行带的是 `it.u`(siteUrl)而不是下标:下标随账号里增删漂移,漂移后会把 A 的行点进 B 的详情,且不报错。",
+            "op": "forEach",
+            "props": {
+              "items": "${list}",
+              "key": "it",
+              "index": "i"
+            },
+            "items": [
+              {
+                "op": "if",
+                "props": {
+                  "cond": "$[if::(lt::(${i},${tShow}),1,0)]"
+                },
+                "items": [
+                  {
+                    "type": "Canvas",
+                    "id": "row-${i}",
+                    "h": "58pt",
+                    "canvas": {
+                      "source": "@[file://page/rc/p-row.rcn]"
+                    },
+                    "params": {
+                      "n": "${it.n}",
+                      "c": "${it.c}",
+                      "im": "${it.im}",
+                      "ct": "${it.ct}",
+                      "nd": "${it.nd}"
+                    },
+                    "events": {
+                      "onClick": "numable://self/page/site?u=${it.u}"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "_note": "② 连上了但这个账号下没有站点 —— 不是错误,是一句话能说清的状态。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(eq::(${ok},1),if::(ge::(${total},1),0,1),0)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "empty",
+            "h": "90pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-empty.rcn]"
+            }
+          }
+        ]
+      },
+      {
+        "_note": "③ 没绑账号 / 取不到 —— 这是**未就绪**不是失败(§7.1):用户有明确的下一步,\n所以给编号教程 + 直达凭证面板的按钮,不是一句「去连接」。\n⚠️ 绑定 UI 仍是 native 面板、只由用户手势触发(credential-vault.md 四条红线);\n按钮做的是「把用户送到那个面板」,不是包自己画绑定表单。\n⚠️ 高度取共享真源 SG.guide_h() —— 与出 .rcn 的生成器同一份文案推同一个高度,\n各估一份就会静默截断最后一步或在底下留一大块白。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(eq::(${ok},1),0,1)]"
+        },
+        "items": [
+          {
+            "type": "Canvas",
+            "id": "setup",
+            "h": "400pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-setup.rcn]"
+            }
+          },
+          {
+            "type": "Canvas",
+            "id": "setupbtn",
+            "h": "46pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-setupbtn.rcn]"
+            },
+            "events": {
+              "onClick": "numable://app/mine?section=credentials&bundle=01M026MFQB4W6V9S4QAT4ESCFN&bind=google"
+            }
+          }
+        ]
+      },
+      {
+        "_note": "③′ 加卡区、加卡按钮与页脚**也只在接入后显示**(2026-09-09,照 appstoreconnect 2026-08-31 那一轮改)。此前这三块在 ok 分支**之外** —— 于是未接入的用户看到的是「两步教程 + 去连接按钮」底下顶着一个「添加组件」按钮,而这一刻加进去的每一张卡都必然是宿主渲的 🔑「需要凭证」占位(§7.1.2),等于让人先做一件注定白做的事(承 G12「不得出现点了没反应的控件」);页脚那段数据来源说明也与教程块里的边界说明重复。未接入页 = 表头 + 教程 + 凭证按钮,再无其他。\n⚠️ 判据只取 `ok=1` 而不是「ok=1 且 total≥1」:账号连上了但名下一个站点都没有(分支 ②)照样该能加卡 ——「我的站点」那张卡本来就要显示 0。",
+        "op": "if",
+        "props": {
+          "cond": "$[if::(eq::(${ok},1),1,0)]"
+        },
+        "items": [
+          {
+            "_note": "加卡入口 = **一个按钮**(§8.1a)。此前点进 `/cards` —— 一整页卡片墙 + 逐张加卡,那一页整个就是包内自建的组件面板(系统面板本来就有真 RCN 预览、多选、跨包),已整页删除。",
+            "type": "Canvas",
+            "id": "addBtn",
+            "h": "56pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-addbtn.rcn]"
+            },
+            "events": {
+              "onClick": {
+                "flow": "@[file://page/flow/pick-home.af]",
+                "params": {}
+              }
+            }
+          },
+          {
+            "type": "Canvas",
+            "id": "foot",
+            "h": "132pt",
+            "canvas": {
+              "source": "@[file://page/rc/p-foot.rcn]"
+            }
+          }
+        ]
+      }
+    ],
+    "events": {
+      "_note": "`onLoad`:三态的中间那一行 —— 首屏若渲的是旧货就后台校新一次(gate 全生命周期恰好一次、软重载不重置,不会自激;⚠️ 别改挂 onVisible)。",
+      "onLoad": [
+        {
+          "flow": "@[file://page/flow/home-revalidate.af]",
+          "params": {
+            "stale": "${_stale}",
+            "ckey": "${ckey}"
+          }
+        }
+      ],
+      "onRefresh": "@[file://page/flow/home-refresh.af]"
+    }
+  }
+}

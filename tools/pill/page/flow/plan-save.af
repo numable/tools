@@ -1,0 +1,181 @@
+{
+  "_note": "设置表单提交:**留空的项保持不变**。字段名与 setup.xform 的 form key 逐字对应。\n\n⚠️⚠️ 为什么要先读旧值再挑:表单**不预填**(平台缺口,见 setup.xform 的长注释),\n用户只会填想改的那几项,其余留空。写盘动作若照单全收,一次「只改别名」就会把\n起始日清空、活性片数写成 0 —— 那不是保存,那是清库。\n**写盘动作必须自己判断输入是否有效,不能假设上游给得对。**\n\n⚠️ 三种无效输入都要挡:\n  ① 空串(用户没填);\n  ② 数字框留空回落的 0(active=0 不合法;rest=0 合法,故两者判据不同);\n  ③ **未求值的字面串**如 `${alias}` —— 平台缺口下这是真会出现的形态,\n     不挡的话别名会被设成 `\"${alias}\"` 这串鬼东西。判据取首字符是不是 `$`。\n\n⚠️ 全用纯表达式,不用 `op:if` —— operation 分支退出时会恢复外层绑定,里面 set 的键拿不到外面。\n\n⚠️ **不动 taken / skipped**:记录按绝对日期存,改尺子不动量过的东西。\n⚠️ `pack` 是 v1 遗留的死键,这里顺手 remove(v2 的翻盒状态住 pageState,见 pack-go.af)。",
+  "version": 1,
+  "i18n": {
+    "zh-CN": {
+      "needStart": "请先选择「本盒起始日」——记录要从这一天开始算"
+    },
+    "en-US": {
+      "needStart": "Pick a pack start date first — the log counts from that day"
+    }
+  },
+  "actions": [
+    {
+      "_note": "⚠️⚠️ **表单值必须经 `@event.value.*` 取,裸 `${start}` 取不到**(2026-08-21 iOS 实测)。\n字符串式绑定(`\"onSubmit\": \"@[file://…]\"`)的 flow **初始 scope 只有 `@event`**(协议 §D 纯显式),\n页面 state / route params 一概看不见。此前直接写 `${start}` → 四个键全空 → 防御逻辑\n把每一项都落回旧值 → **保存等于什么都没发生**,而且不报错(防御写对了,所以没毁数据)。\n这里先把四个表单值映射成短名,后面的表达式一个字不用改。",
+      "op": "set",
+      "props": {
+        "key": "start",
+        "value": "${@event.value.start}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "active",
+        "value": "${@event.value.active}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rest",
+        "value": "${@event.value.rest}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "alias",
+        "value": "${@event.value.alias}"
+      }
+    },
+    {
+      "id": "oStart",
+      "action": "data.get",
+      "params": {
+        "key": "start",
+        "default": ""
+      }
+    },
+    {
+      "id": "oActive",
+      "action": "data.get",
+      "params": {
+        "key": "active",
+        "default": 21
+      }
+    },
+    {
+      "id": "oRest",
+      "action": "data.get",
+      "params": {
+        "key": "rest",
+        "default": 7
+      }
+    },
+    {
+      "id": "oAlias",
+      "action": "data.get",
+      "params": {
+        "key": "alias",
+        "default": ""
+      }
+    },
+    {
+      "_note": "起始日:判据是 **parseDate 解不解得出**,不是「长度是不是 10」——\n`2026/09/01` 也是 10 位,长度判据会把它当合法值写进去,后面所有日期算术全崩。\nparseDate 失败返回 null,`gt(null,0)` 为 false → 落回旧值。",
+      "op": "set",
+      "props": {
+        "key": "nStart",
+        "value": "$[if::(gt::(parseDate::(${start},yyyy-MM-dd),0),${start},${oStart})]"
+      }
+    },
+    {
+      "_note": "活性片数:0 或非数字都视为没填(一盒 0 片没有意义)。\n⚠️ 不用 `parseNumber` —— 它对 `\"24\"` 返回 **null**(不是 24,实测),\n拿它当数值转换会把所有输入都判成无效。`gt`/`ge` 自己就做 toNumber,直接喂串即可。",
+      "op": "set",
+      "props": {
+        "key": "nActive",
+        "value": "$[if::(gt::(${active},0),${active},${oActive})]"
+      }
+    },
+    {
+      "_note": "停药天数:**0 是合法值**(连续服用),所以不能用 gt。\n先用长度挡掉空串(`toNumber(\"\")` 未必是 null,不能指望 ge 挡住它),再用 ge 判 ≥0;\n未求值的字面串 `${rest}` 走到 ge 时 toNumber 给 null → false → 落回旧值。",
+      "op": "set",
+      "props": {
+        "key": "nRest",
+        "value": "$[if::(eq::(length::(${rest}),0),${oRest},if::(ge::(${rest},0),${rest},${oRest}))]"
+      }
+    },
+    {
+      "_note": "别名:空 = 不改(代价是从这里清不掉别名,可输入一个空格代替);\n首字符是 `$` = 未求值的字面串,也当没填。",
+      "op": "set",
+      "props": {
+        "key": "a1",
+        "value": "$[subString::(${alias},0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nAlias",
+        "value": "$[if::(eq::(${a1},$),${oAlias},if::(gt::(length::(${alias}),0),${alias},${oAlias}))]"
+      }
+    },
+    {
+      "action": "data.set",
+      "params": {
+        "key": "start",
+        "value": "${nStart}"
+      }
+    },
+    {
+      "action": "data.set",
+      "params": {
+        "key": "active",
+        "value": "${nActive}"
+      }
+    },
+    {
+      "action": "data.set",
+      "params": {
+        "key": "rest",
+        "value": "${nRest}"
+      }
+    },
+    {
+      "action": "data.set",
+      "params": {
+        "key": "alias",
+        "value": "${nAlias}"
+      }
+    },
+    {
+      "_note": "⚠️ v2 起 `pack` 是**死键** —— 「在看第几盒」搬去了 pageState(见 pack-go.af),data 域这一份没有任何读者。\n这里改成 `data.remove` 而不是删掉整条:老设备上躺着 v1 写下的值,顺手清干净。\n(v1 时这里写 -1 的理由是「周期长度可能变了,旧盒下标指向的已是另一段日子」——\n 那个理由现在由 pageState 随页面消失天然满足。)",
+      "action": "data.remove",
+      "params": {
+        "key": "pack"
+      }
+    },
+    {
+      "_note": "仪表盘卡与桌面小组件不在 openForResult 那条重载链上,自己踢一下(同 toggle.af/log-save.af)。",
+      "action": "widget.refresh"
+    },
+    {
+      "_note": "收口只在**起始日真的有值**时发生。首次进来时表单四项全空,`start` 留空 = 「保持不变」,\n而它本来就没有值 —— 这一支若照样关表单,用户看到的就是「点了保存、表单关了、主界面一点没变」,\n全程零反馈。(2026-08-21 用户实报。)",
+      "op": "if",
+      "props": {
+        "val": "$[gt::(length::(${nStart}),0)]"
+      },
+      "items": [
+        {
+          "action": "page.close"
+        }
+      ]
+    },
+    {
+      "_note": "另一支:留在表单里 + 说清楚缺什么。AF 没有 else,故两支各写一个 op:if,判据互补。\n⚠️ 上面那些 `data.set` 已经跑过了(active/rest 落成默认 21/7、pack 复位)—— 那是无害的:\n起始日一天没定,这些尺子就还没有参照物,下次填了起始日立刻生效。",
+      "op": "if",
+      "props": {
+        "val": "$[eq::(length::(${nStart}),0)]"
+      },
+      "items": [
+        {
+          "action": "ui.toast",
+          "params": {
+            "message": "${@i18n.needStart}",
+            "type": "error"
+          }
+        }
+      ]
+    }
+  ]
+}

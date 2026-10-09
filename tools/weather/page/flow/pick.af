@@ -1,0 +1,127 @@
+{
+  "_note": "加卡:打开系统「添加到仪表盘」面板,由**用户**在面板里挑(doc/infosource-standard.md §8.1a)。\n\n⚠️ 此前这里是 `numable://self/page/cards` —— 一整页四张卡的真 RCN 预览 + 逐张加卡按钮。\n那一页整个就是**包内自建的组件面板**:系统面板本来就有真 RCN 预览、轮播 ⇄ 网格、多选、跨包浏览,\n而那一页只有「逐张点」,还与 `.xwidget` 目录是两份真源(新增组件忘了改那页就永远加不到)。整页已删。\n\n⚠️ 四张卡**都吃 lat/lon/city**,所以候选**逐项**带参数 —— 一份共享 override 只喂给面板\n当前那一张,用户翻到第二张再加就是一张没有城市的空卡(§8.1a 纪律 1)。\n\n⚠️ 参数自己从 `data.*` 读,不靠 cell 事件带页面 scope:cell 事件派发 af 的入参作用域没有先例可依,\n城市取 `data.cities` 的**第一座**(v66 起;此前读隐形的 `cityIdx`「当前城市」,已整个退役 ——\n列表首页没有当前城市这回事。第一座是谁由用户在 /city 里上移/下移决定,规则看得见)。\n\n⚠️ 首个 action 是 `ui.haptic`(G22):点下去到面板弹出之间有一段空白,不给触觉用户会再点一次。\n⚠️ 流里**绝不能**在这之后接「已添加」——落盘只发生在面板里的原生按钮上,用户可能翻两下就关掉。\n\n⚠️ v44:`default` 与 lat/lon/city 的上海兜底一并删除(见 home.df 的长注)。这条流只在**已经有城市**的正常首页页脚上挂着 —— 引导屏那一支根本不画加卡按钮(没城市时加出来的卡必然是空的,G12「不得出现点了没反应的控件」)。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "ui.haptic"
+    },
+    {
+      "id": "saved",
+      "action": "data.get",
+      "params": {
+        "key": "cities",
+        "default": []
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到结果。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[length::(${saved})]"
+      },
+      "_note": "⚠️ 取当前城市必须走 $[index::()],**不能写 `${saved[${savedIdx}]}`** —— VParser 的下标寻址只认字面数字与 @last,方括号里的 ${} 不会先求值(iOS resolveIndex 直接 Int() 失败),整个占位符求成空 → 四张卡的 lat/lon/city 全空、把 .xwidget 默认参数也覆盖掉 → 面板预览与加进盘的卡全渲 `--` 且零报错(2026-08-31 模拟器实拍定位)。以下消毒链与 home.df 逐字同源:parseNumber 吃掉历史坏数据 \"${_i}\",越界钳 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cur",
+        "value": "$[index::(${saved},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lat",
+        "value": "${cur.lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lon",
+        "value": "${cur.lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "city",
+        "value": "${cur.name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "picks",
+        "value": [
+          {
+            "id": "cities"
+          },
+          {
+            "id": "now",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "today",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "hours",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "week",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "air",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          },
+          {
+            "id": "sun",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          }
+        ]
+      },
+      "_note": "⚠️ 候选先经 op:set 落成数组、再整体引用 —— 带 ${} 的嵌套字面量直接写进 action params\n全仓没有先例,某端不递归求值时表现是「加出一张没有参数的空卡」且不报错。\n\n⚠️ **`cities`(多城市聚合卡)排在第一位,且不带 params** —— 这一页现在就是「城市列表」,\n   它的卡片形态本来就是那张聚合卡;面板一打开先看到它才是连贯的\n   (2026-09-10 用户报「列表页小组件应该是多城市聚合」)。\n   它跟随 `data.cities`,**不吃实例参数** —— 逐项带参数的是后面那四张单城市卡。"
+    },
+    {
+      "action": "widget.pick",
+      "params": {
+        "items": "${picks}"
+      }
+    }
+  ]
+}

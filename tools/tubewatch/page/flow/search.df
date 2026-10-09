@@ -1,0 +1,95 @@
+{
+  "_note": "频道搜索(P1 增强档,§3.11)。无 key 时 Data API 恒返 403 → items 取空 → ok=0,页面据此提示「绑定密钥后可搜索」。\n⚠️ 用 search.list 而不是 channels.list?forHandle= :后者 1 unit 更便宜、但**只认精确 handle**;搜索框里用户输的是人名居多(「Linus」而不是「@LinusTechTips」),那条路会一无所获。search.list 是 100 units/次,按 10000/天 的免费额度算 = 100 次搜索/天,对单用户绰绰有余。\n⚠️ 定长 5 槽 + 字面下标(没有 forEach 也拿不到变量下标);空槽字段为空,页面按 ok 逐条过滤。\n【G23 豁免】管理页搜索流:用户敲了关键词才跑,不是首屏。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "cred",
+      "action": "credential.state",
+      "params": {
+        "id": "yt"
+      },
+      "_note": "凭证绑定状态(纯本地查表,零网络)。yt 是 required:false —— 未绑时匿名照发,\n  Data API 恒回 403;有了这条,「没绑密钥」与「搜索无结果」终于分得开(见 credState 的注)。"
+    },
+    {
+      "action": "request",
+      "id": "s",
+      "params": {
+        "url": "https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=5&q=${q}",
+        "method": "GET",
+        "formatType": "json",
+        "credential": "yt"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "请求屏障勿删([[actionflow-concurrent-late-merge]])。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(gt::(length::(${s.items}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "credState",
+        "value": "$[connect::(${cred.state},)]"
+      },
+      "_note": "透给管理页做分诊。\n  ⚠️ **这修掉一个真 bug**:`ok` 是「有没有搜到东西」(items 长度 > 0),而页面把 `!ok`\n  一律说成「要绑定密钥」—— 于是**绑了密钥、只是这个词搜不到**的用户也被告知去绑密钥。\n  两件事本来就不该共用一个哨兵:绑没绑是**本地事实**,搜没搜到是**服务端结果**。\n  ⚠️ 包一层 `connect::(…,)`:裸写时 action 没执行该键根本不会被 set,而 resultFilter\n  不输出没 set 过的键 —— 「没执行」与「没绑」会长得一模一样。"
+    },
+    {
+      "_note": "无 key / 搜不到时**不发 rows** —— 同 cloudflare board.df「列表为空时不发 rows」。发一个 5 元素全空的数组,页面要多写一层过滤,L1 也会把它判成「所有元素都空」= 取数失败,而这里的空是**正常态**(没绑密钥,该功能本就不可用)。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${ok},1),1,0)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "rows",
+            "value": [
+              {
+                "id": "${s.items[0].id.channelId}",
+                "name": "${s.items[0].snippet.title}"
+              },
+              {
+                "id": "${s.items[1].id.channelId}",
+                "name": "${s.items[1].snippet.title}"
+              },
+              {
+                "id": "${s.items[2].id.channelId}",
+                "name": "${s.items[2].snippet.title}"
+              },
+              {
+                "id": "${s.items[3].id.channelId}",
+                "name": "${s.items[3].snippet.title}"
+              },
+              {
+                "id": "${s.items[4].id.channelId}",
+                "name": "${s.items[4].snippet.title}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ok",
+          "rows",
+          "credState"
+        ]
+      }
+    }
+  ],
+  "_lintCache": "exempt"
+}

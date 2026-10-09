@@ -1,0 +1,268 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "y",
+        "value": "$[formatDate::(${nowMs},yyyy)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yStart",
+        "value": "$[parseDate::(connect::(${y},-01-01),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yEnd",
+        "value": "$[parseDate::(connect::(calc::(${y}+1),-01-01),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yPct",
+        "value": "$[round::(calc::((${nowMs}-${yStart})/(${yEnd}-${yStart})*100),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yDay",
+        "value": "$[round::(calc::((${nowMs}-${yStart})/86400000+0.5),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yLeft",
+        "value": "$[round::(calc::((${yEnd}-${nowMs})/86400000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m",
+        "value": "$[formatDate::(${nowMs},MM)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mStart",
+        "value": "$[parseDate::(connect::(${y},-,${m},-01),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nm",
+        "value": "$[if::(ge::(${m},12),01,if::(lt::(${m},9),connect::(0,calc::(${m}+1)),calc::(${m}+1)))]"
+      },
+      "_note": "下月 1 号:①12 月要进位到次年 1 月;②月份**必须补零** —— parseNumber(9,\"00\") 返回的是 9 不是 09,拼出 \"2026-9-01\" 后 parseDate(yyyy-MM-dd) 直接解析失败,月进度会静默变成 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ny",
+        "value": "$[if::(ge::(${m},12),calc::(${y}+1),${y})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mEnd",
+        "value": "$[parseDate::(connect::(${ny},-,${nm},-01),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mPct",
+        "value": "$[round::(calc::((${nowMs}-${mStart})/(${mEnd}-${mStart})*100),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mLeft",
+        "value": "$[round::(calc::((${mEnd}-${nowMs})/86400000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mDays",
+        "value": "$[round::(calc::((${mEnd}-${mStart})/86400000),0)]"
+      },
+      "_note": "本月有几天。⚠️ 这是**格位数**不是格子亮不亮 —— 2 月那三格画得出来但几乎不出声(VOID 色),不是 hide。整行留住矩形轮廓,少三格的缺口在右端会被读成没对齐。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dd",
+        "value": "$[formatDate::(${nowMs},dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mIdx",
+        "value": "$[calc::(${dd}-1)]"
+      },
+      "_note": "今天是本月第几格(0 基)。直接取日号减一,不走 floor —— 日号本身就是整数,而 (now-mStart)/86400000 会被夏令时切换那天的 23/25 小时带偏半格。⚠️ 日号先落成 `dd` 再进 calc:`calc::(formatDate::(…)-1)` 是「算术式里嵌方法」,与「方法参数里嵌方法」不是一回事,四端 VParser 无先例、不可推定。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m1",
+        "value": "$[calc::(${m}-1)]"
+      },
+      "_note": "月份下标(0-11)。季度只能由它推,见下条。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qi",
+        "value": "$[round::(calc::((${m1}-${m1}%3)/3+1),0)]"
+      },
+      "_note": "第几季度。⚠️ 两个坑叠在一起:①VParser 的 calc 是浮点除法,取整只能靠 `x-x%3` 再除 3,不能写 `/3` 直接截断;②被取模的必须是**月份下标 m-1**,不是月份本身 —— `(m-m%3)/3+1` 在每季最后一个月(3/6/9/12)整除,把 qi 算大一档:9 月算成 Q4 → 本季起点落到未来 → 进度渲成负数(2026-09-06 体检实拍「本季 -26%」),12 月更会算出 qi=5 → 起始月 13 → parseDate 直接拿不到日期。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qsm",
+        "value": "$[calc::((${qi}-1)*3+1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qs",
+        "value": "$[if::(lt::(${qsm},10),connect::(0,${qsm}),${qsm})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qem",
+        "value": "$[calc::(${qi}*3+1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qeY",
+        "value": "$[if::(gt::(${qem},12),calc::(${y}+1),${y})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qe",
+        "value": "$[if::(gt::(${qem},12),01,if::(lt::(${qem},10),connect::(0,${qem}),${qem}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qStart",
+        "value": "$[parseDate::(connect::(${y},-,${qs},-01),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qEnd",
+        "value": "$[parseDate::(connect::(${qeY},-,${qe},-01),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qPct",
+        "value": "$[round::(calc::((${nowMs}-${qStart})/(${qEnd}-${qStart})*100),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qLeft",
+        "value": "$[round::(calc::((${qEnd}-${nowMs})/86400000),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qIdx",
+        "value": "$[min::(round::(calc::((${nowMs}-${qStart})/604800000-0.5),0),12)]"
+      },
+      "_note": "本季第几周(0 基)。⚠️ 必须钳到 12:一个季度是 90–92 天 = 13 周**多一两天**,不钳的话季末最后两天会算出第 14 格 —— 那一格不存在,于是整行没有一格是「当下」,看着像卡住了(而百分比照旧走到 99%)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yIdx",
+        "value": "$[calc::(${m}-1)]"
+      },
+      "_note": "今年第几个月(0 基)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "wIdx",
+        "value": "$[min::(round::(calc::((${nowMs}-${yStart})/604800000-0.5),0),51)]"
+      },
+      "_note": "今年第几周(0 基,给 42 卡的 52 周格)。同样要钳 —— 一年 52 周余 1–2 天。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "today",
+        "value": "$[formatDate::(${nowMs},MM-dd)]"
+      },
+      "_note": "时效锚只到天(card-design-system §3:只有日期粒度的数据用 MM-DD)。⚠️ 从 yyyy-MM-dd 收窄过 —— 卡上那一格只有 ~40pt,年份挤掉的正是月日。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${nowMs},HH:mm)]"
+      },
+      "_note": "⚠️ 保留但卡上已不显示:零网络包,三张卡上没有任何按小时变的量。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "today",
+          "at",
+          "y",
+          "yDay",
+          "yLeft",
+          "mLeft",
+          "qLeft",
+          "mPct",
+          "qPct",
+          "yPct",
+          "mDays",
+          "mIdx",
+          "qIdx",
+          "yIdx",
+          "wIdx"
+        ]
+      }
+    }
+  ]
+}

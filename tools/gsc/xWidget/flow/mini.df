@@ -1,0 +1,545 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "hasSite",
+        "value": "$[if::(eq::(${site},),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dTo",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-3*86400000),yyyy-MM-dd)]"
+      },
+      "_note": "GSC 数据滞后约 2–3 天,窗口右端必须留出这一截 —— 否则最后两三天恒为 0,曲线尾部永远是一道往下扎的假坑。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dFrom",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-31*86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${hasSite}"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "bodyS",
+            "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dTo}\",\"dimensions\":[],\"rowLimit\":1}"
+          }
+        },
+        {
+          "id": "resp",
+          "action": "request",
+          "params": {
+            "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+            "method": "POST",
+            "header": {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "User-Agent": "Numable"
+            },
+            "body": "${bodyS}",
+            "formatType": "json",
+            "credential": "google"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b1",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "errMsg",
+            "value": "${resp.error.message}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ok",
+            "value": "$[if::(eq::(${resp},),0,if::(eq::(${errMsg},),1,0))]"
+          },
+          "_note": "请求失败两种形态:① 有的端把非 2xx 当节点失败 → resp 整个为空;② 有的端把 JSON 错误体交回来。两种都得抓 —— 不抓就会把 403 渲成「0 次点击」,而假数字比报错更险(标准 §9.5)。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(if::(eq::(${resp},),0,1),0,1)]"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "gsc_unreachable"
+              }
+            }
+          ],
+          "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r",
+            "value": "${resp.rows[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "clicks",
+            "value": "$[if::(eq::(${ok},1),round::(findNotEmpty::(${r.clicks},0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "imps",
+            "value": "$[if::(eq::(${ok},1),round::(findNotEmpty::(${r.impressions},0)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ctr",
+            "value": "$[parseNumber::(calc::(findNotEmpty::(${r.ctr},0)*100),0.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "clicksS",
+            "value": "$[if::(eq::(${ok},1),parseNumber::(findNotEmpty::(${r.clicks},0),#\\,##0),)]"
+          },
+          "_note": "显示串带千分位(2,072 / 58,016),与另两个开发者工具同一口径;clicks / imps 原值留给 11 档压缩与判据。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "impsS",
+            "value": "$[if::(eq::(${ok},1),parseNumber::(findNotEmpty::(${r.impressions},0),#\\,##0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pos",
+            "value": "$[if::(eq::(${ok},1),parseNumber::(findNotEmpty::(${r.position},0),0.0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ctrTxt",
+            "value": "$[if::(eq::(${ok},1),${ctr}%,)]"
+          },
+          "_note": "展示串在数据层拼好(RCN 里 $[..] 不嵌 $[..],标准 §9.5)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bodyD",
+            "value": "{\"startDate\":\"${dFrom}\",\"endDate\":\"${dTo}\",\"dimensions\":[\"date\"],\"rowLimit\":40}"
+          }
+        },
+        {
+          "id": "day",
+          "action": "request",
+          "params": {
+            "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/$[urlEncode::(${site})]/searchAnalytics/query",
+            "method": "POST",
+            "header": {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "User-Agent": "Numable"
+            },
+            "body": "${bodyD}",
+            "formatType": "json",
+            "credential": "google"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dn",
+            "value": "$[length::(${day.rows})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ser",
+            "value": [
+              "$[get::(index::(${day.rows},calc::(${dn}-1-27)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-26)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-25)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-24)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-23)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-22)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-21)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-20)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-19)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-18)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-17)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-16)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-15)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-14)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-13)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-12)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-11)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-10)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-9)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-8)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-7)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-6)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-5)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-4)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-3)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-2)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-1)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1)),clicks)]"
+            ]
+          },
+          "_note": "逐日点击。⚠️ 末尾锚定:GSC 会**跳过完全没有数据的日子**,所以第 i 个采样不等于「第 i 天」;锚在末尾至少保证最右边那点是最近一天。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wA",
+            "value": [
+              "$[get::(index::(${day.rows},calc::(${dn}-1-13)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-12)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-11)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-10)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-9)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-8)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-7)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-6)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-5)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-4)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-3)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-2)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-1)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1)),clicks)]"
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "wB",
+            "value": [
+              "$[get::(index::(${day.rows},calc::(${dn}-1-27)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-26)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-25)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-24)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-23)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-22)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-21)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-20)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-19)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-18)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-17)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-16)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-15)),clicks)]",
+              "$[get::(index::(${day.rows},calc::(${dn}-1-14)),clicks)]"
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sumA",
+            "value": "$[sum::(${wA})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sumB",
+            "value": "$[sum::(${wB})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chg",
+            "value": "$[if::(gt::(${sumB},0),parseNumber::(calc::((${sumA}-${sumB})/${sumB}*100),0.0),)]"
+          },
+          "_note": "环比:近 14 天 vs 前 14 天。⚠️ 分母为 0 时**不算** —— 「从 0 涨到 5」的百分比是无穷大,渲出来是个荒唐的数;留空让卡上显示 `--`。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "up",
+            "value": "$[if::(gt::(length::(${chg}),0),if::(ge::(${chg},0),1,0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "flat",
+            "value": "$[if::(gt::(length::(${chg}),0),if::(lt::(calc::(${chg}*${chg}),0.25),1,0),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chgA",
+            "value": "$[if::(ge::(${chg},0),${chg},calc::(0-${chg}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chgS",
+            "value": "$[if::(eq::(${up},1),+,−)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "chgTxt",
+            "value": "$[if::(gt::(length::(${up}),0),connect::(${chgS},${chgA},%),)]"
+          },
+          "_note": "带符号的环比串,在**数据层**拼好。理由有两条:\n  ① RCN 的 `$[..]` 不嵌 `$[..]`(标准 §9.5),渲染层没法既选符号又拼百分号;\n  ② `up` 为空(新站/上一窗口点击为 0,分母为 0 不算环比)时这里**留空**,渲染层据此整条结论行不出现 —— 不兜底成 `--%`(那是个看起来像数据的占位)、更不兜底成 0%(那是假话)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lo",
+            "value": "0"
+          },
+          "_note": "⚠️ 基线 **0**,不是窗口最小值:流量图看的是「量」,从最小值起画会把1200→1230 这种 2% 的波动画成一面陡坡。行情图那套 min–max 归一在这里是错的。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hi",
+            "value": "$[max::(calc::(max::(${ser})),1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pts_a",
+            "value": [
+              "0.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},0)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "2.1",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},1)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "4.1",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},2)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "6.2",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},3)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "8.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},4)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "10.4",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},5)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "12.4",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},6)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "14.5",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},7)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "16.6",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},8)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "18.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},9)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "20.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},10)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "22.8",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},11)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "24.9",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},12)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "27.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},13)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "29.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},14)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "31.1",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},15)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "33.2",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},16)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "35.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},17)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "37.3",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},18)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "39.4",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},19)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "41.5",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},20)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "43.6",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},21)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "45.6",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},22)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "47.7",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},23)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "49.8",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},24)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "51.9",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},25)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "53.9",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},26)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]",
+              "56.0",
+              "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${ser},27)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]"
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "pts",
+            "value": "$[join::(${pts_a},\\,)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "lastY",
+            "value": "$[findNotEmpty::(parseNumber::(calc::((1-((findNotEmpty::(index::(${ser},27),0)-${lo})/(${hi}-${lo})))*16.0+4.0),0.0),999)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "rangeTxt",
+            "value": "${dFrom} ~ ${dTo}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nd",
+            "value": "$[if::(eq::(${ok},1),if::(eq::(findNotEmpty::(${r.impressions},__none__),__none__),1,0),0)]"
+          },
+          "_note": "「没有搜索数据」(v37,2026-09-25):授权与站点都对,只是 GSC 一行都没回 —— 新验证的站点头 2–3 天恒是这样。此前这一态被渲成「0 点击 / 0.0% / 0.0」,读起来是「站点真的零流量」,而事实是「还没数据」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sl1",
+        "value": "$[replaceAll::(${site},^sc-domain.,)]"
+      },
+      "_note": "回落站名去前缀(v37):siteName 缺席时(从通用入口加的卡)原先直接渲 siteUrl 原文,22 / 21 档被截成「sc-domain:」。正则用 `.` 代冒号、不写 `://` —— 避开方法分隔符 `::`。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sl2",
+        "value": "$[replaceAll::(${sl1},^https?.//,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sl3",
+        "value": "$[replaceAll::(${sl2},/$,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "siteLabel",
+        "value": "$[if::(eq::(${hasSite},1),findNotEmpty::(${siteName},${sl3}),)]"
+      },
+      "_note": "卡面站名:选站页写回的 siteName 已剥掉 sc-domain: / https:// 前缀;缺则回落 siteUrl 原文(不在表达式里 split『://』—— 冒号双斜杠会跟方法分隔符 :: 打架)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c11",
+        "value": "$[findNotEmpty::(${clicks},__n__)]"
+      },
+      "_note": "判空哨兵。⚠️ 不能写 `eq::(${clicks},)`:eq 是数字化比较,0 次点击会被当成空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t11",
+        "value": "$[round::(calc::(${clicks}/100))]"
+      },
+      "_note": "以 0.1K 为单位取整。⚠️ 进位判档用它,不用原值:`parseNumber::(x,0.0)` 是四舍五入(99,960 → `100.0K`,6 个字符),而 `parseNumber::(x,0)` 在网页引擎上是**截断**(99.95 → 99)—— 两个都不能直接拿来判档。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m10",
+        "value": "$[round::(calc::(${clicks}/100000))]"
+      },
+      "_note": "以 0.1M 为单位取整,理由同 t11。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v11",
+        "value": "$[if::(eq::(${c11},__n__),--,if::(eq::(findNotEmpty::(${nd},0),1),--,if::(lt::(${clicks},10000),${clicks},if::(lt::(${t11},1000),connect::(parseNumber::(calc::(${t11}/10),0.0),K),if::(lt::(round::(calc::(${clicks}/1000)),1000),connect::(round::(calc::(${clicks}/1000)),K),if::(lt::(${m10},100),connect::(parseNumber::(calc::(${m10}/10),0.0),M),connect::(round::(calc::(${clicks}/1000000)),M)))))))]"
+      },
+      "_note": "11 档主值:≤ 5 个字符(§8.2)。<1 万原样(最多 4 位,不加千分位)· 1 万–10 万一位小数 K(`12.3K`)· 10 万起整数 K(`123K`)· 百万起 M。K/M 中英通用,不做「万」(数据不本地化,同 tubewatch 的 KMIFY)。整数一律 round::(Android 上 calc / floor 返回 double 会渲成 `12.0`)。新站点没数据(nd=1)也是 `--`,不渲假的 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "vf",
+        "value": "$[if::(ge::(findNotEmpty::(${clicks},0),10000),if::(lt::(${t11},1000),17,20),20)]"
+      },
+      "_note": "主值字号:只有 5 字符那一档(`12.3K`)是 17pt,其余 ≤ 4 字符 20pt。按数值区间判,不按 length::(对数字恒 0)。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "hasSite",
+          "ok",
+          "errMsg",
+          "clicks",
+          "imps",
+          "clicksS",
+          "impsS",
+          "ctr",
+          "ctrTxt",
+          "pos",
+          "siteLabel",
+          "rangeTxt",
+          "at",
+          "pts",
+          "lastY",
+          "chgA",
+          "chgTxt",
+          "up",
+          "flat",
+          "nd",
+          "v11",
+          "vf"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,1767 @@
+{
+  "_note": "生成器 tools/infosource/gen_secfilings.py(secfilings · 每家前 1 份有效的 · 输出 1 份)。组件 .df **不缓存**(G23 契约 5)。只取类型 / 事项编号 / 时刻,正文与 <summary> 一律不进输出(§3.13)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "kRaw",
+        "value": "${kind}"
+      },
+      "_note": "入参落地(勿删):方法参数里的 ${} 看不见 flow 入参。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kIn",
+        "value": "$[findNotEmpty::(${kRaw},all)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qty",
+        "value": "$[if::(eq::(${kIn},cur),8-K,if::(eq::(${kIn},fin),10-,))]"
+      },
+      "_note": "type 是**前缀**:8-K 含 8-K/A,10- 含 10-Q / 10-K 及更正。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "qow",
+        "value": "$[if::(eq::(${kIn},ins),only,exclude)]"
+      },
+      "_note": "内部人走 owner=only(Form 3/4/5 与 144)。⚠️ 不能用 type=4:前缀会把 424B2 一并带出。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kd",
+        "value": "$[if::(eq::(${kIn},cur),2,if::(eq::(${kIn},fin),3,if::(eq::(${kIn},ins),4,1)))]"
+      },
+      "_note": "类型码(1 全部 / 2 8-K / 3 财报 / 4 内部人),给 RCN 选卡名用。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzNow",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzLf",
+        "value": "$[formatDate::(${tzNow},yyyy-MM-dd HH:mm)]"
+      },
+      "_note": "此刻的**本机**年月日时分。pattern 只用纯 token + `-` `:` 空格(G4c)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzY",
+        "value": "$[subString::(${tzLf},0,4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMo",
+        "value": "$[subString::(${tzLf},5,7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzD",
+        "value": "$[subString::(${tzLf},8,10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzH",
+        "value": "$[subString::(${tzLf},11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMi",
+        "value": "$[subString::(${tzLf},14,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzAdj",
+        "value": "$[if::(le::(${tzMo},2),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzYoe",
+        "value": "$[calc::(${tzY}-2000-${tzAdj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMp",
+        "value": "$[calc::(${tzMo}-3+12*${tzAdj})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzDb",
+        "value": "$[floor::(calc::((153*${tzMp}+2)/5))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzQ4",
+        "value": "$[floor::(calc::(${tzYoe}/4))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzDays",
+        "value": "$[calc::(11017+${tzYoe}*365+${tzQ4}+${tzDb}+${tzD}-1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzE",
+        "value": "$[calc::(${tzDays}*86400000+${tzH}*3600000+${tzMi}*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzMin",
+        "value": "$[calc::(floor::(calc::(${tzNow}/60000))*60000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tzO",
+        "value": "$[round::(calc::(${tzE}-${tzMin}))]"
+      },
+      "_note": "本机时区偏移(毫秒):东八区 = 28800000。round:Android 上 calc 返回 double,不 round 会带 .0。"
+    },
+    {
+      "id": "lst",
+      "action": "data.get",
+      "params": {
+        "key": "sec_list",
+        "default": []
+      },
+      "_note": "关注列表(首页 / 管理页写入,[{t,n}],最多 8 家)。**默认空** —— 不替用户关注任何公司。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b0",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnt",
+        "value": "$[length::(${lst})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "T",
+        "value": {
+          "t0": "${lst[0].t}",
+          "t1": "${lst[1].t}",
+          "t2": "${lst[2].t}",
+          "t3": "${lst[3].t}",
+          "t4": "${lst[4].t}",
+          "t5": "${lst[5].t}",
+          "t6": "${lst[6].t}",
+          "t7": "${lst[7].t}"
+        }
+      },
+      "_note": "8 个定长槽的代码(字面下标;空槽 = 空)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${T.t0}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "request",
+          "id": "r0",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${T.t0}&type=${qty}&dateb=&owner=${qow}&count=10&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${T.t1}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "150"
+          },
+          "_note": "相邻两次请求之间垫 150ms:SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟。"
+        },
+        {
+          "action": "request",
+          "id": "r1",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${T.t1}&type=${qty}&dateb=&owner=${qow}&count=10&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${T.t2}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "150"
+          },
+          "_note": "相邻两次请求之间垫 150ms:SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟。"
+        },
+        {
+          "action": "request",
+          "id": "r2",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${T.t2}&type=${qty}&dateb=&owner=${qow}&count=10&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${T.t3}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "150"
+          },
+          "_note": "相邻两次请求之间垫 150ms:SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟。"
+        },
+        {
+          "action": "request",
+          "id": "r3",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${T.t3}&type=${qty}&dateb=&owner=${qow}&count=10&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${T.t4}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "150"
+          },
+          "_note": "相邻两次请求之间垫 150ms:SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟。"
+        },
+        {
+          "action": "request",
+          "id": "r4",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${T.t4}&type=${qty}&dateb=&owner=${qow}&count=10&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${T.t5}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "150"
+          },
+          "_note": "相邻两次请求之间垫 150ms:SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟。"
+        },
+        {
+          "action": "request",
+          "id": "r5",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${T.t5}&type=${qty}&dateb=&owner=${qow}&count=10&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${T.t6}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "150"
+          },
+          "_note": "相邻两次请求之间垫 150ms:SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟。"
+        },
+        {
+          "action": "request",
+          "id": "r6",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${T.t6}&type=${qty}&dateb=&owner=${qow}&count=10&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${T.t7}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "sleep",
+          "params": {
+            "timestamp": "150"
+          },
+          "_note": "相邻两次请求之间垫 150ms:SEC 公开限速 10 次/秒,超了按 IP 封 10 分钟。"
+        },
+        {
+          "action": "request",
+          "id": "r7",
+          "params": {
+            "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${T.t7}&type=${qty}&dateb=&owner=${qow}&count=10&output=atom",
+            "method": "GET",
+            "formatType": "string",
+            "header": {
+              "User-Agent": "Numable support@numable.app",
+              "Accept": "application/atom+xml"
+            },
+            "timeout": "12000"
+          },
+          "_note": "formatType:string —— Atom XML 不经任何 XML 解析器,用 split 切(xmlParse 四端是四个引擎,对带默认 xmlns 的 Atom 结果互相矛盾;memory actionflow-df-pitfalls §xmlparse)。UA 是 SEC 要求的如实身份,不是伪装(见生成器头注)。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b1",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "OK",
+        "value": {
+          "ok0": "$[if::(contains::(${r0},<feed),1,0)]",
+          "ok1": "$[if::(contains::(${r1},<feed),1,0)]",
+          "ok2": "$[if::(contains::(${r2},<feed),1,0)]",
+          "ok3": "$[if::(contains::(${r3},<feed),1,0)]",
+          "ok4": "$[if::(contains::(${r4},<feed),1,0)]",
+          "ok5": "$[if::(contains::(${r5},<feed),1,0)]",
+          "ok6": "$[if::(contains::(${r6},<feed),1,0)]",
+          "ok7": "$[if::(contains::(${r7},<feed),1,0)]"
+        }
+      },
+      "_note": "取到了没有:不存在的代码 / 被限速时 SEC 回的是 HTML,没有 <feed。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "SP",
+        "value": {
+          "s0": "$[split::(${r0},<entry>)]",
+          "s1": "$[split::(${r1},<entry>)]",
+          "s2": "$[split::(${r2},<entry>)]",
+          "s3": "$[split::(${r3},<entry>)]",
+          "s4": "$[split::(${r4},<entry>)]",
+          "s5": "$[split::(${r5},<entry>)]",
+          "s6": "$[split::(${r6},<entry>)]",
+          "s7": "$[split::(${r7},<entry>)]"
+        }
+      },
+      "_note": "每家按 <entry> 切一次成数组(第 0 段是 feed 头);后面按下标取,不再反复切整份原文。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r0",
+        "value": ""
+      },
+      "_note": "原文用完即清(勿删):后面每个节点都要复制整个数据域,留着 8 份十几 KB 的 XML 白搬。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r1",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r2",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r3",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r4",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r5",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r6",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r7",
+        "value": ""
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "F",
+        "value": {
+          "f0_0": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_1": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_2": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_3": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_4": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_5": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_6": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_7": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_8": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f0_9": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s0},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_0": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_1": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_2": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_3": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_4": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_5": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_6": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_7": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_8": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f1_9": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s1},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_0": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_1": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_2": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_3": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_4": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_5": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_6": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_7": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_8": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f2_9": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s2},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_0": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_1": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_2": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_3": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_4": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_5": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_6": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_7": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_8": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f3_9": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s3},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_0": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_1": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_2": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_3": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_4": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_5": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_6": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_7": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_8": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f4_9": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s4},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_0": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_1": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_2": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_3": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_4": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_5": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_6": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_7": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_8": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f5_9": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s5},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_0": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_1": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_2": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_3": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_4": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_5": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_6": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_7": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_8": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f6_9": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s6},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_0": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},1),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_1": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},2),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_2": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},3),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_3": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},4),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_4": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},5),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_5": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},6),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_6": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},7),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_7": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},8),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_8": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},9),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "f7_9": "$[replaceAll::(index::(split::(index::(split::(index::(${SP.s7},10),<filing-type>),1),<),0),SCHEDULE,SC)]",
+          "u0_0": "$[index::(split::(index::(split::(index::(${SP.s0},1),<updated>),1),<),0)]",
+          "u0_1": "$[index::(split::(index::(split::(index::(${SP.s0},2),<updated>),1),<),0)]",
+          "u0_2": "$[index::(split::(index::(split::(index::(${SP.s0},3),<updated>),1),<),0)]",
+          "u0_3": "$[index::(split::(index::(split::(index::(${SP.s0},4),<updated>),1),<),0)]",
+          "u0_4": "$[index::(split::(index::(split::(index::(${SP.s0},5),<updated>),1),<),0)]",
+          "u0_5": "$[index::(split::(index::(split::(index::(${SP.s0},6),<updated>),1),<),0)]",
+          "u0_6": "$[index::(split::(index::(split::(index::(${SP.s0},7),<updated>),1),<),0)]",
+          "u0_7": "$[index::(split::(index::(split::(index::(${SP.s0},8),<updated>),1),<),0)]",
+          "u0_8": "$[index::(split::(index::(split::(index::(${SP.s0},9),<updated>),1),<),0)]",
+          "u0_9": "$[index::(split::(index::(split::(index::(${SP.s0},10),<updated>),1),<),0)]",
+          "u1_0": "$[index::(split::(index::(split::(index::(${SP.s1},1),<updated>),1),<),0)]",
+          "u1_1": "$[index::(split::(index::(split::(index::(${SP.s1},2),<updated>),1),<),0)]",
+          "u1_2": "$[index::(split::(index::(split::(index::(${SP.s1},3),<updated>),1),<),0)]",
+          "u1_3": "$[index::(split::(index::(split::(index::(${SP.s1},4),<updated>),1),<),0)]",
+          "u1_4": "$[index::(split::(index::(split::(index::(${SP.s1},5),<updated>),1),<),0)]",
+          "u1_5": "$[index::(split::(index::(split::(index::(${SP.s1},6),<updated>),1),<),0)]",
+          "u1_6": "$[index::(split::(index::(split::(index::(${SP.s1},7),<updated>),1),<),0)]",
+          "u1_7": "$[index::(split::(index::(split::(index::(${SP.s1},8),<updated>),1),<),0)]",
+          "u1_8": "$[index::(split::(index::(split::(index::(${SP.s1},9),<updated>),1),<),0)]",
+          "u1_9": "$[index::(split::(index::(split::(index::(${SP.s1},10),<updated>),1),<),0)]",
+          "u2_0": "$[index::(split::(index::(split::(index::(${SP.s2},1),<updated>),1),<),0)]",
+          "u2_1": "$[index::(split::(index::(split::(index::(${SP.s2},2),<updated>),1),<),0)]",
+          "u2_2": "$[index::(split::(index::(split::(index::(${SP.s2},3),<updated>),1),<),0)]",
+          "u2_3": "$[index::(split::(index::(split::(index::(${SP.s2},4),<updated>),1),<),0)]",
+          "u2_4": "$[index::(split::(index::(split::(index::(${SP.s2},5),<updated>),1),<),0)]",
+          "u2_5": "$[index::(split::(index::(split::(index::(${SP.s2},6),<updated>),1),<),0)]",
+          "u2_6": "$[index::(split::(index::(split::(index::(${SP.s2},7),<updated>),1),<),0)]",
+          "u2_7": "$[index::(split::(index::(split::(index::(${SP.s2},8),<updated>),1),<),0)]",
+          "u2_8": "$[index::(split::(index::(split::(index::(${SP.s2},9),<updated>),1),<),0)]",
+          "u2_9": "$[index::(split::(index::(split::(index::(${SP.s2},10),<updated>),1),<),0)]",
+          "u3_0": "$[index::(split::(index::(split::(index::(${SP.s3},1),<updated>),1),<),0)]",
+          "u3_1": "$[index::(split::(index::(split::(index::(${SP.s3},2),<updated>),1),<),0)]",
+          "u3_2": "$[index::(split::(index::(split::(index::(${SP.s3},3),<updated>),1),<),0)]",
+          "u3_3": "$[index::(split::(index::(split::(index::(${SP.s3},4),<updated>),1),<),0)]",
+          "u3_4": "$[index::(split::(index::(split::(index::(${SP.s3},5),<updated>),1),<),0)]",
+          "u3_5": "$[index::(split::(index::(split::(index::(${SP.s3},6),<updated>),1),<),0)]",
+          "u3_6": "$[index::(split::(index::(split::(index::(${SP.s3},7),<updated>),1),<),0)]",
+          "u3_7": "$[index::(split::(index::(split::(index::(${SP.s3},8),<updated>),1),<),0)]",
+          "u3_8": "$[index::(split::(index::(split::(index::(${SP.s3},9),<updated>),1),<),0)]",
+          "u3_9": "$[index::(split::(index::(split::(index::(${SP.s3},10),<updated>),1),<),0)]",
+          "u4_0": "$[index::(split::(index::(split::(index::(${SP.s4},1),<updated>),1),<),0)]",
+          "u4_1": "$[index::(split::(index::(split::(index::(${SP.s4},2),<updated>),1),<),0)]",
+          "u4_2": "$[index::(split::(index::(split::(index::(${SP.s4},3),<updated>),1),<),0)]",
+          "u4_3": "$[index::(split::(index::(split::(index::(${SP.s4},4),<updated>),1),<),0)]",
+          "u4_4": "$[index::(split::(index::(split::(index::(${SP.s4},5),<updated>),1),<),0)]",
+          "u4_5": "$[index::(split::(index::(split::(index::(${SP.s4},6),<updated>),1),<),0)]",
+          "u4_6": "$[index::(split::(index::(split::(index::(${SP.s4},7),<updated>),1),<),0)]",
+          "u4_7": "$[index::(split::(index::(split::(index::(${SP.s4},8),<updated>),1),<),0)]",
+          "u4_8": "$[index::(split::(index::(split::(index::(${SP.s4},9),<updated>),1),<),0)]",
+          "u4_9": "$[index::(split::(index::(split::(index::(${SP.s4},10),<updated>),1),<),0)]",
+          "u5_0": "$[index::(split::(index::(split::(index::(${SP.s5},1),<updated>),1),<),0)]",
+          "u5_1": "$[index::(split::(index::(split::(index::(${SP.s5},2),<updated>),1),<),0)]",
+          "u5_2": "$[index::(split::(index::(split::(index::(${SP.s5},3),<updated>),1),<),0)]",
+          "u5_3": "$[index::(split::(index::(split::(index::(${SP.s5},4),<updated>),1),<),0)]",
+          "u5_4": "$[index::(split::(index::(split::(index::(${SP.s5},5),<updated>),1),<),0)]",
+          "u5_5": "$[index::(split::(index::(split::(index::(${SP.s5},6),<updated>),1),<),0)]",
+          "u5_6": "$[index::(split::(index::(split::(index::(${SP.s5},7),<updated>),1),<),0)]",
+          "u5_7": "$[index::(split::(index::(split::(index::(${SP.s5},8),<updated>),1),<),0)]",
+          "u5_8": "$[index::(split::(index::(split::(index::(${SP.s5},9),<updated>),1),<),0)]",
+          "u5_9": "$[index::(split::(index::(split::(index::(${SP.s5},10),<updated>),1),<),0)]",
+          "u6_0": "$[index::(split::(index::(split::(index::(${SP.s6},1),<updated>),1),<),0)]",
+          "u6_1": "$[index::(split::(index::(split::(index::(${SP.s6},2),<updated>),1),<),0)]",
+          "u6_2": "$[index::(split::(index::(split::(index::(${SP.s6},3),<updated>),1),<),0)]",
+          "u6_3": "$[index::(split::(index::(split::(index::(${SP.s6},4),<updated>),1),<),0)]",
+          "u6_4": "$[index::(split::(index::(split::(index::(${SP.s6},5),<updated>),1),<),0)]",
+          "u6_5": "$[index::(split::(index::(split::(index::(${SP.s6},6),<updated>),1),<),0)]",
+          "u6_6": "$[index::(split::(index::(split::(index::(${SP.s6},7),<updated>),1),<),0)]",
+          "u6_7": "$[index::(split::(index::(split::(index::(${SP.s6},8),<updated>),1),<),0)]",
+          "u6_8": "$[index::(split::(index::(split::(index::(${SP.s6},9),<updated>),1),<),0)]",
+          "u6_9": "$[index::(split::(index::(split::(index::(${SP.s6},10),<updated>),1),<),0)]",
+          "u7_0": "$[index::(split::(index::(split::(index::(${SP.s7},1),<updated>),1),<),0)]",
+          "u7_1": "$[index::(split::(index::(split::(index::(${SP.s7},2),<updated>),1),<),0)]",
+          "u7_2": "$[index::(split::(index::(split::(index::(${SP.s7},3),<updated>),1),<),0)]",
+          "u7_3": "$[index::(split::(index::(split::(index::(${SP.s7},4),<updated>),1),<),0)]",
+          "u7_4": "$[index::(split::(index::(split::(index::(${SP.s7},5),<updated>),1),<),0)]",
+          "u7_5": "$[index::(split::(index::(split::(index::(${SP.s7},6),<updated>),1),<),0)]",
+          "u7_6": "$[index::(split::(index::(split::(index::(${SP.s7},7),<updated>),1),<),0)]",
+          "u7_7": "$[index::(split::(index::(split::(index::(${SP.s7},8),<updated>),1),<),0)]",
+          "u7_8": "$[index::(split::(index::(split::(index::(${SP.s7},9),<updated>),1),<),0)]",
+          "u7_9": "$[index::(split::(index::(split::(index::(${SP.s7},10),<updated>),1),<),0)]",
+          "i0_0": "$[index::(split::(index::(split::(index::(${SP.s0},1),<items-desc>),1),<),0)]",
+          "i0_1": "$[index::(split::(index::(split::(index::(${SP.s0},2),<items-desc>),1),<),0)]",
+          "i0_2": "$[index::(split::(index::(split::(index::(${SP.s0},3),<items-desc>),1),<),0)]",
+          "i0_3": "$[index::(split::(index::(split::(index::(${SP.s0},4),<items-desc>),1),<),0)]",
+          "i0_4": "$[index::(split::(index::(split::(index::(${SP.s0},5),<items-desc>),1),<),0)]",
+          "i0_5": "$[index::(split::(index::(split::(index::(${SP.s0},6),<items-desc>),1),<),0)]",
+          "i0_6": "$[index::(split::(index::(split::(index::(${SP.s0},7),<items-desc>),1),<),0)]",
+          "i0_7": "$[index::(split::(index::(split::(index::(${SP.s0},8),<items-desc>),1),<),0)]",
+          "i0_8": "$[index::(split::(index::(split::(index::(${SP.s0},9),<items-desc>),1),<),0)]",
+          "i0_9": "$[index::(split::(index::(split::(index::(${SP.s0},10),<items-desc>),1),<),0)]",
+          "i1_0": "$[index::(split::(index::(split::(index::(${SP.s1},1),<items-desc>),1),<),0)]",
+          "i1_1": "$[index::(split::(index::(split::(index::(${SP.s1},2),<items-desc>),1),<),0)]",
+          "i1_2": "$[index::(split::(index::(split::(index::(${SP.s1},3),<items-desc>),1),<),0)]",
+          "i1_3": "$[index::(split::(index::(split::(index::(${SP.s1},4),<items-desc>),1),<),0)]",
+          "i1_4": "$[index::(split::(index::(split::(index::(${SP.s1},5),<items-desc>),1),<),0)]",
+          "i1_5": "$[index::(split::(index::(split::(index::(${SP.s1},6),<items-desc>),1),<),0)]",
+          "i1_6": "$[index::(split::(index::(split::(index::(${SP.s1},7),<items-desc>),1),<),0)]",
+          "i1_7": "$[index::(split::(index::(split::(index::(${SP.s1},8),<items-desc>),1),<),0)]",
+          "i1_8": "$[index::(split::(index::(split::(index::(${SP.s1},9),<items-desc>),1),<),0)]",
+          "i1_9": "$[index::(split::(index::(split::(index::(${SP.s1},10),<items-desc>),1),<),0)]",
+          "i2_0": "$[index::(split::(index::(split::(index::(${SP.s2},1),<items-desc>),1),<),0)]",
+          "i2_1": "$[index::(split::(index::(split::(index::(${SP.s2},2),<items-desc>),1),<),0)]",
+          "i2_2": "$[index::(split::(index::(split::(index::(${SP.s2},3),<items-desc>),1),<),0)]",
+          "i2_3": "$[index::(split::(index::(split::(index::(${SP.s2},4),<items-desc>),1),<),0)]",
+          "i2_4": "$[index::(split::(index::(split::(index::(${SP.s2},5),<items-desc>),1),<),0)]",
+          "i2_5": "$[index::(split::(index::(split::(index::(${SP.s2},6),<items-desc>),1),<),0)]",
+          "i2_6": "$[index::(split::(index::(split::(index::(${SP.s2},7),<items-desc>),1),<),0)]",
+          "i2_7": "$[index::(split::(index::(split::(index::(${SP.s2},8),<items-desc>),1),<),0)]",
+          "i2_8": "$[index::(split::(index::(split::(index::(${SP.s2},9),<items-desc>),1),<),0)]",
+          "i2_9": "$[index::(split::(index::(split::(index::(${SP.s2},10),<items-desc>),1),<),0)]",
+          "i3_0": "$[index::(split::(index::(split::(index::(${SP.s3},1),<items-desc>),1),<),0)]",
+          "i3_1": "$[index::(split::(index::(split::(index::(${SP.s3},2),<items-desc>),1),<),0)]",
+          "i3_2": "$[index::(split::(index::(split::(index::(${SP.s3},3),<items-desc>),1),<),0)]",
+          "i3_3": "$[index::(split::(index::(split::(index::(${SP.s3},4),<items-desc>),1),<),0)]",
+          "i3_4": "$[index::(split::(index::(split::(index::(${SP.s3},5),<items-desc>),1),<),0)]",
+          "i3_5": "$[index::(split::(index::(split::(index::(${SP.s3},6),<items-desc>),1),<),0)]",
+          "i3_6": "$[index::(split::(index::(split::(index::(${SP.s3},7),<items-desc>),1),<),0)]",
+          "i3_7": "$[index::(split::(index::(split::(index::(${SP.s3},8),<items-desc>),1),<),0)]",
+          "i3_8": "$[index::(split::(index::(split::(index::(${SP.s3},9),<items-desc>),1),<),0)]",
+          "i3_9": "$[index::(split::(index::(split::(index::(${SP.s3},10),<items-desc>),1),<),0)]",
+          "i4_0": "$[index::(split::(index::(split::(index::(${SP.s4},1),<items-desc>),1),<),0)]",
+          "i4_1": "$[index::(split::(index::(split::(index::(${SP.s4},2),<items-desc>),1),<),0)]",
+          "i4_2": "$[index::(split::(index::(split::(index::(${SP.s4},3),<items-desc>),1),<),0)]",
+          "i4_3": "$[index::(split::(index::(split::(index::(${SP.s4},4),<items-desc>),1),<),0)]",
+          "i4_4": "$[index::(split::(index::(split::(index::(${SP.s4},5),<items-desc>),1),<),0)]",
+          "i4_5": "$[index::(split::(index::(split::(index::(${SP.s4},6),<items-desc>),1),<),0)]",
+          "i4_6": "$[index::(split::(index::(split::(index::(${SP.s4},7),<items-desc>),1),<),0)]",
+          "i4_7": "$[index::(split::(index::(split::(index::(${SP.s4},8),<items-desc>),1),<),0)]",
+          "i4_8": "$[index::(split::(index::(split::(index::(${SP.s4},9),<items-desc>),1),<),0)]",
+          "i4_9": "$[index::(split::(index::(split::(index::(${SP.s4},10),<items-desc>),1),<),0)]",
+          "i5_0": "$[index::(split::(index::(split::(index::(${SP.s5},1),<items-desc>),1),<),0)]",
+          "i5_1": "$[index::(split::(index::(split::(index::(${SP.s5},2),<items-desc>),1),<),0)]",
+          "i5_2": "$[index::(split::(index::(split::(index::(${SP.s5},3),<items-desc>),1),<),0)]",
+          "i5_3": "$[index::(split::(index::(split::(index::(${SP.s5},4),<items-desc>),1),<),0)]",
+          "i5_4": "$[index::(split::(index::(split::(index::(${SP.s5},5),<items-desc>),1),<),0)]",
+          "i5_5": "$[index::(split::(index::(split::(index::(${SP.s5},6),<items-desc>),1),<),0)]",
+          "i5_6": "$[index::(split::(index::(split::(index::(${SP.s5},7),<items-desc>),1),<),0)]",
+          "i5_7": "$[index::(split::(index::(split::(index::(${SP.s5},8),<items-desc>),1),<),0)]",
+          "i5_8": "$[index::(split::(index::(split::(index::(${SP.s5},9),<items-desc>),1),<),0)]",
+          "i5_9": "$[index::(split::(index::(split::(index::(${SP.s5},10),<items-desc>),1),<),0)]",
+          "i6_0": "$[index::(split::(index::(split::(index::(${SP.s6},1),<items-desc>),1),<),0)]",
+          "i6_1": "$[index::(split::(index::(split::(index::(${SP.s6},2),<items-desc>),1),<),0)]",
+          "i6_2": "$[index::(split::(index::(split::(index::(${SP.s6},3),<items-desc>),1),<),0)]",
+          "i6_3": "$[index::(split::(index::(split::(index::(${SP.s6},4),<items-desc>),1),<),0)]",
+          "i6_4": "$[index::(split::(index::(split::(index::(${SP.s6},5),<items-desc>),1),<),0)]",
+          "i6_5": "$[index::(split::(index::(split::(index::(${SP.s6},6),<items-desc>),1),<),0)]",
+          "i6_6": "$[index::(split::(index::(split::(index::(${SP.s6},7),<items-desc>),1),<),0)]",
+          "i6_7": "$[index::(split::(index::(split::(index::(${SP.s6},8),<items-desc>),1),<),0)]",
+          "i6_8": "$[index::(split::(index::(split::(index::(${SP.s6},9),<items-desc>),1),<),0)]",
+          "i6_9": "$[index::(split::(index::(split::(index::(${SP.s6},10),<items-desc>),1),<),0)]",
+          "i7_0": "$[index::(split::(index::(split::(index::(${SP.s7},1),<items-desc>),1),<),0)]",
+          "i7_1": "$[index::(split::(index::(split::(index::(${SP.s7},2),<items-desc>),1),<),0)]",
+          "i7_2": "$[index::(split::(index::(split::(index::(${SP.s7},3),<items-desc>),1),<),0)]",
+          "i7_3": "$[index::(split::(index::(split::(index::(${SP.s7},4),<items-desc>),1),<),0)]",
+          "i7_4": "$[index::(split::(index::(split::(index::(${SP.s7},5),<items-desc>),1),<),0)]",
+          "i7_5": "$[index::(split::(index::(split::(index::(${SP.s7},6),<items-desc>),1),<),0)]",
+          "i7_6": "$[index::(split::(index::(split::(index::(${SP.s7},7),<items-desc>),1),<),0)]",
+          "i7_7": "$[index::(split::(index::(split::(index::(${SP.s7},8),<items-desc>),1),<),0)]",
+          "i7_8": "$[index::(split::(index::(split::(index::(${SP.s7},9),<items-desc>),1),<),0)]",
+          "i7_9": "$[index::(split::(index::(split::(index::(${SP.s7},10),<items-desc>),1),<),0)]"
+        }
+      },
+      "_note": "每份:类型(规整后)/ 受理时刻(ISO 带偏移)/ 8-K 事项编号。**不取 <summary>**(§3.13)。越界的下标 = 空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "SP",
+        "value": ""
+      },
+      "_note": "切好的原文段用完即清(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "V",
+        "value": {
+          "v0_0": "$[if::(and::(gt::(length::(${F.u0_0}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_0},424B),eq::(${F.f0_0},FWP)),0,1),1)),1,0)]",
+          "v0_1": "$[if::(and::(gt::(length::(${F.u0_1}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_1},424B),eq::(${F.f0_1},FWP)),0,1),1)),1,0)]",
+          "v0_2": "$[if::(and::(gt::(length::(${F.u0_2}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_2},424B),eq::(${F.f0_2},FWP)),0,1),1)),1,0)]",
+          "v0_3": "$[if::(and::(gt::(length::(${F.u0_3}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_3},424B),eq::(${F.f0_3},FWP)),0,1),1)),1,0)]",
+          "v0_4": "$[if::(and::(gt::(length::(${F.u0_4}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_4},424B),eq::(${F.f0_4},FWP)),0,1),1)),1,0)]",
+          "v0_5": "$[if::(and::(gt::(length::(${F.u0_5}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_5},424B),eq::(${F.f0_5},FWP)),0,1),1)),1,0)]",
+          "v0_6": "$[if::(and::(gt::(length::(${F.u0_6}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_6},424B),eq::(${F.f0_6},FWP)),0,1),1)),1,0)]",
+          "v0_7": "$[if::(and::(gt::(length::(${F.u0_7}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_7},424B),eq::(${F.f0_7},FWP)),0,1),1)),1,0)]",
+          "v0_8": "$[if::(and::(gt::(length::(${F.u0_8}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_8},424B),eq::(${F.f0_8},FWP)),0,1),1)),1,0)]",
+          "v0_9": "$[if::(and::(gt::(length::(${F.u0_9}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f0_9},424B),eq::(${F.f0_9},FWP)),0,1),1)),1,0)]",
+          "v1_0": "$[if::(and::(gt::(length::(${F.u1_0}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_0},424B),eq::(${F.f1_0},FWP)),0,1),1)),1,0)]",
+          "v1_1": "$[if::(and::(gt::(length::(${F.u1_1}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_1},424B),eq::(${F.f1_1},FWP)),0,1),1)),1,0)]",
+          "v1_2": "$[if::(and::(gt::(length::(${F.u1_2}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_2},424B),eq::(${F.f1_2},FWP)),0,1),1)),1,0)]",
+          "v1_3": "$[if::(and::(gt::(length::(${F.u1_3}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_3},424B),eq::(${F.f1_3},FWP)),0,1),1)),1,0)]",
+          "v1_4": "$[if::(and::(gt::(length::(${F.u1_4}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_4},424B),eq::(${F.f1_4},FWP)),0,1),1)),1,0)]",
+          "v1_5": "$[if::(and::(gt::(length::(${F.u1_5}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_5},424B),eq::(${F.f1_5},FWP)),0,1),1)),1,0)]",
+          "v1_6": "$[if::(and::(gt::(length::(${F.u1_6}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_6},424B),eq::(${F.f1_6},FWP)),0,1),1)),1,0)]",
+          "v1_7": "$[if::(and::(gt::(length::(${F.u1_7}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_7},424B),eq::(${F.f1_7},FWP)),0,1),1)),1,0)]",
+          "v1_8": "$[if::(and::(gt::(length::(${F.u1_8}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_8},424B),eq::(${F.f1_8},FWP)),0,1),1)),1,0)]",
+          "v1_9": "$[if::(and::(gt::(length::(${F.u1_9}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f1_9},424B),eq::(${F.f1_9},FWP)),0,1),1)),1,0)]",
+          "v2_0": "$[if::(and::(gt::(length::(${F.u2_0}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_0},424B),eq::(${F.f2_0},FWP)),0,1),1)),1,0)]",
+          "v2_1": "$[if::(and::(gt::(length::(${F.u2_1}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_1},424B),eq::(${F.f2_1},FWP)),0,1),1)),1,0)]",
+          "v2_2": "$[if::(and::(gt::(length::(${F.u2_2}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_2},424B),eq::(${F.f2_2},FWP)),0,1),1)),1,0)]",
+          "v2_3": "$[if::(and::(gt::(length::(${F.u2_3}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_3},424B),eq::(${F.f2_3},FWP)),0,1),1)),1,0)]",
+          "v2_4": "$[if::(and::(gt::(length::(${F.u2_4}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_4},424B),eq::(${F.f2_4},FWP)),0,1),1)),1,0)]",
+          "v2_5": "$[if::(and::(gt::(length::(${F.u2_5}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_5},424B),eq::(${F.f2_5},FWP)),0,1),1)),1,0)]",
+          "v2_6": "$[if::(and::(gt::(length::(${F.u2_6}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_6},424B),eq::(${F.f2_6},FWP)),0,1),1)),1,0)]",
+          "v2_7": "$[if::(and::(gt::(length::(${F.u2_7}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_7},424B),eq::(${F.f2_7},FWP)),0,1),1)),1,0)]",
+          "v2_8": "$[if::(and::(gt::(length::(${F.u2_8}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_8},424B),eq::(${F.f2_8},FWP)),0,1),1)),1,0)]",
+          "v2_9": "$[if::(and::(gt::(length::(${F.u2_9}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f2_9},424B),eq::(${F.f2_9},FWP)),0,1),1)),1,0)]",
+          "v3_0": "$[if::(and::(gt::(length::(${F.u3_0}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_0},424B),eq::(${F.f3_0},FWP)),0,1),1)),1,0)]",
+          "v3_1": "$[if::(and::(gt::(length::(${F.u3_1}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_1},424B),eq::(${F.f3_1},FWP)),0,1),1)),1,0)]",
+          "v3_2": "$[if::(and::(gt::(length::(${F.u3_2}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_2},424B),eq::(${F.f3_2},FWP)),0,1),1)),1,0)]",
+          "v3_3": "$[if::(and::(gt::(length::(${F.u3_3}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_3},424B),eq::(${F.f3_3},FWP)),0,1),1)),1,0)]",
+          "v3_4": "$[if::(and::(gt::(length::(${F.u3_4}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_4},424B),eq::(${F.f3_4},FWP)),0,1),1)),1,0)]",
+          "v3_5": "$[if::(and::(gt::(length::(${F.u3_5}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_5},424B),eq::(${F.f3_5},FWP)),0,1),1)),1,0)]",
+          "v3_6": "$[if::(and::(gt::(length::(${F.u3_6}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_6},424B),eq::(${F.f3_6},FWP)),0,1),1)),1,0)]",
+          "v3_7": "$[if::(and::(gt::(length::(${F.u3_7}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_7},424B),eq::(${F.f3_7},FWP)),0,1),1)),1,0)]",
+          "v3_8": "$[if::(and::(gt::(length::(${F.u3_8}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_8},424B),eq::(${F.f3_8},FWP)),0,1),1)),1,0)]",
+          "v3_9": "$[if::(and::(gt::(length::(${F.u3_9}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f3_9},424B),eq::(${F.f3_9},FWP)),0,1),1)),1,0)]",
+          "v4_0": "$[if::(and::(gt::(length::(${F.u4_0}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_0},424B),eq::(${F.f4_0},FWP)),0,1),1)),1,0)]",
+          "v4_1": "$[if::(and::(gt::(length::(${F.u4_1}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_1},424B),eq::(${F.f4_1},FWP)),0,1),1)),1,0)]",
+          "v4_2": "$[if::(and::(gt::(length::(${F.u4_2}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_2},424B),eq::(${F.f4_2},FWP)),0,1),1)),1,0)]",
+          "v4_3": "$[if::(and::(gt::(length::(${F.u4_3}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_3},424B),eq::(${F.f4_3},FWP)),0,1),1)),1,0)]",
+          "v4_4": "$[if::(and::(gt::(length::(${F.u4_4}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_4},424B),eq::(${F.f4_4},FWP)),0,1),1)),1,0)]",
+          "v4_5": "$[if::(and::(gt::(length::(${F.u4_5}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_5},424B),eq::(${F.f4_5},FWP)),0,1),1)),1,0)]",
+          "v4_6": "$[if::(and::(gt::(length::(${F.u4_6}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_6},424B),eq::(${F.f4_6},FWP)),0,1),1)),1,0)]",
+          "v4_7": "$[if::(and::(gt::(length::(${F.u4_7}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_7},424B),eq::(${F.f4_7},FWP)),0,1),1)),1,0)]",
+          "v4_8": "$[if::(and::(gt::(length::(${F.u4_8}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_8},424B),eq::(${F.f4_8},FWP)),0,1),1)),1,0)]",
+          "v4_9": "$[if::(and::(gt::(length::(${F.u4_9}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f4_9},424B),eq::(${F.f4_9},FWP)),0,1),1)),1,0)]",
+          "v5_0": "$[if::(and::(gt::(length::(${F.u5_0}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_0},424B),eq::(${F.f5_0},FWP)),0,1),1)),1,0)]",
+          "v5_1": "$[if::(and::(gt::(length::(${F.u5_1}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_1},424B),eq::(${F.f5_1},FWP)),0,1),1)),1,0)]",
+          "v5_2": "$[if::(and::(gt::(length::(${F.u5_2}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_2},424B),eq::(${F.f5_2},FWP)),0,1),1)),1,0)]",
+          "v5_3": "$[if::(and::(gt::(length::(${F.u5_3}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_3},424B),eq::(${F.f5_3},FWP)),0,1),1)),1,0)]",
+          "v5_4": "$[if::(and::(gt::(length::(${F.u5_4}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_4},424B),eq::(${F.f5_4},FWP)),0,1),1)),1,0)]",
+          "v5_5": "$[if::(and::(gt::(length::(${F.u5_5}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_5},424B),eq::(${F.f5_5},FWP)),0,1),1)),1,0)]",
+          "v5_6": "$[if::(and::(gt::(length::(${F.u5_6}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_6},424B),eq::(${F.f5_6},FWP)),0,1),1)),1,0)]",
+          "v5_7": "$[if::(and::(gt::(length::(${F.u5_7}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_7},424B),eq::(${F.f5_7},FWP)),0,1),1)),1,0)]",
+          "v5_8": "$[if::(and::(gt::(length::(${F.u5_8}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_8},424B),eq::(${F.f5_8},FWP)),0,1),1)),1,0)]",
+          "v5_9": "$[if::(and::(gt::(length::(${F.u5_9}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f5_9},424B),eq::(${F.f5_9},FWP)),0,1),1)),1,0)]",
+          "v6_0": "$[if::(and::(gt::(length::(${F.u6_0}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_0},424B),eq::(${F.f6_0},FWP)),0,1),1)),1,0)]",
+          "v6_1": "$[if::(and::(gt::(length::(${F.u6_1}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_1},424B),eq::(${F.f6_1},FWP)),0,1),1)),1,0)]",
+          "v6_2": "$[if::(and::(gt::(length::(${F.u6_2}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_2},424B),eq::(${F.f6_2},FWP)),0,1),1)),1,0)]",
+          "v6_3": "$[if::(and::(gt::(length::(${F.u6_3}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_3},424B),eq::(${F.f6_3},FWP)),0,1),1)),1,0)]",
+          "v6_4": "$[if::(and::(gt::(length::(${F.u6_4}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_4},424B),eq::(${F.f6_4},FWP)),0,1),1)),1,0)]",
+          "v6_5": "$[if::(and::(gt::(length::(${F.u6_5}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_5},424B),eq::(${F.f6_5},FWP)),0,1),1)),1,0)]",
+          "v6_6": "$[if::(and::(gt::(length::(${F.u6_6}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_6},424B),eq::(${F.f6_6},FWP)),0,1),1)),1,0)]",
+          "v6_7": "$[if::(and::(gt::(length::(${F.u6_7}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_7},424B),eq::(${F.f6_7},FWP)),0,1),1)),1,0)]",
+          "v6_8": "$[if::(and::(gt::(length::(${F.u6_8}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_8},424B),eq::(${F.f6_8},FWP)),0,1),1)),1,0)]",
+          "v6_9": "$[if::(and::(gt::(length::(${F.u6_9}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f6_9},424B),eq::(${F.f6_9},FWP)),0,1),1)),1,0)]",
+          "v7_0": "$[if::(and::(gt::(length::(${F.u7_0}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_0},424B),eq::(${F.f7_0},FWP)),0,1),1)),1,0)]",
+          "v7_1": "$[if::(and::(gt::(length::(${F.u7_1}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_1},424B),eq::(${F.f7_1},FWP)),0,1),1)),1,0)]",
+          "v7_2": "$[if::(and::(gt::(length::(${F.u7_2}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_2},424B),eq::(${F.f7_2},FWP)),0,1),1)),1,0)]",
+          "v7_3": "$[if::(and::(gt::(length::(${F.u7_3}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_3},424B),eq::(${F.f7_3},FWP)),0,1),1)),1,0)]",
+          "v7_4": "$[if::(and::(gt::(length::(${F.u7_4}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_4},424B),eq::(${F.f7_4},FWP)),0,1),1)),1,0)]",
+          "v7_5": "$[if::(and::(gt::(length::(${F.u7_5}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_5},424B),eq::(${F.f7_5},FWP)),0,1),1)),1,0)]",
+          "v7_6": "$[if::(and::(gt::(length::(${F.u7_6}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_6},424B),eq::(${F.f7_6},FWP)),0,1),1)),1,0)]",
+          "v7_7": "$[if::(and::(gt::(length::(${F.u7_7}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_7},424B),eq::(${F.f7_7},FWP)),0,1),1)),1,0)]",
+          "v7_8": "$[if::(and::(gt::(length::(${F.u7_8}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_8},424B),eq::(${F.f7_8},FWP)),0,1),1)),1,0)]",
+          "v7_9": "$[if::(and::(gt::(length::(${F.u7_9}),18),if::(eq::(${kd},1),if::(or::(startsWith::(${F.f7_9},424B),eq::(${F.f7_9},FWP)),0,1),1)),1,0)]"
+        }
+      },
+      "_note": "有效:时刻串完整;「全部」类型下再去掉发行说明书(424B*)与发行补充材料(FWP)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "Q",
+        "value": {
+          "q0_0": "0",
+          "q0_1": "$[calc::(${V.v0_0})]",
+          "q0_2": "$[calc::(${V.v0_0}+${V.v0_1})]",
+          "q0_3": "$[calc::(${V.v0_0}+${V.v0_1}+${V.v0_2})]",
+          "q0_4": "$[calc::(${V.v0_0}+${V.v0_1}+${V.v0_2}+${V.v0_3})]",
+          "q0_5": "$[calc::(${V.v0_0}+${V.v0_1}+${V.v0_2}+${V.v0_3}+${V.v0_4})]",
+          "q0_6": "$[calc::(${V.v0_0}+${V.v0_1}+${V.v0_2}+${V.v0_3}+${V.v0_4}+${V.v0_5})]",
+          "q0_7": "$[calc::(${V.v0_0}+${V.v0_1}+${V.v0_2}+${V.v0_3}+${V.v0_4}+${V.v0_5}+${V.v0_6})]",
+          "q0_8": "$[calc::(${V.v0_0}+${V.v0_1}+${V.v0_2}+${V.v0_3}+${V.v0_4}+${V.v0_5}+${V.v0_6}+${V.v0_7})]",
+          "q0_9": "$[calc::(${V.v0_0}+${V.v0_1}+${V.v0_2}+${V.v0_3}+${V.v0_4}+${V.v0_5}+${V.v0_6}+${V.v0_7}+${V.v0_8})]",
+          "q1_0": "0",
+          "q1_1": "$[calc::(${V.v1_0})]",
+          "q1_2": "$[calc::(${V.v1_0}+${V.v1_1})]",
+          "q1_3": "$[calc::(${V.v1_0}+${V.v1_1}+${V.v1_2})]",
+          "q1_4": "$[calc::(${V.v1_0}+${V.v1_1}+${V.v1_2}+${V.v1_3})]",
+          "q1_5": "$[calc::(${V.v1_0}+${V.v1_1}+${V.v1_2}+${V.v1_3}+${V.v1_4})]",
+          "q1_6": "$[calc::(${V.v1_0}+${V.v1_1}+${V.v1_2}+${V.v1_3}+${V.v1_4}+${V.v1_5})]",
+          "q1_7": "$[calc::(${V.v1_0}+${V.v1_1}+${V.v1_2}+${V.v1_3}+${V.v1_4}+${V.v1_5}+${V.v1_6})]",
+          "q1_8": "$[calc::(${V.v1_0}+${V.v1_1}+${V.v1_2}+${V.v1_3}+${V.v1_4}+${V.v1_5}+${V.v1_6}+${V.v1_7})]",
+          "q1_9": "$[calc::(${V.v1_0}+${V.v1_1}+${V.v1_2}+${V.v1_3}+${V.v1_4}+${V.v1_5}+${V.v1_6}+${V.v1_7}+${V.v1_8})]",
+          "q2_0": "0",
+          "q2_1": "$[calc::(${V.v2_0})]",
+          "q2_2": "$[calc::(${V.v2_0}+${V.v2_1})]",
+          "q2_3": "$[calc::(${V.v2_0}+${V.v2_1}+${V.v2_2})]",
+          "q2_4": "$[calc::(${V.v2_0}+${V.v2_1}+${V.v2_2}+${V.v2_3})]",
+          "q2_5": "$[calc::(${V.v2_0}+${V.v2_1}+${V.v2_2}+${V.v2_3}+${V.v2_4})]",
+          "q2_6": "$[calc::(${V.v2_0}+${V.v2_1}+${V.v2_2}+${V.v2_3}+${V.v2_4}+${V.v2_5})]",
+          "q2_7": "$[calc::(${V.v2_0}+${V.v2_1}+${V.v2_2}+${V.v2_3}+${V.v2_4}+${V.v2_5}+${V.v2_6})]",
+          "q2_8": "$[calc::(${V.v2_0}+${V.v2_1}+${V.v2_2}+${V.v2_3}+${V.v2_4}+${V.v2_5}+${V.v2_6}+${V.v2_7})]",
+          "q2_9": "$[calc::(${V.v2_0}+${V.v2_1}+${V.v2_2}+${V.v2_3}+${V.v2_4}+${V.v2_5}+${V.v2_6}+${V.v2_7}+${V.v2_8})]",
+          "q3_0": "0",
+          "q3_1": "$[calc::(${V.v3_0})]",
+          "q3_2": "$[calc::(${V.v3_0}+${V.v3_1})]",
+          "q3_3": "$[calc::(${V.v3_0}+${V.v3_1}+${V.v3_2})]",
+          "q3_4": "$[calc::(${V.v3_0}+${V.v3_1}+${V.v3_2}+${V.v3_3})]",
+          "q3_5": "$[calc::(${V.v3_0}+${V.v3_1}+${V.v3_2}+${V.v3_3}+${V.v3_4})]",
+          "q3_6": "$[calc::(${V.v3_0}+${V.v3_1}+${V.v3_2}+${V.v3_3}+${V.v3_4}+${V.v3_5})]",
+          "q3_7": "$[calc::(${V.v3_0}+${V.v3_1}+${V.v3_2}+${V.v3_3}+${V.v3_4}+${V.v3_5}+${V.v3_6})]",
+          "q3_8": "$[calc::(${V.v3_0}+${V.v3_1}+${V.v3_2}+${V.v3_3}+${V.v3_4}+${V.v3_5}+${V.v3_6}+${V.v3_7})]",
+          "q3_9": "$[calc::(${V.v3_0}+${V.v3_1}+${V.v3_2}+${V.v3_3}+${V.v3_4}+${V.v3_5}+${V.v3_6}+${V.v3_7}+${V.v3_8})]",
+          "q4_0": "0",
+          "q4_1": "$[calc::(${V.v4_0})]",
+          "q4_2": "$[calc::(${V.v4_0}+${V.v4_1})]",
+          "q4_3": "$[calc::(${V.v4_0}+${V.v4_1}+${V.v4_2})]",
+          "q4_4": "$[calc::(${V.v4_0}+${V.v4_1}+${V.v4_2}+${V.v4_3})]",
+          "q4_5": "$[calc::(${V.v4_0}+${V.v4_1}+${V.v4_2}+${V.v4_3}+${V.v4_4})]",
+          "q4_6": "$[calc::(${V.v4_0}+${V.v4_1}+${V.v4_2}+${V.v4_3}+${V.v4_4}+${V.v4_5})]",
+          "q4_7": "$[calc::(${V.v4_0}+${V.v4_1}+${V.v4_2}+${V.v4_3}+${V.v4_4}+${V.v4_5}+${V.v4_6})]",
+          "q4_8": "$[calc::(${V.v4_0}+${V.v4_1}+${V.v4_2}+${V.v4_3}+${V.v4_4}+${V.v4_5}+${V.v4_6}+${V.v4_7})]",
+          "q4_9": "$[calc::(${V.v4_0}+${V.v4_1}+${V.v4_2}+${V.v4_3}+${V.v4_4}+${V.v4_5}+${V.v4_6}+${V.v4_7}+${V.v4_8})]",
+          "q5_0": "0",
+          "q5_1": "$[calc::(${V.v5_0})]",
+          "q5_2": "$[calc::(${V.v5_0}+${V.v5_1})]",
+          "q5_3": "$[calc::(${V.v5_0}+${V.v5_1}+${V.v5_2})]",
+          "q5_4": "$[calc::(${V.v5_0}+${V.v5_1}+${V.v5_2}+${V.v5_3})]",
+          "q5_5": "$[calc::(${V.v5_0}+${V.v5_1}+${V.v5_2}+${V.v5_3}+${V.v5_4})]",
+          "q5_6": "$[calc::(${V.v5_0}+${V.v5_1}+${V.v5_2}+${V.v5_3}+${V.v5_4}+${V.v5_5})]",
+          "q5_7": "$[calc::(${V.v5_0}+${V.v5_1}+${V.v5_2}+${V.v5_3}+${V.v5_4}+${V.v5_5}+${V.v5_6})]",
+          "q5_8": "$[calc::(${V.v5_0}+${V.v5_1}+${V.v5_2}+${V.v5_3}+${V.v5_4}+${V.v5_5}+${V.v5_6}+${V.v5_7})]",
+          "q5_9": "$[calc::(${V.v5_0}+${V.v5_1}+${V.v5_2}+${V.v5_3}+${V.v5_4}+${V.v5_5}+${V.v5_6}+${V.v5_7}+${V.v5_8})]",
+          "q6_0": "0",
+          "q6_1": "$[calc::(${V.v6_0})]",
+          "q6_2": "$[calc::(${V.v6_0}+${V.v6_1})]",
+          "q6_3": "$[calc::(${V.v6_0}+${V.v6_1}+${V.v6_2})]",
+          "q6_4": "$[calc::(${V.v6_0}+${V.v6_1}+${V.v6_2}+${V.v6_3})]",
+          "q6_5": "$[calc::(${V.v6_0}+${V.v6_1}+${V.v6_2}+${V.v6_3}+${V.v6_4})]",
+          "q6_6": "$[calc::(${V.v6_0}+${V.v6_1}+${V.v6_2}+${V.v6_3}+${V.v6_4}+${V.v6_5})]",
+          "q6_7": "$[calc::(${V.v6_0}+${V.v6_1}+${V.v6_2}+${V.v6_3}+${V.v6_4}+${V.v6_5}+${V.v6_6})]",
+          "q6_8": "$[calc::(${V.v6_0}+${V.v6_1}+${V.v6_2}+${V.v6_3}+${V.v6_4}+${V.v6_5}+${V.v6_6}+${V.v6_7})]",
+          "q6_9": "$[calc::(${V.v6_0}+${V.v6_1}+${V.v6_2}+${V.v6_3}+${V.v6_4}+${V.v6_5}+${V.v6_6}+${V.v6_7}+${V.v6_8})]",
+          "q7_0": "0",
+          "q7_1": "$[calc::(${V.v7_0})]",
+          "q7_2": "$[calc::(${V.v7_0}+${V.v7_1})]",
+          "q7_3": "$[calc::(${V.v7_0}+${V.v7_1}+${V.v7_2})]",
+          "q7_4": "$[calc::(${V.v7_0}+${V.v7_1}+${V.v7_2}+${V.v7_3})]",
+          "q7_5": "$[calc::(${V.v7_0}+${V.v7_1}+${V.v7_2}+${V.v7_3}+${V.v7_4})]",
+          "q7_6": "$[calc::(${V.v7_0}+${V.v7_1}+${V.v7_2}+${V.v7_3}+${V.v7_4}+${V.v7_5})]",
+          "q7_7": "$[calc::(${V.v7_0}+${V.v7_1}+${V.v7_2}+${V.v7_3}+${V.v7_4}+${V.v7_5}+${V.v7_6})]",
+          "q7_8": "$[calc::(${V.v7_0}+${V.v7_1}+${V.v7_2}+${V.v7_3}+${V.v7_4}+${V.v7_5}+${V.v7_6}+${V.v7_7})]",
+          "q7_9": "$[calc::(${V.v7_0}+${V.v7_1}+${V.v7_2}+${V.v7_3}+${V.v7_4}+${V.v7_5}+${V.v7_6}+${V.v7_7}+${V.v7_8})]"
+        }
+      },
+      "_note": "前缀计数:这一份之前有几份有效的 —— 有效的第 k 份,q = k。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "X",
+        "value": {
+          "x0_0": "$[findNotEmpty::(if::(and::(eq::(${V.v0_0},1),eq::(${Q.q0_0},0)),0,),if::(and::(eq::(${V.v0_1},1),eq::(${Q.q0_1},0)),1,),if::(and::(eq::(${V.v0_2},1),eq::(${Q.q0_2},0)),2,),if::(and::(eq::(${V.v0_3},1),eq::(${Q.q0_3},0)),3,),if::(and::(eq::(${V.v0_4},1),eq::(${Q.q0_4},0)),4,),if::(and::(eq::(${V.v0_5},1),eq::(${Q.q0_5},0)),5,),if::(and::(eq::(${V.v0_6},1),eq::(${Q.q0_6},0)),6,),if::(and::(eq::(${V.v0_7},1),eq::(${Q.q0_7},0)),7,),if::(and::(eq::(${V.v0_8},1),eq::(${Q.q0_8},0)),8,),if::(and::(eq::(${V.v0_9},1),eq::(${Q.q0_9},0)),9,))]",
+          "x1_0": "$[findNotEmpty::(if::(and::(eq::(${V.v1_0},1),eq::(${Q.q1_0},0)),0,),if::(and::(eq::(${V.v1_1},1),eq::(${Q.q1_1},0)),1,),if::(and::(eq::(${V.v1_2},1),eq::(${Q.q1_2},0)),2,),if::(and::(eq::(${V.v1_3},1),eq::(${Q.q1_3},0)),3,),if::(and::(eq::(${V.v1_4},1),eq::(${Q.q1_4},0)),4,),if::(and::(eq::(${V.v1_5},1),eq::(${Q.q1_5},0)),5,),if::(and::(eq::(${V.v1_6},1),eq::(${Q.q1_6},0)),6,),if::(and::(eq::(${V.v1_7},1),eq::(${Q.q1_7},0)),7,),if::(and::(eq::(${V.v1_8},1),eq::(${Q.q1_8},0)),8,),if::(and::(eq::(${V.v1_9},1),eq::(${Q.q1_9},0)),9,))]",
+          "x2_0": "$[findNotEmpty::(if::(and::(eq::(${V.v2_0},1),eq::(${Q.q2_0},0)),0,),if::(and::(eq::(${V.v2_1},1),eq::(${Q.q2_1},0)),1,),if::(and::(eq::(${V.v2_2},1),eq::(${Q.q2_2},0)),2,),if::(and::(eq::(${V.v2_3},1),eq::(${Q.q2_3},0)),3,),if::(and::(eq::(${V.v2_4},1),eq::(${Q.q2_4},0)),4,),if::(and::(eq::(${V.v2_5},1),eq::(${Q.q2_5},0)),5,),if::(and::(eq::(${V.v2_6},1),eq::(${Q.q2_6},0)),6,),if::(and::(eq::(${V.v2_7},1),eq::(${Q.q2_7},0)),7,),if::(and::(eq::(${V.v2_8},1),eq::(${Q.q2_8},0)),8,),if::(and::(eq::(${V.v2_9},1),eq::(${Q.q2_9},0)),9,))]",
+          "x3_0": "$[findNotEmpty::(if::(and::(eq::(${V.v3_0},1),eq::(${Q.q3_0},0)),0,),if::(and::(eq::(${V.v3_1},1),eq::(${Q.q3_1},0)),1,),if::(and::(eq::(${V.v3_2},1),eq::(${Q.q3_2},0)),2,),if::(and::(eq::(${V.v3_3},1),eq::(${Q.q3_3},0)),3,),if::(and::(eq::(${V.v3_4},1),eq::(${Q.q3_4},0)),4,),if::(and::(eq::(${V.v3_5},1),eq::(${Q.q3_5},0)),5,),if::(and::(eq::(${V.v3_6},1),eq::(${Q.q3_6},0)),6,),if::(and::(eq::(${V.v3_7},1),eq::(${Q.q3_7},0)),7,),if::(and::(eq::(${V.v3_8},1),eq::(${Q.q3_8},0)),8,),if::(and::(eq::(${V.v3_9},1),eq::(${Q.q3_9},0)),9,))]",
+          "x4_0": "$[findNotEmpty::(if::(and::(eq::(${V.v4_0},1),eq::(${Q.q4_0},0)),0,),if::(and::(eq::(${V.v4_1},1),eq::(${Q.q4_1},0)),1,),if::(and::(eq::(${V.v4_2},1),eq::(${Q.q4_2},0)),2,),if::(and::(eq::(${V.v4_3},1),eq::(${Q.q4_3},0)),3,),if::(and::(eq::(${V.v4_4},1),eq::(${Q.q4_4},0)),4,),if::(and::(eq::(${V.v4_5},1),eq::(${Q.q4_5},0)),5,),if::(and::(eq::(${V.v4_6},1),eq::(${Q.q4_6},0)),6,),if::(and::(eq::(${V.v4_7},1),eq::(${Q.q4_7},0)),7,),if::(and::(eq::(${V.v4_8},1),eq::(${Q.q4_8},0)),8,),if::(and::(eq::(${V.v4_9},1),eq::(${Q.q4_9},0)),9,))]",
+          "x5_0": "$[findNotEmpty::(if::(and::(eq::(${V.v5_0},1),eq::(${Q.q5_0},0)),0,),if::(and::(eq::(${V.v5_1},1),eq::(${Q.q5_1},0)),1,),if::(and::(eq::(${V.v5_2},1),eq::(${Q.q5_2},0)),2,),if::(and::(eq::(${V.v5_3},1),eq::(${Q.q5_3},0)),3,),if::(and::(eq::(${V.v5_4},1),eq::(${Q.q5_4},0)),4,),if::(and::(eq::(${V.v5_5},1),eq::(${Q.q5_5},0)),5,),if::(and::(eq::(${V.v5_6},1),eq::(${Q.q5_6},0)),6,),if::(and::(eq::(${V.v5_7},1),eq::(${Q.q5_7},0)),7,),if::(and::(eq::(${V.v5_8},1),eq::(${Q.q5_8},0)),8,),if::(and::(eq::(${V.v5_9},1),eq::(${Q.q5_9},0)),9,))]",
+          "x6_0": "$[findNotEmpty::(if::(and::(eq::(${V.v6_0},1),eq::(${Q.q6_0},0)),0,),if::(and::(eq::(${V.v6_1},1),eq::(${Q.q6_1},0)),1,),if::(and::(eq::(${V.v6_2},1),eq::(${Q.q6_2},0)),2,),if::(and::(eq::(${V.v6_3},1),eq::(${Q.q6_3},0)),3,),if::(and::(eq::(${V.v6_4},1),eq::(${Q.q6_4},0)),4,),if::(and::(eq::(${V.v6_5},1),eq::(${Q.q6_5},0)),5,),if::(and::(eq::(${V.v6_6},1),eq::(${Q.q6_6},0)),6,),if::(and::(eq::(${V.v6_7},1),eq::(${Q.q6_7},0)),7,),if::(and::(eq::(${V.v6_8},1),eq::(${Q.q6_8},0)),8,),if::(and::(eq::(${V.v6_9},1),eq::(${Q.q6_9},0)),9,))]",
+          "x7_0": "$[findNotEmpty::(if::(and::(eq::(${V.v7_0},1),eq::(${Q.q7_0},0)),0,),if::(and::(eq::(${V.v7_1},1),eq::(${Q.q7_1},0)),1,),if::(and::(eq::(${V.v7_2},1),eq::(${Q.q7_2},0)),2,),if::(and::(eq::(${V.v7_3},1),eq::(${Q.q7_3},0)),3,),if::(and::(eq::(${V.v7_4},1),eq::(${Q.q7_4},0)),4,),if::(and::(eq::(${V.v7_5},1),eq::(${Q.q7_5},0)),5,),if::(and::(eq::(${V.v7_6},1),eq::(${Q.q7_6},0)),6,),if::(and::(eq::(${V.v7_7},1),eq::(${Q.q7_7},0)),7,),if::(and::(eq::(${V.v7_8},1),eq::(${Q.q7_8},0)),8,),if::(and::(eq::(${V.v7_9},1),eq::(${Q.q7_9},0)),9,))]"
+        }
+      },
+      "_note": "每家有效的第 k 份在原列表里的下标(0–9);不够 k+1 份 = 空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AR",
+        "value": {
+          "f0": [
+            "${F.f0_0}",
+            "${F.f0_1}",
+            "${F.f0_2}",
+            "${F.f0_3}",
+            "${F.f0_4}",
+            "${F.f0_5}",
+            "${F.f0_6}",
+            "${F.f0_7}",
+            "${F.f0_8}",
+            "${F.f0_9}"
+          ],
+          "f1": [
+            "${F.f1_0}",
+            "${F.f1_1}",
+            "${F.f1_2}",
+            "${F.f1_3}",
+            "${F.f1_4}",
+            "${F.f1_5}",
+            "${F.f1_6}",
+            "${F.f1_7}",
+            "${F.f1_8}",
+            "${F.f1_9}"
+          ],
+          "f2": [
+            "${F.f2_0}",
+            "${F.f2_1}",
+            "${F.f2_2}",
+            "${F.f2_3}",
+            "${F.f2_4}",
+            "${F.f2_5}",
+            "${F.f2_6}",
+            "${F.f2_7}",
+            "${F.f2_8}",
+            "${F.f2_9}"
+          ],
+          "f3": [
+            "${F.f3_0}",
+            "${F.f3_1}",
+            "${F.f3_2}",
+            "${F.f3_3}",
+            "${F.f3_4}",
+            "${F.f3_5}",
+            "${F.f3_6}",
+            "${F.f3_7}",
+            "${F.f3_8}",
+            "${F.f3_9}"
+          ],
+          "f4": [
+            "${F.f4_0}",
+            "${F.f4_1}",
+            "${F.f4_2}",
+            "${F.f4_3}",
+            "${F.f4_4}",
+            "${F.f4_5}",
+            "${F.f4_6}",
+            "${F.f4_7}",
+            "${F.f4_8}",
+            "${F.f4_9}"
+          ],
+          "f5": [
+            "${F.f5_0}",
+            "${F.f5_1}",
+            "${F.f5_2}",
+            "${F.f5_3}",
+            "${F.f5_4}",
+            "${F.f5_5}",
+            "${F.f5_6}",
+            "${F.f5_7}",
+            "${F.f5_8}",
+            "${F.f5_9}"
+          ],
+          "f6": [
+            "${F.f6_0}",
+            "${F.f6_1}",
+            "${F.f6_2}",
+            "${F.f6_3}",
+            "${F.f6_4}",
+            "${F.f6_5}",
+            "${F.f6_6}",
+            "${F.f6_7}",
+            "${F.f6_8}",
+            "${F.f6_9}"
+          ],
+          "f7": [
+            "${F.f7_0}",
+            "${F.f7_1}",
+            "${F.f7_2}",
+            "${F.f7_3}",
+            "${F.f7_4}",
+            "${F.f7_5}",
+            "${F.f7_6}",
+            "${F.f7_7}",
+            "${F.f7_8}",
+            "${F.f7_9}"
+          ],
+          "u0": [
+            "${F.u0_0}",
+            "${F.u0_1}",
+            "${F.u0_2}",
+            "${F.u0_3}",
+            "${F.u0_4}",
+            "${F.u0_5}",
+            "${F.u0_6}",
+            "${F.u0_7}",
+            "${F.u0_8}",
+            "${F.u0_9}"
+          ],
+          "u1": [
+            "${F.u1_0}",
+            "${F.u1_1}",
+            "${F.u1_2}",
+            "${F.u1_3}",
+            "${F.u1_4}",
+            "${F.u1_5}",
+            "${F.u1_6}",
+            "${F.u1_7}",
+            "${F.u1_8}",
+            "${F.u1_9}"
+          ],
+          "u2": [
+            "${F.u2_0}",
+            "${F.u2_1}",
+            "${F.u2_2}",
+            "${F.u2_3}",
+            "${F.u2_4}",
+            "${F.u2_5}",
+            "${F.u2_6}",
+            "${F.u2_7}",
+            "${F.u2_8}",
+            "${F.u2_9}"
+          ],
+          "u3": [
+            "${F.u3_0}",
+            "${F.u3_1}",
+            "${F.u3_2}",
+            "${F.u3_3}",
+            "${F.u3_4}",
+            "${F.u3_5}",
+            "${F.u3_6}",
+            "${F.u3_7}",
+            "${F.u3_8}",
+            "${F.u3_9}"
+          ],
+          "u4": [
+            "${F.u4_0}",
+            "${F.u4_1}",
+            "${F.u4_2}",
+            "${F.u4_3}",
+            "${F.u4_4}",
+            "${F.u4_5}",
+            "${F.u4_6}",
+            "${F.u4_7}",
+            "${F.u4_8}",
+            "${F.u4_9}"
+          ],
+          "u5": [
+            "${F.u5_0}",
+            "${F.u5_1}",
+            "${F.u5_2}",
+            "${F.u5_3}",
+            "${F.u5_4}",
+            "${F.u5_5}",
+            "${F.u5_6}",
+            "${F.u5_7}",
+            "${F.u5_8}",
+            "${F.u5_9}"
+          ],
+          "u6": [
+            "${F.u6_0}",
+            "${F.u6_1}",
+            "${F.u6_2}",
+            "${F.u6_3}",
+            "${F.u6_4}",
+            "${F.u6_5}",
+            "${F.u6_6}",
+            "${F.u6_7}",
+            "${F.u6_8}",
+            "${F.u6_9}"
+          ],
+          "u7": [
+            "${F.u7_0}",
+            "${F.u7_1}",
+            "${F.u7_2}",
+            "${F.u7_3}",
+            "${F.u7_4}",
+            "${F.u7_5}",
+            "${F.u7_6}",
+            "${F.u7_7}",
+            "${F.u7_8}",
+            "${F.u7_9}"
+          ],
+          "i0": [
+            "${F.i0_0}",
+            "${F.i0_1}",
+            "${F.i0_2}",
+            "${F.i0_3}",
+            "${F.i0_4}",
+            "${F.i0_5}",
+            "${F.i0_6}",
+            "${F.i0_7}",
+            "${F.i0_8}",
+            "${F.i0_9}"
+          ],
+          "i1": [
+            "${F.i1_0}",
+            "${F.i1_1}",
+            "${F.i1_2}",
+            "${F.i1_3}",
+            "${F.i1_4}",
+            "${F.i1_5}",
+            "${F.i1_6}",
+            "${F.i1_7}",
+            "${F.i1_8}",
+            "${F.i1_9}"
+          ],
+          "i2": [
+            "${F.i2_0}",
+            "${F.i2_1}",
+            "${F.i2_2}",
+            "${F.i2_3}",
+            "${F.i2_4}",
+            "${F.i2_5}",
+            "${F.i2_6}",
+            "${F.i2_7}",
+            "${F.i2_8}",
+            "${F.i2_9}"
+          ],
+          "i3": [
+            "${F.i3_0}",
+            "${F.i3_1}",
+            "${F.i3_2}",
+            "${F.i3_3}",
+            "${F.i3_4}",
+            "${F.i3_5}",
+            "${F.i3_6}",
+            "${F.i3_7}",
+            "${F.i3_8}",
+            "${F.i3_9}"
+          ],
+          "i4": [
+            "${F.i4_0}",
+            "${F.i4_1}",
+            "${F.i4_2}",
+            "${F.i4_3}",
+            "${F.i4_4}",
+            "${F.i4_5}",
+            "${F.i4_6}",
+            "${F.i4_7}",
+            "${F.i4_8}",
+            "${F.i4_9}"
+          ],
+          "i5": [
+            "${F.i5_0}",
+            "${F.i5_1}",
+            "${F.i5_2}",
+            "${F.i5_3}",
+            "${F.i5_4}",
+            "${F.i5_5}",
+            "${F.i5_6}",
+            "${F.i5_7}",
+            "${F.i5_8}",
+            "${F.i5_9}"
+          ],
+          "i6": [
+            "${F.i6_0}",
+            "${F.i6_1}",
+            "${F.i6_2}",
+            "${F.i6_3}",
+            "${F.i6_4}",
+            "${F.i6_5}",
+            "${F.i6_6}",
+            "${F.i6_7}",
+            "${F.i6_8}",
+            "${F.i6_9}"
+          ],
+          "i7": [
+            "${F.i7_0}",
+            "${F.i7_1}",
+            "${F.i7_2}",
+            "${F.i7_3}",
+            "${F.i7_4}",
+            "${F.i7_5}",
+            "${F.i7_6}",
+            "${F.i7_7}",
+            "${F.i7_8}",
+            "${F.i7_9}"
+          ]
+        }
+      },
+      "_note": "每家三列的数组(真数组字面量,逐元素求值),按下标取。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CD",
+        "value": {
+          "f0": "$[if::(eq::(findNotEmpty::(${X.x0_0},__none__),__none__),,index::(${AR.f0},${X.x0_0}))]",
+          "f1": "$[if::(eq::(findNotEmpty::(${X.x1_0},__none__),__none__),,index::(${AR.f1},${X.x1_0}))]",
+          "f2": "$[if::(eq::(findNotEmpty::(${X.x2_0},__none__),__none__),,index::(${AR.f2},${X.x2_0}))]",
+          "f3": "$[if::(eq::(findNotEmpty::(${X.x3_0},__none__),__none__),,index::(${AR.f3},${X.x3_0}))]",
+          "f4": "$[if::(eq::(findNotEmpty::(${X.x4_0},__none__),__none__),,index::(${AR.f4},${X.x4_0}))]",
+          "f5": "$[if::(eq::(findNotEmpty::(${X.x5_0},__none__),__none__),,index::(${AR.f5},${X.x5_0}))]",
+          "f6": "$[if::(eq::(findNotEmpty::(${X.x6_0},__none__),__none__),,index::(${AR.f6},${X.x6_0}))]",
+          "f7": "$[if::(eq::(findNotEmpty::(${X.x7_0},__none__),__none__),,index::(${AR.f7},${X.x7_0}))]",
+          "u0": "$[if::(eq::(findNotEmpty::(${X.x0_0},__none__),__none__),,index::(${AR.u0},${X.x0_0}))]",
+          "u1": "$[if::(eq::(findNotEmpty::(${X.x1_0},__none__),__none__),,index::(${AR.u1},${X.x1_0}))]",
+          "u2": "$[if::(eq::(findNotEmpty::(${X.x2_0},__none__),__none__),,index::(${AR.u2},${X.x2_0}))]",
+          "u3": "$[if::(eq::(findNotEmpty::(${X.x3_0},__none__),__none__),,index::(${AR.u3},${X.x3_0}))]",
+          "u4": "$[if::(eq::(findNotEmpty::(${X.x4_0},__none__),__none__),,index::(${AR.u4},${X.x4_0}))]",
+          "u5": "$[if::(eq::(findNotEmpty::(${X.x5_0},__none__),__none__),,index::(${AR.u5},${X.x5_0}))]",
+          "u6": "$[if::(eq::(findNotEmpty::(${X.x6_0},__none__),__none__),,index::(${AR.u6},${X.x6_0}))]",
+          "u7": "$[if::(eq::(findNotEmpty::(${X.x7_0},__none__),__none__),,index::(${AR.u7},${X.x7_0}))]",
+          "i0": "$[if::(eq::(findNotEmpty::(${X.x0_0},__none__),__none__),,index::(${AR.i0},${X.x0_0}))]",
+          "i1": "$[if::(eq::(findNotEmpty::(${X.x1_0},__none__),__none__),,index::(${AR.i1},${X.x1_0}))]",
+          "i2": "$[if::(eq::(findNotEmpty::(${X.x2_0},__none__),__none__),,index::(${AR.i2},${X.x2_0}))]",
+          "i3": "$[if::(eq::(findNotEmpty::(${X.x3_0},__none__),__none__),,index::(${AR.i3},${X.x3_0}))]",
+          "i4": "$[if::(eq::(findNotEmpty::(${X.x4_0},__none__),__none__),,index::(${AR.i4},${X.x4_0}))]",
+          "i5": "$[if::(eq::(findNotEmpty::(${X.x5_0},__none__),__none__),,index::(${AR.i5},${X.x5_0}))]",
+          "i6": "$[if::(eq::(findNotEmpty::(${X.x6_0},__none__),__none__),,index::(${AR.i6},${X.x6_0}))]",
+          "i7": "$[if::(eq::(findNotEmpty::(${X.x7_0},__none__),__none__),,index::(${AR.i7},${X.x7_0}))]"
+        }
+      },
+      "_note": "候选(家 × 前 1 份有效的)。⚠️ 下标为空时必须显式给空:index:: 吃空下标会退回第 0 份,凭空多出一个重复候选。判空走 findNotEmpty 哨兵(下标是数字,length:: 对数字恒 0)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "G",
+        "value": {
+          "g0": "$[if::(eq::(subString::(${CD.u0},19,20),-),1,0)]",
+          "g1": "$[if::(eq::(subString::(${CD.u1},19,20),-),1,0)]",
+          "g2": "$[if::(eq::(subString::(${CD.u2},19,20),-),1,0)]",
+          "g3": "$[if::(eq::(subString::(${CD.u3},19,20),-),1,0)]",
+          "g4": "$[if::(eq::(subString::(${CD.u4},19,20),-),1,0)]",
+          "g5": "$[if::(eq::(subString::(${CD.u5},19,20),-),1,0)]",
+          "g6": "$[if::(eq::(subString::(${CD.u6},19,20),-),1,0)]",
+          "g7": "$[if::(eq::(subString::(${CD.u7},19,20),-),1,0)]",
+          "o0": "$[calc::(subString::(${CD.u0},20,22)*60+subString::(${CD.u0},23,25))]",
+          "o1": "$[calc::(subString::(${CD.u1},20,22)*60+subString::(${CD.u1},23,25))]",
+          "o2": "$[calc::(subString::(${CD.u2},20,22)*60+subString::(${CD.u2},23,25))]",
+          "o3": "$[calc::(subString::(${CD.u3},20,22)*60+subString::(${CD.u3},23,25))]",
+          "o4": "$[calc::(subString::(${CD.u4},20,22)*60+subString::(${CD.u4},23,25))]",
+          "o5": "$[calc::(subString::(${CD.u5},20,22)*60+subString::(${CD.u5},23,25))]",
+          "o6": "$[calc::(subString::(${CD.u6},20,22)*60+subString::(${CD.u6},23,25))]",
+          "o7": "$[calc::(subString::(${CD.u7},20,22)*60+subString::(${CD.u7},23,25))]"
+        }
+      },
+      "_note": "偏移符号(`-` → 1)与偏移分钟数,单独落地再进下一阶段的 calc(if:: 的结果不直接喂 calc)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "TS",
+        "value": {
+          "s0": "$[calc::(parseDate::(subString::(${CD.u0},0,10),yyyy-MM-dd)+${tzO}+subString::(${CD.u0},11,13)*3600000+subString::(${CD.u0},14,16)*60000+subString::(${CD.u0},17,19)*1000+(2*${G.g0}-1)*${G.o0}*60000)]",
+          "s1": "$[calc::(parseDate::(subString::(${CD.u1},0,10),yyyy-MM-dd)+${tzO}+subString::(${CD.u1},11,13)*3600000+subString::(${CD.u1},14,16)*60000+subString::(${CD.u1},17,19)*1000+(2*${G.g1}-1)*${G.o1}*60000)]",
+          "s2": "$[calc::(parseDate::(subString::(${CD.u2},0,10),yyyy-MM-dd)+${tzO}+subString::(${CD.u2},11,13)*3600000+subString::(${CD.u2},14,16)*60000+subString::(${CD.u2},17,19)*1000+(2*${G.g2}-1)*${G.o2}*60000)]",
+          "s3": "$[calc::(parseDate::(subString::(${CD.u3},0,10),yyyy-MM-dd)+${tzO}+subString::(${CD.u3},11,13)*3600000+subString::(${CD.u3},14,16)*60000+subString::(${CD.u3},17,19)*1000+(2*${G.g3}-1)*${G.o3}*60000)]",
+          "s4": "$[calc::(parseDate::(subString::(${CD.u4},0,10),yyyy-MM-dd)+${tzO}+subString::(${CD.u4},11,13)*3600000+subString::(${CD.u4},14,16)*60000+subString::(${CD.u4},17,19)*1000+(2*${G.g4}-1)*${G.o4}*60000)]",
+          "s5": "$[calc::(parseDate::(subString::(${CD.u5},0,10),yyyy-MM-dd)+${tzO}+subString::(${CD.u5},11,13)*3600000+subString::(${CD.u5},14,16)*60000+subString::(${CD.u5},17,19)*1000+(2*${G.g5}-1)*${G.o5}*60000)]",
+          "s6": "$[calc::(parseDate::(subString::(${CD.u6},0,10),yyyy-MM-dd)+${tzO}+subString::(${CD.u6},11,13)*3600000+subString::(${CD.u6},14,16)*60000+subString::(${CD.u6},17,19)*1000+(2*${G.g6}-1)*${G.o6}*60000)]",
+          "s7": "$[calc::(parseDate::(subString::(${CD.u7},0,10),yyyy-MM-dd)+${tzO}+subString::(${CD.u7},11,13)*3600000+subString::(${CD.u7},14,16)*60000+subString::(${CD.u7},17,19)*1000+(2*${G.g7}-1)*${G.o7}*60000)]"
+        }
+      },
+      "_note": "受理时刻(UTC 毫秒)。空候选这里求不出值 —— 下一阶段按「时刻串够长」闸成 -1。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "TK",
+        "value": {
+          "k0": "$[if::(gt::(length::(${CD.u0}),18),${TS.s0},-1)]",
+          "k1": "$[if::(gt::(length::(${CD.u1}),18),${TS.s1},-1)]",
+          "k2": "$[if::(gt::(length::(${CD.u2}),18),${TS.s2},-1)]",
+          "k3": "$[if::(gt::(length::(${CD.u3}),18),${TS.s3},-1)]",
+          "k4": "$[if::(gt::(length::(${CD.u4}),18),${TS.s4},-1)]",
+          "k5": "$[if::(gt::(length::(${CD.u5}),18),${TS.s5},-1)]",
+          "k6": "$[if::(gt::(length::(${CD.u6}),18),${TS.s6},-1)]",
+          "k7": "$[if::(gt::(length::(${CD.u7}),18),${TS.s7},-1)]"
+        }
+      },
+      "_note": "排名键:有效候选 = 受理时刻,空候选 = -1(排到最后)。只进比较,不进 calc。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "RK",
+        "value": {
+          "r0": "$[calc::(if::(gt::(${TK.k1},${TK.k0}),1,0)+if::(gt::(${TK.k2},${TK.k0}),1,0)+if::(gt::(${TK.k3},${TK.k0}),1,0)+if::(gt::(${TK.k4},${TK.k0}),1,0)+if::(gt::(${TK.k5},${TK.k0}),1,0)+if::(gt::(${TK.k6},${TK.k0}),1,0)+if::(gt::(${TK.k7},${TK.k0}),1,0))]",
+          "r1": "$[calc::(if::(ge::(${TK.k0},${TK.k1}),1,0)+if::(gt::(${TK.k2},${TK.k1}),1,0)+if::(gt::(${TK.k3},${TK.k1}),1,0)+if::(gt::(${TK.k4},${TK.k1}),1,0)+if::(gt::(${TK.k5},${TK.k1}),1,0)+if::(gt::(${TK.k6},${TK.k1}),1,0)+if::(gt::(${TK.k7},${TK.k1}),1,0))]",
+          "r2": "$[calc::(if::(ge::(${TK.k0},${TK.k2}),1,0)+if::(ge::(${TK.k1},${TK.k2}),1,0)+if::(gt::(${TK.k3},${TK.k2}),1,0)+if::(gt::(${TK.k4},${TK.k2}),1,0)+if::(gt::(${TK.k5},${TK.k2}),1,0)+if::(gt::(${TK.k6},${TK.k2}),1,0)+if::(gt::(${TK.k7},${TK.k2}),1,0))]",
+          "r3": "$[calc::(if::(ge::(${TK.k0},${TK.k3}),1,0)+if::(ge::(${TK.k1},${TK.k3}),1,0)+if::(ge::(${TK.k2},${TK.k3}),1,0)+if::(gt::(${TK.k4},${TK.k3}),1,0)+if::(gt::(${TK.k5},${TK.k3}),1,0)+if::(gt::(${TK.k6},${TK.k3}),1,0)+if::(gt::(${TK.k7},${TK.k3}),1,0))]",
+          "r4": "$[calc::(if::(ge::(${TK.k0},${TK.k4}),1,0)+if::(ge::(${TK.k1},${TK.k4}),1,0)+if::(ge::(${TK.k2},${TK.k4}),1,0)+if::(ge::(${TK.k3},${TK.k4}),1,0)+if::(gt::(${TK.k5},${TK.k4}),1,0)+if::(gt::(${TK.k6},${TK.k4}),1,0)+if::(gt::(${TK.k7},${TK.k4}),1,0))]",
+          "r5": "$[calc::(if::(ge::(${TK.k0},${TK.k5}),1,0)+if::(ge::(${TK.k1},${TK.k5}),1,0)+if::(ge::(${TK.k2},${TK.k5}),1,0)+if::(ge::(${TK.k3},${TK.k5}),1,0)+if::(ge::(${TK.k4},${TK.k5}),1,0)+if::(gt::(${TK.k6},${TK.k5}),1,0)+if::(gt::(${TK.k7},${TK.k5}),1,0))]",
+          "r6": "$[calc::(if::(ge::(${TK.k0},${TK.k6}),1,0)+if::(ge::(${TK.k1},${TK.k6}),1,0)+if::(ge::(${TK.k2},${TK.k6}),1,0)+if::(ge::(${TK.k3},${TK.k6}),1,0)+if::(ge::(${TK.k4},${TK.k6}),1,0)+if::(ge::(${TK.k5},${TK.k6}),1,0)+if::(gt::(${TK.k7},${TK.k6}),1,0))]",
+          "r7": "$[calc::(if::(ge::(${TK.k0},${TK.k7}),1,0)+if::(ge::(${TK.k1},${TK.k7}),1,0)+if::(ge::(${TK.k2},${TK.k7}),1,0)+if::(ge::(${TK.k3},${TK.k7}),1,0)+if::(ge::(${TK.k4},${TK.k7}),1,0)+if::(ge::(${TK.k5},${TK.k7}),1,0)+if::(ge::(${TK.k6},${TK.k7}),1,0))]"
+        }
+      },
+      "_note": "名次 = 比我新的候选数(下标小的同刻者算在前),8 个候选的名次两两不同。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "PK",
+        "value": {
+          "p0": "$[findNotEmpty::(if::(eq::(${RK.r0},0),0,),if::(eq::(${RK.r1},0),1,),if::(eq::(${RK.r2},0),2,),if::(eq::(${RK.r3},0),3,),if::(eq::(${RK.r4},0),4,),if::(eq::(${RK.r5},0),5,),if::(eq::(${RK.r6},0),6,),if::(eq::(${RK.r7},0),7,))]"
+        }
+      },
+      "_note": "第 s 个输出槽 = 名次为 s 的候选下标(findNotEmpty 对数字 0 原样返回)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CT",
+        "value": [
+          "${T.t0}",
+          "${T.t1}",
+          "${T.t2}",
+          "${T.t3}",
+          "${T.t4}",
+          "${T.t5}",
+          "${T.t6}",
+          "${T.t7}"
+        ]
+      },
+      "_note": "候选 → 代码(真数组字面量,逐元素求值)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CF",
+        "value": [
+          "${CD.f0}",
+          "${CD.f1}",
+          "${CD.f2}",
+          "${CD.f3}",
+          "${CD.f4}",
+          "${CD.f5}",
+          "${CD.f6}",
+          "${CD.f7}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CI",
+        "value": [
+          "${CD.i0}",
+          "${CD.i1}",
+          "${CD.i2}",
+          "${CD.i3}",
+          "${CD.i4}",
+          "${CD.i5}",
+          "${CD.i6}",
+          "${CD.i7}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CS",
+        "value": [
+          "${TS.s0}",
+          "${TS.s1}",
+          "${TS.s2}",
+          "${TS.s3}",
+          "${TS.s4}",
+          "${TS.s5}",
+          "${TS.s6}",
+          "${TS.s7}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CN",
+        "value": [
+          "${lst[0].n}",
+          "${lst[1].n}",
+          "${lst[2].n}",
+          "${lst[3].n}",
+          "${lst[4].n}",
+          "${lst[5].n}",
+          "${lst[6].n}",
+          "${lst[7].n}"
+        ]
+      },
+      "_note": "公司名取关注列表里存的那份(添加时从 SEC 的 conformed-name 取来,已解好 &amp;)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "O",
+        "value": {
+          "k0": "$[index::(${CT},${PK.p0})]",
+          "f0": "$[index::(${CF},${PK.p0})]",
+          "i0": "$[index::(${CI},${PK.p0})]",
+          "s0": "$[index::(${CS},${PK.p0})]",
+          "n0": "$[index::(${CN},${PK.p0})]"
+        }
+      },
+      "_note": "按受理时刻排好的前 1 份候选。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "M",
+        "value": {
+          "m0": "$[if::(gt::(length::(${O.f0}),0),max::(floor::(calc::((${tzNow}-parseNumber::(${O.s0},0))/60000)),1),)]"
+        }
+      },
+      "_note": "距今分钟数(下限 1:时钟偏差会让刚交的文件算出负数)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nmR",
+        "value": "$[findNotEmpty::(${O.n0},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nmUp",
+        "value": "$[if::(eq::(connect::(k,toUpperCase::(${nmR})),connect::(k,${nmR})),1,0)]"
+      },
+      "_note": "全大写?(前缀 k:两边都不是数字,eq 走字符串比较)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nmW",
+        "value": "$[split::(${nmR},\\s)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nmN",
+        "value": "$[length::(${nmW})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NC",
+        "value": {
+          "c0": "$[if::(lt::(0,${nmN}),replaceAll::(replaceAll::(index::(${nmW},0),\\x2C,),\\.,),)]",
+          "c1": "$[if::(lt::(1,${nmN}),replaceAll::(replaceAll::(index::(${nmW},1),\\x2C,),\\.,),)]",
+          "c2": "$[if::(lt::(2,${nmN}),replaceAll::(replaceAll::(index::(${nmW},2),\\x2C,),\\.,),)]",
+          "c3": "$[if::(lt::(3,${nmN}),replaceAll::(replaceAll::(index::(${nmW},3),\\x2C,),\\.,),)]",
+          "c4": "$[if::(lt::(4,${nmN}),replaceAll::(replaceAll::(index::(${nmW},4),\\x2C,),\\.,),)]",
+          "c5": "$[if::(lt::(5,${nmN}),replaceAll::(replaceAll::(index::(${nmW},5),\\x2C,),\\.,),)]"
+        }
+      },
+      "_note": "逐词去逗号与句点(逗号是方法参数分隔符,只能写 \\x2C)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NS",
+        "value": {
+          "s0": "$[if::(ge::(0,${nmN}),1,if::(or::(contains::(~CO~COM~CORP~CORPORATION~INC~INCORPORATED~LTD~LIMITED~PLC~LLC~LP~SA~NV~AG~SE~&~,connect::(~,connect::(toUpperCase::(${NC.c0}),~))),startsWith::(${NC.c0},/)),1,0))]",
+          "s1": "$[if::(ge::(1,${nmN}),1,if::(or::(contains::(~CO~COM~CORP~CORPORATION~INC~INCORPORATED~LTD~LIMITED~PLC~LLC~LP~SA~NV~AG~SE~&~,connect::(~,connect::(toUpperCase::(${NC.c1}),~))),startsWith::(${NC.c1},/)),1,0))]",
+          "s2": "$[if::(ge::(2,${nmN}),1,if::(or::(contains::(~CO~COM~CORP~CORPORATION~INC~INCORPORATED~LTD~LIMITED~PLC~LLC~LP~SA~NV~AG~SE~&~,connect::(~,connect::(toUpperCase::(${NC.c2}),~))),startsWith::(${NC.c2},/)),1,0))]",
+          "s3": "$[if::(ge::(3,${nmN}),1,if::(or::(contains::(~CO~COM~CORP~CORPORATION~INC~INCORPORATED~LTD~LIMITED~PLC~LLC~LP~SA~NV~AG~SE~&~,connect::(~,connect::(toUpperCase::(${NC.c3}),~))),startsWith::(${NC.c3},/)),1,0))]",
+          "s4": "$[if::(ge::(4,${nmN}),1,if::(or::(contains::(~CO~COM~CORP~CORPORATION~INC~INCORPORATED~LTD~LIMITED~PLC~LLC~LP~SA~NV~AG~SE~&~,connect::(~,connect::(toUpperCase::(${NC.c4}),~))),startsWith::(${NC.c4},/)),1,0))]",
+          "s5": "$[if::(ge::(5,${nmN}),1,if::(or::(contains::(~CO~COM~CORP~CORPORATION~INC~INCORPORATED~LTD~LIMITED~PLC~LLC~LP~SA~NV~AG~SE~&~,connect::(~,connect::(toUpperCase::(${NC.c5}),~))),startsWith::(${NC.c5},/)),1,0))]"
+        }
+      },
+      "_note": "是不是后缀词(不存在的词也算,好让「末尾连续」一路串到底)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NT",
+        "value": {
+          "t0": "$[if::(and::(eq::(${NS.s0},1),eq::(${NS.s1},1),eq::(${NS.s2},1),eq::(${NS.s3},1),eq::(${NS.s4},1),eq::(${NS.s5},1)),1,0)]",
+          "t1": "$[if::(and::(eq::(${NS.s1},1),eq::(${NS.s2},1),eq::(${NS.s3},1),eq::(${NS.s4},1),eq::(${NS.s5},1)),1,0)]",
+          "t2": "$[if::(and::(eq::(${NS.s2},1),eq::(${NS.s3},1),eq::(${NS.s4},1),eq::(${NS.s5},1)),1,0)]",
+          "t3": "$[if::(and::(eq::(${NS.s3},1),eq::(${NS.s4},1),eq::(${NS.s5},1)),1,0)]",
+          "t4": "$[if::(and::(eq::(${NS.s4},1),eq::(${NS.s5},1)),1,0)]",
+          "t5": "$[if::(and::(eq::(${NS.s5},1)),1,0)]"
+        }
+      },
+      "_note": "从这个词起到末尾全是后缀 → 去掉。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "NO",
+        "value": {
+          "o0": "$[if::(eq::(1,0),,if::(and::(eq::(${nmUp},1),eq::(if::(contains::(${NC.c0},&),1,0),0)),connect::(toUpperCase::(subString::(${NC.c0},0,1)),toLowerCase::(subString::(${NC.c0},1,length::(${NC.c0})))),${NC.c0}))]",
+          "o1": "$[if::(eq::(${NT.t1},1),,if::(and::(eq::(${nmUp},1),eq::(if::(contains::(${NC.c1},&),1,0),0)),connect::(toUpperCase::(subString::(${NC.c1},0,1)),toLowerCase::(subString::(${NC.c1},1,length::(${NC.c1})))),${NC.c1}))]",
+          "o2": "$[if::(eq::(${NT.t2},1),,if::(and::(eq::(${nmUp},1),eq::(if::(contains::(${NC.c2},&),1,0),0)),connect::(toUpperCase::(subString::(${NC.c2},0,1)),toLowerCase::(subString::(${NC.c2},1,length::(${NC.c2})))),${NC.c2}))]",
+          "o3": "$[if::(eq::(${NT.t3},1),,if::(and::(eq::(${nmUp},1),eq::(if::(contains::(${NC.c3},&),1,0),0)),connect::(toUpperCase::(subString::(${NC.c3},0,1)),toLowerCase::(subString::(${NC.c3},1,length::(${NC.c3})))),${NC.c3}))]",
+          "o4": "$[if::(eq::(${NT.t4},1),,if::(and::(eq::(${nmUp},1),eq::(if::(contains::(${NC.c4},&),1,0),0)),connect::(toUpperCase::(subString::(${NC.c4},0,1)),toLowerCase::(subString::(${NC.c4},1,length::(${NC.c4})))),${NC.c4}))]",
+          "o5": "$[if::(eq::(${NT.t5},1),,if::(and::(eq::(${nmUp},1),eq::(if::(contains::(${NC.c5},&),1,0),0)),connect::(toUpperCase::(subString::(${NC.c5},0,1)),toLowerCase::(subString::(${NC.c5},1,length::(${NC.c5})))),${NC.c5}))]"
+        }
+      },
+      "_note": "留下的词逐个首字母大写(第一个词恒留)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nice0",
+        "value": "${NO.o0} ${NO.o1} ${NO.o2} ${NO.o3} ${NO.o4} ${NO.o5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nice",
+        "value": "$[if::(gt::(${nmN},6),${nmR},${nice0})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tTs",
+        "value": "$[parseNumber::(${O.s0},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tMo",
+        "value": "$[round::(parseNumber::(formatDate::(${tTs},MM),0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tDd",
+        "value": "$[round::(parseNumber::(formatDate::(${tTs},dd),0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tHm",
+        "value": "$[formatDate::(${tTs},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "MONS",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tMn",
+        "value": "$[index::(${MONS},calc::(${tMo}-1))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tZh",
+        "value": "${tMo}月${tDd}日 ${tHm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tEn",
+        "value": "${tMn} ${tDd} ${tHm}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tTx",
+        "value": "$[if::(startsWith::(${@app.language},zh),${tZh},${tEn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rows",
+        "value": [
+          {
+            "k": "$[if::(gt::(length::(${O.f0}),0),${O.k0},)]",
+            "f": "${O.f0}",
+            "c": "$[if::(gt::(length::(${O.f0}),0),if::(eq::(connect::(k,${O.f0}),k8-K),if::(contains::(${O.i0},2.02),101,if::(contains::(${O.i0},1.03),102,if::(contains::(${O.i0},4.02),103,if::(contains::(${O.i0},5.01),104,if::(contains::(${O.i0},2.01),105,if::(contains::(${O.i0},1.01),106,if::(contains::(${O.i0},1.02),107,if::(contains::(${O.i0},3.01),108,if::(contains::(${O.i0},4.01),109,if::(contains::(${O.i0},5.02),110,if::(contains::(${O.i0},1.05),111,if::(contains::(${O.i0},2.05),112,if::(contains::(${O.i0},2.06),113,if::(contains::(${O.i0},2.03),114,if::(contains::(${O.i0},3.02),115,if::(contains::(${O.i0},3.03),116,if::(contains::(${O.i0},5.03),117,if::(contains::(${O.i0},5.07),118,if::(contains::(${O.i0},7.01),119,if::(contains::(${O.i0},8.01),120,if::(contains::(${O.i0},9.01),121,1))))))))))))))))))))),if::(eq::(connect::(k,${O.f0}),k8-K/A),2,if::(eq::(connect::(k,${O.f0}),k10-Q),3,if::(eq::(connect::(k,${O.f0}),k10-K),4,if::(eq::(connect::(k,${O.f0}),k10-Q/A),5,if::(eq::(connect::(k,${O.f0}),k10-K/A),6,if::(or::(eq::(connect::(k,${O.f0}),k6-K),eq::(connect::(k,${O.f0}),k6-K/A)),7,if::(or::(eq::(connect::(k,${O.f0}),k20-F),eq::(connect::(k,${O.f0}),k20-F/A)),8,if::(or::(eq::(connect::(k,${O.f0}),k40-F),eq::(connect::(k,${O.f0}),k40-F/A)),9,if::(eq::(connect::(k,${O.f0}),k4),10,if::(eq::(connect::(k,${O.f0}),k4/A),11,if::(or::(eq::(connect::(k,${O.f0}),k3),eq::(connect::(k,${O.f0}),k3/A)),12,if::(or::(eq::(connect::(k,${O.f0}),k5),eq::(connect::(k,${O.f0}),k5/A)),13,if::(or::(eq::(connect::(k,${O.f0}),k144),eq::(connect::(k,${O.f0}),k144/A)),14,if::(or::(eq::(connect::(k,${O.f0}),kS-1),eq::(connect::(k,${O.f0}),kS-1/A),eq::(connect::(k,${O.f0}),kF-1),eq::(connect::(k,${O.f0}),kF-1/A)),15,if::(or::(eq::(connect::(k,${O.f0}),kS-3),eq::(connect::(k,${O.f0}),kS-3/A),eq::(connect::(k,${O.f0}),kS-3ASR),eq::(connect::(k,${O.f0}),kF-3),eq::(connect::(k,${O.f0}),kF-3ASR)),16,if::(or::(eq::(connect::(k,${O.f0}),kS-4),eq::(connect::(k,${O.f0}),kS-4/A),eq::(connect::(k,${O.f0}),kF-4)),17,if::(or::(eq::(connect::(k,${O.f0}),kS-8),eq::(connect::(k,${O.f0}),kS-8 POS)),18,if::(startsWith::(${O.f0},424B),19,if::(eq::(connect::(k,${O.f0}),kFWP),20,if::(eq::(connect::(k,${O.f0}),kDEF 14A),21,if::(eq::(connect::(k,${O.f0}),kDEFA14A),22,if::(eq::(connect::(k,${O.f0}),kPRE 14A),23,if::(or::(eq::(connect::(k,${O.f0}),kSC 13G),eq::(connect::(k,${O.f0}),kSC 13G/A)),24,if::(or::(eq::(connect::(k,${O.f0}),kSC 13D),eq::(connect::(k,${O.f0}),kSC 13D/A)),25,if::(or::(eq::(connect::(k,${O.f0}),k13F-HR),eq::(connect::(k,${O.f0}),k13F-HR/A)),26,if::(eq::(connect::(k,${O.f0}),k11-K),27,if::(eq::(connect::(k,${O.f0}),kSD),28,if::(eq::(connect::(k,${O.f0}),kN-PX),29,if::(eq::(connect::(k,${O.f0}),k425),30,if::(eq::(connect::(k,${O.f0}),kARS),31,if::(or::(eq::(connect::(k,${O.f0}),kNT 10-K),eq::(connect::(k,${O.f0}),kNT 10-Q),eq::(connect::(k,${O.f0}),kNT 20-F)),32,if::(or::(eq::(connect::(k,${O.f0}),k25-NSE),eq::(connect::(k,${O.f0}),k25)),33,if::(or::(eq::(connect::(k,${O.f0}),k8-A12B),eq::(connect::(k,${O.f0}),kCERT),eq::(connect::(k,${O.f0}),k8-A12G)),34,if::(or::(eq::(connect::(k,${O.f0}),kCORRESP),eq::(connect::(k,${O.f0}),kUPLOAD)),35,if::(or::(eq::(connect::(k,${O.f0}),kDEF 14C),eq::(connect::(k,${O.f0}),kPRE 14C)),36,if::(or::(eq::(connect::(k,${O.f0}),kSC TO-T),eq::(connect::(k,${O.f0}),kSC TO-I),eq::(connect::(k,${O.f0}),kSC 14D9)),37,if::(or::(eq::(connect::(k,${O.f0}),k10-12B),eq::(connect::(k,${O.f0}),k10-12B/A)),38,99)))))))))))))))))))))))))))))))))))))),)]",
+            "a": "$[if::(gt::(length::(${O.f0}),0),round::(if::(lt::(${M.m0},60),${M.m0},if::(lt::(${M.m0},2880),floor::(calc::(${M.m0}/60)),floor::(calc::(${M.m0}/1440))))),)]",
+            "u": "$[if::(gt::(length::(${O.f0}),0),if::(lt::(${M.m0},60),1,if::(lt::(${M.m0},2880),2,3)),)]",
+            "n": "$[if::(gt::(length::(${O.f0}),0),${nice},)]",
+            "t": "$[if::(gt::(length::(${O.f0}),0),${tTx},)]"
+          }
+        ]
+      },
+      "_note": "输出槽:k 代码 · f 类型码 · c 词表码(RCN 按它挑释义)· a/u 多久前(数 + 单位码 1 分钟 / 2 小时 / 3 天) · n 公司名 · t 本机时刻。空槽各字段为空(RCN 整行不画)。显示用数字一律 round(Android calc 返回 double)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nOk",
+        "value": "$[calc::(${OK.ok0}+${OK.ok1}+${OK.ok2}+${OK.ok3}+${OK.ok4}+${OK.ok5}+${OK.ok6}+${OK.ok7})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nV",
+        "value": "$[calc::(if::(gt::(${TK.k0},0),1,0)+if::(gt::(${TK.k1},0),1,0)+if::(gt::(${TK.k2},0),1,0)+if::(gt::(${TK.k3},0),1,0)+if::(gt::(${TK.k4},0),1,0)+if::(gt::(${TK.k5},0),1,0)+if::(gt::(${TK.k6},0),1,0)+if::(gt::(${TK.k7},0),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "alive",
+        "value": "$[if::(eq::(${cnt},0),1,if::(gt::(${nOk},0),1,0))]"
+      },
+      "_note": "没关注任何公司 = 合法的空(不抛);关注了但**一家都没取到** = 这次没拿到答案(抛)。部分公司失败照常渲其余的。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${alive},1),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "secfilings_unreachable"
+          }
+        }
+      ],
+      "_note": "关注了公司却一家都没取到(断网 / 被限速)→ 抛错,平台回落上次成功的数据(G26/§7.2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st",
+        "value": "$[if::(eq::(${cnt},0),3,if::(gt::(${nV},0),1,2))]"
+      },
+      "_note": "1 有文件 · 2 关注了但这一类最近没有 · 3 还没关注任何公司。取数失败时流已抛错,st 不存在 → RCN 画骨架。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${tzNow},HH:mm)]"
+      },
+      "_note": "时效锚 = 取数时刻(SEC 列表没有「数据时间」字段)。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "rows",
+          "st",
+          "kd",
+          "at"
+        ]
+      }
+    }
+  ]
+}

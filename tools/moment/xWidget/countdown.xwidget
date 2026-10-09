@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "title": "倒数日",
+  "sub": "距目标还有几天",
+  "i18n": {
+    "en-US": {
+      "title": "Countdown",
+      "sub": "Days until your target date"
+    }
+  },
+  "layout": 22,
+  "params": {
+    "title": "",
+    "date": ""
+  },
+  "ai": {
+    "shows": "距一个目标日期还剩（或已过）几天，点阵按天/周/月显示进度，外加今年还剩百分比",
+    "params": {
+      "title": {
+        "kind": "auto",
+        "hint": "卡上显示的名字（≤ 12 字），与 date 配套，如「春节」「生日」；留空显示「倒数日」（date 也空时显示「元旦」）",
+        "examples": [
+          "春节",
+          "圣诞节",
+          "高考"
+        ]
+      },
+      "date": {
+        "kind": "auto",
+        "format": "公历目标日 YYYY-MM-DD（农历节日先换算成当年公历；已过的日子显示已过几天）。用户的私人日子不知道日期就留空，装上后用户自己填；留空 = 倒数到下一个元旦",
+        "examples": [
+          "2027-02-06",
+          "2026-12-25"
+        ]
+      }
+    }
+  },
+  "events": {
+    "onClick": "numable://self",
+    "onEdit": "/count?title=${title}&date=${date}"
+  },
+  "canvas": {
+    "source": "@[file://rc/countdown.rcn]",
+    "depends": [
+      {
+        "_note": "§D 纯显式:裸 `@[file://…df]` 字符串绑定**传空入参** —— flow 里的 ${x} 取到空、请求打空参,卡片渲一片 `--` 且**不报错**(流仍 success)。要把 widget params 喂给 flow,必须在绑定处显式写 {flow, params}。与 .xpage 的 depends 同一条规则,没有例外。\n⚠️ **两个键都要显式传**:`title` 曾经漏了 —— 卡上的名字取 `$[findNotEmpty::(${title},--)]`,取不到就兜成 `--`,而日期是好的,所以看着像「这张卡只是没写名字」。2026-08-26 iOS 加卡面板预览里抓到。",
+        "flow": "@[file://flow/countdown.df]",
+        "params": {
+          "date": "${date}",
+          "title": "${title}"
+        }
+      }
+    ],
+    "refresh": {
+      "interval": [
+        "3600"
+      ]
+    },
+    "_noteEdit": "参数编辑页(§8:卡片必须有 onEdit,否则加完卡就再也换不了日子、只能删了重加)。⚠️ 匹配的是**裸 path**;当前的名称与日期只能靠这里插值带过去 —— 桥没有「读实例参数」的 API。brickId 由容器自己补,`/count` 据此把按钮换成「保存」。"
+  }
+}

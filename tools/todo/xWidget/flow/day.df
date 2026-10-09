@@ -1,0 +1,206 @@
+{
+ "_note": "随日子变的汇总(今天 / 完成 / 七日 / 日程组件共用)。全部按 off 从 `w.d.*` 取当天那一格。",
+ "version": 1,
+ "actions": [
+  {
+   "_note": "页面算好的整份视图(tools/todo/src/model.js buildW)。没写过 = {} → any/ok 都落 0,组件走空态。",
+   "id": "w",
+   "action": "data.get",
+   "params": {
+    "key": "w",
+    "default": {}
+   }
+  },
+  {
+   "_note": "屏障:data.get 之后紧邻的一步读不到结果(晚一拍,df 章「屏障」)。",
+   "op": "set",
+   "props": {
+    "key": "_b",
+    "value": "1"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "d",
+    "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+   }
+  },
+  {
+   "_note": "今天零点(设备时区)。与页面 JS 的 new Date(y,m,d) 同一个值 —— 行标签全靠它和 dm 比。",
+   "op": "set",
+   "props": {
+    "key": "tdm",
+    "value": "$[parseDate::(${d},yyyy-MM-dd)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "base",
+    "value": "$[findNotEmpty::(${w.base},0)]"
+   }
+  },
+  {
+   "_note": "今天是页面保存那天之后第几天。parseNumber 0 = 截成整数串:index:: 要整数下标(Android 的 calc 返回 double)。",
+   "op": "set",
+   "props": {
+    "key": "off",
+    "value": "$[parseNumber::(round::(calc::((${tdm}-${base})/86400000)),0)]"
+   }
+  },
+  {
+   "_note": "按天摊开的格只有 14 天;超出 = 页面太久没打开,随日子变的量不可信,组件显示「数据未更新」。",
+   "op": "set",
+   "props": {
+    "key": "ok",
+    "value": "$[if::(and::(gt::(${base},0),ge::(${off},0),lt::(${off},14)),1,0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "any",
+    "value": "$[findNotEmpty::(${w.any},0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "rem",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.rem},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "ovr",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.over},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "dueT",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.dueT},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "doneT",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.doneT},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "stk",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.stk},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "done7",
+    "value": "$[if::(eq::(${ok},1),findNotEmpty::(index::(${w.d.done7},${off}),0),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "bars",
+    "value": "$[if::(eq::(${ok},1),index::(${w.d.bars},${off}),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "wk",
+    "value": "$[if::(eq::(${ok},1),index::(${w.d.wk},${off}),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "ag",
+    "value": "$[if::(eq::(${ok},1),index::(${w.d.ag},${off}),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "best",
+    "value": "$[findNotEmpty::(${w.best},0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "tot",
+    "value": "$[calc::(${rem}+${doneT})]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "sweep",
+    "value": "$[if::(gt::(${tot},0),round::(calc::(${doneT}*360/${tot})),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "wkN",
+    "value": "$[if::(eq::(${ok},1),sum::(pluck::(${wk},n)),0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "nOpen",
+    "value": "$[findNotEmpty::(${w.nOpen},0)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "rows",
+    "value": "$[findNotEmpty::(get::(${w.s},today),)]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "ic",
+    "value": "${w.ic}"
+   }
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "tdm",
+     "ok",
+     "any",
+     "rem",
+     "ovr",
+     "dueT",
+     "doneT",
+     "stk",
+     "done7",
+     "bars",
+     "wk",
+     "ag",
+     "best",
+     "tot",
+     "sweep",
+     "wkN",
+     "nOpen",
+     "rows",
+     "ic"
+    ]
+   }
+  }
+ ]
+}

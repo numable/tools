@@ -1,0 +1,1895 @@
+{
+  "version": 1,
+  "_note": "多周期涨跌:现价对 1 / 4 / 24 小时前(小时线收盘)与 7 / 30 / 90 天前(UTC 日线收盘)。块的深浅分档按周期放宽 —— 1 小时涨 3% 与 90 天涨 3% 不是一回事。",
+  "i18n": {
+    "zh-CN": {
+      "noData": "取不到行情"
+    },
+    "en-US": {
+      "noData": "Quote unavailable"
+    }
+  },
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "kr",
+        "value": "$[findNotEmpty::(${pair},btcusd)]"
+      },
+      "_note": "⚠️ 入参先落地:方法参数里看不见 flow 入参(§9.5 #3)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "$[if::(contains::(${kr},-),toUpperCase::(${kr}),connect::(toUpperCase::(if::(endsWith::(${kr},usdt),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usdc),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usd),subString::(${kr},0,calc::(length::(${kr})-3)),${kr})))),-,if::(endsWith::(${kr},usdc),USDC,USDT)))]"
+      },
+      "_note": "币对归一:老实例是 Bitstamp 形状 `btcusd`,新实例是 OKX instId `BTC-USDT`,两种都认。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sym",
+        "value": "$[index::(split::(${k},-),0)]"
+      }
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "action": "request",
+          "id": "h",
+          "params": {
+            "url": "https://www.okx.com/api/v5/market/candles?instId=${k}&bar=1H&limit=25",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "d",
+          "params": {
+            "url": "https://www.okx.com/api/v5/market/candles?instId=${k}&bar=1Dutc&limit=91",
+            "method": "GET",
+            "formatType": "json"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h_bad",
+        "value": "$[if::(gt::(length::(${h.data}),0),0,1)]"
+      },
+      "_fb": 1,
+      "_note": "OKX 没取到(被地区政策拦 / 超时 / 空)→ 走备用源 Coinbase(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h_s0",
+        "value": "$[if::(endsWith::(${k},-SWAP),subString::(${k},0,calc::(length::(${k})-5)),${k})]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h_p",
+        "value": "$[if::(endsWith::(${h_s0},-USDT),connect::(subString::(${h_s0},0,calc::(length::(${h_s0})-5)),-USD),if::(endsWith::(${h_s0},-USDC),connect::(subString::(${h_s0},0,calc::(length::(${h_s0})-5)),-USD),${h_s0}))]"
+      },
+      "_fb": 1,
+      "_note": "备用源 Coinbase 的产品名(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h_go",
+        "value": "${h_bad}"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d_bad",
+        "value": "$[if::(gt::(length::(${d.data}),0),0,1)]"
+      },
+      "_fb": 1,
+      "_note": "OKX 没取到(被地区政策拦 / 超时 / 空)→ 走备用源 Coinbase(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d_s0",
+        "value": "$[if::(endsWith::(${k},-SWAP),subString::(${k},0,calc::(length::(${k})-5)),${k})]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d_p",
+        "value": "$[if::(endsWith::(${d_s0},-USDT),connect::(subString::(${d_s0},0,calc::(length::(${d_s0})-5)),-USD),if::(endsWith::(${d_s0},-USDC),connect::(subString::(${d_s0},0,calc::(length::(${d_s0})-5)),-USD),${d_s0}))]"
+      },
+      "_fb": 1,
+      "_note": "备用源 Coinbase 的产品名(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d_go",
+        "value": "${d_bad}"
+      },
+      "_fb": 1
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "op": "if",
+          "props": {
+            "val": "${h_go}"
+          },
+          "items": [
+            {
+              "action": "request",
+              "id": "h_c",
+              "params": {
+                "url": "https://api.exchange.coinbase.com/products/${h_p}/candles?granularity=3600",
+                "method": "GET",
+                "formatType": "json",
+                "timeout": "5000"
+              }
+            }
+          ]
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${d_go}"
+          },
+          "items": [
+            {
+              "action": "request",
+              "id": "d_c",
+              "params": {
+                "url": "https://api.exchange.coinbase.com/products/${d_p}/candles?granularity=86400",
+                "method": "GET",
+                "formatType": "json",
+                "timeout": "5000"
+              }
+            }
+          ]
+        }
+      ],
+      "_fb": 1,
+      "_note": "备用请求(只在 OKX 没取到时发;每个都在 op:if 里)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfb",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 请求屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h_ok",
+        "value": "$[if::(eq::(findNotEmpty::(index::(index::(${h_c},0),4),__none__),__none__),0,1)]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h_q",
+        "value": "${h.data}"
+      },
+      "_fb": 1,
+      "_note": "下游统一读 h_q:OKX 的 data,或下面按 OKX 形状重排的备用数据。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${h_ok}"
+      },
+      "_fb": 1,
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "h_q",
+            "value": [
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},0),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},0),3),)]",
+                "$[connect::(index::(index::(${h_c},0),2),)]",
+                "$[connect::(index::(index::(${h_c},0),1),)]",
+                "$[connect::(index::(index::(${h_c},0),4),)]",
+                "$[connect::(index::(index::(${h_c},0),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},1),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},1),3),)]",
+                "$[connect::(index::(index::(${h_c},1),2),)]",
+                "$[connect::(index::(index::(${h_c},1),1),)]",
+                "$[connect::(index::(index::(${h_c},1),4),)]",
+                "$[connect::(index::(index::(${h_c},1),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},2),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},2),3),)]",
+                "$[connect::(index::(index::(${h_c},2),2),)]",
+                "$[connect::(index::(index::(${h_c},2),1),)]",
+                "$[connect::(index::(index::(${h_c},2),4),)]",
+                "$[connect::(index::(index::(${h_c},2),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},3),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},3),3),)]",
+                "$[connect::(index::(index::(${h_c},3),2),)]",
+                "$[connect::(index::(index::(${h_c},3),1),)]",
+                "$[connect::(index::(index::(${h_c},3),4),)]",
+                "$[connect::(index::(index::(${h_c},3),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},4),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},4),3),)]",
+                "$[connect::(index::(index::(${h_c},4),2),)]",
+                "$[connect::(index::(index::(${h_c},4),1),)]",
+                "$[connect::(index::(index::(${h_c},4),4),)]",
+                "$[connect::(index::(index::(${h_c},4),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},5),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},5),3),)]",
+                "$[connect::(index::(index::(${h_c},5),2),)]",
+                "$[connect::(index::(index::(${h_c},5),1),)]",
+                "$[connect::(index::(index::(${h_c},5),4),)]",
+                "$[connect::(index::(index::(${h_c},5),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},6),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},6),3),)]",
+                "$[connect::(index::(index::(${h_c},6),2),)]",
+                "$[connect::(index::(index::(${h_c},6),1),)]",
+                "$[connect::(index::(index::(${h_c},6),4),)]",
+                "$[connect::(index::(index::(${h_c},6),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},7),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},7),3),)]",
+                "$[connect::(index::(index::(${h_c},7),2),)]",
+                "$[connect::(index::(index::(${h_c},7),1),)]",
+                "$[connect::(index::(index::(${h_c},7),4),)]",
+                "$[connect::(index::(index::(${h_c},7),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},8),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},8),3),)]",
+                "$[connect::(index::(index::(${h_c},8),2),)]",
+                "$[connect::(index::(index::(${h_c},8),1),)]",
+                "$[connect::(index::(index::(${h_c},8),4),)]",
+                "$[connect::(index::(index::(${h_c},8),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},9),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},9),3),)]",
+                "$[connect::(index::(index::(${h_c},9),2),)]",
+                "$[connect::(index::(index::(${h_c},9),1),)]",
+                "$[connect::(index::(index::(${h_c},9),4),)]",
+                "$[connect::(index::(index::(${h_c},9),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},10),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},10),3),)]",
+                "$[connect::(index::(index::(${h_c},10),2),)]",
+                "$[connect::(index::(index::(${h_c},10),1),)]",
+                "$[connect::(index::(index::(${h_c},10),4),)]",
+                "$[connect::(index::(index::(${h_c},10),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},11),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},11),3),)]",
+                "$[connect::(index::(index::(${h_c},11),2),)]",
+                "$[connect::(index::(index::(${h_c},11),1),)]",
+                "$[connect::(index::(index::(${h_c},11),4),)]",
+                "$[connect::(index::(index::(${h_c},11),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},12),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},12),3),)]",
+                "$[connect::(index::(index::(${h_c},12),2),)]",
+                "$[connect::(index::(index::(${h_c},12),1),)]",
+                "$[connect::(index::(index::(${h_c},12),4),)]",
+                "$[connect::(index::(index::(${h_c},12),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},13),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},13),3),)]",
+                "$[connect::(index::(index::(${h_c},13),2),)]",
+                "$[connect::(index::(index::(${h_c},13),1),)]",
+                "$[connect::(index::(index::(${h_c},13),4),)]",
+                "$[connect::(index::(index::(${h_c},13),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},14),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},14),3),)]",
+                "$[connect::(index::(index::(${h_c},14),2),)]",
+                "$[connect::(index::(index::(${h_c},14),1),)]",
+                "$[connect::(index::(index::(${h_c},14),4),)]",
+                "$[connect::(index::(index::(${h_c},14),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},15),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},15),3),)]",
+                "$[connect::(index::(index::(${h_c},15),2),)]",
+                "$[connect::(index::(index::(${h_c},15),1),)]",
+                "$[connect::(index::(index::(${h_c},15),4),)]",
+                "$[connect::(index::(index::(${h_c},15),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},16),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},16),3),)]",
+                "$[connect::(index::(index::(${h_c},16),2),)]",
+                "$[connect::(index::(index::(${h_c},16),1),)]",
+                "$[connect::(index::(index::(${h_c},16),4),)]",
+                "$[connect::(index::(index::(${h_c},16),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},17),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},17),3),)]",
+                "$[connect::(index::(index::(${h_c},17),2),)]",
+                "$[connect::(index::(index::(${h_c},17),1),)]",
+                "$[connect::(index::(index::(${h_c},17),4),)]",
+                "$[connect::(index::(index::(${h_c},17),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},18),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},18),3),)]",
+                "$[connect::(index::(index::(${h_c},18),2),)]",
+                "$[connect::(index::(index::(${h_c},18),1),)]",
+                "$[connect::(index::(index::(${h_c},18),4),)]",
+                "$[connect::(index::(index::(${h_c},18),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},19),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},19),3),)]",
+                "$[connect::(index::(index::(${h_c},19),2),)]",
+                "$[connect::(index::(index::(${h_c},19),1),)]",
+                "$[connect::(index::(index::(${h_c},19),4),)]",
+                "$[connect::(index::(index::(${h_c},19),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},20),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},20),3),)]",
+                "$[connect::(index::(index::(${h_c},20),2),)]",
+                "$[connect::(index::(index::(${h_c},20),1),)]",
+                "$[connect::(index::(index::(${h_c},20),4),)]",
+                "$[connect::(index::(index::(${h_c},20),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},21),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},21),3),)]",
+                "$[connect::(index::(index::(${h_c},21),2),)]",
+                "$[connect::(index::(index::(${h_c},21),1),)]",
+                "$[connect::(index::(index::(${h_c},21),4),)]",
+                "$[connect::(index::(index::(${h_c},21),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},22),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},22),3),)]",
+                "$[connect::(index::(index::(${h_c},22),2),)]",
+                "$[connect::(index::(index::(${h_c},22),1),)]",
+                "$[connect::(index::(index::(${h_c},22),4),)]",
+                "$[connect::(index::(index::(${h_c},22),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},23),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},23),3),)]",
+                "$[connect::(index::(index::(${h_c},23),2),)]",
+                "$[connect::(index::(index::(${h_c},23),1),)]",
+                "$[connect::(index::(index::(${h_c},23),4),)]",
+                "$[connect::(index::(index::(${h_c},23),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${h_c},24),0)*1000),0),)]",
+                "$[connect::(index::(index::(${h_c},24),3),)]",
+                "$[connect::(index::(index::(${h_c},24),2),)]",
+                "$[connect::(index::(index::(${h_c},24),1),)]",
+                "$[connect::(index::(index::(${h_c},24),4),)]",
+                "$[connect::(index::(index::(${h_c},24),5),)]"
+              ]
+            ]
+          },
+          "_fb": 1
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfc",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 屏障(勿删):op:if 复合节点之后紧邻的节点同样读不到它的结果 ——实测紧跟一个 remove 会让后面的节点全部取空(2026-10-01 CLI)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "h_c"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d_ok",
+        "value": "$[if::(eq::(findNotEmpty::(index::(index::(${d_c},0),4),__none__),__none__),0,1)]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d_q",
+        "value": "${d.data}"
+      },
+      "_fb": 1,
+      "_note": "下游统一读 d_q:OKX 的 data,或下面按 OKX 形状重排的备用数据。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${d_ok}"
+      },
+      "_fb": 1,
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "d_q",
+            "value": [
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},0),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},0),3),)]",
+                "$[connect::(index::(index::(${d_c},0),2),)]",
+                "$[connect::(index::(index::(${d_c},0),1),)]",
+                "$[connect::(index::(index::(${d_c},0),4),)]",
+                "$[connect::(index::(index::(${d_c},0),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},1),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},1),3),)]",
+                "$[connect::(index::(index::(${d_c},1),2),)]",
+                "$[connect::(index::(index::(${d_c},1),1),)]",
+                "$[connect::(index::(index::(${d_c},1),4),)]",
+                "$[connect::(index::(index::(${d_c},1),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},2),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},2),3),)]",
+                "$[connect::(index::(index::(${d_c},2),2),)]",
+                "$[connect::(index::(index::(${d_c},2),1),)]",
+                "$[connect::(index::(index::(${d_c},2),4),)]",
+                "$[connect::(index::(index::(${d_c},2),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},3),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},3),3),)]",
+                "$[connect::(index::(index::(${d_c},3),2),)]",
+                "$[connect::(index::(index::(${d_c},3),1),)]",
+                "$[connect::(index::(index::(${d_c},3),4),)]",
+                "$[connect::(index::(index::(${d_c},3),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},4),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},4),3),)]",
+                "$[connect::(index::(index::(${d_c},4),2),)]",
+                "$[connect::(index::(index::(${d_c},4),1),)]",
+                "$[connect::(index::(index::(${d_c},4),4),)]",
+                "$[connect::(index::(index::(${d_c},4),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},5),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},5),3),)]",
+                "$[connect::(index::(index::(${d_c},5),2),)]",
+                "$[connect::(index::(index::(${d_c},5),1),)]",
+                "$[connect::(index::(index::(${d_c},5),4),)]",
+                "$[connect::(index::(index::(${d_c},5),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},6),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},6),3),)]",
+                "$[connect::(index::(index::(${d_c},6),2),)]",
+                "$[connect::(index::(index::(${d_c},6),1),)]",
+                "$[connect::(index::(index::(${d_c},6),4),)]",
+                "$[connect::(index::(index::(${d_c},6),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},7),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},7),3),)]",
+                "$[connect::(index::(index::(${d_c},7),2),)]",
+                "$[connect::(index::(index::(${d_c},7),1),)]",
+                "$[connect::(index::(index::(${d_c},7),4),)]",
+                "$[connect::(index::(index::(${d_c},7),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},8),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},8),3),)]",
+                "$[connect::(index::(index::(${d_c},8),2),)]",
+                "$[connect::(index::(index::(${d_c},8),1),)]",
+                "$[connect::(index::(index::(${d_c},8),4),)]",
+                "$[connect::(index::(index::(${d_c},8),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},9),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},9),3),)]",
+                "$[connect::(index::(index::(${d_c},9),2),)]",
+                "$[connect::(index::(index::(${d_c},9),1),)]",
+                "$[connect::(index::(index::(${d_c},9),4),)]",
+                "$[connect::(index::(index::(${d_c},9),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},10),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},10),3),)]",
+                "$[connect::(index::(index::(${d_c},10),2),)]",
+                "$[connect::(index::(index::(${d_c},10),1),)]",
+                "$[connect::(index::(index::(${d_c},10),4),)]",
+                "$[connect::(index::(index::(${d_c},10),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},11),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},11),3),)]",
+                "$[connect::(index::(index::(${d_c},11),2),)]",
+                "$[connect::(index::(index::(${d_c},11),1),)]",
+                "$[connect::(index::(index::(${d_c},11),4),)]",
+                "$[connect::(index::(index::(${d_c},11),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},12),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},12),3),)]",
+                "$[connect::(index::(index::(${d_c},12),2),)]",
+                "$[connect::(index::(index::(${d_c},12),1),)]",
+                "$[connect::(index::(index::(${d_c},12),4),)]",
+                "$[connect::(index::(index::(${d_c},12),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},13),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},13),3),)]",
+                "$[connect::(index::(index::(${d_c},13),2),)]",
+                "$[connect::(index::(index::(${d_c},13),1),)]",
+                "$[connect::(index::(index::(${d_c},13),4),)]",
+                "$[connect::(index::(index::(${d_c},13),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},14),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},14),3),)]",
+                "$[connect::(index::(index::(${d_c},14),2),)]",
+                "$[connect::(index::(index::(${d_c},14),1),)]",
+                "$[connect::(index::(index::(${d_c},14),4),)]",
+                "$[connect::(index::(index::(${d_c},14),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},15),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},15),3),)]",
+                "$[connect::(index::(index::(${d_c},15),2),)]",
+                "$[connect::(index::(index::(${d_c},15),1),)]",
+                "$[connect::(index::(index::(${d_c},15),4),)]",
+                "$[connect::(index::(index::(${d_c},15),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},16),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},16),3),)]",
+                "$[connect::(index::(index::(${d_c},16),2),)]",
+                "$[connect::(index::(index::(${d_c},16),1),)]",
+                "$[connect::(index::(index::(${d_c},16),4),)]",
+                "$[connect::(index::(index::(${d_c},16),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},17),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},17),3),)]",
+                "$[connect::(index::(index::(${d_c},17),2),)]",
+                "$[connect::(index::(index::(${d_c},17),1),)]",
+                "$[connect::(index::(index::(${d_c},17),4),)]",
+                "$[connect::(index::(index::(${d_c},17),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},18),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},18),3),)]",
+                "$[connect::(index::(index::(${d_c},18),2),)]",
+                "$[connect::(index::(index::(${d_c},18),1),)]",
+                "$[connect::(index::(index::(${d_c},18),4),)]",
+                "$[connect::(index::(index::(${d_c},18),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},19),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},19),3),)]",
+                "$[connect::(index::(index::(${d_c},19),2),)]",
+                "$[connect::(index::(index::(${d_c},19),1),)]",
+                "$[connect::(index::(index::(${d_c},19),4),)]",
+                "$[connect::(index::(index::(${d_c},19),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},20),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},20),3),)]",
+                "$[connect::(index::(index::(${d_c},20),2),)]",
+                "$[connect::(index::(index::(${d_c},20),1),)]",
+                "$[connect::(index::(index::(${d_c},20),4),)]",
+                "$[connect::(index::(index::(${d_c},20),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},21),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},21),3),)]",
+                "$[connect::(index::(index::(${d_c},21),2),)]",
+                "$[connect::(index::(index::(${d_c},21),1),)]",
+                "$[connect::(index::(index::(${d_c},21),4),)]",
+                "$[connect::(index::(index::(${d_c},21),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},22),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},22),3),)]",
+                "$[connect::(index::(index::(${d_c},22),2),)]",
+                "$[connect::(index::(index::(${d_c},22),1),)]",
+                "$[connect::(index::(index::(${d_c},22),4),)]",
+                "$[connect::(index::(index::(${d_c},22),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},23),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},23),3),)]",
+                "$[connect::(index::(index::(${d_c},23),2),)]",
+                "$[connect::(index::(index::(${d_c},23),1),)]",
+                "$[connect::(index::(index::(${d_c},23),4),)]",
+                "$[connect::(index::(index::(${d_c},23),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},24),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},24),3),)]",
+                "$[connect::(index::(index::(${d_c},24),2),)]",
+                "$[connect::(index::(index::(${d_c},24),1),)]",
+                "$[connect::(index::(index::(${d_c},24),4),)]",
+                "$[connect::(index::(index::(${d_c},24),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},25),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},25),3),)]",
+                "$[connect::(index::(index::(${d_c},25),2),)]",
+                "$[connect::(index::(index::(${d_c},25),1),)]",
+                "$[connect::(index::(index::(${d_c},25),4),)]",
+                "$[connect::(index::(index::(${d_c},25),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},26),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},26),3),)]",
+                "$[connect::(index::(index::(${d_c},26),2),)]",
+                "$[connect::(index::(index::(${d_c},26),1),)]",
+                "$[connect::(index::(index::(${d_c},26),4),)]",
+                "$[connect::(index::(index::(${d_c},26),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},27),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},27),3),)]",
+                "$[connect::(index::(index::(${d_c},27),2),)]",
+                "$[connect::(index::(index::(${d_c},27),1),)]",
+                "$[connect::(index::(index::(${d_c},27),4),)]",
+                "$[connect::(index::(index::(${d_c},27),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},28),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},28),3),)]",
+                "$[connect::(index::(index::(${d_c},28),2),)]",
+                "$[connect::(index::(index::(${d_c},28),1),)]",
+                "$[connect::(index::(index::(${d_c},28),4),)]",
+                "$[connect::(index::(index::(${d_c},28),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},29),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},29),3),)]",
+                "$[connect::(index::(index::(${d_c},29),2),)]",
+                "$[connect::(index::(index::(${d_c},29),1),)]",
+                "$[connect::(index::(index::(${d_c},29),4),)]",
+                "$[connect::(index::(index::(${d_c},29),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},30),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},30),3),)]",
+                "$[connect::(index::(index::(${d_c},30),2),)]",
+                "$[connect::(index::(index::(${d_c},30),1),)]",
+                "$[connect::(index::(index::(${d_c},30),4),)]",
+                "$[connect::(index::(index::(${d_c},30),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},31),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},31),3),)]",
+                "$[connect::(index::(index::(${d_c},31),2),)]",
+                "$[connect::(index::(index::(${d_c},31),1),)]",
+                "$[connect::(index::(index::(${d_c},31),4),)]",
+                "$[connect::(index::(index::(${d_c},31),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},32),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},32),3),)]",
+                "$[connect::(index::(index::(${d_c},32),2),)]",
+                "$[connect::(index::(index::(${d_c},32),1),)]",
+                "$[connect::(index::(index::(${d_c},32),4),)]",
+                "$[connect::(index::(index::(${d_c},32),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},33),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},33),3),)]",
+                "$[connect::(index::(index::(${d_c},33),2),)]",
+                "$[connect::(index::(index::(${d_c},33),1),)]",
+                "$[connect::(index::(index::(${d_c},33),4),)]",
+                "$[connect::(index::(index::(${d_c},33),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},34),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},34),3),)]",
+                "$[connect::(index::(index::(${d_c},34),2),)]",
+                "$[connect::(index::(index::(${d_c},34),1),)]",
+                "$[connect::(index::(index::(${d_c},34),4),)]",
+                "$[connect::(index::(index::(${d_c},34),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},35),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},35),3),)]",
+                "$[connect::(index::(index::(${d_c},35),2),)]",
+                "$[connect::(index::(index::(${d_c},35),1),)]",
+                "$[connect::(index::(index::(${d_c},35),4),)]",
+                "$[connect::(index::(index::(${d_c},35),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},36),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},36),3),)]",
+                "$[connect::(index::(index::(${d_c},36),2),)]",
+                "$[connect::(index::(index::(${d_c},36),1),)]",
+                "$[connect::(index::(index::(${d_c},36),4),)]",
+                "$[connect::(index::(index::(${d_c},36),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},37),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},37),3),)]",
+                "$[connect::(index::(index::(${d_c},37),2),)]",
+                "$[connect::(index::(index::(${d_c},37),1),)]",
+                "$[connect::(index::(index::(${d_c},37),4),)]",
+                "$[connect::(index::(index::(${d_c},37),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},38),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},38),3),)]",
+                "$[connect::(index::(index::(${d_c},38),2),)]",
+                "$[connect::(index::(index::(${d_c},38),1),)]",
+                "$[connect::(index::(index::(${d_c},38),4),)]",
+                "$[connect::(index::(index::(${d_c},38),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},39),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},39),3),)]",
+                "$[connect::(index::(index::(${d_c},39),2),)]",
+                "$[connect::(index::(index::(${d_c},39),1),)]",
+                "$[connect::(index::(index::(${d_c},39),4),)]",
+                "$[connect::(index::(index::(${d_c},39),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},40),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},40),3),)]",
+                "$[connect::(index::(index::(${d_c},40),2),)]",
+                "$[connect::(index::(index::(${d_c},40),1),)]",
+                "$[connect::(index::(index::(${d_c},40),4),)]",
+                "$[connect::(index::(index::(${d_c},40),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},41),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},41),3),)]",
+                "$[connect::(index::(index::(${d_c},41),2),)]",
+                "$[connect::(index::(index::(${d_c},41),1),)]",
+                "$[connect::(index::(index::(${d_c},41),4),)]",
+                "$[connect::(index::(index::(${d_c},41),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},42),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},42),3),)]",
+                "$[connect::(index::(index::(${d_c},42),2),)]",
+                "$[connect::(index::(index::(${d_c},42),1),)]",
+                "$[connect::(index::(index::(${d_c},42),4),)]",
+                "$[connect::(index::(index::(${d_c},42),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},43),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},43),3),)]",
+                "$[connect::(index::(index::(${d_c},43),2),)]",
+                "$[connect::(index::(index::(${d_c},43),1),)]",
+                "$[connect::(index::(index::(${d_c},43),4),)]",
+                "$[connect::(index::(index::(${d_c},43),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},44),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},44),3),)]",
+                "$[connect::(index::(index::(${d_c},44),2),)]",
+                "$[connect::(index::(index::(${d_c},44),1),)]",
+                "$[connect::(index::(index::(${d_c},44),4),)]",
+                "$[connect::(index::(index::(${d_c},44),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},45),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},45),3),)]",
+                "$[connect::(index::(index::(${d_c},45),2),)]",
+                "$[connect::(index::(index::(${d_c},45),1),)]",
+                "$[connect::(index::(index::(${d_c},45),4),)]",
+                "$[connect::(index::(index::(${d_c},45),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},46),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},46),3),)]",
+                "$[connect::(index::(index::(${d_c},46),2),)]",
+                "$[connect::(index::(index::(${d_c},46),1),)]",
+                "$[connect::(index::(index::(${d_c},46),4),)]",
+                "$[connect::(index::(index::(${d_c},46),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},47),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},47),3),)]",
+                "$[connect::(index::(index::(${d_c},47),2),)]",
+                "$[connect::(index::(index::(${d_c},47),1),)]",
+                "$[connect::(index::(index::(${d_c},47),4),)]",
+                "$[connect::(index::(index::(${d_c},47),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},48),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},48),3),)]",
+                "$[connect::(index::(index::(${d_c},48),2),)]",
+                "$[connect::(index::(index::(${d_c},48),1),)]",
+                "$[connect::(index::(index::(${d_c},48),4),)]",
+                "$[connect::(index::(index::(${d_c},48),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},49),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},49),3),)]",
+                "$[connect::(index::(index::(${d_c},49),2),)]",
+                "$[connect::(index::(index::(${d_c},49),1),)]",
+                "$[connect::(index::(index::(${d_c},49),4),)]",
+                "$[connect::(index::(index::(${d_c},49),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},50),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},50),3),)]",
+                "$[connect::(index::(index::(${d_c},50),2),)]",
+                "$[connect::(index::(index::(${d_c},50),1),)]",
+                "$[connect::(index::(index::(${d_c},50),4),)]",
+                "$[connect::(index::(index::(${d_c},50),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},51),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},51),3),)]",
+                "$[connect::(index::(index::(${d_c},51),2),)]",
+                "$[connect::(index::(index::(${d_c},51),1),)]",
+                "$[connect::(index::(index::(${d_c},51),4),)]",
+                "$[connect::(index::(index::(${d_c},51),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},52),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},52),3),)]",
+                "$[connect::(index::(index::(${d_c},52),2),)]",
+                "$[connect::(index::(index::(${d_c},52),1),)]",
+                "$[connect::(index::(index::(${d_c},52),4),)]",
+                "$[connect::(index::(index::(${d_c},52),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},53),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},53),3),)]",
+                "$[connect::(index::(index::(${d_c},53),2),)]",
+                "$[connect::(index::(index::(${d_c},53),1),)]",
+                "$[connect::(index::(index::(${d_c},53),4),)]",
+                "$[connect::(index::(index::(${d_c},53),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},54),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},54),3),)]",
+                "$[connect::(index::(index::(${d_c},54),2),)]",
+                "$[connect::(index::(index::(${d_c},54),1),)]",
+                "$[connect::(index::(index::(${d_c},54),4),)]",
+                "$[connect::(index::(index::(${d_c},54),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},55),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},55),3),)]",
+                "$[connect::(index::(index::(${d_c},55),2),)]",
+                "$[connect::(index::(index::(${d_c},55),1),)]",
+                "$[connect::(index::(index::(${d_c},55),4),)]",
+                "$[connect::(index::(index::(${d_c},55),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},56),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},56),3),)]",
+                "$[connect::(index::(index::(${d_c},56),2),)]",
+                "$[connect::(index::(index::(${d_c},56),1),)]",
+                "$[connect::(index::(index::(${d_c},56),4),)]",
+                "$[connect::(index::(index::(${d_c},56),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},57),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},57),3),)]",
+                "$[connect::(index::(index::(${d_c},57),2),)]",
+                "$[connect::(index::(index::(${d_c},57),1),)]",
+                "$[connect::(index::(index::(${d_c},57),4),)]",
+                "$[connect::(index::(index::(${d_c},57),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},58),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},58),3),)]",
+                "$[connect::(index::(index::(${d_c},58),2),)]",
+                "$[connect::(index::(index::(${d_c},58),1),)]",
+                "$[connect::(index::(index::(${d_c},58),4),)]",
+                "$[connect::(index::(index::(${d_c},58),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},59),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},59),3),)]",
+                "$[connect::(index::(index::(${d_c},59),2),)]",
+                "$[connect::(index::(index::(${d_c},59),1),)]",
+                "$[connect::(index::(index::(${d_c},59),4),)]",
+                "$[connect::(index::(index::(${d_c},59),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},60),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},60),3),)]",
+                "$[connect::(index::(index::(${d_c},60),2),)]",
+                "$[connect::(index::(index::(${d_c},60),1),)]",
+                "$[connect::(index::(index::(${d_c},60),4),)]",
+                "$[connect::(index::(index::(${d_c},60),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},61),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},61),3),)]",
+                "$[connect::(index::(index::(${d_c},61),2),)]",
+                "$[connect::(index::(index::(${d_c},61),1),)]",
+                "$[connect::(index::(index::(${d_c},61),4),)]",
+                "$[connect::(index::(index::(${d_c},61),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},62),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},62),3),)]",
+                "$[connect::(index::(index::(${d_c},62),2),)]",
+                "$[connect::(index::(index::(${d_c},62),1),)]",
+                "$[connect::(index::(index::(${d_c},62),4),)]",
+                "$[connect::(index::(index::(${d_c},62),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},63),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},63),3),)]",
+                "$[connect::(index::(index::(${d_c},63),2),)]",
+                "$[connect::(index::(index::(${d_c},63),1),)]",
+                "$[connect::(index::(index::(${d_c},63),4),)]",
+                "$[connect::(index::(index::(${d_c},63),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},64),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},64),3),)]",
+                "$[connect::(index::(index::(${d_c},64),2),)]",
+                "$[connect::(index::(index::(${d_c},64),1),)]",
+                "$[connect::(index::(index::(${d_c},64),4),)]",
+                "$[connect::(index::(index::(${d_c},64),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},65),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},65),3),)]",
+                "$[connect::(index::(index::(${d_c},65),2),)]",
+                "$[connect::(index::(index::(${d_c},65),1),)]",
+                "$[connect::(index::(index::(${d_c},65),4),)]",
+                "$[connect::(index::(index::(${d_c},65),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},66),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},66),3),)]",
+                "$[connect::(index::(index::(${d_c},66),2),)]",
+                "$[connect::(index::(index::(${d_c},66),1),)]",
+                "$[connect::(index::(index::(${d_c},66),4),)]",
+                "$[connect::(index::(index::(${d_c},66),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},67),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},67),3),)]",
+                "$[connect::(index::(index::(${d_c},67),2),)]",
+                "$[connect::(index::(index::(${d_c},67),1),)]",
+                "$[connect::(index::(index::(${d_c},67),4),)]",
+                "$[connect::(index::(index::(${d_c},67),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},68),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},68),3),)]",
+                "$[connect::(index::(index::(${d_c},68),2),)]",
+                "$[connect::(index::(index::(${d_c},68),1),)]",
+                "$[connect::(index::(index::(${d_c},68),4),)]",
+                "$[connect::(index::(index::(${d_c},68),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},69),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},69),3),)]",
+                "$[connect::(index::(index::(${d_c},69),2),)]",
+                "$[connect::(index::(index::(${d_c},69),1),)]",
+                "$[connect::(index::(index::(${d_c},69),4),)]",
+                "$[connect::(index::(index::(${d_c},69),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},70),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},70),3),)]",
+                "$[connect::(index::(index::(${d_c},70),2),)]",
+                "$[connect::(index::(index::(${d_c},70),1),)]",
+                "$[connect::(index::(index::(${d_c},70),4),)]",
+                "$[connect::(index::(index::(${d_c},70),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},71),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},71),3),)]",
+                "$[connect::(index::(index::(${d_c},71),2),)]",
+                "$[connect::(index::(index::(${d_c},71),1),)]",
+                "$[connect::(index::(index::(${d_c},71),4),)]",
+                "$[connect::(index::(index::(${d_c},71),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},72),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},72),3),)]",
+                "$[connect::(index::(index::(${d_c},72),2),)]",
+                "$[connect::(index::(index::(${d_c},72),1),)]",
+                "$[connect::(index::(index::(${d_c},72),4),)]",
+                "$[connect::(index::(index::(${d_c},72),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},73),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},73),3),)]",
+                "$[connect::(index::(index::(${d_c},73),2),)]",
+                "$[connect::(index::(index::(${d_c},73),1),)]",
+                "$[connect::(index::(index::(${d_c},73),4),)]",
+                "$[connect::(index::(index::(${d_c},73),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},74),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},74),3),)]",
+                "$[connect::(index::(index::(${d_c},74),2),)]",
+                "$[connect::(index::(index::(${d_c},74),1),)]",
+                "$[connect::(index::(index::(${d_c},74),4),)]",
+                "$[connect::(index::(index::(${d_c},74),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},75),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},75),3),)]",
+                "$[connect::(index::(index::(${d_c},75),2),)]",
+                "$[connect::(index::(index::(${d_c},75),1),)]",
+                "$[connect::(index::(index::(${d_c},75),4),)]",
+                "$[connect::(index::(index::(${d_c},75),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},76),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},76),3),)]",
+                "$[connect::(index::(index::(${d_c},76),2),)]",
+                "$[connect::(index::(index::(${d_c},76),1),)]",
+                "$[connect::(index::(index::(${d_c},76),4),)]",
+                "$[connect::(index::(index::(${d_c},76),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},77),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},77),3),)]",
+                "$[connect::(index::(index::(${d_c},77),2),)]",
+                "$[connect::(index::(index::(${d_c},77),1),)]",
+                "$[connect::(index::(index::(${d_c},77),4),)]",
+                "$[connect::(index::(index::(${d_c},77),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},78),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},78),3),)]",
+                "$[connect::(index::(index::(${d_c},78),2),)]",
+                "$[connect::(index::(index::(${d_c},78),1),)]",
+                "$[connect::(index::(index::(${d_c},78),4),)]",
+                "$[connect::(index::(index::(${d_c},78),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},79),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},79),3),)]",
+                "$[connect::(index::(index::(${d_c},79),2),)]",
+                "$[connect::(index::(index::(${d_c},79),1),)]",
+                "$[connect::(index::(index::(${d_c},79),4),)]",
+                "$[connect::(index::(index::(${d_c},79),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},80),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},80),3),)]",
+                "$[connect::(index::(index::(${d_c},80),2),)]",
+                "$[connect::(index::(index::(${d_c},80),1),)]",
+                "$[connect::(index::(index::(${d_c},80),4),)]",
+                "$[connect::(index::(index::(${d_c},80),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},81),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},81),3),)]",
+                "$[connect::(index::(index::(${d_c},81),2),)]",
+                "$[connect::(index::(index::(${d_c},81),1),)]",
+                "$[connect::(index::(index::(${d_c},81),4),)]",
+                "$[connect::(index::(index::(${d_c},81),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},82),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},82),3),)]",
+                "$[connect::(index::(index::(${d_c},82),2),)]",
+                "$[connect::(index::(index::(${d_c},82),1),)]",
+                "$[connect::(index::(index::(${d_c},82),4),)]",
+                "$[connect::(index::(index::(${d_c},82),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},83),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},83),3),)]",
+                "$[connect::(index::(index::(${d_c},83),2),)]",
+                "$[connect::(index::(index::(${d_c},83),1),)]",
+                "$[connect::(index::(index::(${d_c},83),4),)]",
+                "$[connect::(index::(index::(${d_c},83),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},84),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},84),3),)]",
+                "$[connect::(index::(index::(${d_c},84),2),)]",
+                "$[connect::(index::(index::(${d_c},84),1),)]",
+                "$[connect::(index::(index::(${d_c},84),4),)]",
+                "$[connect::(index::(index::(${d_c},84),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},85),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},85),3),)]",
+                "$[connect::(index::(index::(${d_c},85),2),)]",
+                "$[connect::(index::(index::(${d_c},85),1),)]",
+                "$[connect::(index::(index::(${d_c},85),4),)]",
+                "$[connect::(index::(index::(${d_c},85),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},86),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},86),3),)]",
+                "$[connect::(index::(index::(${d_c},86),2),)]",
+                "$[connect::(index::(index::(${d_c},86),1),)]",
+                "$[connect::(index::(index::(${d_c},86),4),)]",
+                "$[connect::(index::(index::(${d_c},86),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},87),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},87),3),)]",
+                "$[connect::(index::(index::(${d_c},87),2),)]",
+                "$[connect::(index::(index::(${d_c},87),1),)]",
+                "$[connect::(index::(index::(${d_c},87),4),)]",
+                "$[connect::(index::(index::(${d_c},87),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},88),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},88),3),)]",
+                "$[connect::(index::(index::(${d_c},88),2),)]",
+                "$[connect::(index::(index::(${d_c},88),1),)]",
+                "$[connect::(index::(index::(${d_c},88),4),)]",
+                "$[connect::(index::(index::(${d_c},88),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},89),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},89),3),)]",
+                "$[connect::(index::(index::(${d_c},89),2),)]",
+                "$[connect::(index::(index::(${d_c},89),1),)]",
+                "$[connect::(index::(index::(${d_c},89),4),)]",
+                "$[connect::(index::(index::(${d_c},89),5),)]"
+              ],
+              [
+                "$[connect::(parseNumber::(calc::(index::(index::(${d_c},90),0)*1000),0),)]",
+                "$[connect::(index::(index::(${d_c},90),3),)]",
+                "$[connect::(index::(index::(${d_c},90),2),)]",
+                "$[connect::(index::(index::(${d_c},90),1),)]",
+                "$[connect::(index::(index::(${d_c},90),4),)]",
+                "$[connect::(index::(index::(${d_c},90),5),)]"
+              ]
+            ]
+          },
+          "_fb": 1
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfc",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 屏障(勿删):op:if 复合节点之后紧邻的节点同样读不到它的结果 ——实测紧跟一个 remove 会让后面的节点全部取空(2026-10-01 CLI)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "d_c"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "last",
+        "value": "$[index::(index::(${h_q},0),4)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${last}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "${@i18n.noData}"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pxS",
+        "value": "$[if::(eq::(findNotEmpty::(${last},__none__),__none__),--,if::(ge::(${last},1000),parseNumber::(${last},#\\,##0.0),if::(ge::(${last},100),parseNumber::(${last},0.00),if::(ge::(${last},1),parseNumber::(${last},0.000),if::(ge::(${last},0.01),parseNumber::(${last},0.00000),parseNumber::(${last},0.0000000))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hs",
+        "value": [
+          "$[index::(index::(${d_q},0),2)]",
+          "$[index::(index::(${d_q},1),2)]",
+          "$[index::(index::(${d_q},2),2)]",
+          "$[index::(index::(${d_q},3),2)]",
+          "$[index::(index::(${d_q},4),2)]",
+          "$[index::(index::(${d_q},5),2)]",
+          "$[index::(index::(${d_q},6),2)]",
+          "$[index::(index::(${d_q},7),2)]",
+          "$[index::(index::(${d_q},8),2)]",
+          "$[index::(index::(${d_q},9),2)]",
+          "$[index::(index::(${d_q},10),2)]",
+          "$[index::(index::(${d_q},11),2)]",
+          "$[index::(index::(${d_q},12),2)]",
+          "$[index::(index::(${d_q},13),2)]",
+          "$[index::(index::(${d_q},14),2)]",
+          "$[index::(index::(${d_q},15),2)]",
+          "$[index::(index::(${d_q},16),2)]",
+          "$[index::(index::(${d_q},17),2)]",
+          "$[index::(index::(${d_q},18),2)]",
+          "$[index::(index::(${d_q},19),2)]",
+          "$[index::(index::(${d_q},20),2)]",
+          "$[index::(index::(${d_q},21),2)]",
+          "$[index::(index::(${d_q},22),2)]",
+          "$[index::(index::(${d_q},23),2)]",
+          "$[index::(index::(${d_q},24),2)]",
+          "$[index::(index::(${d_q},25),2)]",
+          "$[index::(index::(${d_q},26),2)]",
+          "$[index::(index::(${d_q},27),2)]",
+          "$[index::(index::(${d_q},28),2)]",
+          "$[index::(index::(${d_q},29),2)]",
+          "$[index::(index::(${d_q},30),2)]",
+          "$[index::(index::(${d_q},31),2)]",
+          "$[index::(index::(${d_q},32),2)]",
+          "$[index::(index::(${d_q},33),2)]",
+          "$[index::(index::(${d_q},34),2)]",
+          "$[index::(index::(${d_q},35),2)]",
+          "$[index::(index::(${d_q},36),2)]",
+          "$[index::(index::(${d_q},37),2)]",
+          "$[index::(index::(${d_q},38),2)]",
+          "$[index::(index::(${d_q},39),2)]",
+          "$[index::(index::(${d_q},40),2)]",
+          "$[index::(index::(${d_q},41),2)]",
+          "$[index::(index::(${d_q},42),2)]",
+          "$[index::(index::(${d_q},43),2)]",
+          "$[index::(index::(${d_q},44),2)]",
+          "$[index::(index::(${d_q},45),2)]",
+          "$[index::(index::(${d_q},46),2)]",
+          "$[index::(index::(${d_q},47),2)]",
+          "$[index::(index::(${d_q},48),2)]",
+          "$[index::(index::(${d_q},49),2)]",
+          "$[index::(index::(${d_q},50),2)]",
+          "$[index::(index::(${d_q},51),2)]",
+          "$[index::(index::(${d_q},52),2)]",
+          "$[index::(index::(${d_q},53),2)]",
+          "$[index::(index::(${d_q},54),2)]",
+          "$[index::(index::(${d_q},55),2)]",
+          "$[index::(index::(${d_q},56),2)]",
+          "$[index::(index::(${d_q},57),2)]",
+          "$[index::(index::(${d_q},58),2)]",
+          "$[index::(index::(${d_q},59),2)]",
+          "$[index::(index::(${d_q},60),2)]",
+          "$[index::(index::(${d_q},61),2)]",
+          "$[index::(index::(${d_q},62),2)]",
+          "$[index::(index::(${d_q},63),2)]",
+          "$[index::(index::(${d_q},64),2)]",
+          "$[index::(index::(${d_q},65),2)]",
+          "$[index::(index::(${d_q},66),2)]",
+          "$[index::(index::(${d_q},67),2)]",
+          "$[index::(index::(${d_q},68),2)]",
+          "$[index::(index::(${d_q},69),2)]",
+          "$[index::(index::(${d_q},70),2)]",
+          "$[index::(index::(${d_q},71),2)]",
+          "$[index::(index::(${d_q},72),2)]",
+          "$[index::(index::(${d_q},73),2)]",
+          "$[index::(index::(${d_q},74),2)]",
+          "$[index::(index::(${d_q},75),2)]",
+          "$[index::(index::(${d_q},76),2)]",
+          "$[index::(index::(${d_q},77),2)]",
+          "$[index::(index::(${d_q},78),2)]",
+          "$[index::(index::(${d_q},79),2)]",
+          "$[index::(index::(${d_q},80),2)]",
+          "$[index::(index::(${d_q},81),2)]",
+          "$[index::(index::(${d_q},82),2)]",
+          "$[index::(index::(${d_q},83),2)]",
+          "$[index::(index::(${d_q},84),2)]",
+          "$[index::(index::(${d_q},85),2)]",
+          "$[index::(index::(${d_q},86),2)]",
+          "$[index::(index::(${d_q},87),2)]",
+          "$[index::(index::(${d_q},88),2)]",
+          "$[index::(index::(${d_q},89),2)]",
+          "$[index::(index::(${d_q},90),2)]"
+        ]
+      },
+      "_note": "90 日高低点 = 91 根日线(含今天这根)的 high / low —— 新币不足 91 根时缺的那几根取空,max/min 自动跳过。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ls",
+        "value": [
+          "$[index::(index::(${d_q},0),3)]",
+          "$[index::(index::(${d_q},1),3)]",
+          "$[index::(index::(${d_q},2),3)]",
+          "$[index::(index::(${d_q},3),3)]",
+          "$[index::(index::(${d_q},4),3)]",
+          "$[index::(index::(${d_q},5),3)]",
+          "$[index::(index::(${d_q},6),3)]",
+          "$[index::(index::(${d_q},7),3)]",
+          "$[index::(index::(${d_q},8),3)]",
+          "$[index::(index::(${d_q},9),3)]",
+          "$[index::(index::(${d_q},10),3)]",
+          "$[index::(index::(${d_q},11),3)]",
+          "$[index::(index::(${d_q},12),3)]",
+          "$[index::(index::(${d_q},13),3)]",
+          "$[index::(index::(${d_q},14),3)]",
+          "$[index::(index::(${d_q},15),3)]",
+          "$[index::(index::(${d_q},16),3)]",
+          "$[index::(index::(${d_q},17),3)]",
+          "$[index::(index::(${d_q},18),3)]",
+          "$[index::(index::(${d_q},19),3)]",
+          "$[index::(index::(${d_q},20),3)]",
+          "$[index::(index::(${d_q},21),3)]",
+          "$[index::(index::(${d_q},22),3)]",
+          "$[index::(index::(${d_q},23),3)]",
+          "$[index::(index::(${d_q},24),3)]",
+          "$[index::(index::(${d_q},25),3)]",
+          "$[index::(index::(${d_q},26),3)]",
+          "$[index::(index::(${d_q},27),3)]",
+          "$[index::(index::(${d_q},28),3)]",
+          "$[index::(index::(${d_q},29),3)]",
+          "$[index::(index::(${d_q},30),3)]",
+          "$[index::(index::(${d_q},31),3)]",
+          "$[index::(index::(${d_q},32),3)]",
+          "$[index::(index::(${d_q},33),3)]",
+          "$[index::(index::(${d_q},34),3)]",
+          "$[index::(index::(${d_q},35),3)]",
+          "$[index::(index::(${d_q},36),3)]",
+          "$[index::(index::(${d_q},37),3)]",
+          "$[index::(index::(${d_q},38),3)]",
+          "$[index::(index::(${d_q},39),3)]",
+          "$[index::(index::(${d_q},40),3)]",
+          "$[index::(index::(${d_q},41),3)]",
+          "$[index::(index::(${d_q},42),3)]",
+          "$[index::(index::(${d_q},43),3)]",
+          "$[index::(index::(${d_q},44),3)]",
+          "$[index::(index::(${d_q},45),3)]",
+          "$[index::(index::(${d_q},46),3)]",
+          "$[index::(index::(${d_q},47),3)]",
+          "$[index::(index::(${d_q},48),3)]",
+          "$[index::(index::(${d_q},49),3)]",
+          "$[index::(index::(${d_q},50),3)]",
+          "$[index::(index::(${d_q},51),3)]",
+          "$[index::(index::(${d_q},52),3)]",
+          "$[index::(index::(${d_q},53),3)]",
+          "$[index::(index::(${d_q},54),3)]",
+          "$[index::(index::(${d_q},55),3)]",
+          "$[index::(index::(${d_q},56),3)]",
+          "$[index::(index::(${d_q},57),3)]",
+          "$[index::(index::(${d_q},58),3)]",
+          "$[index::(index::(${d_q},59),3)]",
+          "$[index::(index::(${d_q},60),3)]",
+          "$[index::(index::(${d_q},61),3)]",
+          "$[index::(index::(${d_q},62),3)]",
+          "$[index::(index::(${d_q},63),3)]",
+          "$[index::(index::(${d_q},64),3)]",
+          "$[index::(index::(${d_q},65),3)]",
+          "$[index::(index::(${d_q},66),3)]",
+          "$[index::(index::(${d_q},67),3)]",
+          "$[index::(index::(${d_q},68),3)]",
+          "$[index::(index::(${d_q},69),3)]",
+          "$[index::(index::(${d_q},70),3)]",
+          "$[index::(index::(${d_q},71),3)]",
+          "$[index::(index::(${d_q},72),3)]",
+          "$[index::(index::(${d_q},73),3)]",
+          "$[index::(index::(${d_q},74),3)]",
+          "$[index::(index::(${d_q},75),3)]",
+          "$[index::(index::(${d_q},76),3)]",
+          "$[index::(index::(${d_q},77),3)]",
+          "$[index::(index::(${d_q},78),3)]",
+          "$[index::(index::(${d_q},79),3)]",
+          "$[index::(index::(${d_q},80),3)]",
+          "$[index::(index::(${d_q},81),3)]",
+          "$[index::(index::(${d_q},82),3)]",
+          "$[index::(index::(${d_q},83),3)]",
+          "$[index::(index::(${d_q},84),3)]",
+          "$[index::(index::(${d_q},85),3)]",
+          "$[index::(index::(${d_q},86),3)]",
+          "$[index::(index::(${d_q},87),3)]",
+          "$[index::(index::(${d_q},88),3)]",
+          "$[index::(index::(${d_q},89),3)]",
+          "$[index::(index::(${d_q},90),3)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi90",
+        "value": "$[max::(${hs})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo90",
+        "value": "$[min::(${ls})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offHv",
+        "value": "$[parseNumber::(calc::((${last}-${hi90})/${hi90}*100),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offLv",
+        "value": "$[parseNumber::(calc::((${last}-${lo90})/${lo90}*100),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offHA",
+        "value": "$[if::(gt::(${offHv},0),${offHv},calc::(0-${offHv}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offHF",
+        "value": "$[if::(ne::(findNotEmpty::(${offHv},__none__),__none__),parseNumber::(${offHA},0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offH",
+        "value": "$[if::(ne::(findNotEmpty::(${offHv},__none__),__none__),if::(eq::(${offHF},0),connect::(${offHF},%),connect::(if::(gt::(${offHv},0),+,−),${offHF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offLA",
+        "value": "$[if::(gt::(${offLv},0),${offLv},calc::(0-${offLv}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offLF",
+        "value": "$[if::(ne::(findNotEmpty::(${offLv},__none__),__none__),parseNumber::(${offLA},0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offL",
+        "value": "$[if::(ne::(findNotEmpty::(${offLv},__none__),__none__),if::(eq::(${offLF},0),connect::(${offLF},%),connect::(if::(gt::(${offLv},0),+,−),${offLF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b1v",
+        "value": "$[index::(index::(${h_q},1),4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1c",
+        "value": "$[parseNumber::(calc::((${last}-${b1v})/${b1v}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1up",
+        "value": "$[if::(gt::(length::(${q1c}),0),if::(ge::(${q1c},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1fl",
+        "value": "$[if::(gt::(length::(${q1c}),0),if::(lt::(calc::(${q1c}*${q1c}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1TA",
+        "value": "$[if::(gt::(${q1c},0),${q1c},calc::(0-${q1c}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1TF",
+        "value": "$[if::(ne::(findNotEmpty::(${q1c},__none__),__none__),parseNumber::(${q1TA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1T",
+        "value": "$[if::(ne::(findNotEmpty::(${q1c},__none__),__none__),if::(eq::(${q1TF},0),connect::(${q1TF},%),connect::(if::(gt::(${q1c},0),+,−),${q1TF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b1",
+        "value": "$[if::(lt::(${q1TA},0.3),0,if::(lt::(${q1TA},1),1,if::(lt::(${q1TA},3),2,3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b2v",
+        "value": "$[index::(index::(${h_q},4),4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q2c",
+        "value": "$[parseNumber::(calc::((${last}-${b2v})/${b2v}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q2up",
+        "value": "$[if::(gt::(length::(${q2c}),0),if::(ge::(${q2c},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q2fl",
+        "value": "$[if::(gt::(length::(${q2c}),0),if::(lt::(calc::(${q2c}*${q2c}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q2TA",
+        "value": "$[if::(gt::(${q2c},0),${q2c},calc::(0-${q2c}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q2TF",
+        "value": "$[if::(ne::(findNotEmpty::(${q2c},__none__),__none__),parseNumber::(${q2TA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q2T",
+        "value": "$[if::(ne::(findNotEmpty::(${q2c},__none__),__none__),if::(eq::(${q2TF},0),connect::(${q2TF},%),connect::(if::(gt::(${q2c},0),+,−),${q2TF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b2",
+        "value": "$[if::(lt::(${q2TA},0.3),0,if::(lt::(${q2TA},1),1,if::(lt::(${q2TA},3),2,3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b3v",
+        "value": "$[index::(index::(${h_q},24),4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q3c",
+        "value": "$[parseNumber::(calc::((${last}-${b3v})/${b3v}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q3up",
+        "value": "$[if::(gt::(length::(${q3c}),0),if::(ge::(${q3c},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q3fl",
+        "value": "$[if::(gt::(length::(${q3c}),0),if::(lt::(calc::(${q3c}*${q3c}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q3TA",
+        "value": "$[if::(gt::(${q3c},0),${q3c},calc::(0-${q3c}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q3TF",
+        "value": "$[if::(ne::(findNotEmpty::(${q3c},__none__),__none__),parseNumber::(${q3TA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q3T",
+        "value": "$[if::(ne::(findNotEmpty::(${q3c},__none__),__none__),if::(eq::(${q3TF},0),connect::(${q3TF},%),connect::(if::(gt::(${q3c},0),+,−),${q3TF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b3",
+        "value": "$[if::(lt::(${q3TA},0.5),0,if::(lt::(${q3TA},2),1,if::(lt::(${q3TA},5),2,3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b4v",
+        "value": "$[index::(index::(${d_q},7),4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q4c",
+        "value": "$[parseNumber::(calc::((${last}-${b4v})/${b4v}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q4up",
+        "value": "$[if::(gt::(length::(${q4c}),0),if::(ge::(${q4c},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q4fl",
+        "value": "$[if::(gt::(length::(${q4c}),0),if::(lt::(calc::(${q4c}*${q4c}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q4TA",
+        "value": "$[if::(gt::(${q4c},0),${q4c},calc::(0-${q4c}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q4TF",
+        "value": "$[if::(ne::(findNotEmpty::(${q4c},__none__),__none__),parseNumber::(${q4TA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q4T",
+        "value": "$[if::(ne::(findNotEmpty::(${q4c},__none__),__none__),if::(eq::(${q4TF},0),connect::(${q4TF},%),connect::(if::(gt::(${q4c},0),+,−),${q4TF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b4",
+        "value": "$[if::(lt::(${q4TA},2),0,if::(lt::(${q4TA},5),1,if::(lt::(${q4TA},15),2,3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b5v",
+        "value": "$[index::(index::(${d_q},30),4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q5c",
+        "value": "$[parseNumber::(calc::((${last}-${b5v})/${b5v}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q5up",
+        "value": "$[if::(gt::(length::(${q5c}),0),if::(ge::(${q5c},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q5fl",
+        "value": "$[if::(gt::(length::(${q5c}),0),if::(lt::(calc::(${q5c}*${q5c}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q5TA",
+        "value": "$[if::(gt::(${q5c},0),${q5c},calc::(0-${q5c}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q5TF",
+        "value": "$[if::(ne::(findNotEmpty::(${q5c},__none__),__none__),parseNumber::(${q5TA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q5T",
+        "value": "$[if::(ne::(findNotEmpty::(${q5c},__none__),__none__),if::(eq::(${q5TF},0),connect::(${q5TF},%),connect::(if::(gt::(${q5c},0),+,−),${q5TF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b5",
+        "value": "$[if::(lt::(${q5TA},2),0,if::(lt::(${q5TA},5),1,if::(lt::(${q5TA},15),2,3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b6v",
+        "value": "$[index::(index::(${d_q},90),4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q6c",
+        "value": "$[parseNumber::(calc::((${last}-${b6v})/${b6v}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q6up",
+        "value": "$[if::(gt::(length::(${q6c}),0),if::(ge::(${q6c},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q6fl",
+        "value": "$[if::(gt::(length::(${q6c}),0),if::(lt::(calc::(${q6c}*${q6c}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q6TA",
+        "value": "$[if::(gt::(${q6c},0),${q6c},calc::(0-${q6c}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q6TF",
+        "value": "$[if::(ne::(findNotEmpty::(${q6c},__none__),__none__),parseNumber::(${q6TA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q6T",
+        "value": "$[if::(ne::(findNotEmpty::(${q6c},__none__),__none__),if::(eq::(${q6TF},0),connect::(${q6TF},%),connect::(if::(gt::(${q6c},0),+,−),${q6TF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b6",
+        "value": "$[if::(lt::(${q6TA},2),0,if::(lt::(${q6TA},5),1,if::(lt::(${q6TA},15),2,3)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "sym",
+          "pxS",
+          "offH",
+          "offL",
+          "at",
+          "q1T",
+          "q1up",
+          "q1fl",
+          "b1",
+          "q2T",
+          "q2up",
+          "q2fl",
+          "b2",
+          "q3T",
+          "q3up",
+          "q3fl",
+          "b3",
+          "q4T",
+          "q4up",
+          "q4fl",
+          "b4",
+          "q5T",
+          "q5up",
+          "q5fl",
+          "b5",
+          "q6T",
+          "q6up",
+          "q6fl",
+          "b6"
+        ]
+      }
+    }
+  ]
+}

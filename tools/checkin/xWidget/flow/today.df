@@ -1,0 +1,942 @@
+{
+  "_note": "今日总览：最多 6 件事，每行 图标 / 名字 / 今天达没达标 / 连续天数，各带自己的主题色。零入参。\n⚠️ `pal` 这个键在循环里被反复覆盖 —— 它只是 `_sel` 的临时输入，每行紧接着就把结果存进 m<i>，覆盖不会串（op:set 是顺序求值）。不要把它放进 resultFilter。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "入参先落地成 data 域的键(§9.5 #3),再由 resultFilter 透出去 —— **RCN 只看得见 flow 的输出**,shell params 不进渲染域。`mask` 决定卡上打不打码(打码开关在事项页,经 pickWidgets 的 per-item params 传进来)。",
+      "op": "set",
+      "props": {
+        "key": "mask",
+        "value": "${mask}"
+      }
+    },
+    {
+      "_note": "多事项总览：读清单 + 每件事的 stat，按固定下标摊开（上限 6 行）。",
+      "id": "it",
+      "action": "data.get",
+      "params": {
+        "key": "items",
+        "default": []
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "_note": "按自然日归零再相减，否则同一天的上午/下午会算出不同天数（同 moment/countdown.df）。",
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(formatDate::(${nowMs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayKey",
+        "value": "$[formatDate::(${nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n0",
+        "value": "${it[0].name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q0",
+        "value": "stat_${it[0].id}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n1",
+        "value": "${it[1].name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q1",
+        "value": "stat_${it[1].id}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n2",
+        "value": "${it[2].name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q2",
+        "value": "stat_${it[2].id}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n3",
+        "value": "${it[3].name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q3",
+        "value": "stat_${it[3].id}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n4",
+        "value": "${it[4].name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q4",
+        "value": "stat_${it[4].id}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n5",
+        "value": "${it[5].name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q5",
+        "value": "stat_${it[5].id}"
+      }
+    },
+    {
+      "id": "s0",
+      "action": "data.get",
+      "params": {
+        "key": "${q0}",
+        "default": {}
+      }
+    },
+    {
+      "id": "s1",
+      "action": "data.get",
+      "params": {
+        "key": "${q1}",
+        "default": {}
+      }
+    },
+    {
+      "id": "s2",
+      "action": "data.get",
+      "params": {
+        "key": "${q2}",
+        "default": {}
+      }
+    },
+    {
+      "id": "s3",
+      "action": "data.get",
+      "params": {
+        "key": "${q3}",
+        "default": {}
+      }
+    },
+    {
+      "id": "s4",
+      "action": "data.get",
+      "params": {
+        "key": "${q4}",
+        "default": {}
+      }
+    },
+    {
+      "id": "s5",
+      "action": "data.get",
+      "params": {
+        "key": "${q5}",
+        "default": {}
+      }
+    },
+    {
+      "_note": "槽位有没有事项。空字符串判定用哨兵串 `_`：findNotEmpty 取不到就返回 `_`，再与 `_` 比。",
+      "op": "set",
+      "props": {
+        "key": "h0",
+        "value": "$[if::(eq::(findNotEmpty::(${n0},_),_),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i0",
+        "value": "$[findNotEmpty::(${it[0].icon},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pal",
+        "value": "$[findNotEmpty::(${it[0].pal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m0",
+        "value": "$[if::(eq::(${pal},1),#2E9E6B|#45C793,if::(eq::(${pal},2),#2F6FE4|#5C9BFF,if::(eq::(${pal},3),#7A5AF8|#A78BFA,if::(eq::(${pal},4),#E07B39|#F0A05F,if::(eq::(${pal},5),#D2536D|#E87A93,#0E9AA7|#35C2CE)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gr0",
+        "value": "$[findNotEmpty::(${it[0].goal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g0",
+        "value": "$[if::(ge::(${gr0},1),${gr0},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b0",
+        "value": "${s0.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v0",
+        "value": "$[findNotEmpty::(get::(${b0},${todayKey}),0)]"
+      }
+    },
+    {
+      "_note": "达标 = 今天次数 ≥ 该事项的每日目标（不是 >0）。",
+      "op": "set",
+      "props": {
+        "key": "d0",
+        "value": "$[if::(ge::(${v0},${g0}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "z0",
+        "value": "$[parseDate::(formatDate::(${s0.lastTs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a0",
+        "value": "$[if::(ge::(${z0},calc::(${todayMs}-86400000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u0",
+        "value": "$[parseDate::(formatDate::(findNotEmpty::(${s0.streakEnd},${s0.lastTs}),yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[if::(eq::(${a0},1),calc::(round::(calc::((${u0}-${s0.streakStart})/86400000),0)+1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w0",
+        "value": "$[findNotEmpty::(${it[0].id},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h1",
+        "value": "$[if::(eq::(findNotEmpty::(${n1},_),_),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i1",
+        "value": "$[findNotEmpty::(${it[1].icon},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pal",
+        "value": "$[findNotEmpty::(${it[1].pal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m1",
+        "value": "$[if::(eq::(${pal},1),#2E9E6B|#45C793,if::(eq::(${pal},2),#2F6FE4|#5C9BFF,if::(eq::(${pal},3),#7A5AF8|#A78BFA,if::(eq::(${pal},4),#E07B39|#F0A05F,if::(eq::(${pal},5),#D2536D|#E87A93,#0E9AA7|#35C2CE)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gr1",
+        "value": "$[findNotEmpty::(${it[1].goal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1",
+        "value": "$[if::(ge::(${gr1},1),${gr1},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b1",
+        "value": "${s1.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v1",
+        "value": "$[findNotEmpty::(get::(${b1},${todayKey}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d1",
+        "value": "$[if::(ge::(${v1},${g1}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "z1",
+        "value": "$[parseDate::(formatDate::(${s1.lastTs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a1",
+        "value": "$[if::(ge::(${z1},calc::(${todayMs}-86400000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u1",
+        "value": "$[parseDate::(formatDate::(findNotEmpty::(${s1.streakEnd},${s1.lastTs}),yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1",
+        "value": "$[if::(eq::(${a1},1),calc::(round::(calc::((${u1}-${s1.streakStart})/86400000),0)+1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w1",
+        "value": "$[findNotEmpty::(${it[1].id},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h2",
+        "value": "$[if::(eq::(findNotEmpty::(${n2},_),_),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i2",
+        "value": "$[findNotEmpty::(${it[2].icon},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pal",
+        "value": "$[findNotEmpty::(${it[2].pal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m2",
+        "value": "$[if::(eq::(${pal},1),#2E9E6B|#45C793,if::(eq::(${pal},2),#2F6FE4|#5C9BFF,if::(eq::(${pal},3),#7A5AF8|#A78BFA,if::(eq::(${pal},4),#E07B39|#F0A05F,if::(eq::(${pal},5),#D2536D|#E87A93,#0E9AA7|#35C2CE)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gr2",
+        "value": "$[findNotEmpty::(${it[2].goal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g2",
+        "value": "$[if::(ge::(${gr2},1),${gr2},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b2",
+        "value": "${s2.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v2",
+        "value": "$[findNotEmpty::(get::(${b2},${todayKey}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d2",
+        "value": "$[if::(ge::(${v2},${g2}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "z2",
+        "value": "$[parseDate::(formatDate::(${s2.lastTs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a2",
+        "value": "$[if::(ge::(${z2},calc::(${todayMs}-86400000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u2",
+        "value": "$[parseDate::(formatDate::(findNotEmpty::(${s2.streakEnd},${s2.lastTs}),yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2",
+        "value": "$[if::(eq::(${a2},1),calc::(round::(calc::((${u2}-${s2.streakStart})/86400000),0)+1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w2",
+        "value": "$[findNotEmpty::(${it[2].id},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h3",
+        "value": "$[if::(eq::(findNotEmpty::(${n3},_),_),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i3",
+        "value": "$[findNotEmpty::(${it[3].icon},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pal",
+        "value": "$[findNotEmpty::(${it[3].pal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m3",
+        "value": "$[if::(eq::(${pal},1),#2E9E6B|#45C793,if::(eq::(${pal},2),#2F6FE4|#5C9BFF,if::(eq::(${pal},3),#7A5AF8|#A78BFA,if::(eq::(${pal},4),#E07B39|#F0A05F,if::(eq::(${pal},5),#D2536D|#E87A93,#0E9AA7|#35C2CE)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gr3",
+        "value": "$[findNotEmpty::(${it[3].goal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g3",
+        "value": "$[if::(ge::(${gr3},1),${gr3},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b3",
+        "value": "${s3.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v3",
+        "value": "$[findNotEmpty::(get::(${b3},${todayKey}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d3",
+        "value": "$[if::(ge::(${v3},${g3}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "z3",
+        "value": "$[parseDate::(formatDate::(${s3.lastTs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a3",
+        "value": "$[if::(ge::(${z3},calc::(${todayMs}-86400000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u3",
+        "value": "$[parseDate::(formatDate::(findNotEmpty::(${s3.streakEnd},${s3.lastTs}),yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3",
+        "value": "$[if::(eq::(${a3},1),calc::(round::(calc::((${u3}-${s3.streakStart})/86400000),0)+1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w3",
+        "value": "$[findNotEmpty::(${it[3].id},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h4",
+        "value": "$[if::(eq::(findNotEmpty::(${n4},_),_),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i4",
+        "value": "$[findNotEmpty::(${it[4].icon},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pal",
+        "value": "$[findNotEmpty::(${it[4].pal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m4",
+        "value": "$[if::(eq::(${pal},1),#2E9E6B|#45C793,if::(eq::(${pal},2),#2F6FE4|#5C9BFF,if::(eq::(${pal},3),#7A5AF8|#A78BFA,if::(eq::(${pal},4),#E07B39|#F0A05F,if::(eq::(${pal},5),#D2536D|#E87A93,#0E9AA7|#35C2CE)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gr4",
+        "value": "$[findNotEmpty::(${it[4].goal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g4",
+        "value": "$[if::(ge::(${gr4},1),${gr4},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b4",
+        "value": "${s4.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v4",
+        "value": "$[findNotEmpty::(get::(${b4},${todayKey}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d4",
+        "value": "$[if::(ge::(${v4},${g4}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "z4",
+        "value": "$[parseDate::(formatDate::(${s4.lastTs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a4",
+        "value": "$[if::(ge::(${z4},calc::(${todayMs}-86400000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u4",
+        "value": "$[parseDate::(formatDate::(findNotEmpty::(${s4.streakEnd},${s4.lastTs}),yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t4",
+        "value": "$[if::(eq::(${a4},1),calc::(round::(calc::((${u4}-${s4.streakStart})/86400000),0)+1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w4",
+        "value": "$[findNotEmpty::(${it[4].id},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "h5",
+        "value": "$[if::(eq::(findNotEmpty::(${n5},_),_),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "i5",
+        "value": "$[findNotEmpty::(${it[5].icon},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pal",
+        "value": "$[findNotEmpty::(${it[5].pal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m5",
+        "value": "$[if::(eq::(${pal},1),#2E9E6B|#45C793,if::(eq::(${pal},2),#2F6FE4|#5C9BFF,if::(eq::(${pal},3),#7A5AF8|#A78BFA,if::(eq::(${pal},4),#E07B39|#F0A05F,if::(eq::(${pal},5),#D2536D|#E87A93,#0E9AA7|#35C2CE)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gr5",
+        "value": "$[findNotEmpty::(${it[5].goal},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g5",
+        "value": "$[if::(ge::(${gr5},1),${gr5},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "b5",
+        "value": "${s5.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "v5",
+        "value": "$[findNotEmpty::(get::(${b5},${todayKey}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d5",
+        "value": "$[if::(ge::(${v5},${g5}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "z5",
+        "value": "$[parseDate::(formatDate::(${s5.lastTs},yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "a5",
+        "value": "$[if::(ge::(${z5},calc::(${todayMs}-86400000)),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "u5",
+        "value": "$[parseDate::(formatDate::(findNotEmpty::(${s5.streakEnd},${s5.lastTs}),yyyy-MM-dd),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t5",
+        "value": "$[if::(eq::(${a5},1),calc::(round::(calc::((${u5}-${s5.streakStart})/86400000),0)+1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "w5",
+        "value": "$[findNotEmpty::(${it[5].id},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p0",
+        "value": "$[if::(eq::(${h0},0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p1",
+        "value": "$[if::(eq::(${h0},1),if::(eq::(${h1},0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p2",
+        "value": "$[if::(eq::(${h1},1),if::(eq::(${h2},0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p3",
+        "value": "$[if::(eq::(${h2},1),if::(eq::(${h3},0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p4",
+        "value": "$[if::(eq::(${h3},1),if::(eq::(${h4},0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p5",
+        "value": "$[if::(eq::(${h4},1),if::(eq::(${h5},0),1,0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "doneRow",
+        "value": "$[calc::(${d0}+${d1}+${d2}+${d3}+${d4}+${d5})]"
+      }
+    },
+    {
+      "_note": "真实事项总数(2026-10-08):原先是 6 个槽位 h0..h5 之和,第 7、8 件事被静默吞掉,页头「3/6」与 progress「5/8」对不上。",
+      "op": "set",
+      "props": {
+        "key": "allCnt",
+        "value": "$[length::(${it})]"
+      }
+    },
+    {
+      "_note": "跨事项聚合(页面 computeAgg 落盘,同 progress.df):超过 6 件时,今天达标件数以它为准 —— 行里只算得到前 6 件。",
+      "id": "agg",
+      "action": "data.get",
+      "params": {
+        "key": "agg",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "aggBy",
+        "value": "${agg.byDay}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "doneCnt",
+        "value": "$[if::(gt::(${allCnt},6),findNotEmpty::(get::(${aggBy},${todayKey}),${doneRow}),${doneRow})]"
+      }
+    },
+    {
+      "_note": "超过 6 件:第 6 行让给「还有 N 件」,只列前 5 件。",
+      "op": "set",
+      "props": {
+        "key": "ov",
+        "value": "$[if::(gt::(${allCnt},6),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "more",
+        "value": "$[calc::(${allCnt}-5)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dateLbl",
+        "value": "$[formatDate::(${nowMs},MM-dd)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "w0",
+          "w1",
+          "w2",
+          "w3",
+          "w4",
+          "w5",
+          "n0",
+          "n1",
+          "n2",
+          "n3",
+          "n4",
+          "n5",
+          "i0",
+          "i1",
+          "i2",
+          "i3",
+          "i4",
+          "i5",
+          "m0",
+          "m1",
+          "m2",
+          "m3",
+          "m4",
+          "m5",
+          "h0",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "d0",
+          "d1",
+          "d2",
+          "d3",
+          "d4",
+          "d5",
+          "v0",
+          "v1",
+          "v2",
+          "v3",
+          "v4",
+          "v5",
+          "g0",
+          "g1",
+          "g2",
+          "g3",
+          "g4",
+          "g5",
+          "t0",
+          "t1",
+          "t2",
+          "t3",
+          "t4",
+          "t5",
+          "p0",
+          "p1",
+          "p2",
+          "p3",
+          "p4",
+          "p5",
+          "doneCnt",
+          "allCnt",
+          "dateLbl",
+          "mask",
+          "ov",
+          "more"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,216 @@
+{
+  "rc": {
+    "_note": "⚠️ **表头圆点的 y 锚在标题实测框上,不许写常量**(2026-08-31 全仓收口,canonical=gen_asc.py):\n`y=\"{<标题id>.y}+({<标题id>.h}-<直径>pt)/2\"` —— 标题保持 `h:\"-1\"`,引擎按**真实字体度量**\n量出标题框高、再把圆点摆到正中,换字号/字体/端都自动跟上。\n原先是人肉试出来的常量 y(等于拿肉眼猜行高):2026-08-27 那轮「逐卡调 y 收敛到 <0.9pt」\n治的是症状,同一批卡 08-31 又被用户报出来。\n· 备选写法 `h:\"20pt\" + alignmentV:\"1\"`(定高带内居中)也有效,不用它是因为要凭空定一个带高。\n⚠️ 布局字段里的纯锚点算术是规范允许的(`+ - * / %` 与括号);那条「坐标不支持减法」\n说的是 `${数据变量}pt-24pt`,与纯锚点算术不是一回事。",
+    "i18n": {
+      "zh-CN": {
+        "title": "今日",
+        "sessions": "会话",
+        "out": "输出",
+        "empty": "等待首次同步",
+        "mulA": "已是日均的 ",
+        "mulB": " 倍",
+        "same": "和平常差不多",
+        "avgA": "日均 ",
+        "avgB": " 条",
+        "msgs": "条消息 · "
+      },
+      "en-US": {
+        "title": "Today",
+        "sessions": "sessions",
+        "out": "Output",
+        "empty": "Not synced yet",
+        "mulA": "Already ",
+        "mulB": "× the daily avg",
+        "same": "About the same as usual",
+        "avgA": "Daily average ",
+        "avgB": " msgs",
+        "msgs": "messages · "
+      }
+    },
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FDFBFA\\,#FBF3F1)@90|linear(#15171A\\,#1A1A1C\\,#221E1F)@90"
+      },
+      {
+        "_note": "源色身份点：本包统一用 Claude 暖橙两档，与仪表盘上其它信息源区分开。",
+        "id": "dot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#C15F3C|#E8916B"
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-92pt",
+        "h": "-1",
+        "text": "${@i18n.title}",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${todayMsgs}),k),0,1)]"
+        },
+        "react": [
+          {
+            "_note": "大数 28pt、y = 0.26h,与本包其它 22 档组件同一条线(原 30pt / 0.34h,并排放时比邻居低 13pt)",
+            "id": "big",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${todayMsgs}",
+            "fontSize": "28pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(connect::(k,${todayMsgs}),k),1,0)]"
+        },
+        "react": [
+          {
+            "_note": "大数 28pt、y = 0.26h,与本包其它 22 档组件同一条线(原 30pt / 0.34h,并排放时比邻居低 13pt)",
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+8.4pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "28pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "id": "sub",
+        "type": "txt",
+        "x": "12pt",
+        "y": "{parent.h}*0.26+32pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "${@i18n.msgs}$[findNotEmpty::(${todaySess},--)] ${@i18n.sessions}",
+        "fontSize": "10pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1",
+        "_note": "大数是今天的消息条数:单位写在第二行行首(「条消息 · 18 会话」),不另起一格贴在大数后面 —— 自适应宽数字后接单位要锚 {big.r},空态两支各要一份。"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${dayOk},1),if::(eq::(${cmpLvl},2),1,0),0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+49pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.mulA}${ratio}${@i18n.mulB}",
+            "fontSize": "10pt",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ],
+        "_note": "「跟平常比」这一行(2026-09-09)。一张只写「今天 138 条」的卡,读者还得自己回忆「我平常写多少」才知道这个数是多是少。这一行把那句话说出来,**零新增请求**(日均由 summary.df 已有的 totals 现算,见那边 msgsAvg 的注)。\n三档 + 一档不说话:\n  · cmpLvl=2(≥1.5 倍)→ 「已是日均的 2.1 倍」(源色);\n  · cmpLvl=1(0.7~1.5 倍)→ 「和平常差不多」(灰);\n  · cmpLvl=0(<0.7 倍)→ **不下判断**,只把基线摆出来:「日均 138 条」(灰);\n  · dayOk=0(没数据 / 活跃天不足 3 天)→ 一句都不说。\n⚠️ 第三档为什么不写「今天比平常少」:今天是**还没过完的一天**,上午看必然低于日均 ——那是钟在走,不是人在偷懒,写成判断就是在冤枉用户。反过来「已经到了/超过了日均」只会随时间更成立,半天的数据得出的结论不会被下半天推翻,所以敢说。\n⚠️ 落位 y=106:sub(会话数)在 87.7..100,out(输出)在 128,这一行 106..119 卡在中间的空档。"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${dayOk},1),if::(eq::(${cmpLvl},1),1,0),0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+49pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.same}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${dayOk},1),if::(eq::(${cmpLvl},0),1,0),0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "12pt",
+            "y": "{parent.h}*0.26+49pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "${@i18n.avgA}${msgsAvg}${@i18n.avgB}",
+            "fontSize": "10pt",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "id": "out",
+        "type": "txt",
+        "x": "12pt",
+        "y": "{parent.h}-30pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "${@i18n.out} $[findNotEmpty::(${todayOutNum},--)]${todayOutUnit}",
+        "fontSize": "10pt",
+        "textColor": "#C15F3C|#E8916B",
+        "maxLines": "1"
+      },
+      {
+        "_note": "时效锚 y = 卡名 y + 3:txt 盒顶 = 墨迹顶,同盒顶时 9pt 锚的基线比 13pt 卡名高 4.5pt(cell_align 实测),+3 后差 ≤ 1pt(卡片设计系统 §3「与组件名同基线」)",
+        "id": "at",
+        "type": "txt",
+        "x": "12pt",
+        "y": "14pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "alignmentH": "2",
+        "text": "$[findNotEmpty::(${at},${@i18n.empty})]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      }
+    ]
+  }
+}

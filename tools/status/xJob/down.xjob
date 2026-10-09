@@ -1,0 +1,164 @@
+{
+  "_note_gen": "tools/infosource/gen_status.py",
+  "_note": "**动态提醒(边沿 + 按事故 id 去重)**。参数 svc = 内置目录里的一个服务:在「单个服务」组件上长按添加会自动填好,从看板添加时在面板里选。\n取数段复用组件的 follow.df(传 ids = svc,只看这一个服务);判定段 xJob/flow/down.df。\n为什么不用 cooldown:同一起事故可能持续几个小时,冷却一过会拿同一起事故再报一次;按事故 id 去重才是「同一起只报一次」。\n取不到状态 = 不知道 = 不响、不动基线(follow.df 在拿不到任何状态时抛错,平台据此判未知)。\nmessage 的结构为同意面板的预览而设(v3):面板只拿 params 做 ${} 代入(不跑流、不求 $[] 方法),预览渲成「github 服务状态」;送达时 then 把 svc 顶成显示名、补上分隔符与状态 →「GitHub 服务状态：轻微异常」。点通知打开详情页用 then 输出的 sid(svc 已被顶成显示名)。",
+  "version": 1,
+  "id": "down",
+  "title": "服务故障提醒",
+  "sub": "这个服务出现故障时提醒一次，恢复后再提醒",
+  "i18n": {
+    "en-US": {
+      "title": "Outage alert",
+      "sub": "Alerts you once when this service has an incident, and again when it recovers",
+      "message": {
+        "title": "${svc} status${sep} ${state}",
+        "body": "${detail}"
+      },
+      "form": {
+        "svc": {
+          "title": "Service"
+        }
+      }
+    }
+  },
+  "params": {
+    "svc": ""
+  },
+  "form": {
+    "svc": {
+      "title": "服务",
+      "required": true,
+      "component": {
+        "type": "select",
+        "props": {
+          "items": [
+            {
+              "label": "GitHub",
+              "value": "github"
+            },
+            {
+              "label": "Claude",
+              "value": "claude"
+            },
+            {
+              "label": "OpenAI",
+              "value": "openai"
+            },
+            {
+              "label": "Vercel",
+              "value": "vercel"
+            },
+            {
+              "label": "Cursor",
+              "value": "cursor"
+            },
+            {
+              "label": "npm",
+              "value": "npm"
+            },
+            {
+              "label": "Docker",
+              "value": "docker"
+            },
+            {
+              "label": "Bitbucket",
+              "value": "bitbucket"
+            },
+            {
+              "label": "CircleCI",
+              "value": "circleci"
+            },
+            {
+              "label": "Netlify",
+              "value": "netlify"
+            },
+            {
+              "label": "Supabase",
+              "value": "supabase"
+            },
+            {
+              "label": "Render",
+              "value": "render"
+            },
+            {
+              "label": "DigitalOcean",
+              "value": "digitalocean"
+            },
+            {
+              "label": "MongoDB Cloud",
+              "value": "mongodb"
+            },
+            {
+              "label": "Sentry",
+              "value": "sentry"
+            },
+            {
+              "label": "Datadog",
+              "value": "datadog"
+            },
+            {
+              "label": "Linear",
+              "value": "linear"
+            },
+            {
+              "label": "Notion",
+              "value": "notion"
+            },
+            {
+              "label": "Figma",
+              "value": "figma"
+            },
+            {
+              "label": "Postman",
+              "value": "postman"
+            },
+            {
+              "label": "Discord",
+              "value": "discord"
+            },
+            {
+              "label": "Reddit",
+              "value": "reddit"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "events": {
+    "onClick": "/svc?id=${sid}"
+  },
+  "task": {
+    "depends": [
+      {
+        "flow": "@[file://xWidget/flow/follow.df]",
+        "params": {
+          "ids": "${svc}"
+        }
+      }
+    ],
+    "then": {
+      "flow": "@[file://xJob/flow/down.df]",
+      "params": {
+        "svc": "${svc}",
+        "lv": "${k0l}",
+        "o": "${k0o}",
+        "iid": "${k0iid}",
+        "nm": "${k0n}",
+        "t": "${k0t}"
+      }
+    },
+    "refresh": {
+      "_note": "状态页每 5 分钟检查一次(免费档由平台钳到 30 分钟;只在打开应用或桌面放着小组件时才有检查机会)。",
+      "interval": [
+        "300"
+      ]
+    }
+  },
+  "alert": {
+    "level": "normal",
+    "message": {
+      "title": "${svc} 服务状态${sep}${state}",
+      "body": "${detail}"
+    }
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "_note": "首屏三态的中间那一行:进页时若有哪一块渲的是旧货,删掉那些键、后台校新一次。生成器 gen_cloudflare.py。\n**挂在 `root.events.onLoad`** —— gate 全生命周期恰好一次,软重载不重置(xpage-design.md §10.1),所以「删键 → reloadPage」不会自激。⚠️ **绝不能改挂 onVisible**(每次可见都触发 = 死循环)。\nhome.df 的新旧由它自己透出的 `_stale`/`ckey` 给;两块 Canvas 的流是组件流、透不出页面级入参,新旧在这里读盘上 ts 按各自 ttl 判(与组件刷新间隔同值)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "st",
+        "value": "${stale}"
+      },
+      "_note": "入参先落地(§9.5 #3)。拿不到就当 0(不校新)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isStale",
+        "value": "$[parseNumber::(${st},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "${ckey}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "now",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st_home",
+        "value": "$[if::(eq::(${isStale},1),if::(gt::(length::(${k}),0),1,0),0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${st_home},1),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "${k}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h_rg",
+      "action": "data.get",
+      "params": {
+        "key": "c.cf.rg",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ts_rg",
+        "value": "$[parseNumber::(${h_rg.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st_rg",
+        "value": "$[if::(gt::(${ts_rg},0),if::(ge::(calc::(${now}-${ts_rg}),300000),1,0),0)]"
+      },
+      "_note": "没有缓存不算旧 —— 那一趟本来就是前台真取数,再校新一次 = 白打一轮网络。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${st_rg},1),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "c.cf.rg"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h_ic",
+      "action": "data.get",
+      "params": {
+        "key": "c.cf.ic",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ts_ic",
+        "value": "$[parseNumber::(${h_ic.ts},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "st_ic",
+        "value": "$[if::(gt::(${ts_ic},0),if::(ge::(calc::(${now}-${ts_ic}),600000),1,0),0)]"
+      },
+      "_note": "没有缓存不算旧 —— 那一趟本来就是前台真取数,再校新一次 = 白打一轮网络。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${st_ic},1),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "c.cf.ic"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "有任何一块旧了才重载,且只重载一次 —— 每块各挂 onLoad 会连环重载。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(calc::(${st_home}+${st_rg}+${st_ic}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "xpage.reloadPage"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "_note": "H5 页改完整份列表后原样落盘(AF 没有数组增删原语,增删在页面 JS 里做)。\n`drop` 非空时顺手删掉被移除城市的缓存键(两套标准各一个,键拼法与 aq.df 一致)。\n最后刷新「我的城市」两个组件 —— 它们跟随这份列表,不刷就要等半小时。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "data.set",
+      "params": {
+        "key": "cities",
+        "value": "${list}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dLat",
+        "value": "${dropLat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dLon",
+        "value": "${dropLon}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${dLat}),0),1,0)]"
+      },
+      "items": [
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "$[connect::(c.aq.,cn,.,${dLat},_,${dLon})]"
+          }
+        },
+        {
+          "action": "data.remove",
+          "params": {
+            "key": "$[connect::(c.aq.,us,.,${dLat},_,${dLon})]"
+          }
+        },
+        {
+          "_note": "v2 的旧键(不含标准)顺手清掉。",
+          "action": "data.remove",
+          "params": {
+            "key": "$[connect::(c.aq.,${dLat},_,${dLon})]"
+          }
+        }
+      ]
+    },
+    {
+      "action": "widget.refresh",
+      "params": {
+        "scope": "widget",
+        "widgetId": "cities"
+      }
+    },
+    {
+      "action": "widget.refresh",
+      "params": {
+        "scope": "widget",
+        "widgetId": "cities6"
+      }
+    }
+  ]
+}

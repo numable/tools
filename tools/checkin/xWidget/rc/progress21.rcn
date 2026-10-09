@@ -1,0 +1,209 @@
+{
+  "_note": "今日进度(21,158×60,card-design-system §8.1):今天达标几件 / 共几件 + 右侧进度条;右上 = 日期锚(同 22 档 progress)。\n手写产物;取数复用 flow/progress.df,零新增键(填充终点在 RCN 里 op:set 算)。",
+  "rc": {
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#F9FCFB\\,#EEF7F3)@90|linear(#15171A\\,#161B1D\\,#182221)@90"
+      },
+      {
+        "id": "dot",
+        "type": "layer",
+        "x": "10pt",
+        "y": "{ttl.y}+({ttl.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "bgColor": "#2E9E6B|#45C793",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        }
+      },
+      {
+        "id": "ttl",
+        "type": "txt",
+        "x": "19pt",
+        "y": "9pt",
+        "w": "92pt",
+        "h": "-1",
+        "maxLines": "1",
+        "lineBreak": "0",
+        "text": "${@i18n.title}",
+        "fontSize": "11pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6"
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "113pt",
+        "y": "10.5pt",
+        "w": "35pt",
+        "h": "-1",
+        "maxLines": "1",
+        "text": "$[if::(eq::(${mask},1),${@i18n.masked},findNotEmpty::(${dateLbl},--))]",
+        "fontSize": "9pt",
+        "textColor": "#6B7280|#8E939B",
+        "alignmentH": "2"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),0,if::(eq::(${hasAny},1),1,0))]"
+        },
+        "react": [
+          {
+            "id": "num",
+            "type": "richText",
+            "x": "10pt",
+            "y": "27pt",
+            "w": "78pt",
+            "h": "-1",
+            "maxLines": "1",
+            "spans": [
+              {
+                "text": "$[findNotEmpty::(${done},0)]",
+                "fontSize": "16.5pt",
+                "typeface": "System-Bold",
+                "textColor": "#0E1116|#F3F4F6"
+              },
+              {
+                "text": "/$[findNotEmpty::(${total},--)]",
+                "fontSize": "10pt",
+                "typeface": "System-Bold",
+                "textColor": "#6B7280|#8E939B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),1,0)]"
+        },
+        "react": [
+          {
+            "id": "numM",
+            "type": "richText",
+            "x": "10pt",
+            "y": "30pt",
+            "w": "78pt",
+            "h": "-1",
+            "maxLines": "1",
+            "spans": [
+              {
+                "text": "••",
+                "fontSize": "16.5pt",
+                "typeface": "System-Bold",
+                "textColor": "#0E1116|#F3F4F6"
+              },
+              {
+                "text": "/••",
+                "fontSize": "10pt",
+                "typeface": "System-Bold",
+                "textColor": "#6B7280|#8E939B"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "_note": "还没有事项:值位「--」,进度条只画空轨(§5 结构先行)。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),0,if::(eq::(${hasAny},1),0,1))]"
+        },
+        "react": [
+          {
+            "id": "numE",
+            "type": "txt",
+            "x": "10pt",
+            "y": "31.95pt",
+            "w": "78pt",
+            "h": "-1",
+            "maxLines": "1",
+            "lineBreak": "0",
+            "text": "--",
+            "fontSize": "16.5pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6"
+          }
+        ]
+      },
+      {
+        "_note": "除数兜底:if:: 两支都会求值,total=0 直接进分母结果不可预期。",
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_den",
+          "value": "$[if::(ge::(${total},1),${total},1)]"
+        }
+      },
+      {
+        "_note": "填充终点(轨内 pt):轨盒 58×6、线宽 6、圆头 → 可用 [3,55]。外层 round 是为 Android calc 恒返 double。",
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_px",
+          "value": "$[round::(calc::(3+52*${done}/${_den}),1)]"
+        }
+      },
+      {
+        "id": "trk",
+        "type": "line",
+        "points": "[3,3,55,3]",
+        "x": "90pt",
+        "y": "30pt",
+        "w": "58pt",
+        "h": "6pt",
+        "lineWidth": "6pt",
+        "lineCap": "round",
+        "strokeColor": "$[if::(eq::(${mask},1),#DCDDE0|#33353B,#EDEEF0|#20232A)]",
+        "_note": "进度轨。打码时整条换成打码灰且不画填充 —— 比例本身就是那两个数。"
+      },
+      {
+        "_note": "0 件达标时不画填充:零长的圆头线会画成一颗点,读起来像「做了一点」。",
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${mask},1),0,if::(eq::(${hasAny},1),if::(ge::(${done},1),1,0),0))]"
+        },
+        "react": [
+          {
+            "id": "fil",
+            "type": "line",
+            "points": "[3,3,$[findNotEmpty::(${_px},3)],3]",
+            "x": "90pt",
+            "y": "30pt",
+            "w": "58pt",
+            "h": "6pt",
+            "lineWidth": "6pt",
+            "lineCap": "round",
+            "strokeColor": "#2E9E6B|#45C793"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "title": "今日进度",
+        "masked": "已隐藏"
+      },
+      "en-US": {
+        "title": "Today",
+        "masked": "Hidden"
+      }
+    }
+  }
+}

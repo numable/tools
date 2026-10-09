@@ -1,0 +1,245 @@
+{
+  "_note": "卡片点击的唯一入口 —— **一次点击,按今天的状态给出唯一正确的那个动作**。\n\n【为什么卡片从「只读」改成「可写」(2026-08-21,方案 C)】\n原设计把桌面卡做成只读,理由写在 today.rcn 里:「口袋里误触写下的假记录,后果是让人\n以为自己吃过了」。这个顾虑没有变,但代价被低估了 —— 只读意味着这个包最高频的动作\n(每天记一笔)恒定要走「解锁 → 开 App → 进包 → 点圆」三跳,而卡片那句「今天还没记」\n每天都在提醒你去走这三跳。**提醒的成本和执行的成本差了一个数量级,这是不对的。**\n\n改成可写,但用四道闸把「误触写下假记录」压到可接受:\n  ① **只写「已服用」这一态**,永远不写「未服用」——后者是需要判断的,必须在 App 里显式选。\n  ② **幂等**:今天已经标过(不论哪一态)就一个字节都不写,改为打开 App。\n     所以连点两下不会写出两条,也不会把「未服用」翻掉。\n  ③ **停药期不写**,只回一句「今天休息」——那几天本就不该有记录。\n  ④ **写完必留撤销**:`autoMark` 记下「这一笔是从卡片记的」,首页据此常驻一个撤销入口\n     (见 page/rc/p-dose.rcn 与 page/flow/undo-mark.af),不是 toast 那种一闪而过的。\n\n⚠️ 因此本文件**没有 else 分支**的概念:三个 op:if 的条件由同一个 `mode` 值切分,互斥且穷尽。\n   mode 恒有值(纯表达式算出),不存在三支都不命中的情况。\n\n⚠️⚠️ **`op:if` 的条件键是 `props.val`,不是 `cond`** —— 四端一律(iOS `runIf` 读 `props[\"val\"]` /\n   Android `ParamsUtil.isTrue(props, data, \"val\")` / web `this.props.val` / 鸿蒙 `this.props.val`)。\n   写成 `cond` 的后果是**条件恒假、整个分支体静默不执行**:流照样报 success、日志干净、\n   分支外的动作全部正常,只有分支里的写盘什么都没发生。\n   2026-08-21 iPhone 13 Pro 模拟器实测踩到:判据 `mode=1` 算得完全正确(用 data.set 探针读出来的),\n   而 `taken` 一个字节都没写。⚠️ `testkit/page/flow/x-boundary-random.af` 与\n   `testkit/xWidget/flow/wform-input.af` 至今仍写着 `cond` —— 抄它们会连坐,别抄。\n\n⚠️ 三个入口共用这一份(spec §0.5#6 / TODO P3 收口):桌面小组件点击 replay · 仪表盘整卡点击 ·\n   信息源页卡片点击。三处语义相同 —— 没记就记下,记过了就进包看。\n\n⚠️ 路径基准是 `xWidget/` 不是包根(memory [[cell-flow-xwidget-base-dir]]),故 .xwidget 里写\n   `@[file://flow/mark-today.af]`。**本文件不 include 任何 page/ 下的东西**。",
+  "version": 1,
+  "actions": [
+    {
+      "_note": "⚠️ **写盘流的第一步恒是触觉反馈**(infosource-standard G22):RCN 没有动画能力,\n从点下去到画面变化之间 ~250ms 全无反馈,用户会以为没点上、再点一次 ——\n这条流虽然幂等(点两下不会写两条),但「点了没动静」本身就会让人再点 ——\n而第二下会走幂等分支把包打开,用户莫名其妙进了一个页面。\n放在 actions[0] 而不是写盘之后:反馈要在动作**开始**时给,不是结束时。",
+      "action": "ui.haptic"
+    },
+    {
+      "id": "start",
+      "action": "data.get",
+      "params": {
+        "key": "start",
+        "default": ""
+      }
+    },
+    {
+      "id": "active",
+      "action": "data.get",
+      "params": {
+        "key": "active",
+        "default": 21
+      }
+    },
+    {
+      "id": "rest",
+      "action": "data.get",
+      "params": {
+        "key": "rest",
+        "default": 7
+      }
+    },
+    {
+      "id": "taken",
+      "action": "data.get",
+      "params": {
+        "key": "taken",
+        "default": "_"
+      }
+    },
+    {
+      "id": "skipped",
+      "action": "data.get",
+      "params": {
+        "key": "skipped",
+        "default": "_"
+      }
+    },
+    {
+      "_note": "入参/上游结果必须先落成 data 域的键,方法参数里才引用得到(同 home.df)。",
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "${start}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasPlan",
+        "value": "$[if::(gt::(length::(${s0}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd",
+        "value": "$[findNotEmpty::(${s0},2026-01-01)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cycle",
+        "value": "$[calc::(${active}+${rest})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startMs",
+        "value": "$[parseDate::(${sd},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "_note": "按自然日算差:先把今天归到当天 0 点,否则同一天的上午/下午会算出不同的偏移。",
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(${d},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offset",
+        "value": "$[round::(calc::((${todayMs}-${startMs})/86400000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curPack",
+        "value": "$[if::(lt::(${offset},0),0,floor::(calc::(${offset}/${cycle})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "idx",
+        "value": "$[calc::(${offset}-${curPack}*${cycle})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tag",
+        "value": "$[connect::(_,${d},_)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isT",
+        "value": "$[if::(contains::(${taken},${tag}),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isS",
+        "value": "$[if::(contains::(${skipped},${tag}),1,0)]"
+      }
+    },
+    {
+      "_note": "⚠️ **合法性闸**(同 toggle.af):算不出日期就一个字节都不写。判据取 yyyy-MM-dd 的定长 10。\n本文件的日期来自 `@time.nowMs`、理论上恒合法,但写盘动作必须自己校验输入 ——\n这条纪律的成本是一行,不守的代价是往用户记录里塞脏数据且全程不报错。",
+      "op": "set",
+      "props": {
+        "key": "ok",
+        "value": "$[if::(eq::(length::(${d}),10),1,0)]"
+      }
+    },
+    {
+      "_note": "mode = 0 打开 App(没计划 / 起始日在未来 / 今天已标过 / 日期不合法)\n       1 记一笔(有计划 · 已开始 · 活性期 · 今天还没标)\n       2 今天休息(同上但落在停药期)\n⚠️ 纯表达式嵌套 `if::`,不用 op:if 算值 —— operation 的分支退出时会完整恢复外层绑定,\n   在分支里 op:set 出来的键拿不到外面(同 toggle.af)。op:if 在本文件只用来**分派动作**。",
+      "op": "set",
+      "props": {
+        "key": "mode",
+        "value": "$[if::(eq::(${ok},0),0,if::(eq::(${hasPlan},0),0,if::(lt::(${offset},0),0,if::(gt::(calc::(${isT}+${isS}),0),0,if::(lt::(${idx},${active}),1,2)))))]"
+      }
+    },
+    {
+      "_note": "① 记一笔。**只追加进 `taken`,绝不碰 `skipped`** —— 卡片这条路只表达「吃了」这一个意思。",
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${mode},1)]"
+      },
+      "items": [
+        {
+          "action": "data.set",
+          "params": {
+            "key": "taken",
+            "value": "$[connect::(${taken},${d},_)]"
+          }
+        },
+        {
+          "_note": "撤销锚点:记下「今天这一笔是从卡片记的」。首页只在 `autoMark == 今天` 时画撤销入口 ——\n跨天之后它自然失效,不需要谁去清它(清它反而要多一条跨天逻辑)。",
+          "action": "data.set",
+          "params": {
+            "key": "autoMark",
+            "value": "${d}"
+          }
+        },
+        {
+          "_note": "撤掉今天剩下的那几发服药提醒(doc/alert-design.md §4.4)。\n提醒是**静态**的(布防时就交给系统定时),它看不到「今天已经记过了」这件本地状态 ——\n所以由记录这个动作的流顺手把当天那一发销掉,而不是让提醒到点再回头评估一遍:\n后者在 iOS 上不可靠,而漏提醒正是这类场景最糟的失败方向。\n\n⚠️ 三条记录路各挂一次,漏一条 = 从那条路记的「已服」不销当天提醒(施工单 §4.7 #5):\n   本文件(整卡点击)· page/flow/toggle.af(页内三态转「已服」)· page/flow/log-save.af(补录今天)。\n⚠️ `params` 省略 = **本规则的全部实例**:这条流不知道用户把提醒设在几点、叫什么名字,\n   也不该知道(实例参数是用户在同意面板填的,§3)。\n⚠️ 幂等且只撤到今天零点(`until:\"today\"` 按该规则 refresh.tz,省略 = 设备本地),\n   明天照常响 —— 它不是关闭提醒。\n⚠️ 这是 **App 注入的 action**,只在新引擎轴的宿主上存在;老宿主当未知 action 会让整条流报错,\n   所以 manifest.minEngine 必须跟着抬(lint G45.min-engine 管这条)。",
+          "action": "alert.skip",
+          "params": {
+            "id": "dose",
+            "until": "today"
+          }
+        },
+        {
+          "action": "ui.toast",
+          "params": {
+            "message": "${@i18n.toastLogged}",
+            "type": "success",
+            "duration": 2500
+          }
+        },
+        {
+          "_note": "清取数计时 + 让本包三张卡真取数重渲(不是 reload —— 渲染图缓存 key 不含数据维度,\nreload 会命中旧图)。scope 缺省 = bundle,desktop 缺省 = true。",
+          "action": "widget.refresh"
+        }
+      ]
+    },
+    {
+      "_note": "② 停药期:不写任何记录,只回一句。这是四分之一的时间里唯一正确的答复 ——\n   既不是「还没记」也不是「记不了」。",
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${mode},2)]"
+      },
+      "items": [
+        {
+          "action": "ui.toast",
+          "params": {
+            "message": "${@i18n.toastRest}",
+            "type": "info",
+            "duration": 2000
+          }
+        }
+      ]
+    },
+    {
+      "_note": "③ 其余一律打开包首页 —— 今天已经标过(想改就得进去显式选)、还没设过计划、\n   或起始日填在未来。\n⚠️⚠️ **这里必须写包自己的 ULID,不能写 `numable://self`** —— 2026-08-21 iPhone 13 Pro 实测:\n   AF 的 `nav.open` 对 `numable://` 走的是**系统 URL scheme 回环**(`UIApplication.open` →\n   SceneDelegate 收端派发,`XHost.open` 的 `.internalRoute` 分支),而收端是**外部入口**、\n   压根没有「当前是哪个包」的上下文 → `self` 被当成 bundleId 去查包,弹「信息源『self』未安装」。\n   `self` 只在**页内路由**(`PageRouter.resolve(_:selfBundleId:)`)那条路上有效,\n   两条路读的东西不一样,别互相照抄(同 open-setup.af 里 params vs query 那条)。\n   ULID 是 opaque 且贯穿键(`[[bundle-id-opaque-ulid]]`),写死它是安全的;\n   `legacyId`(pill)是迁移期兼容字段,不拿它当长期标识。",
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${mode},0)]"
+      },
+      "items": [
+        {
+          "action": "nav.open",
+          "params": {
+            "url": "numable://01M050AARQ0R08T9EHGDSGZBHJ"
+          }
+        }
+      ]
+    }
+  ],
+  "i18n": {
+    "zh-CN": {
+      "toastLogged": "已记下今天 · 可在包内撤销",
+      "toastRest": "今天休息，不用服药"
+    },
+    "en-US": {
+      "toastLogged": "Logged today · undo inside the app",
+      "toastRest": "Break day — nothing to take"
+    }
+  }
+}

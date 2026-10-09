@@ -1,0 +1,517 @@
+{
+  "_note": "近 30 天请求趋势(trend 44)。生成器 gen_cloudflare.py。GraphQL 只查 date + requests,整份约 1.8KB,直接交给渲染层。⚠️ 缺桶不是零桶:零流量的日期 Cloudflare 不返回那一行,柱子按返回顺序排、只标首尾日期。聚合一律闸在 n≥1 之内(GraphQL 体内错误照样 200,sum([]) = 0 会编出假数)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "MONE",
+        "value": [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec"
+        ]
+      }
+    },
+    {
+      "id": "cred",
+      "action": "credential.state",
+      "params": {
+        "id": "cf"
+      },
+      "_note": "只回 bound / unbound / expired(不回本体)。用来分清「没连接」与「连着但这一轮取不到」:断网时两发请求都为空,光看响应分不出来。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zid",
+        "value": "${zoneId}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zname",
+        "value": "${zoneName}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${zid},),1,0)]"
+      },
+      "_note": "没指定域名 → 取账号里第一个兜底。未绑凭证时这一发根本不会发出(宿主抛 credential_required)。",
+      "items": [
+        {
+          "id": "zr",
+          "action": "request",
+          "params": {
+            "url": "https://api.cloudflare.com/client/v4/zones?per_page=1&status=active",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable",
+              "Accept": "application/json"
+            },
+            "credential": "cf"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zid",
+            "value": "${zr.result[0].id}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zname",
+            "value": "${zr.result[0].name}"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "have",
+        "value": "$[if::(eq::(${zid},),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dTo",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dFrom",
+        "value": "$[formatDate::(calc::(${@time.nowMs}-29*86400000),yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${have}"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "body",
+            "value": "{\"query\":\"{viewer{zones(filter:{zoneTag:\\\"${zid}\\\"}){httpRequests1dGroups(limit:31,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\"},orderBy:[date_ASC]){dimensions{date} sum{requests}}}}}\"}"
+          }
+        },
+        {
+          "id": "resp",
+          "action": "request",
+          "params": {
+            "url": "https://api.cloudflare.com/client/v4/graphql",
+            "method": "POST",
+            "formatType": "json",
+            "header": {
+              "Content-Type": "application/json",
+              "User-Agent": "Numable",
+              "Accept": "application/json"
+            },
+            "body": "${body}",
+            "credential": "cf"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "gerr",
+            "value": "$[if::(eq::(findNotEmpty::(${resp.errors[0].message},__none__),__none__),0,1)]"
+          },
+          "_note": "GraphQL 体内错误(查询超配额 / 字段不存在 / 无权限):照样 200,只能读 errors[]。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "got",
+            "value": "$[if::(eq::(${resp},),0,1)]"
+          },
+          "_note": "响应回来了吗。未绑/被拒时请求不发,resp 为空。⚠️ 紧跟 request 之后的第一个 set 读不到响应(晚一拍合并)—— 这一条本身就是屏障,下面的键才读得到。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g",
+            "value": "${resp.data.viewer.zones[0].httpRequests1dGroups}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n",
+            "value": "$[length::(${g})]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(ge::(findNotEmpty::(${n},0),1),1,0)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "mx",
+                "value": "$[max::(pluck::(${g},sum.requests),1)]"
+              },
+              "_note": "钳下限 1:柱高 = requests/mx,除零 = null = 整卡失败。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "total",
+                "value": "$[sum::(pluck::(${g},sum.requests))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "avg",
+                "value": "$[round::(calc::(${total}/max::(${n},1)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "totalS",
+                "value": "$[if::(ge::(${total},1000000),connect::(parseNumber::(calc::(${total}/1000000),0.0),M),if::(ge::(${total},10000),connect::(parseNumber::(calc::(${total}/1000),0.0),k),parseNumber::(${total},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "avgS",
+                "value": "$[if::(ge::(${avg},1000000),connect::(parseNumber::(calc::(${avg}/1000000),0.0),M),if::(ge::(${avg},10000),connect::(parseNumber::(calc::(${avg}/1000),0.0),k),parseNumber::(${avg},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "mxS",
+                "value": "$[if::(ge::(${mx},1000000),connect::(parseNumber::(calc::(${mx}/1000000),0.0),M),if::(ge::(${mx},10000),connect::(parseNumber::(calc::(${mx}/1000),0.0),k),parseNumber::(${mx},#\\,##0)))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "avgY",
+                "value": "$[findNotEmpty::(parseNumber::(calc::(310.0-${avg}*160.0/${mx}),0.0),310.0)]"
+              },
+              "_note": "日均线的 y(与柱同一比例尺)。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "avgLY",
+                "value": "$[findNotEmpty::(calc::(${avgY}-17),0)]"
+              },
+              "_note": "日均标签的 y。⚠️ 渲染层写不了「${avgY}pt-13pt」(内插后接减号不求值),在这里算好。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d0Iso",
+                "value": "$[subString::(${g[0].dimensions.date},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d0Mo",
+                "value": "$[parseNumber::(subString::(${_d0Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d0Dy",
+                "value": "$[parseNumber::(subString::(${_d0Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d0Me",
+                "value": "$[index::(${MONE},calc::(${_d0Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d0Z",
+                "value": "${_d0Mo}月${_d0Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d0E",
+                "value": "${_d0Me} ${_d0Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "d0",
+                "value": "$[if::(eq::(length::(${_d0Iso}),10),if::(startsWith::(${@app.language},zh),${_d0Z},${_d0E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d1Iso",
+                "value": "$[subString::(${g[@last].dimensions.date},0,10)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d1Mo",
+                "value": "$[parseNumber::(subString::(${_d1Iso},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d1Dy",
+                "value": "$[parseNumber::(subString::(${_d1Iso},8,10),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d1Me",
+                "value": "$[index::(${MONE},calc::(${_d1Mo}-1))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d1Z",
+                "value": "${_d1Mo}月${_d1Dy}日"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_d1E",
+                "value": "${_d1Me} ${_d1Dy}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "d1",
+                "value": "$[if::(eq::(length::(${_d1Iso}),10),if::(startsWith::(${@app.language},zh),${_d1Z},${_d1E}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "lastO",
+                "value": "$[index::(${g},calc::(${n}-1))]"
+              },
+              "_note": "结论行:「上一整天跟平常比」。参照日取**倒数第二个桶**(最后一个是今天跑了几小时的半天),基线把最后那个桶剔掉,且两个桶日期正好差一天才说(零流量的日子不返回那一行)。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "lastD",
+                "value": "$[get::(get::(${lastO},dimensions),date)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "lastV",
+                "value": "$[get::(get::(${lastO},sum),requests)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "prevO",
+                "value": "$[index::(${g},calc::(${n}-2))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "prevD",
+                "value": "$[get::(get::(${prevO},dimensions),date)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "prevV",
+                "value": "$[get::(get::(${prevO},sum),requests)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "lastMs",
+                "value": "$[parseDate::(${lastD},yyyy-MM-dd)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "prevMs",
+                "value": "$[parseDate::(${prevD},yyyy-MM-dd)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "adj",
+                "value": "$[if::(ge::(${prevMs},1),if::(eq::(calc::(${lastMs}-${prevMs}),86400000),1,0),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "hasY",
+                "value": "$[if::(eq::(findNotEmpty::(${prevV},__none__),__none__),0,1)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "baseTot",
+                "value": "$[calc::(${total}-${lastV})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "baseN",
+                "value": "$[calc::(${n}-1)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "baseAvg",
+                "value": "$[if::(ge::(${baseN},1),calc::(${baseTot}/${baseN}),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "cmpOk",
+                "value": "$[if::(eq::(${adj},1),if::(eq::(${hasY},1),if::(ge::(${baseN},8),if::(ge::(${baseAvg},1),1,0),0),0),0)]"
+              },
+              "_note": "至少 8 个完整天才算得出「平常是多少」。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "cmpPct",
+                "value": "$[if::(eq::(${cmpOk},1),round::(calc::((${prevV}-${baseAvg})/${baseAvg}*100)),)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "cmpAbs",
+                "value": "$[if::(ge::(${cmpPct},0),${cmpPct},calc::(0-${cmpPct}))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "cmpDir",
+                "value": "$[if::(eq::(${cmpOk},1),if::(lt::(${cmpAbs},20),2,if::(ge::(${cmpPct},0),1,0)),)]"
+              },
+              "_note": "三档,阈值 ±20%:工作日 / 周末的节律本身就有 10~20%,阈值再小这行字天天在喊。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bound",
+        "value": "$[if::(eq::(${cred.state},bound),1,0)]"
+      },
+      "_note": "令牌绑着没有。⚠️ 宿主在缺凭证时根本不跑这条流(组件画「需要凭证」胶囊 + 空数据模板),所以这里 0 主要出现在页面块与编辑器预览里。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ok",
+        "value": "$[if::(eq::(${have},0),0,if::(eq::(findNotEmpty::(${gerr},0),1),0,findNotEmpty::(${got},0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ready",
+        "value": "$[if::(eq::(${_bound},1),${_ok},)]"
+      },
+      "_note": "三态:1 = 有数;0 = 打到了但取不到(GraphQL errors / 被拒 / 账号里没有域名)→「暂时取不到数据」;空 = 令牌没绑 → 「还没连接 Cloudflare 账号」。绑着却取不到(含断网)一律是 0,绝不落到未连接文案。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ready",
+          "g",
+          "n",
+          "mx",
+          "mxS",
+          "total",
+          "totalS",
+          "avg",
+          "avgS",
+          "avgY",
+          "avgLY",
+          "d0",
+          "d1",
+          "at",
+          "zname",
+          "cmpOk",
+          "cmpDir",
+          "cmpAbs"
+        ]
+      }
+    }
+  ]
+}

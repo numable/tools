@@ -1,0 +1,198 @@
+{
+  "_note": "我的边缘节点卡(22 · 158×158)。主数值 = IATA 三字码,恒三字符 —— 这是本包唯一一张「一张卡只回答一个数」且那个数天生就是三个字宽的卡,44pt 占满视觉重心(标准 §4.3)。\n⚠️ 三字码用 textPrimary 而不是源色:源色在本包只作身份行与「跟你有关」的信号,主数值一律主文色 —— 四张卡同一条纪律,不各卡各写。\n⚠️ 卡上没有 IP:见 flow/edge.df 的说明(位图会进渲染图缓存与分享截图)。\n2026-10-08:底部芯片右侧恒显示 WARP 开 / 未开(此前只在开着时出现,未开时这一格空着、信息量偏低)。",
+  "rc": {
+    "cells": [
+      {
+        "id": "bg",
+        "type": "layer",
+        "x": "0pt",
+        "y": "0pt",
+        "w": "{parent.w}",
+        "h": "{parent.h}",
+        "bgColor": "linear(#FFFFFF\\,#FFFBF8\\,#FEF3EB)@90|linear(#15171A\\,#191A1B\\,#211F1C)@90"
+      },
+      {
+        "_note": "源色身份点(卡片设计系统 §2):Cloudflare 官方橙 #F38020|#FBAD41。卡名不再染源色 —— 身份由这颗点承担,卡名恒主文色(§1.2),这样 18 个包并排时「有的卡带身份点、有的不带」的分叉就没了。\n⚠️ y 锚在卡名的实测框上(`{brand.y}+({brand.h}-5pt)/2`),不写常量:换字号/字体/端都自动跟上。",
+        "id": "srcdot",
+        "type": "layer",
+        "x": "12pt",
+        "y": "{brand.y}+({brand.h}-5pt)/2",
+        "w": "5pt",
+        "h": "5pt",
+        "cornerRadius": {
+          "leftT": "2.5pt",
+          "leftB": "2.5pt",
+          "rightT": "2.5pt",
+          "rightB": "2.5pt"
+        },
+        "bgColor": "#F38020|#FBAD41"
+      },
+      {
+        "id": "brand",
+        "type": "txt",
+        "x": "21pt",
+        "y": "11pt",
+        "w": "{parent.w}-79pt",
+        "h": "-1",
+        "text": "${@i18n.brand}",
+        "fontSize": "13pt",
+        "typeface": "System-Bold",
+        "textColor": "#0E1116|#F3F4F6",
+        "maxLines": "1"
+      },
+      {
+        "id": "at",
+        "type": "txt",
+        "x": "{parent.w}-58pt",
+        "y": "14pt",
+        "w": "46pt",
+        "h": "-1",
+        "text": "${at}",
+        "fontSize": "9pt",
+        "alignmentH": "2",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${colo},--),--),0,1)]"
+        },
+        "react": [
+          {
+            "id": "colo",
+            "type": "txt",
+            "x": "12pt",
+            "y": "36pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "$[findNotEmpty::(${colo},--)]",
+            "fontSize": "44pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${colo},--),--),1,0)]"
+        },
+        "react": [
+          {
+            "id": "coloE",
+            "type": "txt",
+            "x": "12pt",
+            "y": "49.25pt",
+            "w": "{parent.w}-24pt",
+            "h": "-1",
+            "text": "--",
+            "fontSize": "44pt",
+            "typeface": "System-Bold",
+            "textColor": "#0E1116|#F3F4F6",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "_note": "国家码 · HTTP 协议。两段各自 findNotEmpty —— 只兜一段的话另一段空时会渲出一个孤零零的「· 」。",
+        "id": "sub",
+        "type": "txt",
+        "x": "12pt",
+        "y": "78pt",
+        "w": "{parent.w}-24pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${loc},--)] · $[findNotEmpty::(${proto},--)]",
+        "fontSize": "11pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "id": "chip",
+        "type": "layer",
+        "x": "12pt",
+        "y": "122pt",
+        "w": "{parent.w}-24pt",
+        "h": "24pt",
+        "cornerRadius": {
+          "leftT": "8pt",
+          "leftB": "8pt",
+          "rightT": "8pt",
+          "rightB": "8pt"
+        },
+        "bgColor": "#E7E9EE|#20232A"
+      },
+      {
+        "id": "tls",
+        "type": "txt",
+        "x": "22pt",
+        "y": "130pt",
+        "w": "{parent.w}-108pt",
+        "h": "-1",
+        "text": "$[findNotEmpty::(${tls},--)]",
+        "fontSize": "11pt",
+        "textColor": "#6B7280|#8E939B",
+        "maxLines": "1"
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(${warpOn},1),1,0)]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}-86pt",
+            "y": "130pt",
+            "w": "64pt",
+            "h": "-1",
+            "text": "${@i18n.warpOn}",
+            "fontSize": "10pt",
+            "typeface": "System-Bold",
+            "alignmentH": "2",
+            "textColor": "#F38020|#FBAD41",
+            "maxLines": "1"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[if::(eq::(findNotEmpty::(${warpOn},__none__),__none__),0,if::(eq::(${warpOn},1),0,1))]"
+        },
+        "react": [
+          {
+            "type": "txt",
+            "x": "{parent.w}-86pt",
+            "y": "130pt",
+            "w": "64pt",
+            "h": "-1",
+            "text": "${@i18n.warpOff}",
+            "fontSize": "10pt",
+            "typeface": "System-Bold",
+            "alignmentH": "2",
+            "textColor": "#6B7280|#8E939B",
+            "maxLines": "1"
+          }
+        ]
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "brand": "边缘节点",
+        "warpOn": "WARP 已开",
+        "warpOff": "WARP 未开"
+      },
+      "en-US": {
+        "brand": "Edge PoP",
+        "warpOn": "WARP on",
+        "warpOff": "WARP off"
+      }
+    }
+  }
+}

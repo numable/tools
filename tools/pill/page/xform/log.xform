@@ -1,0 +1,75 @@
+{
+  "_note": "补录 / 修改某一天。\n\n⚠️ 这一页存在的唯一理由是**平台缺口**:点阵格子的点击在 iOS 上没打通\n(RCN cell 的 events 拿不到本格身份,详见 p-cell.rcn 的长注释)。\n原设计是「点任意一格三态循环」—— 一个手势覆盖今天打卡/补三天前/改上个月。\n平台修好后这一页可以留着(选具体日期有时更直接),但格子点击才是主路。\n\n⚠️ 这里是**显式赋值**不是循环:用户直接说这天是什么状态,包括「清除标记」。\n与 hero 大圆的三态循环语义不同 —— 循环适合高频的今天,显式适合低频的补录。\n\n⚠️ `value` 走宿主侧 VParser,**求不出值的位会留空**,所以 open-log.af 必须恒把日期传进来。\n\n⚠️⚠️ **字段一律不预填(`value` 留空)** —— 2026-08-16 iOS 实测查实的平台缺口:\n`nav.openForResult` 的**嵌套 `params` 对象里的 `${}` 不做求值**(字面量能传、表达式原样透传;\n同一次对照实验里 `alias:\"LITERAL-OK\"` 正常显示,而 `${initStart}`/`${active}` 全空)。\n于是 `.xform` 的 `value: \"${start}\"` 会拿到字面串 `\"${start}\"` 去求值 ——\ndatePicker 认不出显示空、numberInput 认不出显示 0,而**「显示名称」会把 `${alias}` 这串\n原样摆进输入框,用户一保存就把别名设成了 `${alias}`**。这是会毁数据的那种。\n(URL query 那条路也不通:`presentForResult` 只拿入参 params 当 routeParams,不解析 query。)\n\n所以日期不预填,由用户自己选(补录本就是选别的日期;今天走 hero 大圆)。",
+  "type": "form",
+  "id": "pill-log",
+  "title": "${@i18n.title}",
+  "desc": "${@i18n.desc}",
+  "confirmTxt": "${@i18n.save}",
+  "themeColor": "#128F66|#6FE8BE",
+  "onSubmit": "@[file://page/flow/log-save.af]",
+  "i18n": {
+    "zh-CN": {
+      "title": "补录",
+      "desc": "选一天，记下那天的情况。记录只保存在这台设备上。",
+      "save": "保存",
+      "date_title": "日期",
+      "date_desc": "要补录或修改的那一天。",
+      "state_title": "那天的情况",
+      "state_desc": "「未标记」= 还没记，与「未服用」是两回事——回头查记录时，这两者的区别正是你想知道的。",
+      "taken": "已服用",
+      "skipped": "未服用",
+      "clear": "清除标记"
+    },
+    "en-US": {
+      "title": "Add Entry",
+      "desc": "Pick a day and record what happened. Entries stay on this device.",
+      "save": "Save",
+      "date_title": "Date",
+      "date_desc": "The day to add or change.",
+      "state_title": "What happened",
+      "state_desc": "\"Unmarked\" means nothing was logged; \"Skipped\" means you did not take it. Looking back, that difference is exactly what you want to know.",
+      "taken": "Taken",
+      "skipped": "Skipped",
+      "clear": "Clear mark"
+    }
+  },
+  "form": {
+    "date": {
+      "title": "${@i18n.date_title}",
+      "required": "true",
+      "component": {
+        "type": "datePicker",
+        "value": "",
+        "props": {
+          "format": "yyyy-MM-dd"
+        }
+      },
+      "desc": "${@i18n.date_desc}"
+    },
+    "state": {
+      "title": "${@i18n.state_title}",
+      "desc": "${@i18n.state_desc}",
+      "required": "true",
+      "component": {
+        "type": "radio",
+        "value": "taken",
+        "props": {
+          "items": [
+            {
+              "label": "${@i18n.taken}",
+              "value": "taken"
+            },
+            {
+              "label": "${@i18n.skipped}",
+              "value": "skipped"
+            },
+            {
+              "label": "${@i18n.clear}",
+              "value": "none"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

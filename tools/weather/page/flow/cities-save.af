@@ -1,0 +1,28 @@
+{
+  "_note": "城市管理页写回:整份列表落盘(顺序即首页顺序)。\n数组的增删、上移/下移在 H5 页的 JS 里做完再整份传进来 —— VParser 没有数组追加/删除原语,\n而桥的 runFlow 入参是**结构化**的(传数组进来就是数组),所以这里只需原样写盘。\n⚠️ `${list}` 必须整取,不要试图在 AF 里拼数组字面量:那样长度就被写死了。\n本流被两处调用:`/city` 管理页(增删排序)与 `/pick` 给卡选城市时的「顺手记进我的城市」。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "data.set",
+      "params": {
+        "key": "cities",
+        "value": "${list}"
+      }
+    },
+    {
+      "_note": "v66 起「当前城市」退役:清掉老用户盘上遗留的 `cityIdx`,免得它跟着备份 / 同步一直流转。",
+      "action": "data.remove",
+      "params": {
+        "key": "cityIdx"
+      }
+    },
+    {
+      "_note": "⚠️ 落盘之后必须踢一次卡 —— **多城市卡 `cities` 读的正是这份列表**。\n不踢的话:用户在管理页加完城市返回,仪表盘那张卡 reload 的第一步是 cacheGet,\n命中的是**旧数据渲的那张位图**,卡纹丝不动、要等下一个 interval(30 分钟)才自愈,\n而且整条链路不报错(memory「写用户录入的 .af 落盘后必须 widget.refresh」,\nappwatch/github 各撞过一次;lint 有闸)。\n⚠️ scope 取 **`widget`** 不取 `bundle`:另外四张卡烤着自己的城市、与这份列表无关,\n   踢它们只是白打四次网络。`widgetId` 是 .xwidget 的文件名(不含后缀)。",
+      "action": "widget.refresh",
+      "params": {
+        "scope": "widget",
+        "widgetId": "cities"
+      }
+    }
+  ]
+}

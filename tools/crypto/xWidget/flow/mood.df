@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "_note": "市场情绪:恐惧贪婪指数(alternative.me,日更)+ BTC 市值占比 + 总市值 24h 变化(CoinGecko)。",
+  "i18n": {
+    "zh-CN": {
+      "noData": "暂时取不到情绪指数"
+    },
+    "en-US": {
+      "noData": "Fear & Greed unavailable"
+    }
+  },
+  "actions": [
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "action": "request",
+          "id": "f",
+          "params": {
+            "url": "https://api.alternative.me/fng/?limit=2",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "g",
+          "params": {
+            "url": "https://api.coingecko.com/api/v3/global",
+            "method": "GET",
+            "formatType": "json"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fv",
+        "value": "$[get::(index::(${f.data},0),value)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${fv}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "${@i18n.noData}"
+          }
+        }
+      ],
+      "_note": "主干 = 恐惧贪婪读数;CoinGecko 那半边是增强,挂了只让两个小格显示 --。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "yv",
+        "value": "$[get::(index::(${f.data},1),value)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "band",
+        "value": "$[if::(lt::(${fv},25),0,if::(lt::(${fv},45),1,if::(le::(${fv},55),2,if::(lt::(${fv},75),3,4))))]"
+      },
+      "_note": "分档与 alternative.me 自己的五档一致(0–24 / 25–44 / 45–55 / 56–74 / 75–100)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gx",
+        "value": "$[parseNumber::(calc::(3+${fv}/100*128.0),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gxa",
+        "value": "$[calc::(${gx}-0.01)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "btcD",
+        "value": "$[parseNumber::(${g.data.market_cap_percentage.btc},0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mc",
+        "value": "$[parseNumber::(${g.data.market_cap_change_percentage_24h_usd},0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcUp",
+        "value": "$[if::(gt::(length::(${mc}),0),if::(ge::(${mc},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcFl",
+        "value": "$[if::(gt::(length::(${mc}),0),if::(lt::(calc::(${mc}*${mc}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcTA",
+        "value": "$[if::(gt::(${mc},0),${mc},calc::(0-${mc}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcTF",
+        "value": "$[if::(ne::(findNotEmpty::(${mc},__none__),__none__),parseNumber::(${mcTA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mcT",
+        "value": "$[if::(ne::(findNotEmpty::(${mc},__none__),__none__),if::(eq::(${mcTF},0),connect::(${mcTF},%),connect::(if::(gt::(${mc},0),+,−),${mcTF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "fv",
+          "yv",
+          "band",
+          "gx",
+          "gxa",
+          "btcD",
+          "mcT",
+          "mcUp",
+          "mcFl",
+          "at"
+        ]
+      }
+    }
+  ]
+}

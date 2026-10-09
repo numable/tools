@@ -1,0 +1,606 @@
+{
+  "_note": "近 7 天缓存(cache 卡 + 域名页块)。生成器 gen_cloudflare.py。聚合一律闸在 n≥1 之内:GraphQL 体内错误照样 200,sum([]) = 0 会编出「命中率 0%」。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "_cacheIn",
+        "value": "${cache}"
+      },
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cache",
+        "value": "$[parseNumber::(${_cacheIn},0)]"
+      },
+      "_note": "1 = 首页块(读缓存);组件不传 = 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_t0",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_zk",
+        "value": "${zoneId}"
+      },
+      "_note": "入参先落地,键表达式里才看得见(§9.5 #3)。无域名参数的流里恒空,不影响。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ck",
+        "value": "$[connect::(c.cf.zone.,${_zk},_c)]"
+      }
+    },
+    {
+      "id": "_hit",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hitTs",
+        "value": "$[parseNumber::(${_hit.ts},0)]"
+      }
+    },
+    {
+      "_note": "页面有缓存 → 整段跳过(连接都不建);组件 / 无缓存 → 真取数。取数体里的 fail_unless 失败即终止整条流,所以走到 data.set 的一定是取到了的。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${_cache},1),if::(gt::(${_hitTs},0),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "cred",
+          "action": "credential.state",
+          "params": {
+            "id": "cf"
+          },
+          "_note": "只回 bound / unbound / expired(不回本体)。用来分清「没连接」与「连着但这一轮取不到」:断网时两发请求都为空,光看响应分不出来。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zid",
+            "value": "${zoneId}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "zname",
+            "value": "${zoneName}"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(${zid},),1,0)]"
+          },
+          "_note": "没指定域名 → 取账号里第一个兜底。未绑凭证时这一发根本不会发出(宿主抛 credential_required)。",
+          "items": [
+            {
+              "id": "zr",
+              "action": "request",
+              "params": {
+                "url": "https://api.cloudflare.com/client/v4/zones?per_page=1&status=active",
+                "method": "GET",
+                "formatType": "json",
+                "header": {
+                  "User-Agent": "Numable",
+                  "Accept": "application/json"
+                },
+                "credential": "cf"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "zid",
+                "value": "${zr.result[0].id}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "zname",
+                "value": "${zr.result[0].name}"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "have",
+            "value": "$[if::(eq::(${zid},),0,1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dTo",
+            "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dFrom",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-6*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${have}"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "body",
+                "value": "{\"query\":\"{viewer{zones(filter:{zoneTag:\\\"${zid}\\\"}){httpRequests1dGroups(limit:8,filter:{date_geq:\\\"${dFrom}\\\",date_leq:\\\"${dTo}\\\"},orderBy:[date_ASC]){dimensions{date} sum{requests cachedRequests bytes cachedBytes}}}}}\"}"
+              }
+            },
+            {
+              "id": "resp",
+              "action": "request",
+              "params": {
+                "url": "https://api.cloudflare.com/client/v4/graphql",
+                "method": "POST",
+                "formatType": "json",
+                "header": {
+                  "Content-Type": "application/json",
+                  "User-Agent": "Numable",
+                  "Accept": "application/json"
+                },
+                "body": "${body}",
+                "credential": "cf"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_b",
+                "value": "1"
+              },
+              "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "gerr",
+                "value": "$[if::(eq::(findNotEmpty::(${resp.errors[0].message},__none__),__none__),0,1)]"
+              },
+              "_note": "GraphQL 体内错误(查询超配额 / 字段不存在 / 无权限):照样 200,只能读 errors[]。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "got",
+                "value": "$[if::(eq::(${resp},),0,1)]"
+              },
+              "_note": "响应回来了吗。未绑/被拒时请求不发,resp 为空。⚠️ 紧跟 request 之后的第一个 set 读不到响应(晚一拍合并)—— 这一条本身就是屏障,下面的键才读得到。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "g",
+                "value": "${resp.data.viewer.zones[0].httpRequests1dGroups}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n",
+                "value": "$[length::(${g})]"
+              }
+            },
+            {
+              "op": "if",
+              "props": {
+                "val": "$[if::(ge::(findNotEmpty::(${n},0),1),1,0)]"
+              },
+              "items": [
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "req",
+                    "value": "$[sum::(pluck::(${g},sum.requests))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "cac",
+                    "value": "$[sum::(pluck::(${g},sum.cachedRequests))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "byt",
+                    "value": "$[sum::(pluck::(${g},sum.bytes))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "cby",
+                    "value": "$[sum::(pluck::(${g},sum.cachedBytes))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "rate",
+                    "value": "$[round::(calc::(${cac}*100/max::(${req},1)))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "brate",
+                    "value": "$[round::(calc::(${cby}*100/max::(${byt},1)))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "sweep",
+                    "value": "$[parseNumber::(calc::(${cac}*360/max::(${req},1)),0.0)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "xr",
+                    "value": "$[parseNumber::(max::(calc::(4.0+(${cac}/max::(${req},1))*184.0),4.0),0.0)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "xb",
+                    "value": "$[parseNumber::(max::(calc::(4.0+(${cby}/max::(${byt},1))*184.0),4.0),0.0)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "reqS",
+                    "value": "$[if::(ge::(${req},1000000),connect::(parseNumber::(calc::(${req}/1000000),0.0),M),if::(ge::(${req},10000),connect::(parseNumber::(calc::(${req}/1000),0.0),k),parseNumber::(${req},#\\,##0)))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "cacS",
+                    "value": "$[if::(ge::(${cac},1000000),connect::(parseNumber::(calc::(${cac}/1000000),0.0),M),if::(ge::(${cac},10000),connect::(parseNumber::(calc::(${cac}/1000),0.0),k),parseNumber::(${cac},#\\,##0)))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "bytN",
+                    "value": "$[if::(ge::(${byt},1073741824),parseNumber::(calc::(${byt}/1073741824),0.0),if::(ge::(${byt},1048576),parseNumber::(calc::(${byt}/1048576),0.0),parseNumber::(calc::(${byt}/1024),0)))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "bytU",
+                    "value": "$[if::(ge::(${byt},1073741824),GB,if::(ge::(${byt},1048576),MB,KB))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "cbyN",
+                    "value": "$[if::(ge::(${cby},1073741824),parseNumber::(calc::(${cby}/1073741824),0.0),if::(ge::(${cby},1048576),parseNumber::(calc::(${cby}/1048576),0.0),parseNumber::(calc::(${cby}/1024),0)))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "cbyU",
+                    "value": "$[if::(ge::(${cby},1073741824),GB,if::(ge::(${cby},1048576),MB,KB))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "bytS",
+                    "value": "${bytN} ${bytU}"
+                  },
+                  "_note": "数字与单位之间留空格(612.5 MB);拼在普通值里,不进 connect(它会吃掉两端空格)。"
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "cbyS",
+                    "value": "${cbyN} ${cbyU}"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "xb22",
+                    "value": "$[parseNumber::(max::(calc::(4.0+(${cby}/max::(${byt},1))*126.0),4.0),0.0)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "brateS",
+                    "value": "$[if::(gt::(${cby},0),if::(lt::(${brate},1),<1,${brate}),0)]"
+                  },
+                  "_note": "已缓存流量占比的显示串:有缓存但不足 1% 写「<1」,不截成 0。"
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "rateS",
+                    "value": "$[if::(gt::(${cac},0),if::(lt::(${rate},1),<1,${rate}),0)]"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_bound",
+            "value": "$[if::(eq::(${cred.state},bound),1,0)]"
+          },
+          "_note": "令牌绑着没有。⚠️ 宿主在缺凭证时根本不跑这条流(组件画「需要凭证」胶囊 + 空数据模板),所以这里 0 主要出现在页面块与编辑器预览里。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_ok",
+            "value": "$[if::(eq::(${have},0),0,if::(eq::(findNotEmpty::(${gerr},0),1),0,findNotEmpty::(${got},0)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ready",
+            "value": "$[if::(eq::(${_bound},1),${_ok},)]"
+          },
+          "_note": "三态:1 = 有数;0 = 打到了但取不到(GraphQL errors / 被拒 / 账号里没有域名)→「暂时取不到数据」;空 = 令牌没绑 → 「还没连接 Cloudflare 账号」。绑着却取不到(含断网)一律是 0,绝不落到未连接文案。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "at",
+            "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_pack",
+            "value": {
+              "ts": "${@time.nowMs}",
+              "ready": "${ready}",
+              "zname": "${zname}",
+              "at": "${at}",
+              "n": "${n}",
+              "rate": "${rate}",
+              "brate": "${brate}",
+              "rateS": "${rateS}",
+              "brateS": "${brateS}",
+              "sweep": "${sweep}",
+              "xr": "${xr}",
+              "xb": "${xb}",
+              "xb22": "${xb22}",
+              "reqS": "${reqS}",
+              "cacS": "${cacS}",
+              "bytS": "${bytS}",
+              "cbyS": "${cbyS}",
+              "bytN": "${bytN}",
+              "bytU": "${bytU}"
+            }
+          }
+        },
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${_ck}",
+            "value": "${_pack}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入,两条路径只有一份字段映射。",
+      "id": "_box",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ready",
+        "value": "${_box.ready}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zname",
+        "value": "${_box.zname}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "${_box.at}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "${_box.n}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rate",
+        "value": "${_box.rate}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "brate",
+        "value": "${_box.brate}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rateS",
+        "value": "${_box.rateS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "brateS",
+        "value": "${_box.brateS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sweep",
+        "value": "${_box.sweep}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xr",
+        "value": "${_box.xr}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xb",
+        "value": "${_box.xb}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "xb22",
+        "value": "${_box.xb22}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reqS",
+        "value": "${_box.reqS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cacS",
+        "value": "${_box.cacS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bytS",
+        "value": "${_box.bytS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cbyS",
+        "value": "${_box.cbyS}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bytN",
+        "value": "${_box.bytN}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bytU",
+        "value": "${_box.bytU}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(if::(eq::(${_cache},1),1,if::(ge::(parseNumber::(${_box.ts},0),${_t0}),1,0)),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_zone_unreachable"
+          }
+        }
+      ],
+      "_note": "组件模式:回读到的不是这一轮写的 = 这轮没取到。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "ready",
+          "zname",
+          "at",
+          "n",
+          "rate",
+          "brate",
+          "rateS",
+          "brateS",
+          "sweep",
+          "xr",
+          "xb",
+          "xb22",
+          "reqS",
+          "cacS",
+          "bytS",
+          "cbyS",
+          "bytN",
+          "bytU"
+        ]
+      }
+    }
+  ]
+}

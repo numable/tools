@@ -1,0 +1,1531 @@
+{
+  "_note": "未来 24 小时 + 日照(hours / sun 卡与详情页块共用)。生成器 gen_weather_more.py。入参 lat/lon/city(显式携参槽;组件默认 `auto`,见 kit/wxenv.py)。",
+  "version": 1,
+  "i18n": {
+    "zh-CN": {
+      "autoCn": "上海",
+      "autoUs": "纽约"
+    },
+    "en-US": {
+      "autoCn": "Shanghai",
+      "autoUs": "New York"
+    }
+  },
+  "actions": [
+    {
+      "_note": "wxenv.auto_city:组件默认参数是哨兵 `auto`(doc/overseas-first.md §3)—— 城市不写进 .xwidget,在这里按 cnd 兜底:国内默认上海,海外默认纽约。用户选过城市就是真坐标,原样用。",
+      "op": "set",
+      "props": {
+        "key": "_latIn",
+        "value": "${lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lonIn",
+        "value": "${lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cityRaw",
+        "value": "${city}"
+      }
+    },
+    {
+      "_note": "国内默认判据(doc/overseas-first.md §1,逐字照抄):地区 cn,或地区未知且界面中文 → 1。",
+      "op": "set",
+      "props": {
+        "key": "cnd",
+        "value": "$[if::(eq::(${@app.region},cn),1,if::(eq::(${@app.region},overseas),0,if::(startsWith::(${@app.language},zh),1,0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_auto",
+        "value": "$[if::(eq::(${_latIn},auto),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lat",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),31.2222,40.7128),${_latIn})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lon",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),121.4581,-74.0060),${_lonIn})]"
+      }
+    },
+    {
+      "_note": "城市名走本文件 A 表(按 App 语言);宿主没注入 @i18n 时退回英文。",
+      "op": "set",
+      "props": {
+        "key": "city",
+        "value": "$[if::(eq::(${_auto},1),if::(eq::(${cnd},1),findNotEmpty::(${@i18n.autoCn},Shanghai),findNotEmpty::(${@i18n.autoUs},New York)),${_cityRaw})]"
+      }
+    },
+    {
+      "_note": "wxenv.unit_acts:温度单位设置 `data.wxUnit` = c / f(doc/overseas-first.md §7)。管理页「我的城市」里切换;没设过 → 按系统地区(@app.country)缺省。",
+      "id": "_wxu",
+      "action": "data.get",
+      "params": {
+        "key": "wxUnit",
+        "default": ""
+      }
+    },
+    {
+      "_note": "读取屏障(勿删):data.get 之后紧邻的节点读不到结果。",
+      "op": "set",
+      "props": {
+        "key": "_bu",
+        "value": "1"
+      }
+    },
+    {
+      "_note": "缺省按国家:US / LR / MM / BS / BZ / KY / PW / FM / MH → f(华氏),其余(含 country 为空 = 未知)→ c。",
+      "op": "set",
+      "props": {
+        "key": "unit",
+        "value": "$[if::(eq::(${_wxu},f),f,if::(eq::(${_wxu},c),c,if::(or::(eq::(${@app.country},US),or::(eq::(${@app.country},LR),or::(eq::(${@app.country},MM),or::(eq::(${@app.country},BS),or::(eq::(${@app.country},BZ),or::(eq::(${@app.country},KY),or::(eq::(${@app.country},PW),or::(eq::(${@app.country},FM),eq::(${@app.country},MH))))))))),f,c)))]"
+      }
+    },
+    {
+      "_note": "拼到 Open-Meteo URL 末尾;摄氏时为空,URL 与此前逐字相同。",
+      "op": "set",
+      "props": {
+        "key": "uq",
+        "value": "$[if::(eq::(${unit},f),&temperature_unit=fahrenheit&wind_speed_unit=mph,)]"
+      }
+    },
+    {
+      "_note": "风速单位文案(渲染层拼在「风速」后面)。",
+      "op": "set",
+      "props": {
+        "key": "wu",
+        "value": "$[if::(eq::(${unit},f),mph,km/h)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lat",
+        "value": "${lat}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_lon",
+        "value": "${lon}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cacheIn",
+        "value": "${cache}"
+      },
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cache",
+        "value": "$[parseNumber::(${_cacheIn},0)]"
+      },
+      "_note": "1 = 详情页(读缓存);组件不传 = 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ckey",
+        "value": "$[connect::(c.s24.,${_lat},_,${_lon})]"
+      }
+    },
+    {
+      "id": "hitc",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hitTs",
+        "value": "$[if::(eq::(findNotEmpty::(${hitc.u},c),${unit}),parseNumber::(${hitc.ts},0),0)]"
+      },
+      "_note": "缓存里记着取数时的温度单位;与现在的单位不同 = 当没缓存,重取(切了 °C / °F 不会贴出另一种单位的数)。"
+    },
+    {
+      "_note": "页面有缓存 → 整段跳过(连接都不建);组件 / 无缓存 → 真取数,取到了才写。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${_cache},1),if::(gt::(${hitTs},0),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "n_resp",
+          "action": "request",
+          "params": {
+            "url": "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day,uv_index&hourly=temperature_2m,precipitation_probability&daily=sunrise,sunset,daylight_duration,uv_index_max&timezone=auto&forecast_days=2&forecast_hours=24${uq}",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[gt::(length::(${n_resp.current.time}),0)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "pack",
+                "value": {
+                  "ts": "${@time.nowMs}",
+                  "u": "${unit}",
+                  "resp": "${n_resp}"
+                }
+              }
+            },
+            {
+              "action": "data.set",
+              "params": {
+                "key": "${ckey}",
+                "value": "${pack}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "box",
+      "action": "data.get",
+      "params": {
+        "key": "${ckey}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "resp",
+        "value": "${box.resp}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(if::(eq::(${_cache},1),1,if::(ge::(parseNumber::(${box.ts},0),${t0}),1,0)),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "weather_unreachable"
+          }
+        }
+      ],
+      "_note": "组件模式:回读到的不是这一轮写的 = 这轮没取到。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp.current.time}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "weather_unreachable"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "code",
+        "value": "${resp.current.weather_code}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "night",
+        "value": "$[if::(eq::(${resp.current.is_day},1),0,1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "group",
+        "value": "$[if::(le::(${code},0),clear,if::(le::(${code},2),partly,if::(le::(${code},3),cloudy,if::(le::(${code},48),fog,if::(le::(${code},57),drizzle,if::(le::(${code},67),rain,if::(le::(${code},77),snow,if::(le::(${code},82),rain,if::(le::(${code},86),snow,thunder)))))))))]"
+      },
+      "_note": "WMO 天气码归组,与 weather.df 同式。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sky",
+        "value": "$[if::(eq::(${night},1),night,if::(or::(eq::(${group},clear),eq::(${group},partly)),clear,if::(eq::(${group},snow),snow,if::(or::(eq::(${group},cloudy),eq::(${group},fog)),overcast,rain))))]"
+      },
+      "_note": "天空档:与 weather.df 同式(夜恒 night)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[index::(${resp.hourly.temperature_2m},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t1",
+        "value": "$[index::(${resp.hourly.temperature_2m},1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t2",
+        "value": "$[index::(${resp.hourly.temperature_2m},2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t3",
+        "value": "$[index::(${resp.hourly.temperature_2m},3)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t4",
+        "value": "$[index::(${resp.hourly.temperature_2m},4)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t5",
+        "value": "$[index::(${resp.hourly.temperature_2m},5)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t6",
+        "value": "$[index::(${resp.hourly.temperature_2m},6)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t7",
+        "value": "$[index::(${resp.hourly.temperature_2m},7)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t8",
+        "value": "$[index::(${resp.hourly.temperature_2m},8)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t9",
+        "value": "$[index::(${resp.hourly.temperature_2m},9)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t10",
+        "value": "$[index::(${resp.hourly.temperature_2m},10)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t11",
+        "value": "$[index::(${resp.hourly.temperature_2m},11)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t12",
+        "value": "$[index::(${resp.hourly.temperature_2m},12)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t13",
+        "value": "$[index::(${resp.hourly.temperature_2m},13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t14",
+        "value": "$[index::(${resp.hourly.temperature_2m},14)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t15",
+        "value": "$[index::(${resp.hourly.temperature_2m},15)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t16",
+        "value": "$[index::(${resp.hourly.temperature_2m},16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t17",
+        "value": "$[index::(${resp.hourly.temperature_2m},17)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t18",
+        "value": "$[index::(${resp.hourly.temperature_2m},18)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t19",
+        "value": "$[index::(${resp.hourly.temperature_2m},19)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t20",
+        "value": "$[index::(${resp.hourly.temperature_2m},20)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t21",
+        "value": "$[index::(${resp.hourly.temperature_2m},21)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t22",
+        "value": "$[index::(${resp.hourly.temperature_2m},22)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t23",
+        "value": "$[index::(${resp.hourly.temperature_2m},23)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tmax",
+        "value": "$[max::(${t0},${t1},${t2},${t3},${t4},${t5},${t6},${t7},${t8},${t9},${t10},${t11},${t12},${t13},${t14},${t15},${t16},${t17},${t18},${t19},${t20},${t21},${t22},${t23})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tmin",
+        "value": "$[min::(${t0},${t1},${t2},${t3},${t4},${t5},${t6},${t7},${t8},${t9},${t10},${t11},${t12},${t13},${t14},${t15},${t16},${t17},${t18},${t19},${t20},${t21},${t22},${t23})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lo",
+        "value": "$[calc::(${tmin}-0.5)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hi",
+        "value": "$[max::(calc::(${tmax}+0.5),calc::(${tmin}+2))]"
+      },
+      "_note": "上下各留半度;全天温差 <1.5° 时撑到 2°,免得一条几乎平的线被拉成锯齿。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tArr",
+        "value": [
+          "${t0}",
+          "${t1}",
+          "${t2}",
+          "${t3}",
+          "${t4}",
+          "${t5}",
+          "${t6}",
+          "${t7}",
+          "${t8}",
+          "${t9}",
+          "${t10}",
+          "${t11}",
+          "${t12}",
+          "${t13}",
+          "${t14}",
+          "${t15}",
+          "${t16}",
+          "${t17}",
+          "${t18}",
+          "${t19}",
+          "${t20}",
+          "${t21}",
+          "${t22}",
+          "${t23}"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pts_a",
+        "value": [
+          "0.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},0)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "13.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},1)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "26.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},2)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "39.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},3)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "52.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},4)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "66.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},5)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "79.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},6)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "92.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},7)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "105.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},8)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "119.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},9)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "132.2",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},10)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "145.4",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},11)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "158.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},12)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "171.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},13)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "185.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},14)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "198.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},15)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "211.5",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},16)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "224.7",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},17)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "237.9",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},18)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "251.1",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},19)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "264.3",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},20)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "277.6",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},21)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "290.8",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},22)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]",
+          "304.0",
+          "$[findNotEmpty::(parseNumber::(calc::((1-((index::(${tArr},23)-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pts",
+        "value": "$[join::(${pts_a},\\,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mxI",
+        "value": "$[if::(eq::(${t0},${tmax}),0,if::(eq::(${t1},${tmax}),1,if::(eq::(${t2},${tmax}),2,if::(eq::(${t3},${tmax}),3,if::(eq::(${t4},${tmax}),4,if::(eq::(${t5},${tmax}),5,if::(eq::(${t6},${tmax}),6,if::(eq::(${t7},${tmax}),7,if::(eq::(${t8},${tmax}),8,if::(eq::(${t9},${tmax}),9,if::(eq::(${t10},${tmax}),10,if::(eq::(${t11},${tmax}),11,if::(eq::(${t12},${tmax}),12,if::(eq::(${t13},${tmax}),13,if::(eq::(${t14},${tmax}),14,if::(eq::(${t15},${tmax}),15,if::(eq::(${t16},${tmax}),16,if::(eq::(${t17},${tmax}),17,if::(eq::(${t18},${tmax}),18,if::(eq::(${t19},${tmax}),19,if::(eq::(${t20},${tmax}),20,if::(eq::(${t21},${tmax}),21,if::(eq::(${t22},${tmax}),22,if::(eq::(${t23},${tmax}),23,0))))))))))))))))))))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mnI",
+        "value": "$[if::(eq::(${t0},${tmin}),0,if::(eq::(${t1},${tmin}),1,if::(eq::(${t2},${tmin}),2,if::(eq::(${t3},${tmin}),3,if::(eq::(${t4},${tmin}),4,if::(eq::(${t5},${tmin}),5,if::(eq::(${t6},${tmin}),6,if::(eq::(${t7},${tmin}),7,if::(eq::(${t8},${tmin}),8,if::(eq::(${t9},${tmin}),9,if::(eq::(${t10},${tmin}),10,if::(eq::(${t11},${tmin}),11,if::(eq::(${t12},${tmin}),12,if::(eq::(${t13},${tmin}),13,if::(eq::(${t14},${tmin}),14,if::(eq::(${t15},${tmin}),15,if::(eq::(${t16},${tmin}),16,if::(eq::(${t17},${tmin}),17,if::(eq::(${t18},${tmin}),18,if::(eq::(${t19},${tmin}),19,if::(eq::(${t20},${tmin}),20,if::(eq::(${t21},${tmin}),21,if::(eq::(${t22},${tmin}),22,if::(eq::(${t23},${tmin}),23,0))))))))))))))))))))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mxX",
+        "value": "$[parseNumber::(calc::(${mxI}*13.2174),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mnX",
+        "value": "$[parseNumber::(calc::(${mnI}*13.2174),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mxY",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((${tmax}-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mnY",
+        "value": "$[findNotEmpty::(parseNumber::(calc::((1-((${tmin}-${lo})/(${hi}-${lo})))*37.0+6.0),0.0),999)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mxLY",
+        "value": "$[findNotEmpty::(calc::(57.0+${mxY}-15),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mnLY",
+        "value": "$[findNotEmpty::(calc::(57.0+${mnY}+5),-99)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tmaxS",
+        "value": "$[parseNumber::(${tmax},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tminS",
+        "value": "$[parseNumber::(${tmin},0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mxLX",
+        "value": "$[parseNumber::(min::(max::(calc::(14.0+${mxX}-14),14.0),294.0),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mnLX",
+        "value": "$[parseNumber::(min::(max::(calc::(14.0+${mnX}-14),14.0),294.0),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p0",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph0",
+        "value": "$[if::(gt::(${p0},0),max::(round::(calc::(${p0}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py0",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph0}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p1",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},1),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph1",
+        "value": "$[if::(gt::(${p1},0),max::(round::(calc::(${p1}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py1",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph1}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p2",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph2",
+        "value": "$[if::(gt::(${p2},0),max::(round::(calc::(${p2}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py2",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph2}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p3",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},3),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph3",
+        "value": "$[if::(gt::(${p3},0),max::(round::(calc::(${p3}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py3",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph3}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p4",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},4),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph4",
+        "value": "$[if::(gt::(${p4},0),max::(round::(calc::(${p4}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py4",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph4}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p5",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},5),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph5",
+        "value": "$[if::(gt::(${p5},0),max::(round::(calc::(${p5}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py5",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph5}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p6",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},6),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph6",
+        "value": "$[if::(gt::(${p6},0),max::(round::(calc::(${p6}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py6",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph6}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p7",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},7),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph7",
+        "value": "$[if::(gt::(${p7},0),max::(round::(calc::(${p7}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py7",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph7}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p8",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},8),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph8",
+        "value": "$[if::(gt::(${p8},0),max::(round::(calc::(${p8}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py8",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph8}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p9",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},9),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph9",
+        "value": "$[if::(gt::(${p9},0),max::(round::(calc::(${p9}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py9",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph9}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p10",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},10),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph10",
+        "value": "$[if::(gt::(${p10},0),max::(round::(calc::(${p10}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py10",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph10}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p11",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},11),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph11",
+        "value": "$[if::(gt::(${p11},0),max::(round::(calc::(${p11}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py11",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph11}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p12",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},12),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph12",
+        "value": "$[if::(gt::(${p12},0),max::(round::(calc::(${p12}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py12",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph12}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p13",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},13),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph13",
+        "value": "$[if::(gt::(${p13},0),max::(round::(calc::(${p13}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py13",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph13}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p14",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},14),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph14",
+        "value": "$[if::(gt::(${p14},0),max::(round::(calc::(${p14}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py14",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph14}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p15",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},15),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph15",
+        "value": "$[if::(gt::(${p15},0),max::(round::(calc::(${p15}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py15",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph15}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p16",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},16),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph16",
+        "value": "$[if::(gt::(${p16},0),max::(round::(calc::(${p16}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py16",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph16}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p17",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},17),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph17",
+        "value": "$[if::(gt::(${p17},0),max::(round::(calc::(${p17}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py17",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph17}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p18",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},18),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph18",
+        "value": "$[if::(gt::(${p18},0),max::(round::(calc::(${p18}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py18",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph18}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p19",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},19),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph19",
+        "value": "$[if::(gt::(${p19},0),max::(round::(calc::(${p19}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py19",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph19}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p20",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},20),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph20",
+        "value": "$[if::(gt::(${p20},0),max::(round::(calc::(${p20}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py20",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph20}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p21",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},21),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph21",
+        "value": "$[if::(gt::(${p21},0),max::(round::(calc::(${p21}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py21",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph21}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p22",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},22),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph22",
+        "value": "$[if::(gt::(${p22},0),max::(round::(calc::(${p22}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py22",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph22}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "p23",
+        "value": "$[findNotEmpty::(index::(${resp.hourly.precipitation_probability},23),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ph23",
+        "value": "$[if::(gt::(${p23},0),max::(round::(calc::(${p23}*18.0/100)),2),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "py23",
+        "value": "$[findNotEmpty::(calc::(134.0-${ph23}),134.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rI",
+        "value": "$[if::(ge::(${p0},50),0,if::(ge::(${p1},50),1,if::(ge::(${p2},50),2,if::(ge::(${p3},50),3,if::(ge::(${p4},50),4,if::(ge::(${p5},50),5,if::(ge::(${p6},50),6,if::(ge::(${p7},50),7,if::(ge::(${p8},50),8,if::(ge::(${p9},50),9,if::(ge::(${p10},50),10,if::(ge::(${p11},50),11,if::(ge::(${p12},50),12,if::(ge::(${p13},50),13,if::(ge::(${p14},50),14,if::(ge::(${p15},50),15,if::(ge::(${p16},50),16,if::(ge::(${p17},50),17,if::(ge::(${p18},50),18,if::(ge::(${p19},50),19,if::(ge::(${p20},50),20,if::(ge::(${p21},50),21,if::(ge::(${p22},50),22,if::(ge::(${p23},50),23,-1))))))))))))))))))))))))]"
+      },
+      "_note": "第一个降水概率 ≥50% 的小时(-1 = 没有)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rP",
+        "value": "$[if::(ge::(${rI},0),index::(${resp.hourly.precipitation_probability},${rI}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rH",
+        "value": "$[if::(ge::(${rI},0),subString::(index::(${resp.hourly.time},${rI}),11,13),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rCase",
+        "value": "$[if::(lt::(${rI},0),0,if::(eq::(${rI},0),2,1))]"
+      },
+      "_note": "0 = 24 小时内都 <50%;1 = 某点起可能下雨;2 = 当前这一小时就 ≥50%。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pMax",
+        "value": "$[max::(${p0},${p1},${p2},${p3},${p4},${p5},${p6},${p7},${p8},${p9},${p10},${p11},${p12},${p13},${p14},${p15},${p16},${p17},${p18},${p19},${p20},${p21},${p22},${p23})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hh0",
+        "value": "$[subString::(index::(${resp.hourly.time},0),11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hh6",
+        "value": "$[subString::(index::(${resp.hourly.time},6),11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hh12",
+        "value": "$[subString::(index::(${resp.hourly.time},12),11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hh18",
+        "value": "$[subString::(index::(${resp.hourly.time},18),11,13)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nowM",
+        "value": "$[calc::(subString::(${resp.current.time},11,13)*60+subString::(${resp.current.time},14,16))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "srM",
+        "value": "$[calc::(subString::(${resp.daily.sunrise[0]},11,13)*60+subString::(${resp.daily.sunrise[0]},14,16))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ssM",
+        "value": "$[calc::(subString::(${resp.daily.sunset[0]},11,13)*60+subString::(${resp.daily.sunset[0]},14,16))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "srS",
+        "value": "$[subString::(${resp.daily.sunrise[0]},11,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ssS",
+        "value": "$[subString::(${resp.daily.sunset[0]},11,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sr2S",
+        "value": "$[subString::(${resp.daily.sunrise[1]},11,16)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sPh",
+        "value": "$[if::(lt::(${nowM},${srM}),0,if::(ge::(${nowM},${ssM}),2,1))]"
+      },
+      "_note": "0 = 日出前 / 1 = 白天 / 2 = 日落后。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "fr",
+        "value": "$[if::(eq::(${sPh},1),calc::((${nowM}-${srM})/max::(calc::(${ssM}-${srM}),1)),if::(eq::(${sPh},2),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dlM",
+        "value": "$[round::(calc::(findNotEmpty::(${resp.daily.daylight_duration[0]},0)/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dlH",
+        "value": "$[floor::(calc::(${dlM}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dlm",
+        "value": "$[calc::(${dlM}-${dlH}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "toM",
+        "value": "$[if::(eq::(${sPh},1),calc::(${ssM}-${nowM}),if::(eq::(${sPh},0),calc::(${srM}-${nowM}),calc::(1440-${nowM}+calc::(subString::(${resp.daily.sunrise[1]},11,13)*60+subString::(${resp.daily.sunrise[1]},14,16)))))]"
+      },
+      "_note": "日出前 / 日落后 → 距下一次日出;白天 → 距日落。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "toH",
+        "value": "$[floor::(calc::(${toM}/60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tom",
+        "value": "$[calc::(${toM}-${toH}*60)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uvNow",
+        "value": "$[parseNumber::(findNotEmpty::(${resp.current.uv_index},0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uvMax",
+        "value": "$[parseNumber::(findNotEmpty::(${resp.daily.uv_index_max[0]},0),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "uvLv",
+        "value": "$[if::(lt::(${uvMax},3),1,if::(lt::(${uvMax},6),2,if::(lt::(${uvMax},8),3,if::(lt::(${uvMax},11),4,5))))]"
+      },
+      "_note": "按今日最大 UV 分档(WHO 五档)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "spA",
+        "value": [
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*0/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*0/15)*(1-calc::(${fr}*0/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*1/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*1/15)*(1-calc::(${fr}*1/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*2/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*2/15)*(1-calc::(${fr}*2/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*3/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*3/15)*(1-calc::(${fr}*3/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*4/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*4/15)*(1-calc::(${fr}*4/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*5/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*5/15)*(1-calc::(${fr}*5/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*6/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*6/15)*(1-calc::(${fr}*6/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*7/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*7/15)*(1-calc::(${fr}*7/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*8/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*8/15)*(1-calc::(${fr}*8/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*9/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*9/15)*(1-calc::(${fr}*9/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*10/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*10/15)*(1-calc::(${fr}*10/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*11/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*11/15)*(1-calc::(${fr}*11/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*12/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*12/15)*(1-calc::(${fr}*12/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*13/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*13/15)*(1-calc::(${fr}*13/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*14/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*14/15)*(1-calc::(${fr}*14/15))),0.0)]",
+          "$[parseNumber::(calc::(134.0*calc::(${fr}*15/15)),0.0)]",
+          "$[parseNumber::(calc::(50.0-44.0*4*calc::(${fr}*15/15)*(1-calc::(${fr}*15/15))),0.0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sp",
+        "value": "$[join::(${spA},\\,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sunX",
+        "value": "$[parseNumber::(calc::(134.0*${fr}),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sunY",
+        "value": "$[parseNumber::(calc::(50.0-44.0*4*${fr}*(1-${fr})),0.0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "city",
+          "sky",
+          "night",
+          "pts",
+          "mxLY",
+          "mnLY",
+          "mxX",
+          "mxY",
+          "mnX",
+          "mnY",
+          "mxLX",
+          "mnLX",
+          "tmaxS",
+          "tminS",
+          "rCase",
+          "rP",
+          "rH",
+          "pMax",
+          "hh0",
+          "hh6",
+          "hh12",
+          "hh18",
+          "srS",
+          "ssS",
+          "sr2S",
+          "sPh",
+          "fr",
+          "dlH",
+          "dlm",
+          "toH",
+          "tom",
+          "uvNow",
+          "uvMax",
+          "uvLv",
+          "sp",
+          "sunX",
+          "sunY",
+          "at",
+          "ph0",
+          "py0",
+          "ph1",
+          "py1",
+          "ph2",
+          "py2",
+          "ph3",
+          "py3",
+          "ph4",
+          "py4",
+          "ph5",
+          "py5",
+          "ph6",
+          "py6",
+          "ph7",
+          "py7",
+          "ph8",
+          "py8",
+          "ph9",
+          "py9",
+          "ph10",
+          "py10",
+          "ph11",
+          "py11",
+          "ph12",
+          "py12",
+          "ph13",
+          "py13",
+          "ph14",
+          "py14",
+          "ph15",
+          "py15",
+          "ph16",
+          "py16",
+          "ph17",
+          "py17",
+          "ph18",
+          "py18",
+          "ph19",
+          "py19",
+          "ph20",
+          "py20",
+          "ph21",
+          "py21",
+          "ph22",
+          "py22",
+          "ph23",
+          "py23"
+        ]
+      }
+    }
+  ]
+}

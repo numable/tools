@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<!--
+  首页(路由 /)。这一页有两态,且**未接入那一态才是重点** ——
+  本包是面向 Claude Code 用户的获客钩子,没接上的人看到的这一屏正是转化发生的地方
+  (方案稿 §6.2)。故未接入时不是空页,是「两步接上」的引导。
+
+  ⚠️ 凭证录入不在本页做 —— 绑定 UI 恒为 native 面板(credential-vault §7,信任边界)。
+     本页只负责把人送到那里,并把配对码怎么来讲清楚。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Claude Code Usage</title>
+<style>
+/* 源色 = Claude 暖橙两档,与本包 RCN 卡片同源;其余一律取 design-tokens 的 token。 */
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --src:#C15F3C;--srcSoft:rgba(194,65,12,.10);--chip:#E7E9EE;
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px -14px rgba(15,20,30,.18)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--src:#E8916B;--srcSoft:rgba(251,146,60,.14);--chip:#20232A;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.55 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+.top{display:flex;align-items:center;gap:9px;margin-bottom:5px}
+.dot{width:8px;height:8px;border-radius:4px;background:var(--src);flex:0 0 auto}
+h1{font-size:24px;margin:0;font-weight:700;letter-spacing:-.6px}
+.top .grow{flex:1 1 auto;min-width:0}
+.lead{color:var(--sub);font-size:12.5px;margin:2px 0 18px 17px}
+/* ⚠️ 时效锚原来挂在「今天」那条段标题的右侧 —— 那个位置在 §2 里属于「这一段的答案」,
+   被时效锚占着,于是六个段落一个摘要都没有,而页头右上角空着。 */
+/* §1 时效锚 = 页头右上角的 `.xb-at` 胶囊,样式与格式全在 xb:anchor 块(tools/infosource/mk_anchor.py),
+   本页只管给它时间。它同时是刷新按钮(§5.5.2 契约 2)。
+   未接入时加 `.hide` 藏起来 —— 块里已有 `.xb-at.hide{display:none}` 双类钉住。 */
+.card{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow);margin-bottom:12px}
+.step{display:flex;gap:12px;margin-bottom:16px}
+.step:last-child{margin-bottom:0}
+.num{flex:0 0 auto;width:22px;height:22px;border-radius:11px;background:var(--srcSoft);color:var(--src);
+  font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step .b{flex:1 1 auto;min-width:0}
+.step h3{margin:0 0 5px;font-size:14px;font-weight:600}
+.step p{margin:0;color:var(--sub);font-size:12.5px}
+code.cmd{display:block;background:var(--chip);border-radius:12px;padding:9px 11px;margin-top:8px;
+  font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;
+  white-space:pre-line}
+button{border:0;font:inherit;cursor:pointer}
+.btn{display:block;width:100%;background:var(--src);color:#fff;border-radius:12px;
+  padding:12px;font-size:14px;font-weight:600;margin-top:10px}
+.btn.ghost{background:var(--chip);color:var(--fg)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.st{background:var(--chip);border-radius:12px;padding:11px 12px}
+.st .k{color:var(--sub);font-size:11px}
+.st .v{font-size:20px;font-weight:700;margin-top:2px}
+.st .v.acc{color:var(--src)}
+/* ── 聚合首页 ─────────────────────────────────────────── */
+/* §2 段标题 = 左名字 + 右摘要,13pt/sub。
+   ⚠️ 这一段以前在文件里**被写了两遍**(这里一份、样式表末尾又一份),后者整个盖掉前者
+   —— 于是这份 11.5px + 源色竖条的写法从来没生效过,实际生效的是末尾那份 uppercase。
+   现在只留这一份。不做 uppercase:大写只作用于英文,中文档拿不到变化。 */
+.sect{font-size:13px;color:var(--sub);font-weight:700;margin:20px 0 8px;
+  display:flex;align-items:baseline;gap:8px}
+.sect em{font-style:normal;font-weight:400;font-size:13px;margin-left:auto;text-align:right}
+/* 今日:一个大数 + 两个小数。大数是**输出 token** —— 消息数不区分一句话与一整轮重构,
+   而 token 才是「今天让模型干了多少活」。 */
+.hero{display:flex;align-items:flex-end;gap:12px}
+.hero .big{font-size:40px;font-weight:700;letter-spacing:-1.2px;line-height:.98;color:var(--src)}
+.hero .big .u{font-size:22px;opacity:.55;letter-spacing:-.4px}
+.hero .side{margin-left:auto;text-align:right}
+.hero .side .k{font-size:10.5px;color:var(--sub)}
+.hero .side .v{font-size:15px;font-weight:700;margin-top:1px}
+.hlbl{font-size:11.5px;color:var(--sub);margin-bottom:6px}
+.hcmp{font-size:11.5px;color:var(--sub);margin-top:11px;padding-top:10px;border-top:1px solid var(--line)}
+.hcmp b{color:var(--fg)}
+/* 折线:与其它包同构(SVG 只画线与面,标注交给 HTML) */
+.chartWrap{position:relative;height:96px;margin:2px 0 4px}
+.spark{width:100%;height:100%;display:block}
+.axis{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:2px}
+/* 行:最近的日子 / 模型 —— 两处同一种行式,点进去看一个对象 */
+.row{display:flex;align-items:center;gap:10px;padding:11px 0;cursor:pointer}
+.row + .row{border-top:1px solid var(--line)}
+.row .d{flex:0 0 58px;font-size:12.5px;font-weight:600}
+.row .nm{flex:0 0 76px;font-size:13px;font-weight:600;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.row .bar{flex:1 1 0;height:6px;border-radius:3px;background:var(--chip);overflow:hidden;min-width:20px}
+.row .bar i{display:block;height:100%;border-radius:3px;background:var(--src);opacity:.8}
+.row .v{flex:0 0 56px;text-align:right;font-size:13.5px;font-weight:700;letter-spacing:-.2px}
+.row .x{flex:0 0 42px;text-align:right;font-size:11px;color:var(--sub)}
+.row .ar{flex:0 0 auto;color:var(--sub);font-size:13px;opacity:.5}
+/* 活跃热力图:10 列 × 7 行,逐格 c/r/l 由服务端算好 —— 与桌面卡 heatmap.xwidget 同一份
+   merged.grid、同一套五档橙(浅|深),别在两处各调各的色。 */
+.heat{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
+.heat i{aspect-ratio:1;border-radius:3px;background:var(--chip)}
+.heat i[data-day]{cursor:pointer;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.heat i[data-day]:active{transform:scale(.88);opacity:.7;transition-duration:var(--xb-in,60ms)}
+.heat .l1{background:#FED7AA}.heat .l2{background:#FDBA74}
+.heat .l3{background:#E8916B}.heat .l4{background:#EA580C}
+html[data-theme="dark"] .heat .l1{background:#7C2D12}
+html[data-theme="dark"] .heat .l2{background:#9A3412}
+html[data-theme="dark"] .heat .l3{background:#C15F3C}
+html[data-theme="dark"] .heat .l4{background:#E8916B}
+/* 24 小时作息:柱阵,峰值那根用源色 */
+.hours{display:flex;align-items:flex-end;gap:2px;height:52px;margin-top:2px}
+.hours i{flex:1 1 0;background:var(--chip);border-radius:3px 3px 0 0;min-height:2px}
+.hours i.pk{background:var(--src)}
+.hlab{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:5px}
+.three{display:flex;gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}
+.three>div{flex:1;text-align:center}
+.three .k{font-size:10.5px;color:var(--sub)}
+.three .v{font-size:16px;font-weight:700;margin-top:2px;letter-spacing:-.2px}
+/* §3 元信息(数据来源 / 用法说明)一律 11pt,比正文小一档。 */
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+.note{color:var(--sub);font-size:11px;line-height:1.6;margin:14px 0 0}
+/* ── 2026-09-24 扩充:费用 / 5 小时窗口 / 周期表 / 工具 / 项目 / 打卡 / 习惯 ───────── */
+.cardnote{color:var(--sub);font-size:11px;line-height:1.55;margin-top:10px}
+/* 周期对比表:列 = 费用 / 输出 / 活跃 / 改动;变化量小一号贴在值下面 */
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{font-weight:400;color:var(--sub);font-size:10.5px;text-align:right;padding:0 0 7px}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl td{padding:8px 0;text-align:right;font-weight:700;letter-spacing:-.2px;vertical-align:top}
+.tbl tr + tr td{border-top:1px solid var(--line)}
+.tbl td:first-child{font-weight:600;color:var(--fg);white-space:nowrap;padding-right:6px}
+.tbl .cg{display:block;font-size:10.5px;font-weight:400;color:var(--sub);margin-top:1px}
+.tbl .cg.up{color:var(--src)}
+/* 5 小时窗口:时间进度条 + 起止刻度 */
+.wbar{height:8px;border-radius:4px;background:var(--chip);overflow:hidden;margin:12px 0 4px}
+.wbar i{display:block;height:100%;background:var(--src);border-radius:4px}
+.three.tight{margin-top:12px}
+/* 打卡图:7 行 × 24 列,5 档与热力图同色 */
+.punch{display:grid;grid-template-columns:22px repeat(24,1fr);gap:2px;align-items:center}
+.punch b{font-size:10px;font-weight:400;color:var(--sub)}
+.punch i{aspect-ratio:1;border-radius:2px;background:var(--chip)}
+.punch .l1{background:#FED7AA}.punch .l2{background:#FDBA74}.punch .l3{background:#E8916B}.punch .l4{background:#EA580C}
+html[data-theme="dark"] .punch .l1{background:#7C2D12}
+html[data-theme="dark"] .punch .l2{background:#9A3412}
+html[data-theme="dark"] .punch .l3{background:#C15F3C}
+html[data-theme="dark"] .punch .l4{background:#E8916B}
+.plab{display:grid;grid-template-columns:22px repeat(24,minmax(0,1fr));gap:2px;font-size:10.5px;color:var(--sub);margin-top:5px}
+/* 小时刻度与上面的 .punch 同一套 25 列网格(含 2px 列距),每个数字居中在它所标那一列上 ——
+   原来是 4 等分、左对齐,「0」「6」贴在列的左缘、且没算列距越往右偏得越多(作息页的同一张图是居中的) */
+.plab span{justify-self:center;white-space:nowrap}
+.plab span:nth-child(2){grid-column:2}.plab span:nth-child(3){grid-column:8}.plab span:nth-child(4){grid-column:14}.plab span:nth-child(5){grid-column:20}
+/* 行式:工具 / 项目 / 费用按模型沿用 .row,但它们不可点 */
+.row.static{cursor:default}
+.row.static::after{display:none}
+.row .nm.w{flex-basis:92px}
+
+.hide{display:none}
+/* ── 2026-09-24 二版:图表 + 变化值(用户:「样式太素、没有图表、没有变化值」)──────────
+   配色:模型 = 分类色 5 槽(dataviz 参考色板,已用 validate_palette 在本页卡片底色 #FFFFFF / #15171A 上跑过:
+   浅色 CVD 相邻最差 ΔE 9.1、深色 8.4,全部 PASS;浅色 3 槽对比度 <3:1 → 图例恒带文字与数值,满足 relief)。
+   颜色跟着模型走(已知模型钉死槽位),不随排名变;其余并入「其他」一律灰。单序列图用本包源色。 */
+:root{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--sOther:#B8BDC6;--grid:#EEF0F3;
+  --up:#C15F3C;--upBg:rgba(193,95,60,.10);--dn:#5B6472;--dnBg:rgba(91,100,114,.10)}
+html[data-theme="dark"]{--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--sOther:#4B5059;--grid:#23262C;
+  --up:#E8916B;--upBg:rgba(232,145,107,.14);--dn:#9AA1AC;--dnBg:rgba(154,161,172,.14)}
+/* 今天:品牌渐变主卡 —— 页面唯一的「重」块,其余卡保持白底 */
+.hero2{border-radius:18px;padding:16px 16px 14px;color:#fff;margin-bottom:12px;
+  background:linear-gradient(135deg,#E07B55 0%,#C15F3C 52%,#96401F 100%);
+  box-shadow:0 10px 26px -14px rgba(150,64,31,.65)}
+html[data-theme="dark"] .hero2{background:linear-gradient(135deg,#A9553A 0%,#7E3A22 55%,#4E2313 100%);box-shadow:none}
+.hero2 .lbl{display:flex;justify-content:space-between;align-items:center;font-size:12px;opacity:.86}
+.hero2 .lbl b{font-weight:600}
+.hero2 .val{font-size:48px;font-weight:700;letter-spacing:-1.6px;line-height:1.05;margin:6px 0 2px}
+.hero2 .sub{font-size:12px;opacity:.86}
+.meter{margin-top:12px}
+.meter .trk{position:relative;height:8px;border-radius:4px;background:rgba(255,255,255,.24);overflow:visible}
+.meter .fil{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:#fff}
+.meter .avg{position:absolute;top:-4px;width:2px;height:16px;border-radius:1px;background:rgba(255,255,255,.9)}
+.meter .cap{display:flex;justify-content:space-between;font-size:11px;opacity:.86;margin-top:6px}
+.hero2 .four{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px;padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.22)}
+/* 首页这四项里「活跃」是时长(「6 小时 10 分」≈93px),等分 4 列每列只有 ~80px,
+   nowrap 的值会伸进右边「改动行」那一列、两数几乎贴住(2026-09-25 体检)。列宽改为随内容、列间均分余量 */
+#today .four{grid-template-columns:repeat(4,auto);justify-content:space-between;column-gap:10px}
+.hero2 .four .k{font-size:10.5px;opacity:.78}
+.hero2 .four .v{font-size:15px;font-weight:700;margin-top:2px;white-space:nowrap;letter-spacing:-.3px}
+/* 变化值小胶囊:上涨用源色、下降用中性灰 —— 用量涨跌不是好坏,不用状态色 */
+.chip{display:inline-block;font-size:10.5px;font-weight:600;border-radius:999px;padding:2px 7px;line-height:1.35;
+  white-space:nowrap;vertical-align:middle}
+.chip.up{color:var(--up);background:var(--upBg)}
+.chip.dn{color:var(--dn);background:var(--dnBg)}
+.hero2 .chip{color:#fff;background:rgba(255,255,255,.22)}
+/* 近 7 天 KPI 2×2 */
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.kpi{background:var(--card);border-radius:14px;padding:12px 12px 10px;box-shadow:var(--shadow)}
+.kpi .k{font-size:11.5px;color:var(--sub)}
+.kpi .row1{display:flex;align-items:baseline;gap:6px;margin-top:3px;flex-wrap:wrap}
+.kpi .v{font-size:21px;font-weight:700;letter-spacing:-.5px}
+.kpi svg{display:block;width:100%;height:30px;margin-top:8px}
+.kpi .cap{font-size:10px;color:var(--sub);margin-top:4px}
+/* 每日趋势 */
+.seg{display:flex;background:var(--chip);border-radius:10px;padding:3px;gap:2px;margin-bottom:12px}
+.seg button{flex:1;background:transparent;border-radius:8px;padding:6px 0;font-size:12.5px;color:var(--sub)}
+.seg button.on{background:var(--card);color:var(--fg);font-weight:600;box-shadow:0 1px 3px rgba(15,20,30,.10)}
+html[data-theme="dark"] .seg button.on{background:#2A2E35;box-shadow:none}
+.pick{display:flex;align-items:baseline;gap:8px;min-height:44px;flex-wrap:wrap}
+.pick .d{font-size:12px;color:var(--sub)}
+.pick .tv{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.pick .go{margin-left:auto;font-size:12px;color:var(--src);background:none;padding:4px 0}
+.keys{display:flex;flex-wrap:wrap;gap:4px 12px;margin:4px 0 8px;font-size:11px;color:var(--sub)}
+.keys span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.keys i,.dot{display:inline-block;width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+.keys b{color:var(--fg);font-weight:600}
+.plot{display:block;width:100%;height:170px;touch-action:pan-y}
+.plot text{font-size:10px;fill:var(--sub);paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round}
+.plot .hit{fill:transparent;cursor:pointer}
+/* 模型:费用占比条 + 明细行 */
+.share{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;margin:2px 0 12px}
+.share i{display:block;height:100%}
+.mrow{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}
+.mrow + .mrow{border-top:1px solid var(--line)}
+.mrow .nm{flex:1 1 auto;font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow .nm small{display:block;font-size:10.5px;font-weight:400;color:var(--sub);margin-top:1px}
+.mrow .v{flex:0 0 auto;text-align:right;font-size:14px;font-weight:700;letter-spacing:-.2px}
+.mrow .c{flex:0 0 60px;text-align:right}
+/* 习惯格:值旁的变化 */
+.st .dl{font-size:10.5px;margin-top:3px}
+.row .c{flex:0 0 58px;text-align:right}
+/* ── 首屏骨架 ─────────────────────────────────────────────────────────
+   §7「结构先行」在页面层的那一半:块画得出来,只有值的位置是空的。
+   形状照抄 live 的头两段(今天:一个大数 + 两个小块;近 30 日:一条图),
+   换上真数据时版式不跳。 */
+.sk{display:block;background:var(--chip);border-radius:8px;}
+.sect .sk{height:9px;border-radius:5px}
+.sk.w4{width:46px}.sk.w5{width:74px}
+.sk.big{height:34px;width:58%;border-radius:10px}
+.skrow{display:flex;gap:10px;margin-top:13px}
+.skrow .sk{flex:1;height:52px;border-radius:12px}
+.sk.chart{height:96px;border-radius:12px}
+/* 关掉动画的人看到的是一组静止的块,仍然读得出「这儿会有东西」。 */
+@media (prefers-reduced-motion:reduce){.sk{animation:none}}
+
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.row,.xb-tap{position:relative}
+.row::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.row:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.fresh,.btn,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.fresh:active,.btn:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.sk,.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .sk,.xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+
+/* ── 跳转(2026-09-24):凡是能点进去的,都给按下反馈 + 右侧 ›;柱状图整列都是命中区 ── */
+[data-go],[data-day],[data-model],[data-tool]{cursor:pointer;-webkit-user-select:none;user-select:none}
+.hero2[data-go],.kpi[data-go],.card[data-go],.st[data-go],tr[data-go],.mrow[data-model],.mrow[data-tool],.mrow[data-day],.mrow[data-go]{
+  transition:opacity var(--xb-out,140ms) ease,transform var(--xb-out,140ms) ease}
+.hero2[data-go]:active,.kpi[data-go]:active,.card[data-go]:active,.st[data-go]:active{transform:scale(.985);opacity:.8;transition-duration:var(--xb-in,60ms)}
+tr[data-go]:active,.mrow[data-model]:active,.mrow[data-tool]:active,.mrow[data-day]:active,.mrow[data-go]:active{opacity:.55;transition-duration:var(--xb-in,60ms)}
+.chev{flex:0 0 auto;color:var(--sub);opacity:.5;font-size:14px;line-height:1;margin-left:2px}
+/* NAV_MARK */
+</style>
+
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#today,#win,#kpis,#trend,#models,#periods,#tools,#hours,#heat,#projects,#habits";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head><body>
+
+<div class="top"><span class="dot"></span><span class="grow"><h1 id="h1">Claude Code 用量</h1></span>
+  <button class="xb-at" id="at" type="button"></button></div>
+<p class="lead" id="lead">会话、消息与 token 消耗</p>
+
+<!-- 未接入 -->
+<div id="setup" class="hide">
+  <div class="card">
+    <div class="step"><div class="num">1</div><div class="b">
+      <h3 id="s1t">在 Claude Code 里装采集插件</h3>
+      <p id="s1d">依次运行这两条命令。插件只读取用量数字，代码和对话内容不会离开你的电脑。</p>
+      <code class="cmd" id="cmd">/plugin marketplace add numable/numable-usage
+/plugin install numable-usage</code>
+      <button class="btn ghost" id="copy">复制命令</button>
+    </div></div>
+    <div class="step"><div class="num">2</div><div class="b">
+      <h3 id="s2t">把读取令牌填进来</h3>
+      <p id="s2d">装好插件后，在 Claude Code 里运行 <b>/numable-usage</b>，把它给出的读取令牌粘贴到凭证设置里。令牌只能读你自己的用量数字。</p>
+      <button class="btn" id="go">去填令牌</button>
+    </div></div>
+  </div>
+  <p class="note" id="note1">只上传汇总数字：每天的消息数、会话数、token 用量、模型占比、工具调用次数和改动行数，不含分支名、文件路径和任何对话内容。项目默认只显示编号，在插件里打开后才显示文件夹名。</p>
+</div>
+
+<!-- 首屏骨架:三态里「没有缓存」那一态。两个内容容器默认都 hide,不铺这一层的话
+     取数期间整页是纯白 —— 那正是「没加载出来」的样子。 -->
+<div id="skel" class="hide" aria-hidden="true">
+  <div class="sect"><span class="sk w4"></span></div>
+  <div class="card">
+    <div class="sk big"></div>
+    <div class="skrow"><div class="sk"></div><div class="sk"></div></div>
+  </div>
+  <div class="sect"><span class="sk w5"></span></div>
+  <div class="card"><div class="sk chart"></div></div>
+</div>
+
+<!-- 已接入:概况页(不是加卡页)——一屏读懂「今天干了多少活、这阵子怎么样、谁在干」 -->
+<div id="live" class="hide">
+  <!-- 今天:品牌渐变主卡(费用 + 距日均的进度 + 四项) -->
+  <div class="hero2" id="today"></div>
+
+  <div id="winWrap" class="hide">
+    <div class="sect"><span id="secWin">5 小时窗口</span><em id="vWin"></em></div>
+    <div class="card" id="win"></div>
+  </div>
+
+  <div class="sect"><span id="secKpi">近 7 天</span><em id="vKpi"></em></div>
+  <div class="kpis" id="kpis"></div>
+
+  <div id="trendWrap">
+    <div class="sect"><span id="secTrend">每日趋势</span><em id="vTrend"></em></div>
+    <div class="card" id="trend"></div>
+  </div>
+
+  <div class="sect"><span id="secModels">模型</span><em id="vModels"></em></div>
+  <div class="card" id="models"></div>
+
+  <div class="sect"><span id="secPer">周期对比</span><em id="vPer"></em></div>
+  <div class="card" id="periods"></div>
+
+  <div class="sect"><span id="secTools">工具</span><em id="vTools"></em></div>
+  <div class="card" id="tools"></div>
+
+  <div class="sect"><span id="secHours">作息</span><em id="vHours"></em></div>
+  <div class="card" id="hours"></div>
+
+  <div class="sect"><span id="secHeat">活跃热力图</span><em id="vHeat"></em></div>
+  <div class="card" id="heat"></div>
+
+  <div id="projWrap" class="hide">
+    <div class="sect"><span id="secProj">项目</span><em id="vProj"></em></div>
+    <div class="card" id="projects"></div>
+  </div>
+
+  <div class="sect"><span id="secHabit">习惯</span><em id="vHabit"></em></div>
+  <div class="card" id="habits"></div>
+
+  <button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg">
+    <b id="pickT"></b><span class="d" id="pickS"></span></span></button>
+
+  <div class="note" id="note2">数据来自 Claude Code 中的采集插件，只包含汇总数字，不含文件路径和任何对话内容。费用按 Anthropic API 标价折算，订阅用户实际不按此计费。点图表里的任意一天或任一模型可查看详情。</div>
+</div>
+
+<script>
+var L = {
+ "zh-CN": {},
+ "en-US": {
+  h1:"Claude Code Usage", lead:"Sessions, messages and token burn",
+  s1t:"Install the collector plugin", s1d:"Run both lines in order. It reads usage numbers only — your code and conversations never leave your machine.",
+  copy:"Copy command", copied:"Copied", manual:"Long-press the command above to copy",
+  s2t:"Add the read token", s2d:"After installing the plugin, run /numable-usage in Claude Code and paste the read token it prints into credential settings. The token can only read your own usage numbers.",
+  go:"Add token",
+  note1:"Only aggregate numbers are uploaded: daily messages and sessions, token usage, model split, tool call counts and lines changed. No branch names, file paths or conversation content. Projects show as letters unless you turn on folder names in the plugin.",
+  k1:"Sessions", k2:"Messages", k3:"Output tokens", k4:"Streak",
+  days:"d",
+  secToday:"Today", secHeat:"Activity", secDays:"Recent days", secModels:"Models", secHours:"Rhythm",
+  outTok:"output tokens", msgs:"Messages", sess:"Sessions",
+  vs:"vs ", sumIn:"Output over this stretch: ", acrossDays:"{n} days with records",
+  peak:"Most often coding around {h}:00", streak:"Streak", longest:"Longest", actDays:"Active",
+  vDays:"last 7 days", vModels:"{n} in use", vPeak:"peaks at {h}:00", vSum:"{v} total",
+  leadOn:"{v} output tokens today", leadIdle:"nothing recorded today", leadOff:"not connected yet",
+  noData:"Not enough data yet",
+  note2:"Numbers come from the collector plugin in Claude Code and are aggregate only — no file paths or conversation content. Cost is estimated at Anthropic API list prices; subscription plans are not billed this way. Tap any day or model to open it.",
+  secWin:"5-hour window", secPer:"Compare", secCost:"Estimated cost", secTools:"Tools", secProj:"Projects", secHabit:"Habits",
+  cost:"Est. cost", active:"Active", lines:"Lines",
+  wIdle:"Not in a window now", wLast:"last {v}", wUsed:"Used so far (API list prices)", wOut:"Output", wN:"Replies", wReset:"resets {t}", wLeft:"{d} left",
+  wProj:"At this pace, about {v} by {t}", wEarly:"Window opened under 20 minutes ago — too early to project",
+  wNote:"Windows are inferred the same way as the community ccusage tool: 5 hours from the top of the hour of your first message. Your remaining plan quota isn't available.",
+  pPeriod:"", pCost:"Cost", pOut:"Output", pAct:"Active", pLines:"Lines",
+  rToday:"Today", r7:"7 days", r30:"30 days", rMonth:"This month", rPrev:"Last month",
+  vsPrev:"vs previous period", partial:"Some days came from an older plugin version and aren't priced.",
+  unpriced:"Some models aren't in the price list and aren't counted.",
+  v30:"{v} in 30 days",
+  vTools:"{n} calls in 30 days", tAgent:"Agents", tTodo:"To-dos", tOther:"Other", tAskUserQuestion:"Asked you", tToolSearch:"Tool search",
+  proj:"Project {x}", vProj:"share of output", d7:"7 days {v}", projHint:"Showing letters only. To show folder names, run /numable-usage in Claude Code and turn on project names.",
+  hAvg:"Avg session", hMax:"Longest session", hHit:"Cache hits", hThink:"Thinking", hSide:"Subagents", hWeb:"Web", hWebD:"searches and fetches",
+  hHitD:"of context read from cache", hThinkD:"of output", hSideD:"of output", vHabit:"last 30 days",
+  wd:["S","M","T","W","T","F","S"],
+  secKpi:"Last 7 days", secTrend:"Daily trend", todayCost:"Today · API list prices", ofAvg:"{p} of your 30-day daily average",
+  avgIs:"avg {v}", outShort:"Output", kCost:"Est. cost", kOut:"Output tokens", kAct:"Active time", kLines:"Lines changed",
+  vKpi:"vs previous 7 days · bars = last 30 days", mUsd:"Cost", mOut:"Output", mAct:"Active", mLines:"Lines",
+  today:"Today", vsPrevDay:"vs day before", openDay:"Open day ›", v30sum:"{v} in 30 days", other:"Other",
+  perNote:"Change compares with the same length of time right before (7 days vs the 7 before, 30 vs the 30 before).",
+  toolNote:"Calls in the last 30 days; change vs the 30 days before. MCP tools are grouped.",
+  flat:"flat", pt:" pts", vHabit:"30 days · vs the 30 before", hWebD:"searches and fetches",
+  costNote:"Last 30 days at Anthropic API list prices; change vs the 30 days before. Pro and Max subscriptions are not billed per token — read this as what the usage would cost on the API.",
+  fast:"incl. fast mode",
+  best:"Best day {d}: {v} output"
+ }
+};
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+var T = {}, EN = false;
+function t(k, fb){ return (T && Object.prototype.hasOwnProperty.call(T,k)) ? T[k] : fb; }  /* 空串是合法译文,不能当缺键回落 */
+
+function applyTheme(th){
+  var dark = th==='dark' || (th!=='light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+}
+async function ready(){ for(var i=0;i<24 && !window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+  return !!window.xbridge; }
+async function appInfo(){
+  try{ if(xbridge.appInfo) return await xbridge.appInfo(); }catch(e){}
+  return {};
+}
+function setText(id, s){ var e=document.getElementById(id); if(e) e.textContent=s; }
+function setHTML(id, s){ var e=document.getElementById(id); if(e) e.innerHTML=s||""; }
+var LEAD = "";
+function fmt(n){
+  n = Number(n)||0;
+  if(n>=1e9) return (Math.round(n/1e8)/10)+'B';   /* 缓存读取一个月能到百亿级 */
+  if(n>=1e6) return (Math.round(n/1e5)/10)+'M';
+  if(n>=1e3) return (Math.round(n/1e2)/10)+'k';
+  return String(n);
+}
+function nav(url){
+  // ⚠️ 桥上只有 route(→nav.open)。曾经写的 openUrl / open 两个名字**都不存在**,
+  //    而 `if(xbridge.x)` 守卫不报错 —— 于是「去填令牌」这条一直静默走 location.href
+  //    兜底,看着像在走桥(G42 闸 2026-09 扫出)。
+  try{ if(xbridge.route) return xbridge.route(url); }catch(e){}
+  location.href = url;
+}
+
+/* ================= 聚合渲染(已接入态)=================
+   数据全部来自**同一发** `summary` 流的 raw(§5.5 三态缓存),两个详情页共用同一份缓存 ——
+   点进去零额外请求。 */
+var D = null;                       /* 解析后的整份响应 */
+function M(){ return (D && D.merged) || {}; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+/* 日期显示成 MM-DD;`2026-08-20` 这种串各端都能按字面切,不进 Date(时区会把日期挪一天)。 */
+/* 月日:中文「9月25日」/ 英文「Sep 25」(doc/overseas-first.md §5,不出现纯数字月日)。 */
+var MON_EN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function md(s){ s=String(s||""); var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s); if(!m) return s;
+  return EN ? MON_EN[+m[2]-1]+" "+(+m[3]) : (+m[2])+"月"+(+m[3])+"日"; }
+
+/* ================= 2026-09-24 二版渲染 =================
+   用户反馈「样式太素、没有图表、没有变化值」后重排:今天主卡 → 5 小时窗口 → 近 7 天指标卡 → 每日趋势图 →
+   模型 → 周期对比 → 工具 → 作息 → 热力图 → 项目 → 习惯。每个数字尽量带「和上一段比」。
+   数据全部来自服务端合并视图(daily30 / deltas / costModels.chg / tools.chg / compositionPrev 等);
+   缓存里是老版本的数据(没有这些键)时,对应段落收起,不画一排 --。 */
+
+/* ── 格式化 ── */
+/* 占比取整:花了钱却不到 0.5% 时写「<1」,不写「0」(2026-10-08)—— 「$39.19 · 0%」读起来像没花钱。 */
+function pct0(p, v){ var n=Number(p)||0; return (n<0.5 && Number(v)>0) ? "<1" : n.toFixed(0); }
+function usd(v){
+  if (v==null || !isFinite(Number(v))) return "--";
+  v=Number(v);
+  if (v===0) return "$0";
+  if (v<0.01) return "<$0.01";
+  return "$"+(v<100 ? v.toFixed(2) : Math.round(v).toLocaleString("en-US"));
+}
+function dur(min, compact){
+  min=Math.round(Number(min)||0);
+  if (compact && min>=600) return EN ? (Math.round(min/60)+"h") : (Math.round(min/60)+" 小时");
+  if (!min) return EN ? "0m" : "0 分钟";
+  var h=Math.floor(min/60), m=min%60;
+  if (EN) return h ? (h+"h"+(m?" "+m+"m":"")) : (m+"m");
+  return h ? (h+" 小时"+(m?" "+m+" 分":"")) : (m+" 分钟");
+}
+function hm(ms){ var d=new Date(Number(ms)); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+/* 变化值 → 小胶囊。p ≥ 200% 改说倍数(「↑45×」比「↑4373%」好读);上一段为 0 不给 */
+function chipOf(c){
+  if (!c || c.p==null || !isFinite(Number(c.p))) return "";
+  var p=Number(c.p), txt;
+  if (p>=200){ var x=1+p/100; txt="↑"+(x>=10?Math.round(x):Math.round(x*10)/10)+"×"; }
+  else txt=(p>=0?"↑":"↓")+Math.abs(p)+"%";
+  return '<span class="chip '+(p>=0?"up":"dn")+'">'+esc(txt)+"</span>";
+}
+function chgOf(cur, prev){
+  cur=Number(cur)||0; prev=Number(prev)||0;
+  if (!(prev>0)) return null;
+  return { p: Math.round((cur-prev)/prev*100) };
+}
+/* 百分比的变化用「点」,不用「%」—— 命中率 98% → 99% 说成「↑1%」会被读成涨了百分之一 */
+function ptChip(cur, prev){
+  if (prev==null || !isFinite(Number(prev))) return "";
+  var d=Math.round((Number(cur)-Number(prev))*10)/10;
+  if (!d) return '<span class="chip dn">'+esc(t("flat","持平"))+"</span>";
+  return '<span class="chip '+(d>0?"up":"dn")+'">'+(d>0?"↑":"↓")+esc(String(Math.abs(d)))+esc(t("pt"," 点"))+"</span>";
+}
+function noData(){ return '<div class="note" style="margin:0">'+esc(t("noData","还没有足够的数据"))+"</div>"; }
+
+/* ── 模型:短名 + 固定配色 ── */
+function mlabel(n){
+  if (n==="other") return t("other","其他");
+  var m=/^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/.exec(String(n||""));
+  if (!m) return String(n||"").replace(/^claude-/,"");
+  return m[1][0].toUpperCase()+m[1].slice(1)+" "+m[2]+(m[3]?"."+m[3]:"");
+}
+/* 颜色跟着模型走,不跟排名(dataviz:recolor-on-filter 反模式):已知模型钉死槽位,
+   其余按出现顺序取剩下的槽,槽用完 / other 一律灰 */
+var PIN={"claude-opus-5":1,"claude-fable-5":2,"claude-fable-5-1":3,"claude-opus-5-5":4,"claude-sonnet-5":5};
+var COLOR={};
+function buildColors(names){
+  COLOR={}; var used={};
+  names.forEach(function(n){ if (PIN[n]){ COLOR[n]="var(--s"+PIN[n]+")"; used[PIN[n]]=1; } });
+  names.forEach(function(n){
+    if (COLOR[n] || n==="other") return;
+    for (var s=1;s<=5;s++) if (!used[s]){ used[s]=1; COLOR[n]="var(--s"+s+")"; return; }
+  });
+}
+function colorOf(n){ return COLOR[n] || "var(--sOther)"; }
+
+/* 近 30 天里「有用量的日子」的日均(不含今天 —— 今天还没过完,算进去会把基线拉低) */
+function avgActive(rows, pick){
+  var s=0, n=0;
+  for (var i=0;i<rows.length-1;i++){ var v=pick(rows[i]); if (v>0){ s+=v; n++; } }
+  return n ? s/n : 0;
+}
+function linesOf(r){ return (Number(r.la)||0)+(Number(r.lr)||0); }
+
+/* ── 1. 今天:品牌渐变主卡 ── */
+function paintToday(){
+  var m=M(), td=m.today||{}, rows=m.daily30||[], P=m.periods;
+  var el=document.getElementById("today");
+  var cost = P ? P.today.usd : td.usd;
+  var avg = avgActive(rows, function(r){ return Number(r.usd)||0; });
+  var ratio = avg>0 && cost!=null ? cost/avg : null;
+  var meter="";
+  if (ratio!=null){
+    /* 刻度 = 0 ~ max(今天, 日均);白竖线标日均。超过日均时条是满的、竖线落在中间 */
+    var top=Math.max(ratio,1);
+    meter='<div class="meter"><div class="trk"><div class="fil" style="width:'+Math.min(100,ratio/top*100).toFixed(1)+'%"></div>'+
+      '<div class="avg" style="left:calc('+(1/top*100).toFixed(1)+'% - 1px)"></div></div>'+
+      '<div class="cap"><span>'+esc(t("ofAvg","已到近 30 天日均的 {p}").replace("{p}", Math.round(ratio*100)+"%"))+"</span>"+
+      "<span>"+esc(t("avgIs","日均 {v}").replace("{v}", usd(avg)))+"</span></div></div>";
+  }
+  var cell=function(k,v){ return '<div><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+"</div></div>"; };
+  el.innerHTML=
+    '<div class="lbl"><span>'+esc(t("todayCost","今天 · 按 API 标价"))+"</span><b>"+esc(td.date?md(td.date)+" ›":"")+"</b></div>"+
+    '<div class="val">'+esc(usd(cost))+"</div>"+
+    meter+
+    '<div class="four">'+
+      cell(t("outShort","输出"), fmt(td.out))+
+      cell(t("msgs","消息"), fmt(td.msgs))+
+      cell(t("active","活跃"), dur(td.am))+
+      cell(t("lines","改动行"), "+"+fmt(td.la))+
+    "</div>";
+  if (td.date) el.setAttribute("data-go", "/day?date="+td.date); else el.removeAttribute("data-go");
+  LEAD = fmt(td.out);
+}
+
+/* ── 2. 5 小时窗口 ── */
+function paintWin(){
+  var w=M().window, wrap=document.getElementById("winWrap"), card=document.getElementById("win");
+  card.setAttribute("data-go", "/window");
+  if (!w || !w.end || Number(w.end)<=Date.now()){
+    /* 不在窗口里:有窗口历史(插件 0.6.0 起)就留一行入口,没有就整块不出 */
+    var last=(M().windows||[]).filter(function(x){ return !x.live; })[0];
+    if (!last){ wrap.classList.add("hide"); return; }
+    wrap.classList.remove("hide");
+    card.innerHTML='<div class="mrow" style="padding:2px 0"><span class="nm">'+esc(t("wIdle","现在不在窗口中"))+"</span>"+
+      '<span class="x" style="flex-basis:auto">'+esc(t("wLast","上一个 {v}").replace("{v}", usd(last.usd)))+'</span><span class="chev">›</span></div>';
+    setHTML("vWin", "");
+    return;
+  }
+  wrap.classList.remove("hide");
+  var now=Date.now(), s=Number(w.start), e=Number(w.end);
+  var p=Math.max(0,Math.min(100,(now-s)/(e-s)*100));
+  var left=Math.max(0,Math.round((e-now)/60000));
+  var proj = w.projUsd==null ? t("wEarly","开窗不到 20 分钟，先不估算")
+    : t("wProj","按目前的速度，到 {t} 约 {v}").replace("{t}",hm(e)).replace("{v}",usd(w.projUsd));
+  document.getElementById("win").innerHTML=
+    '<div class="hlbl">'+esc(t("wUsed","已用（按 API 标价）"))+"</div>"+
+    '<div class="hero"><div class="big">'+esc(usd(w.usd))+"</div>"+
+      '<div class="side"><div class="k">'+esc(t("wOut","输出"))+'</div><div class="v">'+esc(fmt(w.out))+"</div></div>"+
+      '<div class="side"><div class="k">'+esc(t("wN","回复"))+'</div><div class="v">'+esc(fmt(w.n))+"</div></div></div>"+
+    '<div class="wbar"><i style="width:'+p.toFixed(1)+'%"></i></div>'+
+    '<div class="axis"><span>'+esc(hm(s))+"</span><span>"+esc(t("wLeft","还剩 {d}").replace("{d}",dur(left)))+"</span><span>"+esc(hm(e))+"</span></div>"+
+    '<div class="hcmp">'+esc(proj)+"</div>"+
+    '<div class="cardnote">'+esc(t("wNote","窗口按社区工具 ccusage 的算法推算：从第一次对话所在的整点起算 5 小时。官方剩余额度拿不到。"))+"</div>";
+  setHTML("vWin", esc(t("wReset","{t} 重置").replace("{t}",hm(e)))+" ›");
+}
+
+/* ── 3. 近 7 天:四张指标卡(值 + 对比前 7 天 + 30 天迷你柱,最近 7 天用源色) ── */
+function miniBars(vals){
+  var n=vals.length, W=150, H=30, mx=Math.max.apply(null,vals.concat([0]));
+  if (!n || !(mx>0)) return "";
+  var band=W/n, bw=Math.max(1.5, band-1.6), out="";
+  for (var i=0;i<n;i++){
+    var h=vals[i]>0 ? Math.max(1.5, vals[i]/mx*(H-1)) : 1;
+    out+='<rect x="'+(i*band).toFixed(2)+'" y="'+(H-h).toFixed(2)+'" width="'+bw.toFixed(2)+'" height="'+h.toFixed(2)+'" rx="0.8" '+
+      'fill="'+(i>=n-7?"var(--src)":"var(--sOther)")+'"'+(vals[i]>0?"":' opacity=".5"')+"/>";
+  }
+  return '<svg viewBox="0 0 '+W+" "+H+'" preserveAspectRatio="none" aria-hidden="true">'+out+"</svg>";
+}
+function paintKpis(){
+  var m=M(), P=m.periods, dl=m.deltas, rows=m.daily30||[], el=document.getElementById("kpis");
+  if (!P || !dl){ el.innerHTML=""; return; }
+  var tile=function(k, v, c, vals, met){
+    return '<div class="kpi" data-go="/period?r=d7&m='+met+'"><div class="k">'+esc(k)+' <span class="chev">›</span></div><div class="row1"><span class="v">'+esc(v)+"</span>"+chipOf(c)+"</div>"+
+      miniBars(vals)+"</div>";
+  };
+  el.innerHTML=
+    tile(t("kCost","费用估算"), usd(P.d7.usd), dl.d7.usd, rows.map(function(r){ return Number(r.usd)||0; }), "usd")+
+    tile(t("kOut","输出 token"), fmt(P.d7.out), dl.d7.out, rows.map(function(r){ return Number(r.out)||0; }), "out")+
+    tile(t("kAct","活跃时长"), dur(P.d7.am, true), dl.d7.am, rows.map(function(r){ return Number(r.am)||0; }), "am")+
+    tile(t("kLines","改动行"), fmt(P.d7.la+P.d7.lr), dl.d7.lines, rows.map(linesOf), "lines");
+  setHTML("vKpi", esc(t("vKpi","对比前 7 天 · 柱 = 近 30 天")));
+}
+
+/* ── 4. 每日趋势:30 天柱状图,四个指标切换;费用按模型堆叠 ── */
+var METRIC="usd", SEL=-1, PICKED=false;   // PICKED:用户点过某一天之后才把其余柱子调淡
+function metricVal(r, k){ return k==="usd" ? Number(r.usd)||0 : k==="out" ? Number(r.out)||0 : k==="am" ? Number(r.am)||0 : linesOf(r); }
+function metricFmt(v, k){ return k==="usd" ? usd(v) : k==="am" ? dur(v) : fmt(v); }
+/* 顶部圆角、底部方角的柱(dataviz:数据端 4px 圆角、基线端方角) */
+function barPath(x, y, w, h, r, fill, extra){
+  r=Math.min(r, h, w/2);
+  var f=function(n){ return n.toFixed(2); };
+  var d = r>0
+    ? "M"+f(x)+","+f(y+h)+"V"+f(y+r)+"Q"+f(x)+","+f(y)+" "+f(x+r)+","+f(y)+"H"+f(x+w-r)+"Q"+f(x+w)+","+f(y)+" "+f(x+w)+","+f(y+r)+"V"+f(y+h)+"Z"
+    : "M"+f(x)+","+f(y)+"H"+f(x+w)+"V"+f(y+h)+"H"+f(x)+"Z";
+  return '<path d="'+d+'" fill="'+fill+'"'+(extra||"")+"/>";
+}
+function niceMax(v){
+  if (!(v>0)) return 1;
+  var e=Math.pow(10, Math.floor(Math.log(v)/Math.LN10)), f=v/e;
+  // 档位细一些,顶端贴着峰值,图不被压矮
+  var steps=[1,1.5,2,2.5,3,4,5,6,8,10];
+  for (var i=0;i<steps.length;i++) if (f<=steps[i]) return steps[i]*e;
+  return 10*e;
+}
+function paintTrend(){
+  var m=M(), rows=m.daily30||[], wrap=document.getElementById("trendWrap"), el=document.getElementById("trend");
+  if (!rows.length){ wrap.classList.add("hide"); return; }
+  wrap.classList.remove("hide");
+  var models=(m.daily30Models||[]).slice();
+  var hasOther=rows.some(function(r){ return r.parts && r.parts.other>0; });
+  var stackKeys=models.concat(hasOther?["other"]:[]);
+  if (SEL<0 || SEL>=rows.length) SEL=rows.length-1;
+
+  var segs=[["usd",t("mUsd","费用")],["out",t("mOut","输出")],["am",t("mAct","活跃")],["lines",t("mLines","改动")]];
+  var W=Math.max(280, (el.clientWidth||362)-28), H=170, top=14, bottom=20, ph=H-top-bottom;
+  var vals=rows.map(function(r){ return metricVal(r, METRIC); });
+  var vmax=Math.max.apply(null, vals.concat([0]));
+  // 活跃按分钟存,刻度按小时取整(否则出「13h 20m」这种刻度)
+  var ymax = METRIC==="am" ? niceMax(vmax/60)*60 : niceMax(vmax);
+  var band=W/rows.length, bw=Math.min(12, band*0.62);
+  var Y=function(v){ return top+ph-(v/ymax)*ph; };
+  var g="", lab="";   // 文字最后画(lab),否则会被柱子盖住
+  /* 横向参考线:0 / 一半 / 顶,发丝线,标签贴在线上方左侧 */
+  [0, ymax/2, ymax].forEach(function(v){
+    var y=Y(v).toFixed(1);
+    g+='<line x1="0" x2="'+W+'" y1="'+y+'" y2="'+y+'" stroke="var(--grid)" stroke-width="1"/>';
+    if (v>0) lab+='<text x="0" y="'+(Y(v)-3).toFixed(1)+'">'+esc(METRIC==="am" ? dur(v, true) : metricFmt(v, METRIC))+"</text>";
+  });
+  /* 柱:费用 = 按模型堆叠(段间 1.5px 底色缝),其余单色;选中那根以外降低不透明度 */
+  rows.forEach(function(r, i){
+    var x=i*band+(band-bw)/2, dim = PICKED && SEL!==i ? ' opacity=".4"' : "";
+    if (METRIC==="usd" && r.parts){
+      var acc=0, keys=stackKeys.filter(function(k){ return (r.parts[k]||0)>0; });
+      keys.forEach(function(k, j){
+        var v=r.parts[k], y0=Y(acc), y1=Y(acc+v);
+        acc+=v;
+        var isTop = j===keys.length-1, yt = y1+(isTop?0:1.5), h=y0-yt;   // 段与段之间留 1.5px 底色缝
+        if (h>0.3) g+=barPath(x, yt, bw, h, isTop?3:0, colorOf(k), dim);
+      });
+    } else if (vals[i]>0){
+      var h=Math.max(1.5, top+ph-Y(vals[i]));
+      g+=barPath(x, top+ph-h, bw, h, 3, "var(--src)", dim);
+    }
+  });
+  /* 日均参考线(有用量的日子,不含今天):实线发丝 + 右侧标签 */
+  var avg=avgActive(rows, function(r){ return metricVal(r, METRIC); });
+  if (avg>0){
+    var ya=Y(avg).toFixed(1);
+    g+='<line x1="0" x2="'+W+'" y1="'+ya+'" y2="'+ya+'" stroke="var(--fg)" stroke-opacity=".35" stroke-width="1"/>';
+    lab+='<text x="'+W+'" y="'+(Y(avg)-3).toFixed(1)+'" text-anchor="end">'+esc(t("avgIs","日均 {v}").replace("{v}", metricFmt(avg, METRIC)))+"</text>";
+  }
+  /* 横轴:首 / 中 / 末(末 = 今天) */
+  [[0,"start"],[15,"middle"],[rows.length-1,"end"]].forEach(function(a){
+    var i=a[0], x = a[1]==="start" ? 0 : a[1]==="end" ? W : i*band+band/2;
+    lab+='<text x="'+x.toFixed(1)+'" y="'+(H-4)+'" text-anchor="'+a[1]+'">'+esc(i===rows.length-1?t("today","今天"):md(rows[i].d))+"</text>";
+  });
+  g+=lab;
+  /* 命中区 = 整列(比柱宽得多),点哪一天看哪一天 */
+  rows.forEach(function(r, i){
+    g+='<rect class="hit" data-i="'+i+'" x="'+(i*band).toFixed(2)+'" y="0" width="'+band.toFixed(2)+'" height="'+(top+ph)+'"/>';
+  });
+
+  var r=rows[SEL], sv=metricVal(r, METRIC), prev=SEL>0?metricVal(rows[SEL-1], METRIC):null;
+  var keys="";
+  if (METRIC==="usd"){
+    keys='<div class="keys">'+stackKeys.map(function(k){
+      var v=(r.parts||{})[k]||0;
+      return '<span'+(k!=="other"?' data-model="'+esc(k)+'"':"")+'><i style="background:'+colorOf(k)+'"></i>'+esc(mlabel(k))+(v>0?" <b>"+esc(usd(v))+"</b>":"")+"</span>";
+    }).join("")+"</div>";
+  }
+  el.innerHTML='<div class="seg">'+segs.map(function(s){
+      return '<button data-m="'+s[0]+'" class="'+(s[0]===METRIC?"on":"")+'">'+esc(s[1])+"</button>";
+    }).join("")+"</div>"+
+    '<div class="pick"><span class="d">'+esc(SEL===rows.length-1?t("today","今天"):md(r.d))+"</span>"+
+      '<span class="tv">'+esc(metricFmt(sv, METRIC))+"</span>"+
+      (prev!=null ? chipOf(chgOf(sv, prev))+'<span class="d">'+esc(t("vsPrevDay","比前一天"))+"</span>" : "")+
+      '<button class="go" data-day="'+esc(r.d)+'">'+esc(t("openDay","看这一天 ›"))+"</button></div>"+
+    keys+
+    '<svg class="plot" viewBox="0 0 '+W+" "+H+'" role="img" aria-label="'+esc(t("secTrend","每日趋势"))+'">'+g+"</svg>";
+  var sum=vals.reduce(function(a,b){ return a+b; },0);
+  setHTML("vTrend", esc(t("v30sum","近 30 天 {v}").replace("{v}", metricFmt(sum, METRIC))));
+}
+document.addEventListener("click", function(e){
+  var s=e.target.closest ? e.target.closest("#trend .seg button") : null;
+  if (s){ METRIC=s.getAttribute("data-m"); paintTrend(); return; }
+  var h=e.target.closest ? e.target.closest("#trend .hit") : null;
+  if (h){ SEL=Number(h.getAttribute("data-i")); PICKED=true; paintTrend(); }
+});
+
+/* ── 5. 模型:费用占比条 + 每个模型的费用 / 输出 / 与上一段比 ── */
+function paintModels(){
+  var m=M(), cm=m.costModels||[], ms=m.models||[], el=document.getElementById("models");
+  if (!cm.length && !ms.length){ el.innerHTML=noData(); setHTML("vModels",""); return; }
+  var outOf={}; ms.forEach(function(x){ outOf[x.name]=x; });
+  var list = cm.length ? cm : ms.map(function(x){ return { name:x.name, usd:null, pct:x.pct }; });
+  var total=list.reduce(function(a,b){ return a+(Number(b.usd)||0); },0);
+  el.innerHTML=
+    (cm.length ? '<div class="share">'+list.filter(function(x){ return Number(x.pct)>0.5; }).map(function(x){
+        return '<i style="flex:'+Number(x.pct)+" 1 0;background:"+colorOf(x.name)+'" title="'+esc(mlabel(x.name))+'"></i>';
+      }).join("")+"</div>" : "")+
+    list.map(function(x){
+      var o=outOf[x.name];
+      return '<div class="mrow" data-model="'+esc(x.name)+'"><span class="dot" style="background:'+colorOf(x.name)+'"></span>'+
+        '<span class="nm">'+esc(mlabel(x.name))+"<small>"+esc(t("outShort","输出"))+" "+esc(o?fmt(o.out):"--")+" · "+
+          esc(x.usd==null ? (Number(x.pct)||0).toFixed(0) : pct0(x.pct, x.usd))+"%"+(x.fastOut?" · "+esc(t("fast","含快速模式")):"")+"</small></span>"+
+        '<span class="v">'+esc(x.unpriced?"--":usd(x.usd))+"</span>"+
+        '<span class="c">'+chipOf(x.chg)+"</span></div>";
+    }).join("")+
+    '<div class="cardnote">'+esc(t("costNote","近 30 天，按 Anthropic API 标价折算；变化 = 对比前 30 天。Pro、Max 订阅不按 token 计费，可以把它读成「这些用量放在 API 上值多少」。"))+"</div>";
+  setHTML("vModels", cm.length ? esc(t("v30","近 30 天 {v}").replace("{v}", usd(total))) : "");
+}
+
+/* ── 6. 周期对比 ── */
+function paintPeriods(){
+  var P=M().periods, Mo=M().months, dl=M().deltas, el=document.getElementById("periods");
+  if (!P){ el.innerHTML=noData(); return; }
+  var cg=function(c){ return c ? '<span class="cg">'+chipOf(c)+"</span>" : ""; };
+  var row=function(label, a, d, go){
+    return '<tr data-go="'+go+'"><td>'+esc(label)+' <span class="chev">›</span></td>'+
+      "<td>"+esc(usd(a.usd))+cg(d&&d.usd)+"</td>"+
+      "<td>"+esc(fmt(a.out))+cg(d&&d.out)+"</td>"+
+      "<td>"+esc(dur(a.am,true))+cg(d&&d.am)+"</td>"+
+      "<td>"+esc(fmt((a.la||0)+(a.lr||0)))+cg(d&&d.lines)+"</td></tr>";
+  };
+  var mo = Mo ? { usd: chgOf(Mo.cur.usd, Mo.prev.usd) } : null;
+  el.innerHTML='<table class="tbl"><tr><th></th><th>'+esc(t("pCost","费用"))+"</th><th>"+
+      esc(t("pOut","输出"))+"</th><th>"+esc(t("pAct","活跃"))+"</th><th>"+esc(t("pLines","改动行"))+"</th></tr>"+
+    row(t("rToday","今天"), P.today, null, "/day?date="+((M().today||{}).date||""))+
+    row(t("r7","近 7 天"), P.d7, dl&&dl.d7, "/period?r=d7")+
+    row(t("r30","近 30 天"), P.d30, dl&&dl.d30, "/period?r=d30")+
+    (Mo ? row(t("rMonth","本月"), Mo.cur, null, "/period?r=month")+row(t("rPrev","上月"), Mo.prev, null, "/period?r=pmonth") : "")+"</table>"+
+    '<div class="cardnote">'+esc(t("perNote","变化 = 和紧挨着的上一段等长时间比（近 7 天比前 7 天，近 30 天比前 30 天）。"))+"</div>"+
+    ((P.d30.partial || (Mo && (Mo.cur.partial || Mo.prev.partial))) ? '<div class="cardnote">'+esc(t("partial","有些日子来自旧版插件，没有折算费用。"))+"</div>" : "")+
+    ((P.d30.unpriced||0) > 0 ? '<div class="cardnote">'+esc(t("unpriced","有模型不在价目表里，这部分没有算进费用。"))+"</div>" : "");
+  var b=M().best;
+  setHTML("vPer", b ? '<span data-day="'+esc(b.date)+'">'+esc(t("best","最高 {d}：输出 {v}").replace("{d}",md(b.date)).replace("{v}",fmt(b.out)))+" ›</span>" : "");
+}
+
+/* ── 7. 工具 ── */
+var TOOL_ZH={Agent:"子代理",Todo:"待办",Other:"其他",AskUserQuestion:"向你提问",ToolSearch:"查找工具",
+  WebSearch:"联网搜索",WebFetch:"抓取网页",ExitPlanMode:"计划模式",EnterPlanMode:"计划模式",NotebookEdit:"改笔记本"};
+function paintTools(){
+  var all=M().tools||[], ts=all.slice(0,8), el=document.getElementById("tools");
+  if (!ts.length){ el.innerHTML=noData(); setHTML("vTools",""); return; }
+  var mx=Number(ts[0].n)||1, sum=0;
+  all.forEach(function(x){ sum+=Number(x.n)||0; });
+  el.innerHTML=ts.map(function(x){
+    var nm = EN ? (t("t"+x.name, x.name)) : (TOOL_ZH[x.name]||x.name);
+    return '<div class="row" data-tool="'+esc(x.name)+'"><span class="nm w">'+esc(nm)+"</span>"+
+      '<span class="bar"><i style="width:'+Math.max(3,(Number(x.n)||0)/mx*100).toFixed(0)+'%"></i></span>'+
+      '<span class="v">'+esc(fmt(x.n))+"</span>"+
+      '<span class="c">'+chipOf(x.chg)+'</span><span class="chev">›</span></div>';
+  }).join("")+'<div class="cardnote">'+esc(t("toolNote","近 30 天调用次数；变化 = 对比前 30 天。MCP 工具合并成一类。"))+"</div>";
+  setHTML("vTools", esc(t("vTools","近 30 天 {n} 次").replace("{n}", fmt(sum))));
+}
+
+/* ── 8. 作息:星期 × 小时打卡图(老服务端没有 punch → 退回 24 柱)+ 连续天数 ── */
+function paintHours(){
+  var m=M(), h=m.hours||{}, el=document.getElementById("hours");
+  setHTML("vHours", isFinite(Number(m.peakHour)) && Number(m.peakHour)>=0
+    ? esc(t("vPeak","峰值 {h}:00").replace("{h}", Number(m.peakHour)))+" ›" : "");
+  var vs=[]; for (var i=0;i<24;i++) vs.push(Number(h[i]||h[String(i)]||0));
+  var mx=Math.max.apply(null,vs)||1, pk=Number(m.peakHour);
+  var pu=m.punch, pmx=Number(m.punchMax)||0;
+  var WD = EN ? (T.wd||["S","M","T","W","T","F","S"]) : ["日","一","二","三","四","五","六"];
+  var grid = (pu && pu.length===168 && pmx>0) ? '<div class="punch">'+[1,2,3,4,5,6,0].map(function(wd){
+      var cells=""; for (var hh=0;hh<24;hh++){ var v=Number(pu[wd*24+hh])||0;
+        var l = v<=0?0 : v>=pmx*0.66?4 : v>=pmx*0.33?3 : v>=pmx*0.12?2 : 1;
+        cells+='<i class="'+(l?("l"+l):"")+'"></i>'; }
+      return "<b>"+esc(WD[wd])+"</b>"+cells;
+    }).join("")+'</div><div class="plab"><span></span><span>0</span><span>6</span><span>12</span><span>18</span></div>'
+    : '<div class="hours">'+vs.map(function(v,i){
+      return '<i class="'+(i===pk?"pk":"")+'" style="height:'+Math.max(2,v/mx*100).toFixed(0)+'%"></i>';
+    }).join("")+"</div>"+
+    '<div class="hlab"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div>';
+  var tot=m.totals||{};
+  el.setAttribute("data-go", "/hours");
+  el.innerHTML=grid+
+    '<div class="three"><div><div class="k">'+esc(t("streak","连续活跃"))+'</div><div class="v">'+
+      esc(String(tot.streak==null?"--":tot.streak))+esc(t("days","天"))+"</div></div>"+
+      '<div><div class="k">'+esc(t("longest","最长连续"))+'</div><div class="v">'+
+      esc(String(tot.longestStreak==null?"--":tot.longestStreak))+esc(t("days","天"))+"</div></div>"+
+      '<div><div class="k">'+esc(t("actDays","有记录"))+'</div><div class="v">'+
+      esc(String(tot.activeDays==null?"--":tot.activeDays))+esc(t("days","天"))+"</div></div></div>";
+}
+
+/* ── 9. 活跃热力图 ── */
+function paintHeat(){
+  var m=M(), g=m.grid||[], el=document.getElementById("heat");
+  if (!g.length){ el.innerHTML=noData(); return; }
+  el.innerHTML='<div class="heat">'+g.map(function(d){
+      var l=Math.max(0,Math.min(4,Number(d.l)||0));
+      /* 有用量的格子可点进「这一天」(与趋势图「看这一天 ›」同一个 data-day 分发);空白日不挂,点了也只是「没有记录」 */
+      var on=Number(d.o)>0 && d.d;
+      return '<i class="'+(l?("l"+l):"")+'"'+(on?' data-day="'+esc(d.d)+'" role="button" aria-label="'+esc(d.d)+'"':"")+
+        ' style="grid-area:'+((Number(d.r)||0)+1)+" / "+((Number(d.c)||0)+1)+'"></i>';
+    }).join("")+"</div>"+
+    '<div class="axis"><span>'+esc(m.gridStart||"")+"</span><span>"+esc(m.gridEnd||"")+"</span></div>";
+  setHTML("vHeat", esc(t("acrossDays","{n} 天有记录")
+    .replace("{n}", String((m.totals||{}).activeDays==null?"--":m.totals.activeDays))));
+}
+
+/* ── 10. 项目:默认只有编号(「项目 A / B / C」);打开开关的人看到文件夹名 ── */
+function paintProjects(){
+  var ps=(M().projects||[]).slice(0,8), wrap=document.getElementById("projWrap");
+  if (!ps.length){ wrap.classList.add("hide"); return; }
+  wrap.classList.remove("hide");
+  var anon=0, named=0;
+  var html=ps.map(function(p){
+    var nm = p.name ? p.name : t("proj","项目 {x}").replace("{x}", String.fromCharCode(65+(anon++)));
+    if (p.name) named++;
+    return '<div class="row" data-go="/project?id='+esc(encodeURIComponent(p.id))+'&name='+esc(encodeURIComponent(nm))+'"><span class="nm w">'+esc(nm)+"</span>"+
+      '<span class="bar"><i style="width:'+Math.max(3,Number(p.pct)||0).toFixed(0)+'%"></i></span>'+
+      '<span class="v">'+esc((Number(p.pct)||0).toFixed(0))+"%</span>"+
+      '<span class="x">'+esc(fmt(p.out))+'</span><span class="chev">›</span></div>';
+  }).join("");
+  if (!named) html += '<div class="cardnote">'+esc(t("projHint","现在只显示编号。想显示文件夹名：在 Claude Code 里运行 /numable-usage，打开「上传项目名」。"))+"</div>";
+  document.getElementById("projects").innerHTML=html;
+  setHTML("vProj", esc(t("vProj","按输出占比")));
+}
+
+/* ── 11. 习惯:与前 30 天比(百分比用「点」) ── */
+function webCalls(list){ var n=0; (list||[]).forEach(function(x){ if (x.name==="WebSearch"||x.name==="WebFetch") n+=Number(x.n)||0; }); return n; }
+function webPrev(list){ var n=0; (list||[]).forEach(function(x){ if (x.name==="WebSearch"||x.name==="WebFetch") n+=Number(x.prev)||0; }); return n; }
+function paintHabits(){
+  var c=M().composition, cp=M().compositionPrev, ss=M().sessions, el=document.getElementById("habits");
+  if (!c){ el.innerHTML=noData(); return; }
+  var tile=function(k, v, dl, d, go){ return '<div class="st"'+(go?' '+go:"")+'><div class="k">'+esc(k)+(go?' <span class="chev">›</span>':"")+'</div><div class="v">'+esc(v)+"</div>"+
+    (dl?'<div class="dl">'+dl+"</div>":"")+(d?'<div class="k" style="margin-top:3px">'+esc(d)+"</div>":"")+"</div>"; };
+  var w=webCalls(M().tools), wp=webPrev(M().tools);
+  el.innerHTML='<div class="grid">'+
+    tile(t("hAvg","平均会话"), ss&&ss.n ? dur(ss.avgMin) : "--")+
+    tile(t("hMax","最长会话"), ss&&ss.n ? dur(ss.maxMin) : "--")+
+    tile(t("hHit","缓存命中"), (Number(c.hitRate)||0).toFixed(0)+"%", cp?ptChip(c.hitRate, cp.hitRate):"", t("hHitD","上下文直接读缓存"), 'data-go="/tokens"')+
+    tile(t("hThink","思考"), (Number(c.thinkPct)||0).toFixed(0)+"%", cp?ptChip(c.thinkPct, cp.thinkPct):"", t("hThinkD","占输出"), 'data-go="/tokens"')+
+    tile(t("hSide","子代理"), (Number(c.sidePct)||0).toFixed(0)+"%", cp?ptChip(c.sidePct, cp.sidePct):"", t("hSideD","占输出"), 'data-go="/tokens"')+
+    tile(t("hWeb","联网"), fmt(w), chipOf(chgOf(w, wp)), t("hWebD","搜索与抓取网页"), 'data-tool="WebSearch"')+
+    "</div>";
+  setHTML("vHabit", esc(t("vHabit","近 30 天 · 对比前 30 天")));
+}
+
+
+function paintAll(){
+  var el=document.getElementById("at");
+  /* 时间锚兼刷新入口(§5.5.2 契约 2):H5 页拿不到容器的下拉刷新,穿透路径必须页面自己给。
+     锚取**采集端上传的时刻**,不是「我什么时候取的」—— 后者刷新一下就变新,那是假新鲜。
+     §1:恒在页头右上角、带底胶囊(裸文字不给可点暗示)。 */
+  var up=D&&D.updatedAt;
+  xbAt.set(el, up ? Number(up) : null);   /* updatedAt 是毫秒;格式归 xbAt(当天 HH:mm / 跨天 MM-DD HH:mm) */
+  LEAD = "";
+  var names=(M().daily30Models||[]).concat((M().costModels||[]).map(function(x){ return x.name; }))
+    .concat((M().models||[]).map(function(x){ return x.name; }));
+  buildColors(names.filter(function(n, i){ return names.indexOf(n)===i; }));
+  paintToday(); paintWin(); paintKpis(); paintTrend(); paintModels(); paintPeriods(); paintTools();
+  paintHours(); paintHeat(); paintProjects(); paintHabits();
+  /* §1 副标 = 这个页面**此刻的状态**。原来这里是「会话、消息与 token 消耗」——
+     那是这一页有什么(描述),不是现在怎么样。 */
+  var lead=document.getElementById("lead");
+  if (lead) lead.textContent = LEAD
+    ? t("leadOn","今天输出 {v} token").replace("{v}", LEAD)
+    : t("leadIdle","今天还没有记录");
+}
+
+/* 进详情页。容器内导航走 xbridge.route(裸 path 会被补成 numable://<self>/page<path>);
+   没有桥时(浏览器预览)回落相对路径。
+   ⚠️ 这里原本写的是 `xbridge.navigate` —— **桥上没有这个方法**(全表只有 route),
+      而 `if(xbridge.x)` 守卫不报错,于是这条一直走下面的相对路径 = 绕开容器路由:
+      没有容器栈、router.json 里声明的标题也不生效(G42 闸 2026-09 扫出)。 */
+function go(path, q){
+  q=q||"";
+  try{
+    if (window.xbridge && xbridge.route) return xbridge.route(path+q);
+  }catch(e){}
+  location.href = "../"+path.replace(/^\//,"")+"/index.html"+q;
+}
+/* 一个分发器管全部跳转(2026-09-24):data-go="/路由?参数" / data-day / data-model / data-tool */
+document.addEventListener("click", function(e){
+  var el=e.target.closest?e.target.closest("[data-go],[data-day],[data-model],[data-tool]"):null;
+  if (!el) return;
+  var d=el.dataset;
+  if (d.go){ var i=d.go.indexOf("?"); return go(i<0?d.go:d.go.slice(0,i), i<0?"":d.go.slice(i)); }
+  if (d.day) return go("/day","?date="+encodeURIComponent(d.day));
+  if (d.model) return go("/model","?name="+encodeURIComponent(d.model));
+  if (d.tool) return go("/tool","?name="+encodeURIComponent(d.tool));
+});
+
+function renderWidgets(en){
+  /* 加卡入口 = **一个按钮**(doc/infosource-standard.md §8.1a):打开系统「添加到仪表盘」面板,
+     由**用户**在面板里挑。此前这里逐行渲一份 WIDGETS 表 —— 那是在包内手抄一份 .xwidget 目录,
+     与真目录两份真源(新增组件忘了改表就永远加不到),而面板已经做得更好。整表已随之删除。
+     ⚠️ 不提示「已添加」(原来那句 `已添加` 在撒谎):落盘只发生在面板里的原生按钮上。 */
+  document.getElementById('pickT').textContent = en ? 'Add widgets' : '添加组件';
+  document.getElementById('pickS').textContent = en ? 'Pick in the panel, then confirm' : '在面板里挑，确认后加到仪表盘';
+  document.getElementById('pickw').onclick = function(){
+    if (window.xbridge && xbridge.pickWidgets) xbridge.pickWidgets();
+  };
+}
+
+/* ── 骨架的开合(§5.5 首屏缓存 · G23)─────────────────────────────────────
+   ⚠️ **延迟 150ms 才铺**(照 hacker 首页 `refresh()`):命中缓存时整条链路是毫秒级,
+      先铺一屏骨架再瞬间换掉,比不铺更糟 —— 那是一次没有信息量的闪烁。
+      于是骨架只在**真的没有缓存**(或缓存已过 hardTTL)、要等一整轮网络时才出现。
+   ⚠️ **只在从没渲出过东西时铺**:点时间锚那次是穿透刷新,用户正看着内容,
+      铺骨架等于把好数据抹掉再等一轮 —— 那一趟本来就该原地替换(§5.5.2 契约 1)。
+   ⚠️ 计时器在 `boot()` **第一行**就起,不是在 `load()` 里:`ready()` 等桥、`appInfo()`
+      都在 load 之前,把它们排除在外就等于这段白屏没人管。 */
+var SHOWN = false, SKEL_T = null;
+function armSkeleton(){
+  SKEL_T = setTimeout(function(){
+    if (!SHOWN) document.getElementById('skel').classList.remove('hide');
+  }, 150);
+}
+function dropSkeleton(){
+  if (SKEL_T){ clearTimeout(SKEL_T); SKEL_T = null; }
+  document.getElementById('skel').classList.add('hide');
+}
+
+async function boot(){
+  armSkeleton();
+  await ready();
+  /* ⚠️ 桥返回的是 {code, data:{...}} —— 这里原本直接读 `info.theme` / `info.language`,
+     两个都恒 undefined:主题永远回落系统、语言永远判成中文(**en 用户整页看到中文**)。
+     别的包(hacker/gold)都写 `(info && info.data) || {}`,这一处漏了。 */
+  var raw = await appInfo();
+  var info = (raw && raw.data) || raw || {};
+  applyTheme(info && info.theme);
+  /* 语言:appInfo → <html data-lang> → 英文(doc/overseas-first.md §1–§2,nbLang)。 */
+  var lang=(info && (info.language||info.lang||info.locale)) || document.documentElement.getAttribute('data-lang') || '';
+  var en = nbLang(lang) !== 'zh';
+  EN = en;
+  T = en ? L['en-US'] : L['zh-CN'];
+  document.documentElement.lang = (EN || T === L['en-US']) ? 'en' : 'zh-CN';
+
+  if(en){
+    ['h1','s1t','s1d','s2t','s2d','go','note1',
+     'secToday','secTrend','secHeat','secDays','secModels','secHours','note2',
+     'secWin','secPer','secTools','secProj','secHabit','secKpi'].forEach(function(k){
+      if(T[k]) setText(k, T[k]);
+    });
+    setText('copy', T.copy);
+    document.documentElement.lang = 'en';
+    document.title = T.h1;
+  }
+
+  document.getElementById('copy').onclick = function(){
+    var s = document.getElementById('cmd').textContent;
+    var done = function(){ setText('copy', t('copied','已复制')); };
+    // ⚠️ 桥上没有 setClipboard(G42);而 WebView 里 navigator.clipboard 常因非安全上下文缺席。
+    //    以前那条**失败也照报「已复制」**,剪贴板其实是空的 —— 报个假成功比不报更糟。
+    //    现在:先真剪贴板 → 退 execCommand 选中复制 → 都不行就据实让用户手动长按。
+    var manual = function(){
+      try{
+        var el = document.getElementById('cmd');
+        var r = document.createRange(); r.selectNodeContents(el);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        if(document.execCommand('copy')){ sel.removeAllRanges(); return done(); }
+      }catch(e){}
+      setText('copy', t('manual','请长按上面的命令复制'));
+    };
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(s).then(done, manual); return;
+      }
+    }catch(e){}
+    manual();
+  };
+  document.getElementById('go').onclick = function(){ nav('numable://app/mine?section=credentials&bundle=01M0F1AVEJJ9700CB548NS6X2E&bind=nu'); };
+
+  // ⚠️ 2026-09-09:此前判据只有一个「取得到数就是已接入」—— 它把**没绑令牌**与
+  // **绑了但服务/网络取不到数**压成同一个观测量(两者都让 live=0),于是投递服务临时挂掉时，
+  // 已经接入的用户会被打回一整页接入教程，而他令牌明明配着、什么都不用做。
+  // 现在绑没绑直接查绑定表(credential.state，纯本地零网络)，取不取得到数是另一件事。
+  await load(false);
+  /* 点锚 = 穿透刷新;在途时转圈、不重复发(连点只算一次)。 */
+  var AT_BUSY = false;
+  document.getElementById('at').addEventListener('click', async function(){
+    if (AT_BUSY) return;
+    AT_BUSY = true; xbAt.busy('at', true);
+    try{ await load(true); } finally { AT_BUSY = false; xbAt.busy('at', false); }
+  });
+}
+
+/* 取一次。useCache=true → 走 .df 的三态缓存(命中即毫秒级);false → 穿透,必打网络。
+   §5.5:首屏有货就先渲货,校新放后台。 */
+async function fetchSummary(useCache){
+  if (!(window.xbridge && xbridge.runDataFlow)) return null;
+  try{ var r = await xbridge.runDataFlow('summary', { _cache: useCache?1:0 });
+       return (r && (r.data || r)) || null; }catch(e){ return null; }
+}
+async function load(force){
+  var data = await fetchSummary(!force);
+  var on = data && String(data.live||'') === '1';
+  if (on){
+    try{ D = JSON.parse(String(data.raw||'')); }catch(e){ D = null; }
+    if (!D) on = false;
+  }
+  /* 令牌**明明绑着**却没取到数(投递服务抖动 / 断网)时，仍然出这一页(没有第三态 UI，
+     而空着的 live 面板比教程更糟)，但把顶部那句话换成对他成立的说法 ——
+     否则一个已经接好的人被从头教一遍怎么接，会以为自己的配置丢了。
+     ⚠️ credState 为空 = 老宿主答不出这个问题 → 一个字都不改，走原行为。 */
+  var cs = data && String(data.credState || '');
+  if (!on && cs === 'bound') {
+    var lead = document.getElementById('lead');
+    if (lead) lead.textContent = EN ? 'Token is configured — usage data is temporarily unavailable. Try again in a moment.'
+                                    : '令牌已配置，暂时取不到用量数据。稍后再试一次。';
+  }
+  /* §1 副标 = 此刻的状态,未接入那一态也不例外(那一屏的状态就是「还没接上」)。 */
+  if (!on && cs !== 'bound'){
+    var l0=document.getElementById('lead');
+    if (l0) l0.textContent = t('leadOff','还没接入——两步就好');
+  }
+  document.getElementById('at').classList.toggle('hide', !on);
+  dropSkeleton();
+  document.getElementById(on ? 'live' : 'setup').classList.remove('hide');
+  SHOWN = true;
+  if (!on) return;
+  document.getElementById('setup').classList.add('hide');
+  renderWidgets(EN);
+  paintAll();
+  /* 三态的中间那一行:刚才渲的是旧货 → 后台真取一次,回来原地替换。
+     这一趟**不铺骨架、不弹任何东西** —— 用户已经在看内容了。 */
+  if (!force && String(data._stale) === '1'){
+    var fresh = await fetchSummary(false);
+    if (!fresh || String(fresh.live||'') !== '1') return;
+    try{ D = JSON.parse(String(fresh.raw||'')); }catch(e){ return; }
+    paintAll();
+  }
+}
+boot();
+</script>
+</body></html>

@@ -1,0 +1,95 @@
+{
+  "_note": "全局状态。两个端点都是 Statuspage v2 公开 API,匿名可达、无 key:\n  · `status.json` 221B —— 整站一个 indicator(none/minor/major/critical/maintenance);\n  · `incidents/unresolved.json` —— **只要未解决的那些**。⚠️ 不要用 `incidents.json`(全量 50 条 131KB)或 `summary.json`(206KB),两者都越过标准 §3 第 5 条的 100KB 上限。\n\n`lv` 把 indicator 折成 4 档给渲染层用(颜色与文案都按它分支)。⚠️ **取不到时落 `-1` 而不是默认档** —— 默认成「局部异常」是编一个状态出来,默认成「正常」更糟(骗人说没事)。-1 在卡上渲成灰点 + `--`,即标准 §7.3。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "st",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflarestatus.com/api/v2/status.json",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "id": "inc",
+      "action": "request",
+      "params": {
+        "url": "https://www.cloudflarestatus.com/api/v2/incidents/unresolved.json",
+        "method": "GET",
+        "formatType": "json",
+        "header": {
+          "User-Agent": "Numable",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ind",
+        "value": "${st.status.indicator}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lv",
+        "value": "$[if::(eq::(${ind},none),0,if::(eq::(${ind},maintenance),1,if::(eq::(${ind},minor),2,if::(eq::(${ind},major),3,if::(eq::(${ind},critical),3,-1)))))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${ind}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_status_unreachable"
+          }
+        }
+      ],
+      "_note": "主干 = 全局状态指示(st.status.indicator)。事件列表(inc)是可选增强 —— 没有事件本身就是好消息。\n取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)。"
+    },
+    {
+      "_note": "进行中事件数。未解决列表为空是常态(实测多数时刻为 0),那不是空态而是好消息 —— 卡上渲 0 是对的。",
+      "op": "set",
+      "props": {
+        "key": "nInc",
+        "value": "$[length::(${inc.incidents})]"
+      }
+    },
+    {
+      "_note": "最近一起进行中事件的标题,用作副行。没有事件时为空,渲染层走「一切正常」分支。",
+      "op": "set",
+      "props": {
+        "key": "top",
+        "value": "${inc.incidents[0].name}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "lv",
+          "nInc",
+          "top",
+          "at"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "id": "price",
+  "title": "价格提醒",
+  "sub": "这个币越过你设的价位时提醒一次",
+  "_note": "动态提醒(边沿):到点取一次 ticker,判「上次在线这边、这次在线那边」才响。与 stock / gold 的 price.xjob 同形。\n⚠️ 从详情页或长按组件进来,pair 预填成那个币、price 预填成现价(改一个数就是自己的线)。「我的 → 提醒 → 添加」那条路 pair 留空必填,不猜默认币。",
+  "i18n": {
+    "en-US": {
+      "title": "Price alert",
+      "sub": "Tells you once, when this coin crosses your price",
+      "message": {
+        "title": "${sym} at ${cur}",
+        "body": "It crossed your ${price}"
+      },
+      "form": {
+        "pair": {
+          "title": "Coin",
+          "component": {
+            "props": {
+              "placeholder": "e.g. BTC-USDT"
+            }
+          }
+        },
+        "dir": {
+          "title": "Direction",
+          "component": {
+            "props": {
+              "items": [
+                {
+                  "value": "below",
+                  "label": "Falls below"
+                },
+                {
+                  "value": "above",
+                  "label": "Rises above"
+                }
+              ]
+            }
+          }
+        },
+        "price": {
+          "title": "Price (USDT)"
+        }
+      }
+    }
+  },
+  "params": {
+    "pair": "",
+    "dir": "above",
+    "price": ""
+  },
+  "form": {
+    "pair": {
+      "title": "币种",
+      "required": true,
+      "component": {
+        "type": "textInput",
+        "props": {
+          "placeholder": "如 BTC-USDT"
+        }
+      }
+    },
+    "dir": {
+      "title": "方向",
+      "component": {
+        "type": "radio",
+        "props": {
+          "items": [
+            {
+              "label": "跌破",
+              "value": "below"
+            },
+            {
+              "label": "涨过",
+              "value": "above"
+            }
+          ]
+        }
+      }
+    },
+    "price": {
+      "title": "价位(USDT)",
+      "required": true,
+      "component": {
+        "type": "numberInput"
+      }
+    }
+  },
+  "events": {
+    "onClick": "/coin?pair=${pair}"
+  },
+  "task": {
+    "depends": [
+      {
+        "flow": "@[file://xJob/flow/tick.df]",
+        "params": {
+          "pair": "${pair}"
+        }
+      }
+    ],
+    "then": {
+      "flow": "@[file://xJob/flow/price.df]",
+      "params": {
+        "cur": "${cur}",
+        "pair": "${pair}",
+        "price": "${price}",
+        "dir": "${dir}"
+      }
+    },
+    "refresh": {
+      "interval": [
+        "300"
+      ]
+    }
+  },
+  "alert": {
+    "level": "normal",
+    "message": {
+      "title": "${sym} ${cur}",
+      "body": "已越过你设的 ${price}"
+    }
+  }
+}

@@ -1,0 +1,3107 @@
+{
+  "_note": "近 14 天事故(incidents 卡 + 首页块)。生成器 gen_cloudflare.py。逐日计数 = 创建时间串的切分计数;逐起字段(重大 / 未结 / 恢复用时)按 50 槽展开(AF 没有可用循环)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "_cacheIn",
+        "value": "${cache}"
+      },
+      "_note": "入参先落地(§9.5 #3:方法参数里的 ${} 看不见 flow 入参)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_cache",
+        "value": "$[parseNumber::(${_cacheIn},0)]"
+      },
+      "_note": "1 = 首页块(读缓存);组件不传 = 0。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_t0",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_zk",
+        "value": "${zoneId}"
+      },
+      "_note": "入参先落地,键表达式里才看得见(§9.5 #3)。无域名参数的流里恒空,不影响。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_ck",
+        "value": "c.cf.ic"
+      }
+    },
+    {
+      "id": "_hit",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_hitTs",
+        "value": "$[parseNumber::(${_hit.ts},0)]"
+      }
+    },
+    {
+      "_note": "页面有缓存 → 整段跳过(连接都不建);组件 / 无缓存 → 真取数。取数体里的 fail_unless 失败即终止整条流,所以走到 data.set 的一定是取到了的。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${_cache},1),if::(gt::(${_hitTs},0),0,1),1)]"
+      },
+      "items": [
+        {
+          "id": "inc",
+          "action": "request",
+          "params": {
+            "url": "https://www.cloudflarestatus.com/api/v2/incidents.json",
+            "method": "GET",
+            "formatType": "json",
+            "header": {
+              "User-Agent": "Numable",
+              "Accept": "application/json"
+            }
+          },
+          "_note": "最近 50 起事故(约 110KB,覆盖大约两周多)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          },
+          "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(gt::(length::(${inc.incidents}),0),0,1)]"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "cf_incidents_unreachable"
+              }
+            }
+          ],
+          "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "cj",
+            "value": "$[join::(pluck::(${inc.incidents},created_at),~)]"
+          },
+          "_note": "全部创建时间拼成一串,逐日用 split 计数(同 regions 的切分计数)。按 UTC 日期归日。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "oldD",
+            "value": "$[subString::(${inc.incidents[@last].created_at},0,10)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "oldMs",
+            "value": "$[parseDate::(${oldD},yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk0",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-0*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c0",
+            "value": "$[calc::(length::(split::(${cj},${dk0}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k0",
+            "value": "$[if::(ge::(parseDate::(${dk0},yyyy-MM-dd),${oldMs}),1,0)]"
+          },
+          "_note": "这一天在 50 起的覆盖范围内吗?不在 = 不知道,柱子不画(而不是画 0)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk1",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-1*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c1",
+            "value": "$[calc::(length::(split::(${cj},${dk1}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k1",
+            "value": "$[if::(ge::(parseDate::(${dk1},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk2",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-2*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c2",
+            "value": "$[calc::(length::(split::(${cj},${dk2}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k2",
+            "value": "$[if::(ge::(parseDate::(${dk2},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk3",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-3*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c3",
+            "value": "$[calc::(length::(split::(${cj},${dk3}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k3",
+            "value": "$[if::(ge::(parseDate::(${dk3},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk4",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-4*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c4",
+            "value": "$[calc::(length::(split::(${cj},${dk4}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k4",
+            "value": "$[if::(ge::(parseDate::(${dk4},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk5",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-5*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c5",
+            "value": "$[calc::(length::(split::(${cj},${dk5}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k5",
+            "value": "$[if::(ge::(parseDate::(${dk5},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk6",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-6*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c6",
+            "value": "$[calc::(length::(split::(${cj},${dk6}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k6",
+            "value": "$[if::(ge::(parseDate::(${dk6},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk7",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-7*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c7",
+            "value": "$[calc::(length::(split::(${cj},${dk7}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k7",
+            "value": "$[if::(ge::(parseDate::(${dk7},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk8",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-8*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c8",
+            "value": "$[calc::(length::(split::(${cj},${dk8}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k8",
+            "value": "$[if::(ge::(parseDate::(${dk8},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk9",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-9*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c9",
+            "value": "$[calc::(length::(split::(${cj},${dk9}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k9",
+            "value": "$[if::(ge::(parseDate::(${dk9},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk10",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-10*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c10",
+            "value": "$[calc::(length::(split::(${cj},${dk10}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k10",
+            "value": "$[if::(ge::(parseDate::(${dk10},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk11",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-11*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c11",
+            "value": "$[calc::(length::(split::(${cj},${dk11}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k11",
+            "value": "$[if::(ge::(parseDate::(${dk11},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk12",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-12*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c12",
+            "value": "$[calc::(length::(split::(${cj},${dk12}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k12",
+            "value": "$[if::(ge::(parseDate::(${dk12},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dk13",
+            "value": "$[formatDate::(calc::(${@time.nowMs}-13*86400000),yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c13",
+            "value": "$[calc::(length::(split::(${cj},${dk13}))-1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "k13",
+            "value": "$[if::(ge::(parseDate::(${dk13},yyyy-MM-dd),${oldMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n14",
+            "value": "$[calc::(${c0}+${c1}+${c2}+${c3}+${c4}+${c5}+${c6}+${c7}+${c8}+${c9}+${c10}+${c11}+${c12}+${c13})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mx",
+            "value": "$[max::(${c0},${c1},${c2},${c3},${c4},${c5},${c6},${c7},${c8},${c9},${c10},${c11},${c12},${c13},1)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "fromMs",
+            "value": "$[parseDate::(${dk13},yyyy-MM-dd)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "MONE",
+            "value": [
+              "Jan",
+              "Feb",
+              "Mar",
+              "Apr",
+              "May",
+              "Jun",
+              "Jul",
+              "Aug",
+              "Sep",
+              "Oct",
+              "Nov",
+              "Dec"
+            ]
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "d13Iso",
+            "value": "${dk13}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "d13Mo",
+            "value": "$[parseNumber::(subString::(${d13Iso},5,7),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "d13Dy",
+            "value": "$[parseNumber::(subString::(${d13Iso},8,10),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "d13Me",
+            "value": "$[index::(${MONE},calc::(${d13Mo}-1))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "d13Z",
+            "value": "${d13Mo}月${d13Dy}日"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "d13E",
+            "value": "${d13Me} ${d13Dy}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "d13",
+            "value": "$[if::(eq::(length::(${d13Iso}),10),if::(startsWith::(${@app.language},zh),${d13Z},${d13E}),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh0",
+            "value": "$[if::(gt::(${c0},0),max::(round::(calc::(${c0}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by0",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh0}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh1",
+            "value": "$[if::(gt::(${c1},0),max::(round::(calc::(${c1}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by1",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh1}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh2",
+            "value": "$[if::(gt::(${c2},0),max::(round::(calc::(${c2}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by2",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh2}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh3",
+            "value": "$[if::(gt::(${c3},0),max::(round::(calc::(${c3}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by3",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh3}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh4",
+            "value": "$[if::(gt::(${c4},0),max::(round::(calc::(${c4}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by4",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh4}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh5",
+            "value": "$[if::(gt::(${c5},0),max::(round::(calc::(${c5}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by5",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh5}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh6",
+            "value": "$[if::(gt::(${c6},0),max::(round::(calc::(${c6}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by6",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh6}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh7",
+            "value": "$[if::(gt::(${c7},0),max::(round::(calc::(${c7}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by7",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh7}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh8",
+            "value": "$[if::(gt::(${c8},0),max::(round::(calc::(${c8}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by8",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh8}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh9",
+            "value": "$[if::(gt::(${c9},0),max::(round::(calc::(${c9}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by9",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh9}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh10",
+            "value": "$[if::(gt::(${c10},0),max::(round::(calc::(${c10}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by10",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh10}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh11",
+            "value": "$[if::(gt::(${c11},0),max::(round::(calc::(${c11}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by11",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh11}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh12",
+            "value": "$[if::(gt::(${c12},0),max::(round::(calc::(${c12}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by12",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh12}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "bh13",
+            "value": "$[if::(gt::(${c13},0),max::(round::(calc::(${c13}*70.0/${mx})),4),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "by13",
+            "value": "$[findNotEmpty::(calc::(126.0-${bh13}),124.0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w0",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[0].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j0",
+            "value": "$[if::(eq::(${w0},1),if::(or::(eq::(${inc.incidents[0].impact},major),eq::(${inc.incidents[0].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o0",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[0].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[0].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0",
+            "value": "$[if::(eq::(${w0},1),if::(eq::(${o0},0),if::(eq::(findNotEmpty::(${inc.incidents[0].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u0",
+            "value": "$[if::(eq::(${r0},1),calc::((calc::(parseDate::(subString::(${inc.incidents[0].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[0].resolved_at},11,13)*3600000+subString::(${inc.incidents[0].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[0].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[0].created_at},11,13)*3600000+subString::(${inc.incidents[0].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w1",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[1].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j1",
+            "value": "$[if::(eq::(${w1},1),if::(or::(eq::(${inc.incidents[1].impact},major),eq::(${inc.incidents[1].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o1",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[1].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[1].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1",
+            "value": "$[if::(eq::(${w1},1),if::(eq::(${o1},0),if::(eq::(findNotEmpty::(${inc.incidents[1].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u1",
+            "value": "$[if::(eq::(${r1},1),calc::((calc::(parseDate::(subString::(${inc.incidents[1].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[1].resolved_at},11,13)*3600000+subString::(${inc.incidents[1].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[1].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[1].created_at},11,13)*3600000+subString::(${inc.incidents[1].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w2",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[2].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j2",
+            "value": "$[if::(eq::(${w2},1),if::(or::(eq::(${inc.incidents[2].impact},major),eq::(${inc.incidents[2].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o2",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[2].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[2].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2",
+            "value": "$[if::(eq::(${w2},1),if::(eq::(${o2},0),if::(eq::(findNotEmpty::(${inc.incidents[2].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u2",
+            "value": "$[if::(eq::(${r2},1),calc::((calc::(parseDate::(subString::(${inc.incidents[2].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[2].resolved_at},11,13)*3600000+subString::(${inc.incidents[2].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[2].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[2].created_at},11,13)*3600000+subString::(${inc.incidents[2].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w3",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[3].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j3",
+            "value": "$[if::(eq::(${w3},1),if::(or::(eq::(${inc.incidents[3].impact},major),eq::(${inc.incidents[3].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o3",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[3].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[3].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3",
+            "value": "$[if::(eq::(${w3},1),if::(eq::(${o3},0),if::(eq::(findNotEmpty::(${inc.incidents[3].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u3",
+            "value": "$[if::(eq::(${r3},1),calc::((calc::(parseDate::(subString::(${inc.incidents[3].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[3].resolved_at},11,13)*3600000+subString::(${inc.incidents[3].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[3].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[3].created_at},11,13)*3600000+subString::(${inc.incidents[3].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w4",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[4].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j4",
+            "value": "$[if::(eq::(${w4},1),if::(or::(eq::(${inc.incidents[4].impact},major),eq::(${inc.incidents[4].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o4",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[4].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[4].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r4",
+            "value": "$[if::(eq::(${w4},1),if::(eq::(${o4},0),if::(eq::(findNotEmpty::(${inc.incidents[4].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u4",
+            "value": "$[if::(eq::(${r4},1),calc::((calc::(parseDate::(subString::(${inc.incidents[4].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[4].resolved_at},11,13)*3600000+subString::(${inc.incidents[4].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[4].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[4].created_at},11,13)*3600000+subString::(${inc.incidents[4].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w5",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[5].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j5",
+            "value": "$[if::(eq::(${w5},1),if::(or::(eq::(${inc.incidents[5].impact},major),eq::(${inc.incidents[5].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o5",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[5].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[5].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r5",
+            "value": "$[if::(eq::(${w5},1),if::(eq::(${o5},0),if::(eq::(findNotEmpty::(${inc.incidents[5].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u5",
+            "value": "$[if::(eq::(${r5},1),calc::((calc::(parseDate::(subString::(${inc.incidents[5].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[5].resolved_at},11,13)*3600000+subString::(${inc.incidents[5].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[5].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[5].created_at},11,13)*3600000+subString::(${inc.incidents[5].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w6",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[6].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j6",
+            "value": "$[if::(eq::(${w6},1),if::(or::(eq::(${inc.incidents[6].impact},major),eq::(${inc.incidents[6].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o6",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[6].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[6].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r6",
+            "value": "$[if::(eq::(${w6},1),if::(eq::(${o6},0),if::(eq::(findNotEmpty::(${inc.incidents[6].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u6",
+            "value": "$[if::(eq::(${r6},1),calc::((calc::(parseDate::(subString::(${inc.incidents[6].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[6].resolved_at},11,13)*3600000+subString::(${inc.incidents[6].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[6].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[6].created_at},11,13)*3600000+subString::(${inc.incidents[6].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w7",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[7].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j7",
+            "value": "$[if::(eq::(${w7},1),if::(or::(eq::(${inc.incidents[7].impact},major),eq::(${inc.incidents[7].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o7",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[7].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[7].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r7",
+            "value": "$[if::(eq::(${w7},1),if::(eq::(${o7},0),if::(eq::(findNotEmpty::(${inc.incidents[7].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u7",
+            "value": "$[if::(eq::(${r7},1),calc::((calc::(parseDate::(subString::(${inc.incidents[7].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[7].resolved_at},11,13)*3600000+subString::(${inc.incidents[7].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[7].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[7].created_at},11,13)*3600000+subString::(${inc.incidents[7].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w8",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[8].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j8",
+            "value": "$[if::(eq::(${w8},1),if::(or::(eq::(${inc.incidents[8].impact},major),eq::(${inc.incidents[8].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o8",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[8].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[8].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r8",
+            "value": "$[if::(eq::(${w8},1),if::(eq::(${o8},0),if::(eq::(findNotEmpty::(${inc.incidents[8].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u8",
+            "value": "$[if::(eq::(${r8},1),calc::((calc::(parseDate::(subString::(${inc.incidents[8].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[8].resolved_at},11,13)*3600000+subString::(${inc.incidents[8].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[8].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[8].created_at},11,13)*3600000+subString::(${inc.incidents[8].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w9",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[9].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j9",
+            "value": "$[if::(eq::(${w9},1),if::(or::(eq::(${inc.incidents[9].impact},major),eq::(${inc.incidents[9].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o9",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[9].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[9].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r9",
+            "value": "$[if::(eq::(${w9},1),if::(eq::(${o9},0),if::(eq::(findNotEmpty::(${inc.incidents[9].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u9",
+            "value": "$[if::(eq::(${r9},1),calc::((calc::(parseDate::(subString::(${inc.incidents[9].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[9].resolved_at},11,13)*3600000+subString::(${inc.incidents[9].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[9].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[9].created_at},11,13)*3600000+subString::(${inc.incidents[9].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w10",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[10].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j10",
+            "value": "$[if::(eq::(${w10},1),if::(or::(eq::(${inc.incidents[10].impact},major),eq::(${inc.incidents[10].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o10",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[10].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[10].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r10",
+            "value": "$[if::(eq::(${w10},1),if::(eq::(${o10},0),if::(eq::(findNotEmpty::(${inc.incidents[10].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u10",
+            "value": "$[if::(eq::(${r10},1),calc::((calc::(parseDate::(subString::(${inc.incidents[10].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[10].resolved_at},11,13)*3600000+subString::(${inc.incidents[10].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[10].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[10].created_at},11,13)*3600000+subString::(${inc.incidents[10].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w11",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[11].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j11",
+            "value": "$[if::(eq::(${w11},1),if::(or::(eq::(${inc.incidents[11].impact},major),eq::(${inc.incidents[11].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o11",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[11].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[11].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r11",
+            "value": "$[if::(eq::(${w11},1),if::(eq::(${o11},0),if::(eq::(findNotEmpty::(${inc.incidents[11].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u11",
+            "value": "$[if::(eq::(${r11},1),calc::((calc::(parseDate::(subString::(${inc.incidents[11].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[11].resolved_at},11,13)*3600000+subString::(${inc.incidents[11].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[11].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[11].created_at},11,13)*3600000+subString::(${inc.incidents[11].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w12",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[12].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j12",
+            "value": "$[if::(eq::(${w12},1),if::(or::(eq::(${inc.incidents[12].impact},major),eq::(${inc.incidents[12].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o12",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[12].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[12].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r12",
+            "value": "$[if::(eq::(${w12},1),if::(eq::(${o12},0),if::(eq::(findNotEmpty::(${inc.incidents[12].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u12",
+            "value": "$[if::(eq::(${r12},1),calc::((calc::(parseDate::(subString::(${inc.incidents[12].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[12].resolved_at},11,13)*3600000+subString::(${inc.incidents[12].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[12].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[12].created_at},11,13)*3600000+subString::(${inc.incidents[12].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w13",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[13].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j13",
+            "value": "$[if::(eq::(${w13},1),if::(or::(eq::(${inc.incidents[13].impact},major),eq::(${inc.incidents[13].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o13",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[13].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[13].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r13",
+            "value": "$[if::(eq::(${w13},1),if::(eq::(${o13},0),if::(eq::(findNotEmpty::(${inc.incidents[13].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u13",
+            "value": "$[if::(eq::(${r13},1),calc::((calc::(parseDate::(subString::(${inc.incidents[13].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[13].resolved_at},11,13)*3600000+subString::(${inc.incidents[13].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[13].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[13].created_at},11,13)*3600000+subString::(${inc.incidents[13].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w14",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[14].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j14",
+            "value": "$[if::(eq::(${w14},1),if::(or::(eq::(${inc.incidents[14].impact},major),eq::(${inc.incidents[14].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o14",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[14].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[14].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r14",
+            "value": "$[if::(eq::(${w14},1),if::(eq::(${o14},0),if::(eq::(findNotEmpty::(${inc.incidents[14].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u14",
+            "value": "$[if::(eq::(${r14},1),calc::((calc::(parseDate::(subString::(${inc.incidents[14].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[14].resolved_at},11,13)*3600000+subString::(${inc.incidents[14].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[14].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[14].created_at},11,13)*3600000+subString::(${inc.incidents[14].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w15",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[15].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j15",
+            "value": "$[if::(eq::(${w15},1),if::(or::(eq::(${inc.incidents[15].impact},major),eq::(${inc.incidents[15].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o15",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[15].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[15].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r15",
+            "value": "$[if::(eq::(${w15},1),if::(eq::(${o15},0),if::(eq::(findNotEmpty::(${inc.incidents[15].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u15",
+            "value": "$[if::(eq::(${r15},1),calc::((calc::(parseDate::(subString::(${inc.incidents[15].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[15].resolved_at},11,13)*3600000+subString::(${inc.incidents[15].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[15].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[15].created_at},11,13)*3600000+subString::(${inc.incidents[15].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w16",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[16].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j16",
+            "value": "$[if::(eq::(${w16},1),if::(or::(eq::(${inc.incidents[16].impact},major),eq::(${inc.incidents[16].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o16",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[16].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[16].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r16",
+            "value": "$[if::(eq::(${w16},1),if::(eq::(${o16},0),if::(eq::(findNotEmpty::(${inc.incidents[16].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u16",
+            "value": "$[if::(eq::(${r16},1),calc::((calc::(parseDate::(subString::(${inc.incidents[16].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[16].resolved_at},11,13)*3600000+subString::(${inc.incidents[16].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[16].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[16].created_at},11,13)*3600000+subString::(${inc.incidents[16].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w17",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[17].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j17",
+            "value": "$[if::(eq::(${w17},1),if::(or::(eq::(${inc.incidents[17].impact},major),eq::(${inc.incidents[17].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o17",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[17].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[17].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r17",
+            "value": "$[if::(eq::(${w17},1),if::(eq::(${o17},0),if::(eq::(findNotEmpty::(${inc.incidents[17].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u17",
+            "value": "$[if::(eq::(${r17},1),calc::((calc::(parseDate::(subString::(${inc.incidents[17].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[17].resolved_at},11,13)*3600000+subString::(${inc.incidents[17].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[17].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[17].created_at},11,13)*3600000+subString::(${inc.incidents[17].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w18",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[18].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j18",
+            "value": "$[if::(eq::(${w18},1),if::(or::(eq::(${inc.incidents[18].impact},major),eq::(${inc.incidents[18].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o18",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[18].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[18].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r18",
+            "value": "$[if::(eq::(${w18},1),if::(eq::(${o18},0),if::(eq::(findNotEmpty::(${inc.incidents[18].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u18",
+            "value": "$[if::(eq::(${r18},1),calc::((calc::(parseDate::(subString::(${inc.incidents[18].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[18].resolved_at},11,13)*3600000+subString::(${inc.incidents[18].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[18].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[18].created_at},11,13)*3600000+subString::(${inc.incidents[18].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w19",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[19].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j19",
+            "value": "$[if::(eq::(${w19},1),if::(or::(eq::(${inc.incidents[19].impact},major),eq::(${inc.incidents[19].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o19",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[19].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[19].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r19",
+            "value": "$[if::(eq::(${w19},1),if::(eq::(${o19},0),if::(eq::(findNotEmpty::(${inc.incidents[19].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u19",
+            "value": "$[if::(eq::(${r19},1),calc::((calc::(parseDate::(subString::(${inc.incidents[19].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[19].resolved_at},11,13)*3600000+subString::(${inc.incidents[19].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[19].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[19].created_at},11,13)*3600000+subString::(${inc.incidents[19].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w20",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[20].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j20",
+            "value": "$[if::(eq::(${w20},1),if::(or::(eq::(${inc.incidents[20].impact},major),eq::(${inc.incidents[20].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o20",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[20].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[20].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r20",
+            "value": "$[if::(eq::(${w20},1),if::(eq::(${o20},0),if::(eq::(findNotEmpty::(${inc.incidents[20].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u20",
+            "value": "$[if::(eq::(${r20},1),calc::((calc::(parseDate::(subString::(${inc.incidents[20].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[20].resolved_at},11,13)*3600000+subString::(${inc.incidents[20].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[20].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[20].created_at},11,13)*3600000+subString::(${inc.incidents[20].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w21",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[21].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j21",
+            "value": "$[if::(eq::(${w21},1),if::(or::(eq::(${inc.incidents[21].impact},major),eq::(${inc.incidents[21].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o21",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[21].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[21].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r21",
+            "value": "$[if::(eq::(${w21},1),if::(eq::(${o21},0),if::(eq::(findNotEmpty::(${inc.incidents[21].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u21",
+            "value": "$[if::(eq::(${r21},1),calc::((calc::(parseDate::(subString::(${inc.incidents[21].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[21].resolved_at},11,13)*3600000+subString::(${inc.incidents[21].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[21].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[21].created_at},11,13)*3600000+subString::(${inc.incidents[21].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w22",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[22].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j22",
+            "value": "$[if::(eq::(${w22},1),if::(or::(eq::(${inc.incidents[22].impact},major),eq::(${inc.incidents[22].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o22",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[22].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[22].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r22",
+            "value": "$[if::(eq::(${w22},1),if::(eq::(${o22},0),if::(eq::(findNotEmpty::(${inc.incidents[22].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u22",
+            "value": "$[if::(eq::(${r22},1),calc::((calc::(parseDate::(subString::(${inc.incidents[22].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[22].resolved_at},11,13)*3600000+subString::(${inc.incidents[22].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[22].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[22].created_at},11,13)*3600000+subString::(${inc.incidents[22].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w23",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[23].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j23",
+            "value": "$[if::(eq::(${w23},1),if::(or::(eq::(${inc.incidents[23].impact},major),eq::(${inc.incidents[23].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o23",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[23].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[23].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r23",
+            "value": "$[if::(eq::(${w23},1),if::(eq::(${o23},0),if::(eq::(findNotEmpty::(${inc.incidents[23].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u23",
+            "value": "$[if::(eq::(${r23},1),calc::((calc::(parseDate::(subString::(${inc.incidents[23].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[23].resolved_at},11,13)*3600000+subString::(${inc.incidents[23].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[23].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[23].created_at},11,13)*3600000+subString::(${inc.incidents[23].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w24",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[24].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j24",
+            "value": "$[if::(eq::(${w24},1),if::(or::(eq::(${inc.incidents[24].impact},major),eq::(${inc.incidents[24].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o24",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[24].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[24].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r24",
+            "value": "$[if::(eq::(${w24},1),if::(eq::(${o24},0),if::(eq::(findNotEmpty::(${inc.incidents[24].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u24",
+            "value": "$[if::(eq::(${r24},1),calc::((calc::(parseDate::(subString::(${inc.incidents[24].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[24].resolved_at},11,13)*3600000+subString::(${inc.incidents[24].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[24].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[24].created_at},11,13)*3600000+subString::(${inc.incidents[24].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w25",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[25].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j25",
+            "value": "$[if::(eq::(${w25},1),if::(or::(eq::(${inc.incidents[25].impact},major),eq::(${inc.incidents[25].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o25",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[25].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[25].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r25",
+            "value": "$[if::(eq::(${w25},1),if::(eq::(${o25},0),if::(eq::(findNotEmpty::(${inc.incidents[25].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u25",
+            "value": "$[if::(eq::(${r25},1),calc::((calc::(parseDate::(subString::(${inc.incidents[25].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[25].resolved_at},11,13)*3600000+subString::(${inc.incidents[25].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[25].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[25].created_at},11,13)*3600000+subString::(${inc.incidents[25].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w26",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[26].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j26",
+            "value": "$[if::(eq::(${w26},1),if::(or::(eq::(${inc.incidents[26].impact},major),eq::(${inc.incidents[26].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o26",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[26].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[26].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r26",
+            "value": "$[if::(eq::(${w26},1),if::(eq::(${o26},0),if::(eq::(findNotEmpty::(${inc.incidents[26].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u26",
+            "value": "$[if::(eq::(${r26},1),calc::((calc::(parseDate::(subString::(${inc.incidents[26].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[26].resolved_at},11,13)*3600000+subString::(${inc.incidents[26].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[26].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[26].created_at},11,13)*3600000+subString::(${inc.incidents[26].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w27",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[27].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j27",
+            "value": "$[if::(eq::(${w27},1),if::(or::(eq::(${inc.incidents[27].impact},major),eq::(${inc.incidents[27].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o27",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[27].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[27].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r27",
+            "value": "$[if::(eq::(${w27},1),if::(eq::(${o27},0),if::(eq::(findNotEmpty::(${inc.incidents[27].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u27",
+            "value": "$[if::(eq::(${r27},1),calc::((calc::(parseDate::(subString::(${inc.incidents[27].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[27].resolved_at},11,13)*3600000+subString::(${inc.incidents[27].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[27].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[27].created_at},11,13)*3600000+subString::(${inc.incidents[27].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w28",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[28].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j28",
+            "value": "$[if::(eq::(${w28},1),if::(or::(eq::(${inc.incidents[28].impact},major),eq::(${inc.incidents[28].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o28",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[28].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[28].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r28",
+            "value": "$[if::(eq::(${w28},1),if::(eq::(${o28},0),if::(eq::(findNotEmpty::(${inc.incidents[28].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u28",
+            "value": "$[if::(eq::(${r28},1),calc::((calc::(parseDate::(subString::(${inc.incidents[28].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[28].resolved_at},11,13)*3600000+subString::(${inc.incidents[28].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[28].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[28].created_at},11,13)*3600000+subString::(${inc.incidents[28].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w29",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[29].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j29",
+            "value": "$[if::(eq::(${w29},1),if::(or::(eq::(${inc.incidents[29].impact},major),eq::(${inc.incidents[29].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o29",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[29].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[29].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r29",
+            "value": "$[if::(eq::(${w29},1),if::(eq::(${o29},0),if::(eq::(findNotEmpty::(${inc.incidents[29].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u29",
+            "value": "$[if::(eq::(${r29},1),calc::((calc::(parseDate::(subString::(${inc.incidents[29].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[29].resolved_at},11,13)*3600000+subString::(${inc.incidents[29].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[29].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[29].created_at},11,13)*3600000+subString::(${inc.incidents[29].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w30",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[30].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j30",
+            "value": "$[if::(eq::(${w30},1),if::(or::(eq::(${inc.incidents[30].impact},major),eq::(${inc.incidents[30].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o30",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[30].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[30].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r30",
+            "value": "$[if::(eq::(${w30},1),if::(eq::(${o30},0),if::(eq::(findNotEmpty::(${inc.incidents[30].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u30",
+            "value": "$[if::(eq::(${r30},1),calc::((calc::(parseDate::(subString::(${inc.incidents[30].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[30].resolved_at},11,13)*3600000+subString::(${inc.incidents[30].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[30].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[30].created_at},11,13)*3600000+subString::(${inc.incidents[30].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w31",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[31].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j31",
+            "value": "$[if::(eq::(${w31},1),if::(or::(eq::(${inc.incidents[31].impact},major),eq::(${inc.incidents[31].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o31",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[31].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[31].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r31",
+            "value": "$[if::(eq::(${w31},1),if::(eq::(${o31},0),if::(eq::(findNotEmpty::(${inc.incidents[31].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u31",
+            "value": "$[if::(eq::(${r31},1),calc::((calc::(parseDate::(subString::(${inc.incidents[31].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[31].resolved_at},11,13)*3600000+subString::(${inc.incidents[31].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[31].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[31].created_at},11,13)*3600000+subString::(${inc.incidents[31].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w32",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[32].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j32",
+            "value": "$[if::(eq::(${w32},1),if::(or::(eq::(${inc.incidents[32].impact},major),eq::(${inc.incidents[32].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o32",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[32].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[32].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r32",
+            "value": "$[if::(eq::(${w32},1),if::(eq::(${o32},0),if::(eq::(findNotEmpty::(${inc.incidents[32].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u32",
+            "value": "$[if::(eq::(${r32},1),calc::((calc::(parseDate::(subString::(${inc.incidents[32].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[32].resolved_at},11,13)*3600000+subString::(${inc.incidents[32].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[32].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[32].created_at},11,13)*3600000+subString::(${inc.incidents[32].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w33",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[33].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j33",
+            "value": "$[if::(eq::(${w33},1),if::(or::(eq::(${inc.incidents[33].impact},major),eq::(${inc.incidents[33].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o33",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[33].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[33].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r33",
+            "value": "$[if::(eq::(${w33},1),if::(eq::(${o33},0),if::(eq::(findNotEmpty::(${inc.incidents[33].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u33",
+            "value": "$[if::(eq::(${r33},1),calc::((calc::(parseDate::(subString::(${inc.incidents[33].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[33].resolved_at},11,13)*3600000+subString::(${inc.incidents[33].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[33].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[33].created_at},11,13)*3600000+subString::(${inc.incidents[33].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w34",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[34].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j34",
+            "value": "$[if::(eq::(${w34},1),if::(or::(eq::(${inc.incidents[34].impact},major),eq::(${inc.incidents[34].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o34",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[34].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[34].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r34",
+            "value": "$[if::(eq::(${w34},1),if::(eq::(${o34},0),if::(eq::(findNotEmpty::(${inc.incidents[34].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u34",
+            "value": "$[if::(eq::(${r34},1),calc::((calc::(parseDate::(subString::(${inc.incidents[34].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[34].resolved_at},11,13)*3600000+subString::(${inc.incidents[34].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[34].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[34].created_at},11,13)*3600000+subString::(${inc.incidents[34].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w35",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[35].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j35",
+            "value": "$[if::(eq::(${w35},1),if::(or::(eq::(${inc.incidents[35].impact},major),eq::(${inc.incidents[35].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o35",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[35].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[35].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r35",
+            "value": "$[if::(eq::(${w35},1),if::(eq::(${o35},0),if::(eq::(findNotEmpty::(${inc.incidents[35].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u35",
+            "value": "$[if::(eq::(${r35},1),calc::((calc::(parseDate::(subString::(${inc.incidents[35].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[35].resolved_at},11,13)*3600000+subString::(${inc.incidents[35].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[35].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[35].created_at},11,13)*3600000+subString::(${inc.incidents[35].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w36",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[36].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j36",
+            "value": "$[if::(eq::(${w36},1),if::(or::(eq::(${inc.incidents[36].impact},major),eq::(${inc.incidents[36].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o36",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[36].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[36].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r36",
+            "value": "$[if::(eq::(${w36},1),if::(eq::(${o36},0),if::(eq::(findNotEmpty::(${inc.incidents[36].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u36",
+            "value": "$[if::(eq::(${r36},1),calc::((calc::(parseDate::(subString::(${inc.incidents[36].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[36].resolved_at},11,13)*3600000+subString::(${inc.incidents[36].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[36].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[36].created_at},11,13)*3600000+subString::(${inc.incidents[36].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w37",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[37].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j37",
+            "value": "$[if::(eq::(${w37},1),if::(or::(eq::(${inc.incidents[37].impact},major),eq::(${inc.incidents[37].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o37",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[37].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[37].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r37",
+            "value": "$[if::(eq::(${w37},1),if::(eq::(${o37},0),if::(eq::(findNotEmpty::(${inc.incidents[37].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u37",
+            "value": "$[if::(eq::(${r37},1),calc::((calc::(parseDate::(subString::(${inc.incidents[37].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[37].resolved_at},11,13)*3600000+subString::(${inc.incidents[37].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[37].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[37].created_at},11,13)*3600000+subString::(${inc.incidents[37].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w38",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[38].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j38",
+            "value": "$[if::(eq::(${w38},1),if::(or::(eq::(${inc.incidents[38].impact},major),eq::(${inc.incidents[38].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o38",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[38].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[38].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r38",
+            "value": "$[if::(eq::(${w38},1),if::(eq::(${o38},0),if::(eq::(findNotEmpty::(${inc.incidents[38].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u38",
+            "value": "$[if::(eq::(${r38},1),calc::((calc::(parseDate::(subString::(${inc.incidents[38].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[38].resolved_at},11,13)*3600000+subString::(${inc.incidents[38].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[38].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[38].created_at},11,13)*3600000+subString::(${inc.incidents[38].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w39",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[39].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j39",
+            "value": "$[if::(eq::(${w39},1),if::(or::(eq::(${inc.incidents[39].impact},major),eq::(${inc.incidents[39].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o39",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[39].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[39].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r39",
+            "value": "$[if::(eq::(${w39},1),if::(eq::(${o39},0),if::(eq::(findNotEmpty::(${inc.incidents[39].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u39",
+            "value": "$[if::(eq::(${r39},1),calc::((calc::(parseDate::(subString::(${inc.incidents[39].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[39].resolved_at},11,13)*3600000+subString::(${inc.incidents[39].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[39].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[39].created_at},11,13)*3600000+subString::(${inc.incidents[39].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w40",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[40].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j40",
+            "value": "$[if::(eq::(${w40},1),if::(or::(eq::(${inc.incidents[40].impact},major),eq::(${inc.incidents[40].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o40",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[40].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[40].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r40",
+            "value": "$[if::(eq::(${w40},1),if::(eq::(${o40},0),if::(eq::(findNotEmpty::(${inc.incidents[40].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u40",
+            "value": "$[if::(eq::(${r40},1),calc::((calc::(parseDate::(subString::(${inc.incidents[40].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[40].resolved_at},11,13)*3600000+subString::(${inc.incidents[40].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[40].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[40].created_at},11,13)*3600000+subString::(${inc.incidents[40].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w41",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[41].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j41",
+            "value": "$[if::(eq::(${w41},1),if::(or::(eq::(${inc.incidents[41].impact},major),eq::(${inc.incidents[41].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o41",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[41].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[41].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r41",
+            "value": "$[if::(eq::(${w41},1),if::(eq::(${o41},0),if::(eq::(findNotEmpty::(${inc.incidents[41].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u41",
+            "value": "$[if::(eq::(${r41},1),calc::((calc::(parseDate::(subString::(${inc.incidents[41].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[41].resolved_at},11,13)*3600000+subString::(${inc.incidents[41].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[41].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[41].created_at},11,13)*3600000+subString::(${inc.incidents[41].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w42",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[42].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j42",
+            "value": "$[if::(eq::(${w42},1),if::(or::(eq::(${inc.incidents[42].impact},major),eq::(${inc.incidents[42].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o42",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[42].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[42].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r42",
+            "value": "$[if::(eq::(${w42},1),if::(eq::(${o42},0),if::(eq::(findNotEmpty::(${inc.incidents[42].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u42",
+            "value": "$[if::(eq::(${r42},1),calc::((calc::(parseDate::(subString::(${inc.incidents[42].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[42].resolved_at},11,13)*3600000+subString::(${inc.incidents[42].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[42].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[42].created_at},11,13)*3600000+subString::(${inc.incidents[42].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w43",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[43].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j43",
+            "value": "$[if::(eq::(${w43},1),if::(or::(eq::(${inc.incidents[43].impact},major),eq::(${inc.incidents[43].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o43",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[43].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[43].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r43",
+            "value": "$[if::(eq::(${w43},1),if::(eq::(${o43},0),if::(eq::(findNotEmpty::(${inc.incidents[43].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u43",
+            "value": "$[if::(eq::(${r43},1),calc::((calc::(parseDate::(subString::(${inc.incidents[43].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[43].resolved_at},11,13)*3600000+subString::(${inc.incidents[43].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[43].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[43].created_at},11,13)*3600000+subString::(${inc.incidents[43].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w44",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[44].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j44",
+            "value": "$[if::(eq::(${w44},1),if::(or::(eq::(${inc.incidents[44].impact},major),eq::(${inc.incidents[44].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o44",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[44].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[44].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r44",
+            "value": "$[if::(eq::(${w44},1),if::(eq::(${o44},0),if::(eq::(findNotEmpty::(${inc.incidents[44].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u44",
+            "value": "$[if::(eq::(${r44},1),calc::((calc::(parseDate::(subString::(${inc.incidents[44].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[44].resolved_at},11,13)*3600000+subString::(${inc.incidents[44].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[44].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[44].created_at},11,13)*3600000+subString::(${inc.incidents[44].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w45",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[45].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j45",
+            "value": "$[if::(eq::(${w45},1),if::(or::(eq::(${inc.incidents[45].impact},major),eq::(${inc.incidents[45].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o45",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[45].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[45].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r45",
+            "value": "$[if::(eq::(${w45},1),if::(eq::(${o45},0),if::(eq::(findNotEmpty::(${inc.incidents[45].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u45",
+            "value": "$[if::(eq::(${r45},1),calc::((calc::(parseDate::(subString::(${inc.incidents[45].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[45].resolved_at},11,13)*3600000+subString::(${inc.incidents[45].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[45].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[45].created_at},11,13)*3600000+subString::(${inc.incidents[45].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w46",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[46].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j46",
+            "value": "$[if::(eq::(${w46},1),if::(or::(eq::(${inc.incidents[46].impact},major),eq::(${inc.incidents[46].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o46",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[46].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[46].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r46",
+            "value": "$[if::(eq::(${w46},1),if::(eq::(${o46},0),if::(eq::(findNotEmpty::(${inc.incidents[46].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u46",
+            "value": "$[if::(eq::(${r46},1),calc::((calc::(parseDate::(subString::(${inc.incidents[46].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[46].resolved_at},11,13)*3600000+subString::(${inc.incidents[46].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[46].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[46].created_at},11,13)*3600000+subString::(${inc.incidents[46].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w47",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[47].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j47",
+            "value": "$[if::(eq::(${w47},1),if::(or::(eq::(${inc.incidents[47].impact},major),eq::(${inc.incidents[47].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o47",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[47].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[47].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r47",
+            "value": "$[if::(eq::(${w47},1),if::(eq::(${o47},0),if::(eq::(findNotEmpty::(${inc.incidents[47].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u47",
+            "value": "$[if::(eq::(${r47},1),calc::((calc::(parseDate::(subString::(${inc.incidents[47].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[47].resolved_at},11,13)*3600000+subString::(${inc.incidents[47].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[47].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[47].created_at},11,13)*3600000+subString::(${inc.incidents[47].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w48",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[48].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j48",
+            "value": "$[if::(eq::(${w48},1),if::(or::(eq::(${inc.incidents[48].impact},major),eq::(${inc.incidents[48].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o48",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[48].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[48].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r48",
+            "value": "$[if::(eq::(${w48},1),if::(eq::(${o48},0),if::(eq::(findNotEmpty::(${inc.incidents[48].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u48",
+            "value": "$[if::(eq::(${r48},1),calc::((calc::(parseDate::(subString::(${inc.incidents[48].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[48].resolved_at},11,13)*3600000+subString::(${inc.incidents[48].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[48].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[48].created_at},11,13)*3600000+subString::(${inc.incidents[48].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "w49",
+            "value": "$[if::(ge::(parseDate::(subString::(${inc.incidents[49].created_at},0,10),yyyy-MM-dd),${fromMs}),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "j49",
+            "value": "$[if::(eq::(${w49},1),if::(or::(eq::(${inc.incidents[49].impact},major),eq::(${inc.incidents[49].impact},critical)),1,0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "o49",
+            "value": "$[if::(eq::(findNotEmpty::(${inc.incidents[49].id},__none__),__none__),0,if::(eq::(findNotEmpty::(${inc.incidents[49].resolved_at},__none__),__none__),1,0))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r49",
+            "value": "$[if::(eq::(${w49},1),if::(eq::(${o49},0),if::(eq::(findNotEmpty::(${inc.incidents[49].id},__none__),__none__),0,1),0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "u49",
+            "value": "$[if::(eq::(${r49},1),calc::((calc::(parseDate::(subString::(${inc.incidents[49].resolved_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[49].resolved_at},11,13)*3600000+subString::(${inc.incidents[49].resolved_at},14,16)*60000)-calc::(parseDate::(subString::(${inc.incidents[49].created_at},0,10),yyyy-MM-dd)+subString::(${inc.incidents[49].created_at},11,13)*3600000+subString::(${inc.incidents[49].created_at},14,16)*60000))/3600000),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nMaj",
+            "value": "$[calc::(${j0}+${j1}+${j2}+${j3}+${j4}+${j5}+${j6}+${j7}+${j8}+${j9}+${j10}+${j11}+${j12}+${j13}+${j14}+${j15}+${j16}+${j17}+${j18}+${j19}+${j20}+${j21}+${j22}+${j23}+${j24}+${j25}+${j26}+${j27}+${j28}+${j29}+${j30}+${j31}+${j32}+${j33}+${j34}+${j35}+${j36}+${j37}+${j38}+${j39}+${j40}+${j41}+${j42}+${j43}+${j44}+${j45}+${j46}+${j47}+${j48}+${j49})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nOpen",
+            "value": "$[calc::(${o0}+${o1}+${o2}+${o3}+${o4}+${o5}+${o6}+${o7}+${o8}+${o9}+${o10}+${o11}+${o12}+${o13}+${o14}+${o15}+${o16}+${o17}+${o18}+${o19}+${o20}+${o21}+${o22}+${o23}+${o24}+${o25}+${o26}+${o27}+${o28}+${o29}+${o30}+${o31}+${o32}+${o33}+${o34}+${o35}+${o36}+${o37}+${o38}+${o39}+${o40}+${o41}+${o42}+${o43}+${o44}+${o45}+${o46}+${o47}+${o48}+${o49})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "nRes",
+            "value": "$[calc::(${r0}+${r1}+${r2}+${r3}+${r4}+${r5}+${r6}+${r7}+${r8}+${r9}+${r10}+${r11}+${r12}+${r13}+${r14}+${r15}+${r16}+${r17}+${r18}+${r19}+${r20}+${r21}+${r22}+${r23}+${r24}+${r25}+${r26}+${r27}+${r28}+${r29}+${r30}+${r31}+${r32}+${r33}+${r34}+${r35}+${r36}+${r37}+${r38}+${r39}+${r40}+${r41}+${r42}+${r43}+${r44}+${r45}+${r46}+${r47}+${r48}+${r49})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "sumH",
+            "value": "$[calc::(max::(${u0},0)+max::(${u1},0)+max::(${u2},0)+max::(${u3},0)+max::(${u4},0)+max::(${u5},0)+max::(${u6},0)+max::(${u7},0)+max::(${u8},0)+max::(${u9},0)+max::(${u10},0)+max::(${u11},0)+max::(${u12},0)+max::(${u13},0)+max::(${u14},0)+max::(${u15},0)+max::(${u16},0)+max::(${u17},0)+max::(${u18},0)+max::(${u19},0)+max::(${u20},0)+max::(${u21},0)+max::(${u22},0)+max::(${u23},0)+max::(${u24},0)+max::(${u25},0)+max::(${u26},0)+max::(${u27},0)+max::(${u28},0)+max::(${u29},0)+max::(${u30},0)+max::(${u31},0)+max::(${u32},0)+max::(${u33},0)+max::(${u34},0)+max::(${u35},0)+max::(${u36},0)+max::(${u37},0)+max::(${u38},0)+max::(${u39},0)+max::(${u40},0)+max::(${u41},0)+max::(${u42},0)+max::(${u43},0)+max::(${u44},0)+max::(${u45},0)+max::(${u46},0)+max::(${u47},0)+max::(${u48},0)+max::(${u49},0))]"
+          },
+          "_note": "负时长兜 0:极少数事故的 resolved_at 早于 created_at(状态页补录),不能拉低平均。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "mttr",
+            "value": "$[if::(ge::(${nRes},1),parseNumber::(calc::(${sumH}/${nRes}),0.0),)]"
+          },
+          "_note": "14 天窗内已恢复事故的平均用时(小时)。一起都没恢复 = 不说(不兜 0)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "at",
+            "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_pack",
+            "value": {
+              "ts": "${@time.nowMs}",
+              "n14": "${n14}",
+              "nMaj": "${nMaj}",
+              "nOpen": "${nOpen}",
+              "mttr": "${mttr}",
+              "d13": "${d13}",
+              "at": "${at}",
+              "c0": "${c0}",
+              "k0": "${k0}",
+              "bh0": "${bh0}",
+              "by0": "${by0}",
+              "c1": "${c1}",
+              "k1": "${k1}",
+              "bh1": "${bh1}",
+              "by1": "${by1}",
+              "c2": "${c2}",
+              "k2": "${k2}",
+              "bh2": "${bh2}",
+              "by2": "${by2}",
+              "c3": "${c3}",
+              "k3": "${k3}",
+              "bh3": "${bh3}",
+              "by3": "${by3}",
+              "c4": "${c4}",
+              "k4": "${k4}",
+              "bh4": "${bh4}",
+              "by4": "${by4}",
+              "c5": "${c5}",
+              "k5": "${k5}",
+              "bh5": "${bh5}",
+              "by5": "${by5}",
+              "c6": "${c6}",
+              "k6": "${k6}",
+              "bh6": "${bh6}",
+              "by6": "${by6}",
+              "c7": "${c7}",
+              "k7": "${k7}",
+              "bh7": "${bh7}",
+              "by7": "${by7}",
+              "c8": "${c8}",
+              "k8": "${k8}",
+              "bh8": "${bh8}",
+              "by8": "${by8}",
+              "c9": "${c9}",
+              "k9": "${k9}",
+              "bh9": "${bh9}",
+              "by9": "${by9}",
+              "c10": "${c10}",
+              "k10": "${k10}",
+              "bh10": "${bh10}",
+              "by10": "${by10}",
+              "c11": "${c11}",
+              "k11": "${k11}",
+              "bh11": "${bh11}",
+              "by11": "${by11}",
+              "c12": "${c12}",
+              "k12": "${k12}",
+              "bh12": "${bh12}",
+              "by12": "${by12}",
+              "c13": "${c13}",
+              "k13": "${k13}",
+              "bh13": "${bh13}",
+              "by13": "${by13}"
+            }
+          }
+        },
+        {
+          "action": "data.set",
+          "params": {
+            "key": "${_ck}",
+            "value": "${_pack}"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "统一出口:走没走网络都从缓存对象取渲染输入,两条路径只有一份字段映射。",
+      "id": "_box",
+      "action": "data.get",
+      "params": {
+        "key": "${_ck}",
+        "default": {}
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n14",
+        "value": "${_box.n14}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nMaj",
+        "value": "${_box.nMaj}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nOpen",
+        "value": "${_box.nOpen}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "mttr",
+        "value": "${_box.mttr}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d13",
+        "value": "${_box.d13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "${_box.at}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c0",
+        "value": "${_box.c0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k0",
+        "value": "${_box.k0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh0",
+        "value": "${_box.bh0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by0",
+        "value": "${_box.by0}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "${_box.c1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k1",
+        "value": "${_box.k1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh1",
+        "value": "${_box.bh1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by1",
+        "value": "${_box.by1}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c2",
+        "value": "${_box.c2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k2",
+        "value": "${_box.k2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh2",
+        "value": "${_box.bh2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by2",
+        "value": "${_box.by2}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c3",
+        "value": "${_box.c3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k3",
+        "value": "${_box.k3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh3",
+        "value": "${_box.bh3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by3",
+        "value": "${_box.by3}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c4",
+        "value": "${_box.c4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k4",
+        "value": "${_box.k4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh4",
+        "value": "${_box.bh4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by4",
+        "value": "${_box.by4}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c5",
+        "value": "${_box.c5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k5",
+        "value": "${_box.k5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh5",
+        "value": "${_box.bh5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by5",
+        "value": "${_box.by5}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c6",
+        "value": "${_box.c6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k6",
+        "value": "${_box.k6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh6",
+        "value": "${_box.bh6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by6",
+        "value": "${_box.by6}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c7",
+        "value": "${_box.c7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k7",
+        "value": "${_box.k7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh7",
+        "value": "${_box.bh7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by7",
+        "value": "${_box.by7}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c8",
+        "value": "${_box.c8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k8",
+        "value": "${_box.k8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh8",
+        "value": "${_box.bh8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by8",
+        "value": "${_box.by8}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c9",
+        "value": "${_box.c9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k9",
+        "value": "${_box.k9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh9",
+        "value": "${_box.bh9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by9",
+        "value": "${_box.by9}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c10",
+        "value": "${_box.c10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k10",
+        "value": "${_box.k10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh10",
+        "value": "${_box.bh10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by10",
+        "value": "${_box.by10}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c11",
+        "value": "${_box.c11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k11",
+        "value": "${_box.k11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh11",
+        "value": "${_box.bh11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by11",
+        "value": "${_box.by11}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c12",
+        "value": "${_box.c12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k12",
+        "value": "${_box.k12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh12",
+        "value": "${_box.bh12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by12",
+        "value": "${_box.by12}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c13",
+        "value": "${_box.c13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k13",
+        "value": "${_box.k13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bh13",
+        "value": "${_box.bh13}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "by13",
+        "value": "${_box.by13}"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(if::(eq::(${_cache},1),1,if::(ge::(parseNumber::(${_box.ts},0),${_t0}),1,0)),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "cf_incidents_unreachable"
+          }
+        }
+      ],
+      "_note": "组件模式:回读到的不是这一轮写的 = 这轮没取到。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "n14",
+          "nMaj",
+          "nOpen",
+          "mttr",
+          "d13",
+          "at",
+          "c0",
+          "k0",
+          "bh0",
+          "by0",
+          "c1",
+          "k1",
+          "bh1",
+          "by1",
+          "c2",
+          "k2",
+          "bh2",
+          "by2",
+          "c3",
+          "k3",
+          "bh3",
+          "by3",
+          "c4",
+          "k4",
+          "bh4",
+          "by4",
+          "c5",
+          "k5",
+          "bh5",
+          "by5",
+          "c6",
+          "k6",
+          "bh6",
+          "by6",
+          "c7",
+          "k7",
+          "bh7",
+          "by7",
+          "c8",
+          "k8",
+          "bh8",
+          "by8",
+          "c9",
+          "k9",
+          "bh9",
+          "by9",
+          "c10",
+          "k10",
+          "bh10",
+          "by10",
+          "c11",
+          "k11",
+          "bh11",
+          "by11",
+          "c12",
+          "k12",
+          "bh12",
+          "by12",
+          "c13",
+          "k13",
+          "bh13",
+          "by13"
+        ]
+      }
+    }
+  ]
+}

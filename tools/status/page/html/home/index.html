@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Service Status</title>
+<style>
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;--tile:#E7E9EE;--add:#EEF0F4;
+  --src:#7A4FD8;--srcSoft:rgba(122,79,216,.11);--shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--line:#262A31;--tile:#20232A;
+  --add:#252930;--src:#B49BFF;--srcSoft:rgba(180,155,255,.15);--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC",sans-serif;font-variant-numeric:tabular-nums;
+  padding:calc(var(--xb-content-top) + 12px) 14px calc(var(--xb-content-bottom) + 28px)}
+button{font:inherit;color:inherit}
+svg{display:block}
+.hd{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.hd h1{flex:1 1 auto;min-width:0;font-size:24px;font-weight:700;margin:0;letter-spacing:-.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 段标题 = 左名字 + 右摘要/动作(github 同款:13/700,上 22 下 8,不做 uppercase) */
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:22px 0 8px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:20px}
+.sec em{font-style:normal;font-weight:500;font-size:12px}
+.lnk{border:0;background:none;color:var(--src);font-size:13px;font-weight:700;padding:8px 2px;margin:-8px 0;cursor:pointer}
+/* 卡片:无描边 + 极浅投影;列表型卡片 overflow:hidden 让按压洗色跟着圆角走 */
+.grp{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--f);flex:0 0 auto}
+.lw{color:var(--c);font-weight:600}
+.state{color:var(--sub);font-size:13px;text-align:center;padding:22px 14px}
+.foot{color:var(--sub);font-size:11px;line-height:1.7;margin-top:18px;background:var(--tile);border-radius:14px;padding:12px 14px}
+.foot b{color:var(--fg);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0 0 6px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.orig{font-size:10.5px;color:var(--sub);font-weight:500;border:1px solid var(--line);border-radius:5px;padding:0 5px;
+  margin-left:6px;white-space:nowrap}
+/* 近 N 天日格:无事故 = tile;有事故 = 当天最重影响的状态色 */
+.days{display:flex;gap:3px;flex:0 0 auto}
+.days i{display:block;width:11px;height:11px;border-radius:3px;background:var(--tile)}
+.days i[class*="lv"]{background:var(--f)}
+.days.sk i{opacity:.5}
+.days i.na,.bar i.na{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+/* 次要动作:源色浅底胶囊;已关注 = 中性灰;满额 = 灰且不可点 */
+.chip{flex:0 0 auto;border:0;border-radius:999px;background:var(--srcSoft);color:var(--src);
+  font-size:12.5px;font-weight:600;min-height:30px;min-width:64px;padding:0 13px;cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--tile);color:var(--sub)}
+.chip:disabled{background:var(--tile);color:var(--sub);opacity:.55;cursor:default}
+.ib{flex:0 0 auto;width:30px;height:30px;border:0;border-radius:15px;background:var(--tile);color:var(--sub);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.ib:disabled{opacity:.35;cursor:default}
+.lv0{--c:#1E9E62;--f:#1E9E62}
+.lv1{--c:#2F6FDB;--f:#2F6FDB}
+.lv2{--c:#A86E00;--f:#E0A100}
+.lv3{--c:#D9600F;--f:#D9600F}
+.lv4{--c:#D93A34;--f:#D93A34}
+.lvU{--c:#6B7280;--f:#6B7280}
+html[data-theme="dark"] .lv0{--c:#3DD68C;--f:#3DD68C}
+html[data-theme="dark"] .lv1{--c:#6EA8FE;--f:#6EA8FE}
+html[data-theme="dark"] .lv2{--c:#E8B339;--f:#E8B339}
+html[data-theme="dark"] .lv3{--c:#FF9148;--f:#FF9148}
+html[data-theme="dark"] .lv4{--c:#FF6B61;--f:#FF6B61}
+html[data-theme="dark"] .lvU{--c:#8E939B;--f:#8E939B}
+
+.hero{background:var(--card);box-shadow:var(--shadow);border-radius:14px;padding:14px;margin-top:10px}
+.hero .big{font-size:22px;font-weight:700;color:var(--c);line-height:1.3}
+.hero .meta{color:var(--sub);font-size:12.5px;margin-top:2px}
+.strip{display:flex;gap:4px;margin-top:12px}
+.strip i{flex:1 1 0;height:8px;border-radius:4px;background:var(--f)}
+/* 关注列表:一张卡、一行一个服务。行左右内边距 14 对称;分隔线从名字起点(14 + 点 9 + 间距 9 = 32)缩进 */
+.row{position:relative;padding:12px 14px;cursor:pointer}
+.row+.row::before{content:"";position:absolute;left:32px;right:0;top:0;border-top:1px solid var(--line)}
+.r1{display:flex;align-items:center;gap:9px}
+.r1 b{flex:1 1 auto;min-width:0;font-size:15px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r1 .lw{font-size:12.5px;white-space:nowrap}
+.go{flex:0 0 auto;color:var(--sub);opacity:.6;display:flex}
+.r2{display:flex;align-items:center;gap:8px;margin:7px 0 0 18px;min-height:16px}
+.r2 small{flex:1 1 auto;min-width:0;color:var(--sub);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inc{margin:9px 0 0 18px;padding:8px 10px;background:var(--tile);border-radius:10px;border-left:3px solid var(--c)}
+.inc .it{font-size:13px;font-weight:600;line-height:1.4}
+.inc .im{font-size:11.5px;color:var(--sub);margin-top:3px}
+.more{margin:6px 0 0 18px;font-size:11.5px;color:var(--sub)}
+.mt{display:flex;align-items:flex-start;gap:9px;padding:12px 14px;position:relative}
+.mt+.mt::before{content:"";position:absolute;left:32px;right:0;top:0;border-top:1px solid var(--line)}
+.mt .dot{margin-top:6px}
+.mt div{flex:1 1 auto;min-width:0}
+.mt b{display:block;font-size:13.5px;font-weight:600;line-height:1.4}
+.mt small{display:block;color:var(--sub);font-size:11.5px;margin-top:2px}
+.empty{background:var(--card);box-shadow:var(--shadow);border-radius:14px;padding:22px 16px;text-align:center}
+.empty b{display:block;font-size:16px;margin-bottom:6px}
+.empty p{color:var(--sub);font-size:13px;margin:0 0 14px}
+.btn{border:0;background:var(--srcSoft);color:var(--src);border-radius:999px;padding:0 18px;min-height:40px;font-weight:600;cursor:pointer}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.row,.xb-tap{position:relative}
+.row::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.row:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.lnk,.btn,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.lnk:active,.btn:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#list,#hero,#maint";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+<div class="hd"><h1 data-i="title"></h1><button class="xb-at" id="xbAt" type="button"></button></div>
+<div id="hero"></div>
+<div class="sec"><span data-i="secW"></span><button class="lnk" id="mg" data-i="manage"></button></div>
+<div id="list"><div class="state xb-sk" data-i="loading"></div></div>
+<div id="maint"></div>
+<button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg"><b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button>
+<div class="foot"><div id="leg"></div><div data-i="foot"></div></div>
+
+<script>
+var I18N = {
+ "zh": {
+  "lvU": "状态未知",
+  "lv0": "运行正常",
+  "lv1": "维护中",
+  "lv2": "轻微异常",
+  "lv3": "部分中断",
+  "lv4": "重大中断",
+  "stInv": "调查中",
+  "stIdf": "已定位",
+  "stMon": "观察恢复中",
+  "stUpd": "处理中",
+  "stSch": "已排期",
+  "stIng": "进行中",
+  "uMin": " 分钟",
+  "uH": " 小时",
+  "uD": " 天",
+  "sp": " ",
+  "lastToday": "最近一次在今天",
+  "lastYday": "最近一次在昨天",
+  "lastPre": "最近一次在 ",
+  "lastSuf": " 天前",
+  "pickT": "添加组件",
+  "pickS": "在面板里挑，确认后加到仪表盘",
+  "title": "服务状态",
+  "secW": "关注的服务",
+  "manage": "管理",
+  "loading": "读取中…",
+  "fail": "暂时取不到状态，请检查网络后点右上角重试",
+  "hAll": "全部运行正常",
+  "hBadPre": "",
+  "hBadSuf": " 个服务异常",
+  "hMtPre": "",
+  "hMtSuf": " 个服务维护中",
+  "hUnkPre": "",
+  "hUnkSuf": " 个服务暂时取不到状态",
+  "wPre": "关注 ",
+  "wSuf": " 个服务",
+  "iPre": "",
+  "iSuf": " 起进行中事故",
+  "iNone": "没有进行中的事故",
+  "durPre": "持续 ",
+  "sincePre": "",
+  "sinceSuf": " 开始",
+  "morePre": "还有 ",
+  "moreSuf": " 起事故，点开查看",
+  "wkPre": "近 7 天 ",
+  "wkMinPre": "近 7 天至少 ",
+  "wkSuf": " 起事故",
+  "wkSuf1": " 起事故",
+  "wkNone": "近 7 天无事故",
+  "wkLoad": "近 7 天读取中…",
+  "wkFail": "近 7 天的记录暂时取不到",
+  "secMt": "即将进行的维护",
+  "noneT": "还没有关注任何服务",
+  "noneS": "从内置目录里选几个你每天依赖的服务，这里会显示它们此刻的状态。",
+  "noneBtn": "选择服务",
+  "foot": "每行下面的 7 个小方格是近 7 天，最右边是今天；有事故的日子按当天最重的影响着色。数据直接取自各服务的<b>官方状态页</b>（Atlassian Statuspage 公开接口），由你的设备直接获取，不经过任何中转。事故标题与说明是服务商的<b>英文原文</b>，不作翻译。可关注的服务限于内置目录，最多 6 个。"
+ },
+ "en": {
+  "lvU": "Unknown",
+  "lv0": "Operational",
+  "lv1": "Maintenance",
+  "lv2": "Minor issues",
+  "lv3": "Partial outage",
+  "lv4": "Major outage",
+  "stInv": "Investigating",
+  "stIdf": "Identified",
+  "stMon": "Monitoring",
+  "stUpd": "In progress",
+  "stSch": "Scheduled",
+  "stIng": "In progress",
+  "uMin": "m",
+  "uH": "h",
+  "uD": "d",
+  "sp": " ",
+  "lastToday": "latest today",
+  "lastYday": "latest yesterday",
+  "lastPre": "latest ",
+  "lastSuf": "d ago",
+  "pickT": "Add widgets",
+  "pickS": "Pick in the panel, then confirm",
+  "title": "Service Status",
+  "secW": "Watched services",
+  "manage": "Manage",
+  "loading": "Loading…",
+  "fail": "Couldn't get status. Check your connection, then tap the time to retry.",
+  "hAll": "All operational",
+  "hBadPre": "Affected: ",
+  "hBadSuf": "",
+  "hMtPre": "In maintenance: ",
+  "hMtSuf": "",
+  "hUnkPre": "Not reporting: ",
+  "hUnkSuf": "",
+  "wPre": "",
+  "wSuf": " watched",
+  "iPre": "Open incidents: ",
+  "iSuf": "",
+  "iNone": "No open incidents",
+  "durPre": "for ",
+  "sincePre": "since ",
+  "sinceSuf": "",
+  "morePre": "",
+  "moreSuf": " more — tap to see all",
+  "wkPre": "",
+  "wkMinPre": "At least ",
+  "wkSuf": " incidents in 7 days",
+  "wkSuf1": " incident in 7 days",
+  "wkNone": "No incidents in 7 days",
+  "wkLoad": "Loading the last 7 days…",
+  "wkFail": "Couldn't load the last 7 days",
+  "secMt": "Upcoming maintenance",
+  "noneT": "No services watched yet",
+  "noneS": "Pick the services you rely on from the built-in list to see their status here.",
+  "noneBtn": "Choose services",
+  "foot": "The 7 small squares under each service are the last 7 days, today on the right; days with incidents take the color of that day's worst impact. Status comes straight from each service's <b>official status page</b> (public Atlassian Statuspage API), fetched by your device with no relay. Incident titles and updates are shown in the provider's <b>original English</b>. You can watch up to 6 services from the built-in list."
+ }
+};
+var CAT = [{"id": "github", "n": "GitHub", "h": "www.githubstatus.com", "k": "sp", "g": "code"}, {"id": "claude", "n": "Claude", "h": "status.claude.com", "k": "sp", "g": "ai"}, {"id": "openai", "n": "OpenAI", "h": "status.openai.com", "k": "io", "g": "ai"}, {"id": "vercel", "n": "Vercel", "h": "www.vercel-status.com", "k": "sp", "g": "cloud"}, {"id": "cursor", "n": "Cursor", "h": "status.cursor.com", "k": "sp", "g": "ai"}, {"id": "npm", "n": "npm", "h": "status.npmjs.org", "k": "sp", "g": "code"}, {"id": "docker", "n": "Docker", "h": "www.dockerstatus.com", "k": "io", "g": "code"}, {"id": "bitbucket", "n": "Bitbucket", "h": "bitbucket.status.atlassian.com", "k": "sp", "g": "code"}, {"id": "circleci", "n": "CircleCI", "h": "status.circleci.com", "k": "sp", "g": "code"}, {"id": "netlify", "n": "Netlify", "h": "www.netlifystatus.com", "k": "sp", "g": "cloud"}, {"id": "supabase", "n": "Supabase", "h": "status.supabase.com", "k": "sp", "g": "cloud"}, {"id": "render", "n": "Render", "h": "status.render.com", "k": "sp", "g": "cloud"}, {"id": "digitalocean", "n": "DigitalOcean", "h": "status.digitalocean.com", "k": "sp", "g": "cloud"}, {"id": "mongodb", "n": "MongoDB Cloud", "h": "status.mongodb.com", "k": "sp", "g": "cloud"}, {"id": "sentry", "n": "Sentry", "h": "status.sentry.io", "k": "sp", "g": "tools"}, {"id": "datadog", "n": "Datadog", "h": "status.datadoghq.com", "k": "sp", "g": "tools"}, {"id": "linear", "n": "Linear", "h": "linearstatus.com", "k": "io", "g": "tools"}, {"id": "notion", "n": "Notion", "h": "www.notion-status.com", "k": "io", "g": "tools"}, {"id": "figma", "n": "Figma", "h": "status.figma.com", "k": "sp", "g": "tools"}, {"id": "postman", "n": "Postman", "h": "status.postman.com", "k": "sp", "g": "tools"}, {"id": "discord", "n": "Discord", "h": "discordstatus.com", "k": "sp", "g": "comm"}, {"id": "reddit", "n": "Reddit", "h": "www.redditstatus.com", "k": "sp", "g": "comm"}];
+var GROUPS = {"ai": {"zh": "AI 服务", "en": "AI"}, "code": {"zh": "代码与构建", "en": "Code & builds"}, "cloud": {"zh": "托管与数据库", "en": "Hosting & data"}, "tools": {"zh": "开发工具", "en": "Dev tools"}, "comm": {"zh": "社区", "en": "Community"}};
+var DEFAULT = ["github", "claude", "openai", "vercel"], MAXF = 6, SCHEMA = 2;
+var ICO = { up: "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 19V5M6 11l6-6 6 6\"/></svg>", x: "<svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg>", bell: "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9\"/><path d=\"M10.3 21a1.94 1.94 0 0 0 3.4 0\"/></svg>" };
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。缺键回落英文表。 */
+var LANG = nbLang(document.documentElement.getAttribute("data-lang"));
+function t(k){ var m=I18N[LANG]; if (m && Object.prototype.hasOwnProperty.call(m,k)) return m[k]; return I18N.en[k]!==undefined?I18N.en[k]:k; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function byId(id){ for (var i=0;i<CAT.length;i++) if (CAT[i].id===id) return CAT[i]; return null; }
+/* 桥的 call 型方法四端一律 resolve {code,msg,data}、从不 reject(G49)—— 统一在这里拆信封。 */
+function un(r){ if (r && typeof r==="object" && "code" in r){ if (r.code!==0) throw new Error(r.msg||("code "+r.code)); return r.data; } return r; }
+function toast(s){ try { xbridge.toast && xbridge.toast(s); } catch(e){} }
+async function ready(){
+  for (var i=0;i<24 && !window.xbridge;i++) await new Promise(function(r){ setTimeout(r,50); });
+  return !!(window.xbridge && xbridge.isXBundleEnv && xbridge.isXBundleEnv());
+}
+async function env(){
+  var a = await nbInfo();
+  LANG = nbLang(a.language || a.locale);
+  if (a.theme && !document.documentElement.dataset.theme) document.documentElement.setAttribute("data-theme", a.theme);
+}
+async function getFollow(){
+  var v = null;
+  try { v = (await xbridge.getData("follow").then(un)); } catch(e){ v = null; }
+  if (typeof v === "string"){ try { v = JSON.parse(v); } catch(e){ v = null; } }
+  if (!Array.isArray(v)) v = DEFAULT.slice();
+  var out = [];
+  v.forEach(function(id){ if (byId(id) && out.indexOf(id) < 0 && out.length < MAXF) out.push(id); });
+  return out;
+}
+/* ── 状态档:与组件 follow.df 同一套判据 ──
+   -1 未知 · 0 正常 · 1 维护 · 2 降级 · 3 部分中断 · 4 重大中断 */
+function indLv(ind){ return ({none:0,maintenance:1,minor:2,major:3,critical:4})[ind]; }
+function impLv(imp){ return ({critical:4,major:3,maintenance:1})[imp] || 2; }
+function compLv(s){ return ({operational:0,under_maintenance:1,degraded_performance:2,partial_outage:3,major_outage:4})[s]; }
+function openOf(inc){ var s=String(inc&&inc.status||""); return s && ["resolved","postmortem","completed"].indexOf(s)<0; }
+function lvKey(lv){ return lv==null||lv<0 ? "U" : String(lv); }
+function lvWord(lv){ return t("lv"+lvKey(lv)); }
+function stWord(s){ return t(({investigating:"stInv",identified:"stIdf",monitoring:"stMon",verifying:"stMon",
+  scheduled:"stSch",in_progress:"stIng"})[s]||"stUpd"); }
+function pad(n){ return ("0"+n).slice(-2); }
+/* 月日:中文「9月25日」/ 英文「Sep 25」(doc/overseas-first.md §5,不出现纯数字月日)。 */
+var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDay(ms){ var d=new Date(ms); return LANG==="zh" ? (d.getMonth()+1)+"月"+d.getDate()+"日" : MON[d.getMonth()]+" "+d.getDate(); }
+function fmtTime(ms, nowMs){
+  var d=new Date(ms), n=new Date(nowMs||Date.now());
+  var hm=pad(d.getHours())+":"+pad(d.getMinutes());
+  if (d.toDateString()===n.toDateString()) return hm;
+  return fmtDay(ms)+" "+hm;
+}
+function fmtDur(ms){
+  var m=Math.max(0,Math.floor(ms/60000)), h=Math.floor(m/60), d=Math.floor(h/24);
+  if (m<60) return m+t("uMin");
+  if (h<24) return h+t("uH")+(m%60 ? t("sp")+(m%60)+t("uMin") : "");
+  return d+t("uD")+(h%24 ? t("sp")+(h%24)+t("uH") : "");
+}
+/* ── 一批服务此刻的状态(home.df 的原始响应 → 精简模型;首页与管理页共用)── */
+function statusModel(d, ids){
+  var now = Number(d.nowMs)||Date.now();
+  return { now: now, svcs: ids.map(function(id){
+    var c = byId(id), st = d["st_"+id], ind = st && st.status && st.status.indicator;
+    var raw = c.k==="sp" ? ((d["ur_"+id]||{}).incidents||[]) : ((d["ih_"+id]||{}).incidents||[]).filter(openOf);
+    var incs = raw.map(function(x){ return { n: x.name, l: impLv(x.impact), s: x.status, st: Date.parse(x.started_at||x.created_at)||0 }; });
+    var base = indLv(ind), lv = base==null ? -1 : Math.max.apply(null, [base].concat(incs.map(function(x){ return x.l; })));
+    return { id: id, lv: lv, incs: incs.slice(0,3), nInc: incs.length };
+  }) };
+}
+/* ── 事故历史(hist.df;与组件 week.df 同一套判据)──
+   sp = history.json:本季度逐月块,timestamp 是「Sep 24, 16:51 - 20:41 UTC」这样的展示串,时区取 start_time 的偏移;
+   io = incidents.json 最新 25 条。计划维护单列(m),不计入事故数。 */
+var MON3 = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function histFrom(d, c){
+  var out = [], seen = {}, trunc = false;
+  function push(x){ if (!x.s || seen[x.u||x.n+x.s]) return; seen[x.u||x.n+x.s] = 1; out.push(x); }
+  if (c.k === "sp"){
+    [d.h, d.g].forEach(function(H){
+      if (!H || !H.months) return;
+      var mo = /([+-])(\d\d):?(\d\d)$/.exec(String(H.start_time||"")), off = mo ? (mo[1]==="-"?-1:1)*(+mo[2]*60 + +mo[3]) : 0;
+      H.months.forEach(function(b){ (b.incidents||[]).forEach(function(x){
+        var p = String(x.timestamp||"").replace(/<[^>]+>/g,"");
+        var m = /([A-Z][a-z]{2})\s+(\d+),\s+(\d\d):(\d\d)(?:\s*-\s*(?:([A-Z][a-z]{2})\s+(\d+),\s+)?(\d\d):(\d\d))?/.exec(p);
+        if (!m || MON3[m[1]]==null) return;
+        var y = Number(b.year)||new Date().getFullYear(), mon = MON3[m[1]];
+        var s = Date.UTC(y, mon, +m[2], +m[3], +m[4]) - off*60000, e = 0;
+        if (m[7]){
+          var mon2 = m[5] ? MON3[m[5]] : mon, d2 = m[6] ? +m[6] : +m[2];
+          e = Date.UTC(y + (mon2 < mon ? 1 : 0), mon2, d2, +m[7], +m[8]) - off*60000;
+          if (e < s) e += 86400000;
+        }
+        push({ n: x.name, l: x.impact==="maintenance" ? 1 : impLv(x.impact), m: x.impact==="maintenance" ? 1 : 0, s: s, e: e,
+               u: x.code ? "https://"+c.h+"/incidents/"+x.code : "" });
+      }); });
+    });
+  } else {
+    var arr = (d.h||{}).incidents||[];
+    arr.forEach(function(x){
+      push({ n: x.name, l: x.impact==="maintenance" ? 1 : impLv(x.impact), m: x.impact==="maintenance" ? 1 : 0,
+             s: Date.parse(x.started_at||x.created_at)||0, e: openOf(x) ? 0 : (Date.parse(x.resolved_at||"")||0), u: x.shortlink||"" });
+    });
+    trunc = arr.length >= 25;      /* 只有最新 25 条:更早的看不到 */
+  }
+  out.sort(function(a,b){ return b.s - a.s; });
+  var now = Number(d.nowMs)||Date.now(), cut = now - 36*86400000;
+  var keep = out.filter(function(x, i){ return x.s >= cut || i < 8; });
+  var oldest = out.length ? out[out.length-1].s : now;
+  var up = ((d.u||{}).scheduled_maintenances||[]).slice(0,4).map(function(x){
+    return { n: x.name, a: Date.parse(x.scheduled_for)||0, b: Date.parse(x.scheduled_until)||0, u: x.shortlink||"" }; });
+  return { list: keep, oldest: trunc ? oldest : 0, up: up };
+}
+/* 近 N 天:每天最重的事故影响、事故数、最近一次在几天前(按设备时区的自然日;0 = 今天)。
+   atLeast = 数据源只给到最新 25 条、而第 25 条仍在窗口内 → 真实数只会更多,文案写「至少」。 */
+function dayStats(H, days, now){
+  var z = new Date(now); z.setHours(0,0,0,0); var t0 = +z;
+  var cells = [], cnt = 0, last = null;
+  for (var i=0;i<days;i++) cells.push(0);
+  (H.list||[]).forEach(function(x){
+    if (x.m || !x.s || x.s > now) return;
+    var ago = x.s >= t0 ? 0 : Math.floor((t0 - x.s)/86400000) + 1;
+    if (last===null || ago < last) last = ago;
+    if (ago < days){ cnt++; cells[ago] = Math.max(cells[ago], x.l); }
+  });
+  var atLeast = !!(H.oldest && H.oldest > t0 - (days-1)*86400000);
+  /* 数据只覆盖到最早那一条(io 只给 25 条):更早的日子是「不知道」,不能画成「无事故」 */
+  var cover = atLeast ? Math.floor((t0 - H.oldest)/86400000) + 1 : days;
+  return { cells: cells, cnt: cnt, last: last, atLeast: atLeast, cover: cover };
+}
+function daysHtml(st, n){
+  var h = "";
+  for (var i=n-1;i>=0;i--){ var l = st ? st.cells[i] : 0; h += '<i'+(st && i >= st.cover ? ' class="na"' : l>=2 ? ' class="lv'+l+'"' : '')+'></i>'; }
+  return '<span class="days'+(st ? '' : ' sk')+'">'+h+'</span>';
+}
+function lastWord(last){
+  if (last===null) return "";
+  return last===0 ? t("lastToday") : last===1 ? t("lastYday") : t("lastPre")+last+t("lastSuf");
+}
+/* 近 30 天的窗口跨进上一季度 → hist.df 另取 page 2(history.json 只覆盖当前季度)。 */
+function needP2(now){
+  var d = new Date(now - 31*86400000), n = new Date(now);
+  return Math.floor(d.getMonth()/3) !== Math.floor(n.getMonth()/3) ? 1 : 0;
+}
+/* ── 首屏缓存三态(G23,JS 层 flowCached):有缓存必先渲(过期也先渲),过期则后台校新,失败不覆盖 ── */
+async function cacheGet(key){
+  try { var v = (await xbridge.getData(key).then(un)); if (typeof v==="string") v = JSON.parse(v);
+    return (v && v.schema===SCHEMA && v.ts) ? v : null; } catch(e){ return null; }
+}
+async function cacheSet(key, model){
+  try { await xbridge.setData(key, JSON.stringify({schema:SCHEMA, ts:Date.now(), m:model})); } catch(e){}
+}
+async function flowCached(key, ttl, hard, fetcher, paint, force){
+  var c = force ? null : await cacheGet(key), age = c ? Date.now()-c.ts : 1e15;
+  if (c && age < hard){ paint(c.m, c.ts, false); if (age < ttl) return; }
+  var fresh = null;
+  try { fresh = await fetcher(); } catch(e){ fresh = null; }
+  if (fresh){ await cacheSet(key, fresh); paint(fresh, Date.now(), false); }
+  else if (!c || age >= hard) paint(null, 0, true);
+}
+/* 一个服务的事故历史(1 小时新鲜;首页与详情页共用这份缓存)。 */
+function histOf(id, force, paint){
+  var c = byId(id);
+  return flowCached("c.hist."+id, 3600000, 24*3600000, async function(){
+    var d = (await xbridge.runDataFlow("hist", { id: id, p2: needP2(Date.now()) }, 30000).then(un));
+    return d && d.h && (d.h.months||d.h.incidents) ? histFrom(d, c) : null;
+  }, paint, force);
+}
+/* 并发上限:同时最多 n 个 runDataFlow,别一口气打 22 个状态页。 */
+async function pool(items, n, fn){
+  var i = 0;
+  async function worker(){ while (i < items.length){ var k = i++; try { await fn(items[k], k); } catch(e){} } }
+  var ws = []; for (var j=0;j<Math.min(n, items.length);j++) ws.push(worker());
+  await Promise.all(ws);
+}
+
+function legendHtml(){
+  return '<div class="legend">'+[0,1,2,3,4].map(function(l){
+    return '<span class="lv'+l+'"><i class="dot"></i>'+esc(lvWord(l))+'</span>'; }).join("")+'</div>';
+}
+
+/* 首页 = 每天要看的内容:关注的服务此刻怎么样、这一周稳不稳、哪个在出事、出的什么事、持续多久。
+   加组件入口只是页尾一个按钮;需要选对象的「单个服务」组件挂在服务详情页。
+   两段取数:① 此刻状态(home.df,2 分钟新鲜)先画;② 各服务近 7 天(hist.df,按服务缓存 1 小时)随后逐行补上。 */
+var FOLLOW = [], HAS = false, seq = 0, WK = {};
+var CHEV = "<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 6l6 6-6 6\"/></svg>";
+async function fetchHome(ids){
+  if (!ids.length) return { now: Date.now(), svcs: [] };
+  var d = (await xbridge.runDataFlow("home", { ids: ids.join("~") }, 30000).then(un)) || {};
+  var m = statusModel(d, ids);
+  if (!m.svcs.some(function(s){ return s.lv >= 0; })) return null;   /* 一个都没取到 = 失败,不覆盖缓存 */
+  return m;
+}
+function paintHero(m){
+  var el = document.getElementById("hero");
+  if (!m || !m.svcs.length){ el.innerHTML = ""; return; }
+  var n = m.svcs.length, bad=0, mt=0, unk=0, inc=0, worst=-1;
+  m.svcs.forEach(function(s){ if (s.lv>=2) bad++; else if (s.lv===1) mt++; else if (s.lv<0) unk++; inc += s.nInc; worst=Math.max(worst,s.lv); });
+  var head = bad ? t("hBadPre")+bad+t("hBadSuf") : mt ? t("hMtPre")+mt+t("hMtSuf") : unk ? t("hUnkPre")+unk+t("hUnkSuf") : t("hAll");
+  var cls = bad ? "lv"+lvKey(worst) : mt ? "lv1" : unk ? "lvU" : "lv0";
+  el.innerHTML = '<div class="hero '+cls+'"><div class="big">'+esc(head)+'</div><div class="meta">'+
+    esc(t("wPre")+n+t("wSuf"))+" · "+esc(inc ? t("iPre")+inc+t("iSuf") : t("iNone"))+'</div>'+
+    '<div class="strip">'+m.svcs.map(function(s){ return '<i class="lv'+lvKey(s.lv)+'"></i>'; }).join("")+'</div></div>';
+}
+function wkLine(id, now){
+  var H = WK[id];
+  if (H === undefined) return daysHtml(null, 7)+'<small class="xb-sk">'+esc(t("wkLoad"))+'</small>';
+  if (!H) return daysHtml(null, 7)+'<small>'+esc(t("wkFail"))+'</small>';
+  var st = dayStats(H, 7, now);
+  var txt = st.cnt ? (st.atLeast ? t("wkMinPre") : t("wkPre"))+st.cnt+t(st.cnt===1 && !st.atLeast ? "wkSuf1" : "wkSuf") : t("wkNone");
+  return daysHtml(st, 7)+'<small>'+esc(txt)+'</small>';
+}
+var LASTM = null;
+function paintList(m){
+  var box = document.getElementById("list");
+  if (!FOLLOW.length){
+    box.innerHTML = '<div class="empty"><b>'+esc(t("noneT"))+'</b><p>'+esc(t("noneS"))+'</p><button class="btn" id="go1">'+esc(t("noneBtn"))+'</button></div>';
+    return;
+  }
+  if (!m){ box.innerHTML = '<div class="grp"><div class="state">'+esc(t("fail"))+'</div></div>'; return; }
+  LASTM = m;
+  box.innerHTML = '<div class="grp">'+m.svcs.map(function(s){
+    var c = byId(s.id), k = lvKey(s.lv);
+    var incs = s.incs.map(function(x){
+      return '<div class="inc lv'+lvKey(x.l)+'"><div class="it">'+esc(x.n)+'</div><div class="im">'+
+        esc(lvWord(x.l)+" · "+stWord(x.s)+(x.st ? " · "+t("durPre")+fmtDur(m.now-x.st)+" · "+t("sincePre")+fmtTime(x.st,m.now)+t("sinceSuf") : ""))+
+        '</div></div>';
+    }).join("");
+    var more = s.nInc > s.incs.length ? '<div class="more">'+esc(t("morePre")+(s.nInc-s.incs.length)+t("moreSuf"))+'</div>' : "";
+    return '<div class="row" data-id="'+esc(s.id)+'"><div class="r1 lv'+k+'"><i class="dot"></i><b>'+esc(c.n)+'</b>'+
+      '<span class="lw">'+esc(lvWord(s.lv))+'</span><span class="go">'+CHEV+'</span></div>'+
+      '<div class="r2" data-wk="'+esc(s.id)+'">'+wkLine(s.id, m.now)+'</div>'+incs+more+'</div>';
+  }).join("")+'</div>';
+}
+function paintWk(id){
+  var el = document.querySelector('[data-wk="'+id+'"]');
+  if (el) el.innerHTML = wkLine(id, Date.now());
+  paintMaint();
+}
+/* 即将进行的计划维护(只有 Statuspage 原生那几家给得出来):有才画,按开始时间排 */
+function paintMaint(){
+  var all = [];
+  FOLLOW.forEach(function(id){ var H = WK[id]; if (H && H.up) H.up.forEach(function(x){ all.push({ id: id, x: x }); }); });
+  all.sort(function(a,b){ return a.x.a - b.x.a; });
+  var el = document.getElementById("maint");
+  if (!all.length){ el.innerHTML = ""; return; }
+  var now = Date.now();
+  el.innerHTML = '<div class="sec"><span>'+esc(t("secMt"))+'</span></div><div class="grp">'+all.slice(0,4).map(function(o){
+    return '<div class="mt lv1"><i class="dot"></i><div><b>'+esc(byId(o.id).n+" · "+o.x.n)+'</b><small>'+
+      esc((o.x.a ? fmtTime(o.x.a, now) : "")+(o.x.b ? " – "+fmtTime(o.x.b, now) : ""))+'</small></div></div>';
+  }).join("")+'</div>';
+}
+function paintAt(ts){ xbAt.set("xbAt", ts || null); }
+function paint(){
+  document.querySelectorAll("[data-i]").forEach(function(el){ var k=el.dataset.i; if (k==="foot") el.innerHTML=t(k); else el.textContent=t(k); });
+  document.getElementById("leg").innerHTML = legendHtml();
+}
+async function loadWeeks(ids, force, my){
+  await pool(ids, 3, function(id){
+    return histOf(id, force, function(H, ts, failed){
+      if (my !== seq) return;
+      if (failed && WK[id]) return;
+      WK[id] = H || null; paintWk(id);
+    });
+  });
+}
+async function refresh(force){
+  var my = ++seq;
+  FOLLOW = await getFollow();
+  var key = "c.home", ids = FOLLOW.slice();
+  /* 两段并行:近 7 天(按服务缓存)与首页此刻状态互不依赖。⚠️ 别写成先 await 首页再 loadWeeks ——
+     首页缓存一过 2 分钟就要等它那趟网络回来,7 天那栏的缓存明明在盘上,却一直挂着「加载中」。
+     行还没画出来时 paintWk 找不到格子也没关系:WK 已经记下,paintList 画行时按 WK 出。 */
+  var weeks = ids.length ? loadWeeks(ids, force, my) : null;
+  await flowCached(key, 120000, 6*3600000, function(){ return fetchHome(ids); }, function(m, ts, failed){
+    if (my !== seq) return;
+    if (m && (!m.svcs || m.svcs.map(function(s){ return s.id; }).join("~") !== ids.join("~"))) return;  /* 关注列表变了:旧缓存不渲 */
+    if (failed && HAS) return;                                   /* 失败不覆盖已有内容 */
+    paintHero(m); paintList(m); paintAt(ts); HAS = !!m;
+  }, force);
+  if (weeks) await weeks;
+}
+document.addEventListener("click", function(e){
+  var r = e.target.closest && e.target.closest(".row");
+  if (r && r.dataset.id){ xbridge.haptic && xbridge.haptic(); var rc = byId(r.dataset.id), rn = rc && rc.n ? String(rc.n) : "";
+    xbridge.route("/svc?id="+encodeURIComponent(r.dataset.id)+(rn ? "&name="+encodeURIComponent(rn) : "")); return; }
+  if (e.target.closest && (e.target.closest("#mg") || e.target.closest("#go1"))){ xbridge.route("/manage"); return; }
+  if (e.target.closest && e.target.closest("#xbAt")){ xbridge.haptic && xbridge.haptic(); xbAt.busy("xbAt", true);
+    refresh(true).then(function(){ xbAt.busy("xbAt", false); }, function(){ xbAt.busy("xbAt", false); }); return; }
+  if (e.target.closest && e.target.closest("#pickw")){
+    /* 加组件入口 = 一个按钮(§8.1a);「单个服务」要先选服务,放在服务详情页 */
+    xbridge.pickWidgets([{id:"board"},{id:"week"},{id:"incidents"},{id:"glance"}]);
+  }
+});
+var BOOTED = false;
+function resync(){ if (BOOTED) refresh(false); }
+document.addEventListener("visibilitychange", function(){ if (document.visibilityState==="visible") resync(); });
+addEventListener("pageshow", resync);
+addEventListener("languagechange", async function(){ await env(); paint(); if (LASTM){ paintHero(LASTM); paintList(LASTM); } paintMaint(); });
+addEventListener("themechange", function(){});
+(async function boot(){
+  if (!(await ready())){ paint(); document.getElementById("list").innerHTML='<div class="grp"><div class="state">'+esc(t("fail"))+'</div></div>'; return; }
+  await env(); paint(); await refresh(false); BOOTED = true;
+})();
+
+</script>
+</body></html>

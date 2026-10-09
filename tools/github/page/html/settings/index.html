@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<!--
+  「令牌与额度」页(路由 /settings)。
+
+  v41 起 GitHub 待办全部走 GraphQL,令牌是**必需**的(manifest credentials gh required:true;
+  没绑时组件由宿主显示「需要凭证」胶囊,首页整页换成绑定引导)。这不违反「零密钥」硬闸
+  (doc/infosource-standard.md §3.1):那条闸禁的是「密钥进签名包」,这里是**用户自带凭证**(§3.6)。
+
+  本页只做三件事:显示绑定状态(credential.state,纯本地查表)、显示本小时 GraphQL 额度(/rate_limit
+  本身不计配额)、给两个直达按钮(去 GitHub 新建令牌 / 去 App 的凭证管理绑定 —— G25 #4)。
+  页面永远拿不到令牌本体 —— 拿到就可能进 DOM、进日志、进分享截图。
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Token and quota</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --accent:#128F66;--accentStrong:#128F66;--chip:#E7E9EE}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--accentStrong:#6FE8BE;--chip:#20232A}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+h1{font-size:24px;margin:0 0 2px;letter-spacing:-.6px}
+.sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+/* §2 段标题 = 左名字 + 右摘要;不做 uppercase(只作用于英文,双语两种观感)。 */
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:20px 0 8px;
+  display:flex;align-items:center;justify-content:space-between}
+.sec em{font-style:normal;font-weight:400;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.quota{display:flex;gap:8px}
+.q1{flex:1 1 0;background:var(--chip);border-radius:12px;padding:10px;min-width:0}
+.q1 i{display:block;font-style:normal;color:var(--sub);font-size:11px}
+.q1 b{display:block;font-size:18px;font-weight:700;margin-top:2px}
+.badge{display:inline-block;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:600;
+  background:var(--chip);color:var(--sub)}
+.badge.on{background:var(--srcSoft);color:var(--src)}
+.row{display:flex;gap:8px;margin-top:10px}
+.btn{flex:1 1 0;border:0;border-radius:12px;padding:11px 4px;font-size:14px;font-weight:600;cursor:pointer}
+.primary{background:var(--accentStrong);color:var(--onAccent)}
+.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.note{color:var(--sub);font-size:11px;line-height:1.7;margin-top:12px}
+.note b{color:var(--fg)}
+/* 卡片第一块就是说明文字时不再叠 12px 上边距(原来上 26 / 左 14,2026-09-25 体检) */
+.card>.note:first-child{margin-top:0}
+.foot{color:var(--sub);font-size:11px;margin-top:22px;line-height:1.6}
+
+/* —— 视觉统一(与本包 RCN 卡片同源)——
+   「源色」是包自己的 accent(GitHub 贡献绿 / App Store 蓝),不再借 App 的品牌薄荷绿;
+   卡片去 1px 描边改「无边 + 极浅投影」,分节标题改大写小字距,长文脚注收进一块浅底面板。
+   本段刻意放在样式表末尾作**覆盖层** —— 各页原有规则一条不动,改动集中在这里一处。
+   ⚠️ 暗色档必须把 --accentStrong 一起改:原表里 html[data-theme=dark] 的特异性高于 :root,
+   只在 :root 里改会被它盖回薄荷绿(改完看着没变的典型)。 */
+:root{--onAccent:#FFFFFF;--src:#2DA44E;--srcSoft:rgba(45,164,78,.10);--chip:#E7E9EE;--chip2:#EEF0F4;
+  --shadow:0 1px 2px rgba(22,23,27,.04),0 10px 24px -16px rgba(22,23,27,.18);
+  --accent:var(--src);--accentStrong:var(--src)}
+html[data-theme="dark"]{--onAccent:#0B0C0E;--src:#3FB950;--srcSoft:rgba(63,185,80,.14);--chip:#20232A;--chip2:#252930;
+  --shadow:none;--accent:var(--src);--accentStrong:var(--src)}
+h1{font-weight:700;letter-spacing:-.5px}
+.sec{margin-top:22px}
+.card,.box{border:0;border-radius:14px;box-shadow:var(--shadow)}
+.row{border-bottom:0}
+.foot{background:var(--chip2);border-radius:14px;padding:12px 14px;line-height:1.7;margin-top:20px}
+
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.xb-tap{position:relative}
+.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.btn,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.btn:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style></head>
+<body>
+  <h1 data-i="title"></h1>
+  <div class="sub" data-i="sub"></div>
+
+  <!-- 令牌区排第一:进这一页的人多半是来绑 / 换令牌的,绑定按钮不能落在小屏折叠线以下。 -->
+  <div class="sec"><span data-i="tokenSec"></span><em id="vTok">--</em></div>
+  <div class="card">
+    <div class="note" id="how"></div>
+    <!-- 直达凭证面板(§7.1.1 #4)。此前这里只有一段「我的 → 凭证管理」的**纯文字**,
+         等于把用户指到一个得自己去 App 里找的页面 —— G25 #4 要的是**可执行**的下一步。
+         deeplink 三段都不能省:section 定位到凭证区、bundle 说清是给哪个包绑、
+         bind 指名本包 manifest.credentials[0].id(gh),面板直接开到那一条的绑定态。 -->
+    <div class="row"><button class="btn ghost" id="newTok"></button><button class="btn primary" id="bind"></button></div>
+  </div>
+
+  <div class="sec"><span data-i="quotaSec"></span><em id="vQuota">--</em></div>
+  <div class="card">
+    <div class="quota">
+      <div class="q1"><i data-i="qRemain"></i><b id="qr">--</b></div>
+      <div class="q1"><i data-i="qLimit"></i><b id="ql">--</b></div>
+      <div class="q1"><i data-i="qReset"></i><b id="qt">--</b></div>
+    </div>
+    <div class="note"><span id="badge" class="badge"></span></div>
+  </div>
+
+  <div class="foot" data-i="foot"></div>
+<script>
+(function(){
+var I18N = {
+  "zh":{
+    "title":"令牌与额度","sub":"正在读取…","subWait":"正在读取额度…","subOn":"已绑定令牌 · 本小时还剩 ","subOff":"还没绑定令牌","subExp":"令牌已失效，请重新绑定","subTimes":" 点",
+    "quotaSec":"本小时额度","qRemain":"剩余","qLimit":"上限","qReset":"重置于",
+    "tokenSec":"GitHub 访问令牌","bindBtn":"去凭证管理绑定","rebindBtn":"重新绑定","newBtn":"在 GitHub 新建令牌",
+    "onBadge":"已绑定","offBadge":"未绑定","expBadge":"已失效",
+    "how":"这个工具需要一个 GitHub 访问令牌才能读到你的 PR、review 请求和 issue。<br><b>怎么建：</b>点「在 GitHub 新建令牌」，已帮你勾好 <b>repo</b>（读私有仓库）和 <b>read:org</b>（看到发给你所在团队的 review 请求）两项；只看公开仓库可以都不勾。<br><b>保存在哪：</b>保存在设备的系统安全存储中，只随请求发送给 api.github.com，不会写入备份，也不会出现在分享图中。只有你在多设备同步里打开「同步密钥与凭证」，才会加密后同步到你的其他设备。",
+    "foot":"组件每次更新只用 1 点额度；打开首页、看年视图会多用一些，通常几十点。每小时有 5000 点，正常使用远远用不完。",
+    "notX":"当前不在 App 中"
+  },
+  "en":{
+    "title":"Token and quota","sub":"Loading…","subWait":"Loading quota…","subOn":"Token connected · ","subOff":"No token connected yet","subExp":"Your token has expired — reconnect it","subTimes":" points left this hour",
+    "quotaSec":"This hour","qRemain":"Left","qLimit":"Limit","qReset":"Resets at",
+    "tokenSec":"GitHub access token","bindBtn":"Connect in Credentials","rebindBtn":"Reconnect","newBtn":"Create a token on GitHub",
+    "onBadge":"Connected","offBadge":"Not connected","expBadge":"Expired",
+    "how":"This tool needs a GitHub access token to read your pull requests, review requests and issues.<br><b>How to create one:</b> tap \u201cCreate a token on GitHub\u201d. The <b>repo</b> scope (private repos) and <b>read:org</b> scope (review requests sent to your teams) are pre-selected; for public repos only you can clear both.<br><b>Where it's kept:</b> in your device's secure storage, and sent only to api.github.com. It's never included in backups or shared images. It syncs to your other devices, encrypted, only if you turn on Sync keys and credentials in multi-device sync.",
+    "foot":"A widget update costs 1 point; opening the home page and the year view take a few dozen. You get 5,000 an hour — far more than you'll use.",
+    "notX":"Not running inside the app"
+  }
+};
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function nbCnDefault(info){
+  var r = info && info.region;
+  if (r === "cn") return true;
+  if (r === "overseas") return false;
+  return nbLang(info && (info.language || info.locale)) === "zh";
+}
+/* 宿主信息(market boot() 同法):等桥 → appInfo(带信封且 code≠0 = 没拿到)→ 缺语言时退回 <html data-lang>。 */
+async function nbInfo(){
+  for (var i = 0; i < 24 && !window.xbridge; i++) await new Promise(function(r){ setTimeout(r, 50); });
+  var d = {};
+  if (window.xbridge && xbridge.appInfo) {
+    try {
+      var x = xbridge.appInfo();
+      if (x && typeof x.then === "function") x = await x;
+      d = (x && x.code != null && x.code !== 0) ? {} : ((x && (x.data || x)) || {});
+    } catch(e){ d = {}; }
+  }
+  if (!d.language && !d.locale) d.language = document.documentElement.getAttribute("data-lang") || "";
+  return d;
+}
+/* 语言:缺省英文;先用 <html data-lang>,appInfo 回来再以它为准(doc/overseas-first.md §1–§2)。 */
+var LANG=nbLang(document.documentElement.getAttribute('data-lang'));
+function t(k){var T=I18N[LANG]; if(T&&Object.prototype.hasOwnProperty.call(T,k)) return T[k]; return Object.prototype.hasOwnProperty.call(I18N.en,k)?I18N.en[k]:k;}  /* 空串是合法译文(如英文的后缀),不能当缺键回落;缺键回落英文 */
+/* ⚠️ 语言判定的兜底不能硬写 'zh'(2026-08-21 Android 真机:appInfo 没拿到 language 时详情页落成中文、首页是英文)。
+   2026-10-01 起统一走 nbLang / nbInfo:appInfo → <html data-lang> → 英文(doc/overseas-first.md §1–§2)。 */
+function applyTheme(th){
+  var dark = th==='dark' || (th!=='light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+}
+function paint(){
+  Array.prototype.forEach.call(document.querySelectorAll('[data-i]'),function(el){
+    el.textContent = t(el.dataset.i); });
+  document.getElementById('how').innerHTML = t('how');
+  // 取数还没回来时副标先说「正在读取额度…」,不留一句与状态无关的描述占位
+  var sb = document.querySelector('[data-i="sub"]'); if(sb) sb.textContent = t('subWait');
+  document.getElementById('bind').textContent = t('bindBtn');
+  document.getElementById('newTok').textContent = t('newBtn');
+}
+/* 导航分两路:`numable://` 走桥的 route;http(s) 外链**必须**走 page/flow/open.af(nav.open)——
+   iOS / Android 的 route 只认 numable://,https 会弹「链接无效」(2026-09-25 用户实报)。 */
+function nav(url){
+  url = String(url||'');
+  if(/^https?:\/\//i.test(url)){ try{ xbridge.runActionFlow('open', {url: url}); }catch(e){} return; }
+  try{ if(xbridge.route) return xbridge.route(url); }catch(e){}
+}
+/* bundle = manifest.id(ULID),bind = manifest.credentials[0].id。
+   ⚠️ 写死字面量:页面拿不到 manifest,而 deeplink 少了 bundle/bind 只会开到凭证列表,
+   用户还得自己认哪一条是 GitHub —— 那就退回「得自己去找」了。 */
+function bindCred(){
+  nav('numable://app/mine?section=credentials&bundle=01KZGDDA96VW07WKQAK2SQ9HWA&bind=gh');
+}
+async function ready(){ for(var i=0;i<24&&!window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+  return !!window.xbridge; }
+async function appInfo(){
+  try{ if(xbridge.appInfo) return await xbridge.appInfo(); }catch(e){}
+  return null;
+}
+function refreshQuota(){
+  // /rate_limit 本身不计入配额,可以随时查
+  return xbridge.runDataFlow('rate',{}).then(function(r){
+    var d=(r&&r.code===0&&r.data)||{};
+    document.getElementById('qr').textContent = d.remaining==null?'--':d.remaining;
+    document.getElementById('ql').textContent = d.limit==null?'--':d.limit;
+    document.getElementById('qt').textContent = d.resetAt||'--';
+    var cs = d.credState || (String(d.hasToken)==='1' ? 'bound' : 'unbound');
+    var on = cs==='bound', exp = cs==='expired';
+    var b = document.getElementById('badge');
+    b.textContent = t(on?'onBadge':(exp?'expBadge':'offBadge'));
+    b.className = 'badge' + (on?' on':'');
+    /* §1 副标 = 此刻的状态,不是这一页是干什么的。 */
+    var rem = d.remaining==null ? '--' : d.remaining;
+    document.querySelector('[data-i="sub"]').textContent =
+      on ? t('subOn')+rem+t('subTimes') : t(exp?'subExp':'subOff');
+    document.getElementById('vTok').textContent = t(on?'onBadge':(exp?'expBadge':'offBadge'));
+    document.getElementById('bind').textContent = t(on||exp?'rebindBtn':'bindBtn');
+    document.getElementById('vQuota').textContent = on ? rem+' / '+(d.limit==null?'--':d.limit) : '--';
+  }).catch(function(){});
+}
+(async function boot(){
+  if(!(await ready())){ paint(); document.getElementById('badge').textContent=t('notX'); return; }
+  var d=await nbInfo();
+  applyTheme(d.theme);
+  LANG = nbLang(d.language||d.locale);
+  paint(); refreshQuota();
+  /* 从 App 的凭证管理绑完回来,状态要跟上。 */
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) refreshQuota(); });
+  window.addEventListener('languagechange', function(e){
+    LANG = nbLang((e && e.detail && e.detail.language) || document.documentElement.getAttribute('data-lang')); paint(); refreshQuota(); });
+  document.getElementById('bind').addEventListener('click', bindCred);
+  document.getElementById('newTok').addEventListener('click', function(){
+    nav('https://github.com/settings/tokens/new?scopes=repo,read:org&description=Numable'); });
+})();
+
+})();
+</script>
+</body></html>

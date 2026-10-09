@@ -1,0 +1,157 @@
+{
+  "rc": {
+    "cells": [
+      {
+        "type": "op",
+        "action": "set",
+        "props": {
+          "key": "_sky",
+          "value": "$[findNotEmpty::(${sky},overcast)]"
+        }
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},clear)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#4C5F6A|#2E4149"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},overcast)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#535A5F|#3D4348"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},rain)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#3D4951|#2C383F"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},snow)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#61666A|#47505A"
+          }
+        ]
+      },
+      {
+        "type": "op",
+        "action": "if",
+        "props": {
+          "val": "$[eq::(${_sky},night)]"
+        },
+        "react": [
+          {
+            "type": "layer",
+            "x": "0pt",
+            "y": "0pt",
+            "w": "{parent.w}",
+            "h": "{parent.h}",
+            "bgColor": "#17202B|#101720"
+          }
+        ]
+      },
+      {
+        "type": "txt",
+        "x": "16pt",
+        "y": "0pt",
+        "w": "{parent.w}-32pt",
+        "h": "54pt",
+        "text": "${@i18n.add_pre}${city}${@i18n.add_post}",
+        "fontSize": "14pt",
+        "typeface": "System-Bold",
+        "textColor": "#FFFFFF|#FFFFFF",
+        "bgColor": "#2EFFFFFF|#1FFFFFFF",
+        "alignmentH": "1",
+        "alignmentV": "1",
+        "maxLines": "1",
+        "cornerRadius": {
+          "leftT": "14pt",
+          "leftB": "14pt",
+          "rightT": "14pt",
+          "rightB": "14pt"
+        },
+        "events": {
+          "onClick": {
+            "flow": "@[file://page/flow/pick-detail.af]",
+            "params": {
+              "lat": "${lat}",
+              "lon": "${lon}",
+              "city": "${city}"
+            }
+          }
+        },
+        "_note": "加卡按钮。与首页那份的两处不同:\n① 事件带**本页的**坐标(结构化 {flow,params},cell.events 与 XNode/外壳 events 同形)——不带就会去取列表第一座城市,加出别的城市;\n② 文案点名城市。两段式拼接而不是一句整串:中英语序不同(「＋ 添加 长沙 的天气组件」/ \"+ Add a Changsha weather widget\"),整串没法只换中间。\n⚠️ 拼接走**普通串内插**不用 `connect::` —— 后者吃参数两侧空格,「＋ 添加 」的尾空格会被吞掉、拼成「＋ 添加长沙」。同页 p-hours/p-sky 的 `${@i18n.rain_pre}${rainAt}${@i18n.rain_post}` 是现成的同款样例。"
+      },
+      {
+        "type": "txt",
+        "x": "16pt",
+        "y": "72pt",
+        "w": "{parent.w}-32pt",
+        "h": "-1",
+        "text": "${@i18n.foot}",
+        "fontSize": "10.5pt",
+        "textColor": "#D6FFFFFF|#CCFFFFFF",
+        "maxLines": "3",
+        "lineSpacing": "4pt",
+        "_note": "与上面的 CTA 同一条左缘。⚠️ 这一页的 root `padding` 是 **0**(全铺底沉浸),所以 x=0 不是「块缘线」而是**屏幕边缘** —— 别照抄 crypto/forex 那条 x=0 规则。"
+      }
+    ],
+    "i18n": {
+      "zh-CN": {
+        "foot": "数据来源：Open-Meteo（开放气象数据，无需密钥）。天气实况每 5 分钟刷新一次，数据在你的设备上直接获取。",
+        "add_pre": "＋ 添加 ",
+        "add_post": " 的天气组件"
+      },
+      "en-US": {
+        "foot": "Source: Open-Meteo (open weather data, no API key). Refreshed every 5 minutes, fetched directly on your device.",
+        "add_pre": "+ Add a ",
+        "add_post": " weather widget"
+      }
+    }
+  },
+  "_note": "详情页页脚 = 首页 p-foot.rcn 的「按本页城市加卡」版本(生成脚本 tools/infosource/gen_weather_detail.py)。\n余高兼作底部安全区的着色区 —— root paddingBottom 必须是 0,否则整页天空断在最后一块的下沿、露出 App 底色。"
+}

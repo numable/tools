@@ -1,0 +1,619 @@
+{
+  "version": 1,
+  "_note": "合约脉搏:资金费率(当期 + 按真实结算周期折算的年化 + 下次结算时刻)· 持仓量与 24h 变化 · 多空人数比 · 24h 主动买入占比 · 永续价格。",
+  "i18n": {
+    "zh-CN": {
+      "noSwap": "这个币没有 USDT 永续合约"
+    },
+    "en-US": {
+      "noSwap": "No USDT perpetual for this coin"
+    }
+  },
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "kr",
+        "value": "$[findNotEmpty::(${pair},btcusd)]"
+      },
+      "_note": "⚠️ 入参先落地:方法参数里看不见 flow 入参(§9.5 #3)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "k",
+        "value": "$[if::(contains::(${kr},-),toUpperCase::(${kr}),connect::(toUpperCase::(if::(endsWith::(${kr},usdt),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usdc),subString::(${kr},0,calc::(length::(${kr})-4)),if::(endsWith::(${kr},usd),subString::(${kr},0,calc::(length::(${kr})-3)),${kr})))),-,if::(endsWith::(${kr},usdc),USDC,USDT)))]"
+      },
+      "_note": "币对归一:老实例是 Bitstamp 形状 `btcusd`,新实例是 OKX instId `BTC-USDT`,两种都认。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "base",
+        "value": "$[index::(split::(${k},-),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sw",
+        "value": "$[connect::(${base},-USDT-SWAP)]"
+      },
+      "_note": "永续一律取 USDT 本位(OKX 流动性最好的那一档);现货 BTC-USDC 也落到 BTC-USDT-SWAP。"
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "action": "request",
+          "id": "fr",
+          "params": {
+            "url": "https://www.okx.com/api/v5/public/funding-rate?instId=${sw}",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "oi",
+          "params": {
+            "url": "https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=${sw}",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "tk",
+          "params": {
+            "url": "https://www.okx.com/api/v5/market/ticker?instId=${sw}",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "ls",
+          "params": {
+            "url": "https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=${base}&period=1H",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "ov",
+          "params": {
+            "url": "https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-volume?ccy=${base}&period=1H",
+            "method": "GET",
+            "formatType": "json"
+          }
+        },
+        {
+          "action": "request",
+          "id": "tv",
+          "params": {
+            "url": "https://www.okx.com/api/v5/rubik/stat/taker-volume?ccy=${base}&instType=CONTRACTS&period=1H",
+            "method": "GET",
+            "formatType": "json"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tk_bad",
+        "value": "$[if::(gt::(length::(${tk.data}),0),0,1)]"
+      },
+      "_fb": 1,
+      "_note": "OKX 没取到(被地区政策拦 / 超时 / 空)→ 走备用源 Coinbase(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tk_s0",
+        "value": "$[if::(endsWith::(${sw},-SWAP),subString::(${sw},0,calc::(length::(${sw})-5)),${sw})]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tk_p",
+        "value": "$[if::(endsWith::(${tk_s0},-USDT),connect::(subString::(${tk_s0},0,calc::(length::(${tk_s0})-5)),-USD),if::(endsWith::(${tk_s0},-USDC),connect::(subString::(${tk_s0},0,calc::(length::(${tk_s0})-5)),-USD),${tk_s0}))]"
+      },
+      "_fb": 1,
+      "_note": "备用源 Coinbase 的产品名(doc/overseas-first.md §10)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tk_go",
+        "value": "${tk_bad}"
+      },
+      "_fb": 1
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "op": "if",
+          "props": {
+            "val": "${tk_go}"
+          },
+          "items": [
+            {
+              "action": "request",
+              "id": "tk_c",
+              "params": {
+                "url": "https://api.exchange.coinbase.com/products/${tk_p}/stats",
+                "method": "GET",
+                "formatType": "json",
+                "timeout": "5000"
+              }
+            }
+          ]
+        }
+      ],
+      "_fb": 1,
+      "_note": "备用请求(只在 OKX 没取到时发;每个都在 op:if 里)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfb",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 请求屏障(勿删):request / concurrent 之后紧邻的节点读不到结果(memory actionflow-concurrent-late-merge)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tk_ok",
+        "value": "$[if::(eq::(findNotEmpty::(${tk_c.last},__none__),__none__),0,1)]"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tk_q",
+        "value": "${tk.data}"
+      },
+      "_fb": 1,
+      "_note": "下游统一读 tk_q:OKX 的 data,或下面按 OKX 形状重排的备用数据。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${tk_ok}"
+      },
+      "_fb": 1,
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "tk_q",
+            "value": [
+              {
+                "last": "$[connect::(${tk_c.last},)]",
+                "open24h": "$[connect::(${tk_c.open},)]",
+                "high24h": "$[connect::(${tk_c.high},)]",
+                "low24h": "$[connect::(${tk_c.low},)]",
+                "vol24h": "$[connect::(${tk_c.volume},)]",
+                "volCcy24h": "$[if::(endsWith::(${sw},-SWAP),connect::(${tk_c.volume},),parseNumber::(calc::(${tk_c.volume}*${tk_c.last}),0))]"
+              }
+            ]
+          },
+          "_fb": 1
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_bfc",
+        "value": "1"
+      },
+      "_fb": 1,
+      "_note": "⚠️ 屏障(勿删):op:if 复合节点之后紧邻的节点同样读不到它的结果 ——实测紧跟一个 remove 会让后面的节点全部取空(2026-10-01 CLI)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "tk_c"
+      },
+      "_fb": 1
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frR",
+        "value": "$[get::(index::(${fr.data},0),fundingRate)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${frR}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "${@i18n.noSwap}"
+          }
+        }
+      ],
+      "_note": "主干 = 资金费率。取不到 = 这个币没有 USDT 永续,或网络失败 —— 都让流真失败,平台回落上次成功的图。rubik 三项(多空比 / 持仓变化 / 主动买卖)是可选增强,冷门币本来就没有,挂了不抛。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frT",
+        "value": "$[get::(index::(${fr.data},0),fundingTime)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frP",
+        "value": "$[get::(index::(${fr.data},0),prevFundingTime)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ivH",
+        "value": "$[parseNumber::(calc::((${frT}-${frP})/3600000),0)]"
+      },
+      "_note": "结算周期(小时):OKX 的永续有 8h / 4h / 1h 三种,年化必须按真实周期折算,一律乘 3×365 会把 4 小时一结的币少算一半。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frV",
+        "value": "$[parseNumber::(calc::(${frR}*100),0.000000)]"
+      },
+      "_note": "⚠️ 必须 parseNumber 成串:updown / flat_flag 用 length:: 判空,对 calc 出来的数字恒 0 → 方向与持平双双落空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frUp",
+        "value": "$[if::(gt::(length::(${frV}),0),if::(ge::(${frV},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frFl",
+        "value": "$[if::(gt::(length::(${frV}),0),if::(lt::(calc::(${frV}*${frV}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frA",
+        "value": "$[if::(gt::(${frV},0),${frV},calc::(0-${frV}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frS",
+        "value": "$[parseNumber::(${frA},0.0000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "frTx",
+        "value": "$[if::(ne::(findNotEmpty::(${frV},__none__),__none__),if::(eq::(${frS},0),${frS},connect::(if::(gt::(${frV},0),+,−),${frS})),)]"
+      },
+      "_note": "取整后为 0 不带符号(同 signed_txt,2026-10-08「+-0.0」修复)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "an",
+        "value": "$[parseNumber::(calc::(${frR}*24/findNotEmpty::(${ivH},8)*365*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "anTA",
+        "value": "$[if::(gt::(${an},0),${an},calc::(0-${an}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "anTF",
+        "value": "$[if::(ne::(findNotEmpty::(${an},__none__),__none__),parseNumber::(${anTA},0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "anT",
+        "value": "$[if::(ne::(findNotEmpty::(${an},__none__),__none__),if::(eq::(${anTF},0),connect::(${anTF},%),connect::(if::(gt::(${an},0),+,−),${anTF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "setAt",
+        "value": "$[formatDate::(calc::(${frT}*1),HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oiU",
+        "value": "$[get::(index::(${oi.data},0),oiUsd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oiE",
+        "value": "$[if::(ge::(${oiU},1000000000000),parseNumber::(calc::(${oiU}/1000000000000),0.00),if::(ge::(${oiU},1000000000),parseNumber::(calc::(${oiU}/1000000000),0.00),if::(ge::(${oiU},100000000),parseNumber::(calc::(${oiU}/1000000),0),parseNumber::(calc::(${oiU}/1000000),0.0))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oiEU",
+        "value": "$[if::(ge::(${oiU},1000000000000),T,if::(ge::(${oiU},1000000000),B,M))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oiZ",
+        "value": "$[if::(ge::(${oiU},1000000000000),parseNumber::(calc::(${oiU}/1000000000000),0.00),if::(ge::(${oiU},100000000),parseNumber::(calc::(${oiU}/100000000),0.00),parseNumber::(calc::(${oiU}/10000),0)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oiZU",
+        "value": "$[if::(ge::(${oiU},1000000000000),2,if::(ge::(${oiU},100000000),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o0",
+        "value": "$[index::(index::(${ov.data},0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "o24",
+        "value": "$[index::(index::(${ov.data},24),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "oc",
+        "value": "$[if::(gt::(findNotEmpty::(${o24},0),0),parseNumber::(calc::((${o0}-${o24})/${o24}*100),0.0),)]"
+      },
+      "_note": "持仓 24h 变化:rubik 是 OKX 全部合约口径(与详情页「合约数据」同一个数),24 根前那一根不存在(新币)就留空。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ocUp",
+        "value": "$[if::(gt::(length::(${oc}),0),if::(ge::(${oc},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ocTA",
+        "value": "$[if::(gt::(${oc},0),${oc},calc::(0-${oc}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ocTF",
+        "value": "$[if::(ne::(findNotEmpty::(${oc},__none__),__none__),parseNumber::(${ocTA},0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ocT",
+        "value": "$[if::(ne::(findNotEmpty::(${oc},__none__),__none__),if::(eq::(${ocTF},0),connect::(${ocTF},%),connect::(if::(gt::(${oc},0),+,−),${ocTF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lsr",
+        "value": "$[index::(index::(${ls.data},0),1)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lsrS",
+        "value": "$[if::(gt::(length::(${lsr}),0),parseNumber::(${lsr},0.00),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lsL",
+        "value": "$[if::(gt::(length::(${lsr}),0),parseNumber::(calc::(${lsr}/(1+${lsr})*100),0),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lsW",
+        "value": "$[if::(gt::(length::(${lsr}),0),parseNumber::(max::(1.5,calc::(${lsr}/(1+${lsr})*89.33-1.5)),0.0),)]"
+      },
+      "_note": "多空双色细条里多头段的右端点(条宽 = deriv 底栏一列宽 − 14)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tvB",
+        "value": "$[calc::(findNotEmpty::(index::(index::(${tv.data},0),2),0)+findNotEmpty::(index::(index::(${tv.data},1),2),0)+findNotEmpty::(index::(index::(${tv.data},2),2),0)+findNotEmpty::(index::(index::(${tv.data},3),2),0)+findNotEmpty::(index::(index::(${tv.data},4),2),0)+findNotEmpty::(index::(index::(${tv.data},5),2),0)+findNotEmpty::(index::(index::(${tv.data},6),2),0)+findNotEmpty::(index::(index::(${tv.data},7),2),0)+findNotEmpty::(index::(index::(${tv.data},8),2),0)+findNotEmpty::(index::(index::(${tv.data},9),2),0)+findNotEmpty::(index::(index::(${tv.data},10),2),0)+findNotEmpty::(index::(index::(${tv.data},11),2),0)+findNotEmpty::(index::(index::(${tv.data},12),2),0)+findNotEmpty::(index::(index::(${tv.data},13),2),0)+findNotEmpty::(index::(index::(${tv.data},14),2),0)+findNotEmpty::(index::(index::(${tv.data},15),2),0)+findNotEmpty::(index::(index::(${tv.data},16),2),0)+findNotEmpty::(index::(index::(${tv.data},17),2),0)+findNotEmpty::(index::(index::(${tv.data},18),2),0)+findNotEmpty::(index::(index::(${tv.data},19),2),0)+findNotEmpty::(index::(index::(${tv.data},20),2),0)+findNotEmpty::(index::(index::(${tv.data},21),2),0)+findNotEmpty::(index::(index::(${tv.data},22),2),0)+findNotEmpty::(index::(index::(${tv.data},23),2),0))]"
+      },
+      "_note": "rubik taker-volume 每根 = [ts, 卖出额, 买入额](USD);取最近 24 根小时线求和。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tvS",
+        "value": "$[calc::(findNotEmpty::(index::(index::(${tv.data},0),1),0)+findNotEmpty::(index::(index::(${tv.data},1),1),0)+findNotEmpty::(index::(index::(${tv.data},2),1),0)+findNotEmpty::(index::(index::(${tv.data},3),1),0)+findNotEmpty::(index::(index::(${tv.data},4),1),0)+findNotEmpty::(index::(index::(${tv.data},5),1),0)+findNotEmpty::(index::(index::(${tv.data},6),1),0)+findNotEmpty::(index::(index::(${tv.data},7),1),0)+findNotEmpty::(index::(index::(${tv.data},8),1),0)+findNotEmpty::(index::(index::(${tv.data},9),1),0)+findNotEmpty::(index::(index::(${tv.data},10),1),0)+findNotEmpty::(index::(index::(${tv.data},11),1),0)+findNotEmpty::(index::(index::(${tv.data},12),1),0)+findNotEmpty::(index::(index::(${tv.data},13),1),0)+findNotEmpty::(index::(index::(${tv.data},14),1),0)+findNotEmpty::(index::(index::(${tv.data},15),1),0)+findNotEmpty::(index::(index::(${tv.data},16),1),0)+findNotEmpty::(index::(index::(${tv.data},17),1),0)+findNotEmpty::(index::(index::(${tv.data},18),1),0)+findNotEmpty::(index::(index::(${tv.data},19),1),0)+findNotEmpty::(index::(index::(${tv.data},20),1),0)+findNotEmpty::(index::(index::(${tv.data},21),1),0)+findNotEmpty::(index::(index::(${tv.data},22),1),0)+findNotEmpty::(index::(index::(${tv.data},23),1),0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tkB",
+        "value": "$[if::(gt::(calc::(${tvB}+${tvS}),0),parseNumber::(calc::(${tvB}/(${tvB}+${tvS})*100),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tkUp",
+        "value": "$[if::(gt::(length::(${tkB}),0),if::(ge::(${tkB},50),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tkBS",
+        "value": "$[if::(gt::(length::(${tkB}),0),connect::(${tkB},%),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "last",
+        "value": "$[get::(index::(${tk_q},0),last)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "open",
+        "value": "$[get::(index::(${tk_q},0),open24h)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pxS",
+        "value": "$[if::(eq::(findNotEmpty::(${last},__none__),__none__),--,if::(ge::(${last},1000),parseNumber::(${last},#\\,##0.0),if::(ge::(${last},100),parseNumber::(${last},0.00),if::(ge::(${last},1),parseNumber::(${last},0.000),if::(ge::(${last},0.01),parseNumber::(${last},0.00000),parseNumber::(${last},0.0000000))))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pc",
+        "value": "$[parseNumber::(calc::((${last}-${open})/${open}*100),0.00)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pup",
+        "value": "$[if::(gt::(length::(${pc}),0),if::(ge::(${pc},0),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pfl",
+        "value": "$[if::(gt::(length::(${pc}),0),if::(lt::(calc::(${pc}*${pc}),0.000025),1,0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pTA",
+        "value": "$[if::(gt::(${pc},0),${pc},calc::(0-${pc}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pTF",
+        "value": "$[if::(ne::(findNotEmpty::(${pc},__none__),__none__),parseNumber::(${pTA},0.00),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pT",
+        "value": "$[if::(ne::(findNotEmpty::(${pc},__none__),__none__),if::(eq::(${pTF},0),connect::(${pTF},%),connect::(if::(gt::(${pc},0),+,−),${pTF},%)),--)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sym",
+        "value": "${base}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "sym",
+          "at",
+          "ivH",
+          "frTx",
+          "frUp",
+          "frFl",
+          "anT",
+          "setAt",
+          "oiE",
+          "oiEU",
+          "oiZ",
+          "oiZU",
+          "ocT",
+          "ocUp",
+          "lsrS",
+          "lsL",
+          "lsW",
+          "tkBS",
+          "tkUp",
+          "pxS",
+          "pT",
+          "pup",
+          "pfl"
+        ]
+      }
+    }
+  ]
+}

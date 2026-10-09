@@ -1,0 +1,1085 @@
+{
+  "_note": "链接来源(dom 卡):首页 30 条按域名聚合取前 5。生成器 gen_hacker.py。",
+  "version": 1,
+  "actions": [
+    {
+      "action": "request",
+      "id": "resp",
+      "params": {
+        "url": "https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30&attributesToRetrieve=url,points,objectID&attributesToHighlight=none",
+        "method": "GET",
+        "formatType": "json"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求/并发屏障(勿删):request 与 concurrent 之后**紧邻**的节点读不到响应(晚一拍合并,memory [[actionflow-concurrent-late-merge]])。删掉它 → 下面所有 index:: 静默取空 → 卡渲一片 `--`,而流仍报 success。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(gt::(length::(${resp.hits}),0),0,1)]"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "hn_unreachable"
+          }
+        }
+      ],
+      "_note": "取数失败 → 抛错终止流,平台据此回落上次成功数据(G26/§7.2)"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${@time.nowMs},HH:mm)]"
+      },
+      "_note": "榜单没有「数据时间」字段,用取数时刻兜底(标准 §4.4)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "reHost",
+        "value": "^https?://(www[.])?"
+      },
+      "_note": "剥协议与 www.,再按 / 切取第一段 = 域名。⚠️ 正则先落地成键再传(括号会被方法参数解析器吃掉)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dm",
+        "value": [
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[0].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[1].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[2].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[3].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[4].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[5].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[6].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[7].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[8].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[9].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[10].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[11].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[12].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[13].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[14].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[15].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[16].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[17].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[18].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[19].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[20].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[21].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[22].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[23].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[24].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[25].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[26].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[27].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[28].url},),${reHost},),/),0))]",
+          "$[toLowerCase::(index::(split::(replaceAll::(findNotEmpty::(${resp.hits[29].url},),${reHost},),/),0))]"
+        ]
+      },
+      "_note": "逐条的域名;没有 url 的站内帖为空(不计)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dRx",
+        "value": "[^a-z0-9~@]"
+      },
+      "_note": "键里的正则特殊字符(`.` `+` …)统一换成 `_`,blob 与候选两边同换。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSg",
+        "value": [
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},0),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},1),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},2),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},3),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},4),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},5),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},6),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},7),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},8),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},9),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},10),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},11),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},12),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},13),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},14),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},15),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},16),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},17),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},18),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},19),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},20),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},21),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},22),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},23),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},24),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},25),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},26),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},27),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},28),~)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(connect::(~,index::(${dm},29),~)),${dRx},_)]"
+        ]
+      },
+      "_note": "逐条的「~域名~」段。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dBl",
+        "value": "$[connect::(@,join::(${dSg},),@)]"
+      },
+      "_note": "全部段拼成一串;两端 `@` 哨兵不能省(split 丢首尾空段)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCk",
+        "value": [
+          "$[replaceAll::(toLowerCase::(index::(${dm},0)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},1)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},2)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},3)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},4)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},5)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},6)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},7)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},8)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},9)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},10)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},11)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},12)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},13)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},14)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},15)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},16)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},17)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},18)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},19)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},20)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},21)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},22)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},23)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},24)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},25)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},26)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},27)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},28)),${dRx},_)]",
+          "$[replaceAll::(toLowerCase::(index::(${dm},29)),${dRx},_)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dLb",
+        "value": [
+          "$[findNotEmpty::(index::(${dm},0),)]",
+          "$[findNotEmpty::(index::(${dm},1),)]",
+          "$[findNotEmpty::(index::(${dm},2),)]",
+          "$[findNotEmpty::(index::(${dm},3),)]",
+          "$[findNotEmpty::(index::(${dm},4),)]",
+          "$[findNotEmpty::(index::(${dm},5),)]",
+          "$[findNotEmpty::(index::(${dm},6),)]",
+          "$[findNotEmpty::(index::(${dm},7),)]",
+          "$[findNotEmpty::(index::(${dm},8),)]",
+          "$[findNotEmpty::(index::(${dm},9),)]",
+          "$[findNotEmpty::(index::(${dm},10),)]",
+          "$[findNotEmpty::(index::(${dm},11),)]",
+          "$[findNotEmpty::(index::(${dm},12),)]",
+          "$[findNotEmpty::(index::(${dm},13),)]",
+          "$[findNotEmpty::(index::(${dm},14),)]",
+          "$[findNotEmpty::(index::(${dm},15),)]",
+          "$[findNotEmpty::(index::(${dm},16),)]",
+          "$[findNotEmpty::(index::(${dm},17),)]",
+          "$[findNotEmpty::(index::(${dm},18),)]",
+          "$[findNotEmpty::(index::(${dm},19),)]",
+          "$[findNotEmpty::(index::(${dm},20),)]",
+          "$[findNotEmpty::(index::(${dm},21),)]",
+          "$[findNotEmpty::(index::(${dm},22),)]",
+          "$[findNotEmpty::(index::(${dm},23),)]",
+          "$[findNotEmpty::(index::(${dm},24),)]",
+          "$[findNotEmpty::(index::(${dm},25),)]",
+          "$[findNotEmpty::(index::(${dm},26),)]",
+          "$[findNotEmpty::(index::(${dm},27),)]",
+          "$[findNotEmpty::(index::(${dm},28),)]",
+          "$[findNotEmpty::(index::(${dm},29),)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCt",
+        "value": [
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},0),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},0),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},1),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},1),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},2),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},2),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},3),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},3),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},4),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},4),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},5),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},5),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},6),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},6),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},7),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},7),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},8),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},8),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},9),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},9),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},10),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},10),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},11),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},11),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},12),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},12),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},13),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},13),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},14),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},14),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},15),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},15),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},16),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},16),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},17),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},17),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},18),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},18),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},19),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},19),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},20),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},20),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},21),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},21),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},22),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},22),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},23),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},23),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},24),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},24),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},25),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},25),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},26),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},26),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},27),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},27),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},28),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},28),~)))-1))]",
+          "$[if::(eq::(findNotEmpty::(index::(${dCk},29),__none__),__none__),-1,calc::(length::(split::(${dBl},connect::(~,index::(${dCk},29),~)))-1))]"
+        ]
+      },
+      "_note": "每个候选出现了几次;空候选记 -1。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "@"
+      },
+      "_note": "已选中的键「~a~~b~」:后一轮把它们排除掉(contains 一次判完,不必逐个比)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM0",
+        "value": "$[max::(${dCt})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI0s",
+        "value": [
+          "$[if::(eq::(index::(${dCt},0),${dM0}),0,999)]",
+          "$[if::(eq::(index::(${dCt},1),${dM0}),1,999)]",
+          "$[if::(eq::(index::(${dCt},2),${dM0}),2,999)]",
+          "$[if::(eq::(index::(${dCt},3),${dM0}),3,999)]",
+          "$[if::(eq::(index::(${dCt},4),${dM0}),4,999)]",
+          "$[if::(eq::(index::(${dCt},5),${dM0}),5,999)]",
+          "$[if::(eq::(index::(${dCt},6),${dM0}),6,999)]",
+          "$[if::(eq::(index::(${dCt},7),${dM0}),7,999)]",
+          "$[if::(eq::(index::(${dCt},8),${dM0}),8,999)]",
+          "$[if::(eq::(index::(${dCt},9),${dM0}),9,999)]",
+          "$[if::(eq::(index::(${dCt},10),${dM0}),10,999)]",
+          "$[if::(eq::(index::(${dCt},11),${dM0}),11,999)]",
+          "$[if::(eq::(index::(${dCt},12),${dM0}),12,999)]",
+          "$[if::(eq::(index::(${dCt},13),${dM0}),13,999)]",
+          "$[if::(eq::(index::(${dCt},14),${dM0}),14,999)]",
+          "$[if::(eq::(index::(${dCt},15),${dM0}),15,999)]",
+          "$[if::(eq::(index::(${dCt},16),${dM0}),16,999)]",
+          "$[if::(eq::(index::(${dCt},17),${dM0}),17,999)]",
+          "$[if::(eq::(index::(${dCt},18),${dM0}),18,999)]",
+          "$[if::(eq::(index::(${dCt},19),${dM0}),19,999)]",
+          "$[if::(eq::(index::(${dCt},20),${dM0}),20,999)]",
+          "$[if::(eq::(index::(${dCt},21),${dM0}),21,999)]",
+          "$[if::(eq::(index::(${dCt},22),${dM0}),22,999)]",
+          "$[if::(eq::(index::(${dCt},23),${dM0}),23,999)]",
+          "$[if::(eq::(index::(${dCt},24),${dM0}),24,999)]",
+          "$[if::(eq::(index::(${dCt},25),${dM0}),25,999)]",
+          "$[if::(eq::(index::(${dCt},26),${dM0}),26,999)]",
+          "$[if::(eq::(index::(${dCt},27),${dM0}),27,999)]",
+          "$[if::(eq::(index::(${dCt},28),${dM0}),28,999)]",
+          "$[if::(eq::(index::(${dCt},29),${dM0}),29,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI0",
+        "value": "$[min::(${dI0s})]"
+      },
+      "_note": "并列时取靠前的(原列表按热度排,靠前 = 更热)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI0}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn0",
+        "value": "$[if::(ge::(${dM0},1),index::(${dLb},${dI0}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc0",
+        "value": "$[if::(ge::(${dM0},1),round::(${dM0}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW0",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[0].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[1].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[2].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[3].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[4].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[5].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[6].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[7].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[8].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[9].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},10),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[10].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},11),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[11].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},12),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[12].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},13),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[13].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},14),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[14].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},15),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[15].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},16),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[16].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},17),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[17].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},18),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[18].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},19),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[19].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},20),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[20].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},21),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[21].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},22),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[22].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},23),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[23].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},24),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[24].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},25),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[25].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},26),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[26].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},27),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[27].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},28),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[28].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},29),connect::(~,index::(${dCk},${dI0}),~)),findNotEmpty::(${resp.hits[29].points},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds0",
+        "value": "$[if::(ge::(${dM0},1),round::(sum::(${dW0})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSc1",
+        "value": [
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},0),~)),-1,index::(${dCt},0))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},1),~)),-1,index::(${dCt},1))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},2),~)),-1,index::(${dCt},2))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},3),~)),-1,index::(${dCt},3))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},4),~)),-1,index::(${dCt},4))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},5),~)),-1,index::(${dCt},5))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},6),~)),-1,index::(${dCt},6))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},7),~)),-1,index::(${dCt},7))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},8),~)),-1,index::(${dCt},8))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},9),~)),-1,index::(${dCt},9))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},10),~)),-1,index::(${dCt},10))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},11),~)),-1,index::(${dCt},11))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},12),~)),-1,index::(${dCt},12))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},13),~)),-1,index::(${dCt},13))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},14),~)),-1,index::(${dCt},14))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},15),~)),-1,index::(${dCt},15))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},16),~)),-1,index::(${dCt},16))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},17),~)),-1,index::(${dCt},17))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},18),~)),-1,index::(${dCt},18))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},19),~)),-1,index::(${dCt},19))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},20),~)),-1,index::(${dCt},20))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},21),~)),-1,index::(${dCt},21))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},22),~)),-1,index::(${dCt},22))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},23),~)),-1,index::(${dCt},23))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},24),~)),-1,index::(${dCt},24))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},25),~)),-1,index::(${dCt},25))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},26),~)),-1,index::(${dCt},26))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},27),~)),-1,index::(${dCt},27))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},28),~)),-1,index::(${dCt},28))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},29),~)),-1,index::(${dCt},29))]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM1",
+        "value": "$[max::(${dSc1})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI1s",
+        "value": [
+          "$[if::(eq::(index::(${dSc1},0),${dM1}),0,999)]",
+          "$[if::(eq::(index::(${dSc1},1),${dM1}),1,999)]",
+          "$[if::(eq::(index::(${dSc1},2),${dM1}),2,999)]",
+          "$[if::(eq::(index::(${dSc1},3),${dM1}),3,999)]",
+          "$[if::(eq::(index::(${dSc1},4),${dM1}),4,999)]",
+          "$[if::(eq::(index::(${dSc1},5),${dM1}),5,999)]",
+          "$[if::(eq::(index::(${dSc1},6),${dM1}),6,999)]",
+          "$[if::(eq::(index::(${dSc1},7),${dM1}),7,999)]",
+          "$[if::(eq::(index::(${dSc1},8),${dM1}),8,999)]",
+          "$[if::(eq::(index::(${dSc1},9),${dM1}),9,999)]",
+          "$[if::(eq::(index::(${dSc1},10),${dM1}),10,999)]",
+          "$[if::(eq::(index::(${dSc1},11),${dM1}),11,999)]",
+          "$[if::(eq::(index::(${dSc1},12),${dM1}),12,999)]",
+          "$[if::(eq::(index::(${dSc1},13),${dM1}),13,999)]",
+          "$[if::(eq::(index::(${dSc1},14),${dM1}),14,999)]",
+          "$[if::(eq::(index::(${dSc1},15),${dM1}),15,999)]",
+          "$[if::(eq::(index::(${dSc1},16),${dM1}),16,999)]",
+          "$[if::(eq::(index::(${dSc1},17),${dM1}),17,999)]",
+          "$[if::(eq::(index::(${dSc1},18),${dM1}),18,999)]",
+          "$[if::(eq::(index::(${dSc1},19),${dM1}),19,999)]",
+          "$[if::(eq::(index::(${dSc1},20),${dM1}),20,999)]",
+          "$[if::(eq::(index::(${dSc1},21),${dM1}),21,999)]",
+          "$[if::(eq::(index::(${dSc1},22),${dM1}),22,999)]",
+          "$[if::(eq::(index::(${dSc1},23),${dM1}),23,999)]",
+          "$[if::(eq::(index::(${dSc1},24),${dM1}),24,999)]",
+          "$[if::(eq::(index::(${dSc1},25),${dM1}),25,999)]",
+          "$[if::(eq::(index::(${dSc1},26),${dM1}),26,999)]",
+          "$[if::(eq::(index::(${dSc1},27),${dM1}),27,999)]",
+          "$[if::(eq::(index::(${dSc1},28),${dM1}),28,999)]",
+          "$[if::(eq::(index::(${dSc1},29),${dM1}),29,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI1",
+        "value": "$[min::(${dI1s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI1}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn1",
+        "value": "$[if::(ge::(${dM1},1),index::(${dLb},${dI1}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc1",
+        "value": "$[if::(ge::(${dM1},1),round::(${dM1}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW1",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[0].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[1].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[2].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[3].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[4].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[5].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[6].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[7].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[8].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[9].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},10),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[10].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},11),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[11].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},12),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[12].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},13),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[13].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},14),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[14].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},15),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[15].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},16),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[16].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},17),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[17].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},18),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[18].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},19),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[19].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},20),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[20].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},21),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[21].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},22),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[22].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},23),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[23].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},24),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[24].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},25),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[25].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},26),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[26].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},27),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[27].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},28),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[28].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},29),connect::(~,index::(${dCk},${dI1}),~)),findNotEmpty::(${resp.hits[29].points},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds1",
+        "value": "$[if::(ge::(${dM1},1),round::(sum::(${dW1})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSc2",
+        "value": [
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},0),~)),-1,index::(${dCt},0))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},1),~)),-1,index::(${dCt},1))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},2),~)),-1,index::(${dCt},2))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},3),~)),-1,index::(${dCt},3))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},4),~)),-1,index::(${dCt},4))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},5),~)),-1,index::(${dCt},5))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},6),~)),-1,index::(${dCt},6))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},7),~)),-1,index::(${dCt},7))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},8),~)),-1,index::(${dCt},8))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},9),~)),-1,index::(${dCt},9))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},10),~)),-1,index::(${dCt},10))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},11),~)),-1,index::(${dCt},11))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},12),~)),-1,index::(${dCt},12))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},13),~)),-1,index::(${dCt},13))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},14),~)),-1,index::(${dCt},14))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},15),~)),-1,index::(${dCt},15))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},16),~)),-1,index::(${dCt},16))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},17),~)),-1,index::(${dCt},17))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},18),~)),-1,index::(${dCt},18))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},19),~)),-1,index::(${dCt},19))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},20),~)),-1,index::(${dCt},20))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},21),~)),-1,index::(${dCt},21))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},22),~)),-1,index::(${dCt},22))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},23),~)),-1,index::(${dCt},23))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},24),~)),-1,index::(${dCt},24))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},25),~)),-1,index::(${dCt},25))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},26),~)),-1,index::(${dCt},26))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},27),~)),-1,index::(${dCt},27))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},28),~)),-1,index::(${dCt},28))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},29),~)),-1,index::(${dCt},29))]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM2",
+        "value": "$[max::(${dSc2})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI2s",
+        "value": [
+          "$[if::(eq::(index::(${dSc2},0),${dM2}),0,999)]",
+          "$[if::(eq::(index::(${dSc2},1),${dM2}),1,999)]",
+          "$[if::(eq::(index::(${dSc2},2),${dM2}),2,999)]",
+          "$[if::(eq::(index::(${dSc2},3),${dM2}),3,999)]",
+          "$[if::(eq::(index::(${dSc2},4),${dM2}),4,999)]",
+          "$[if::(eq::(index::(${dSc2},5),${dM2}),5,999)]",
+          "$[if::(eq::(index::(${dSc2},6),${dM2}),6,999)]",
+          "$[if::(eq::(index::(${dSc2},7),${dM2}),7,999)]",
+          "$[if::(eq::(index::(${dSc2},8),${dM2}),8,999)]",
+          "$[if::(eq::(index::(${dSc2},9),${dM2}),9,999)]",
+          "$[if::(eq::(index::(${dSc2},10),${dM2}),10,999)]",
+          "$[if::(eq::(index::(${dSc2},11),${dM2}),11,999)]",
+          "$[if::(eq::(index::(${dSc2},12),${dM2}),12,999)]",
+          "$[if::(eq::(index::(${dSc2},13),${dM2}),13,999)]",
+          "$[if::(eq::(index::(${dSc2},14),${dM2}),14,999)]",
+          "$[if::(eq::(index::(${dSc2},15),${dM2}),15,999)]",
+          "$[if::(eq::(index::(${dSc2},16),${dM2}),16,999)]",
+          "$[if::(eq::(index::(${dSc2},17),${dM2}),17,999)]",
+          "$[if::(eq::(index::(${dSc2},18),${dM2}),18,999)]",
+          "$[if::(eq::(index::(${dSc2},19),${dM2}),19,999)]",
+          "$[if::(eq::(index::(${dSc2},20),${dM2}),20,999)]",
+          "$[if::(eq::(index::(${dSc2},21),${dM2}),21,999)]",
+          "$[if::(eq::(index::(${dSc2},22),${dM2}),22,999)]",
+          "$[if::(eq::(index::(${dSc2},23),${dM2}),23,999)]",
+          "$[if::(eq::(index::(${dSc2},24),${dM2}),24,999)]",
+          "$[if::(eq::(index::(${dSc2},25),${dM2}),25,999)]",
+          "$[if::(eq::(index::(${dSc2},26),${dM2}),26,999)]",
+          "$[if::(eq::(index::(${dSc2},27),${dM2}),27,999)]",
+          "$[if::(eq::(index::(${dSc2},28),${dM2}),28,999)]",
+          "$[if::(eq::(index::(${dSc2},29),${dM2}),29,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI2",
+        "value": "$[min::(${dI2s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI2}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn2",
+        "value": "$[if::(ge::(${dM2},1),index::(${dLb},${dI2}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc2",
+        "value": "$[if::(ge::(${dM2},1),round::(${dM2}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW2",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[0].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[1].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[2].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[3].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[4].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[5].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[6].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[7].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[8].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[9].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},10),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[10].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},11),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[11].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},12),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[12].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},13),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[13].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},14),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[14].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},15),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[15].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},16),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[16].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},17),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[17].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},18),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[18].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},19),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[19].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},20),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[20].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},21),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[21].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},22),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[22].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},23),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[23].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},24),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[24].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},25),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[25].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},26),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[26].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},27),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[27].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},28),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[28].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},29),connect::(~,index::(${dCk},${dI2}),~)),findNotEmpty::(${resp.hits[29].points},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds2",
+        "value": "$[if::(ge::(${dM2},1),round::(sum::(${dW2})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSc3",
+        "value": [
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},0),~)),-1,index::(${dCt},0))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},1),~)),-1,index::(${dCt},1))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},2),~)),-1,index::(${dCt},2))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},3),~)),-1,index::(${dCt},3))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},4),~)),-1,index::(${dCt},4))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},5),~)),-1,index::(${dCt},5))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},6),~)),-1,index::(${dCt},6))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},7),~)),-1,index::(${dCt},7))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},8),~)),-1,index::(${dCt},8))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},9),~)),-1,index::(${dCt},9))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},10),~)),-1,index::(${dCt},10))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},11),~)),-1,index::(${dCt},11))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},12),~)),-1,index::(${dCt},12))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},13),~)),-1,index::(${dCt},13))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},14),~)),-1,index::(${dCt},14))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},15),~)),-1,index::(${dCt},15))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},16),~)),-1,index::(${dCt},16))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},17),~)),-1,index::(${dCt},17))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},18),~)),-1,index::(${dCt},18))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},19),~)),-1,index::(${dCt},19))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},20),~)),-1,index::(${dCt},20))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},21),~)),-1,index::(${dCt},21))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},22),~)),-1,index::(${dCt},22))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},23),~)),-1,index::(${dCt},23))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},24),~)),-1,index::(${dCt},24))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},25),~)),-1,index::(${dCt},25))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},26),~)),-1,index::(${dCt},26))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},27),~)),-1,index::(${dCt},27))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},28),~)),-1,index::(${dCt},28))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},29),~)),-1,index::(${dCt},29))]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM3",
+        "value": "$[max::(${dSc3})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI3s",
+        "value": [
+          "$[if::(eq::(index::(${dSc3},0),${dM3}),0,999)]",
+          "$[if::(eq::(index::(${dSc3},1),${dM3}),1,999)]",
+          "$[if::(eq::(index::(${dSc3},2),${dM3}),2,999)]",
+          "$[if::(eq::(index::(${dSc3},3),${dM3}),3,999)]",
+          "$[if::(eq::(index::(${dSc3},4),${dM3}),4,999)]",
+          "$[if::(eq::(index::(${dSc3},5),${dM3}),5,999)]",
+          "$[if::(eq::(index::(${dSc3},6),${dM3}),6,999)]",
+          "$[if::(eq::(index::(${dSc3},7),${dM3}),7,999)]",
+          "$[if::(eq::(index::(${dSc3},8),${dM3}),8,999)]",
+          "$[if::(eq::(index::(${dSc3},9),${dM3}),9,999)]",
+          "$[if::(eq::(index::(${dSc3},10),${dM3}),10,999)]",
+          "$[if::(eq::(index::(${dSc3},11),${dM3}),11,999)]",
+          "$[if::(eq::(index::(${dSc3},12),${dM3}),12,999)]",
+          "$[if::(eq::(index::(${dSc3},13),${dM3}),13,999)]",
+          "$[if::(eq::(index::(${dSc3},14),${dM3}),14,999)]",
+          "$[if::(eq::(index::(${dSc3},15),${dM3}),15,999)]",
+          "$[if::(eq::(index::(${dSc3},16),${dM3}),16,999)]",
+          "$[if::(eq::(index::(${dSc3},17),${dM3}),17,999)]",
+          "$[if::(eq::(index::(${dSc3},18),${dM3}),18,999)]",
+          "$[if::(eq::(index::(${dSc3},19),${dM3}),19,999)]",
+          "$[if::(eq::(index::(${dSc3},20),${dM3}),20,999)]",
+          "$[if::(eq::(index::(${dSc3},21),${dM3}),21,999)]",
+          "$[if::(eq::(index::(${dSc3},22),${dM3}),22,999)]",
+          "$[if::(eq::(index::(${dSc3},23),${dM3}),23,999)]",
+          "$[if::(eq::(index::(${dSc3},24),${dM3}),24,999)]",
+          "$[if::(eq::(index::(${dSc3},25),${dM3}),25,999)]",
+          "$[if::(eq::(index::(${dSc3},26),${dM3}),26,999)]",
+          "$[if::(eq::(index::(${dSc3},27),${dM3}),27,999)]",
+          "$[if::(eq::(index::(${dSc3},28),${dM3}),28,999)]",
+          "$[if::(eq::(index::(${dSc3},29),${dM3}),29,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI3",
+        "value": "$[min::(${dI3s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI3}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn3",
+        "value": "$[if::(ge::(${dM3},1),index::(${dLb},${dI3}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc3",
+        "value": "$[if::(ge::(${dM3},1),round::(${dM3}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW3",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[0].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[1].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[2].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[3].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[4].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[5].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[6].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[7].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[8].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[9].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},10),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[10].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},11),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[11].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},12),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[12].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},13),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[13].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},14),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[14].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},15),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[15].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},16),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[16].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},17),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[17].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},18),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[18].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},19),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[19].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},20),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[20].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},21),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[21].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},22),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[22].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},23),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[23].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},24),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[24].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},25),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[25].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},26),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[26].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},27),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[27].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},28),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[28].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},29),connect::(~,index::(${dCk},${dI3}),~)),findNotEmpty::(${resp.hits[29].points},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds3",
+        "value": "$[if::(ge::(${dM3},1),round::(sum::(${dW3})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dSc4",
+        "value": [
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},0),~)),-1,index::(${dCt},0))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},1),~)),-1,index::(${dCt},1))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},2),~)),-1,index::(${dCt},2))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},3),~)),-1,index::(${dCt},3))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},4),~)),-1,index::(${dCt},4))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},5),~)),-1,index::(${dCt},5))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},6),~)),-1,index::(${dCt},6))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},7),~)),-1,index::(${dCt},7))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},8),~)),-1,index::(${dCt},8))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},9),~)),-1,index::(${dCt},9))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},10),~)),-1,index::(${dCt},10))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},11),~)),-1,index::(${dCt},11))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},12),~)),-1,index::(${dCt},12))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},13),~)),-1,index::(${dCt},13))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},14),~)),-1,index::(${dCt},14))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},15),~)),-1,index::(${dCt},15))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},16),~)),-1,index::(${dCt},16))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},17),~)),-1,index::(${dCt},17))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},18),~)),-1,index::(${dCt},18))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},19),~)),-1,index::(${dCt},19))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},20),~)),-1,index::(${dCt},20))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},21),~)),-1,index::(${dCt},21))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},22),~)),-1,index::(${dCt},22))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},23),~)),-1,index::(${dCt},23))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},24),~)),-1,index::(${dCt},24))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},25),~)),-1,index::(${dCt},25))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},26),~)),-1,index::(${dCt},26))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},27),~)),-1,index::(${dCt},27))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},28),~)),-1,index::(${dCt},28))]",
+          "$[if::(contains::(${dCh},connect::(~,index::(${dCk},29),~)),-1,index::(${dCt},29))]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dM4",
+        "value": "$[max::(${dSc4})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI4s",
+        "value": [
+          "$[if::(eq::(index::(${dSc4},0),${dM4}),0,999)]",
+          "$[if::(eq::(index::(${dSc4},1),${dM4}),1,999)]",
+          "$[if::(eq::(index::(${dSc4},2),${dM4}),2,999)]",
+          "$[if::(eq::(index::(${dSc4},3),${dM4}),3,999)]",
+          "$[if::(eq::(index::(${dSc4},4),${dM4}),4,999)]",
+          "$[if::(eq::(index::(${dSc4},5),${dM4}),5,999)]",
+          "$[if::(eq::(index::(${dSc4},6),${dM4}),6,999)]",
+          "$[if::(eq::(index::(${dSc4},7),${dM4}),7,999)]",
+          "$[if::(eq::(index::(${dSc4},8),${dM4}),8,999)]",
+          "$[if::(eq::(index::(${dSc4},9),${dM4}),9,999)]",
+          "$[if::(eq::(index::(${dSc4},10),${dM4}),10,999)]",
+          "$[if::(eq::(index::(${dSc4},11),${dM4}),11,999)]",
+          "$[if::(eq::(index::(${dSc4},12),${dM4}),12,999)]",
+          "$[if::(eq::(index::(${dSc4},13),${dM4}),13,999)]",
+          "$[if::(eq::(index::(${dSc4},14),${dM4}),14,999)]",
+          "$[if::(eq::(index::(${dSc4},15),${dM4}),15,999)]",
+          "$[if::(eq::(index::(${dSc4},16),${dM4}),16,999)]",
+          "$[if::(eq::(index::(${dSc4},17),${dM4}),17,999)]",
+          "$[if::(eq::(index::(${dSc4},18),${dM4}),18,999)]",
+          "$[if::(eq::(index::(${dSc4},19),${dM4}),19,999)]",
+          "$[if::(eq::(index::(${dSc4},20),${dM4}),20,999)]",
+          "$[if::(eq::(index::(${dSc4},21),${dM4}),21,999)]",
+          "$[if::(eq::(index::(${dSc4},22),${dM4}),22,999)]",
+          "$[if::(eq::(index::(${dSc4},23),${dM4}),23,999)]",
+          "$[if::(eq::(index::(${dSc4},24),${dM4}),24,999)]",
+          "$[if::(eq::(index::(${dSc4},25),${dM4}),25,999)]",
+          "$[if::(eq::(index::(${dSc4},26),${dM4}),26,999)]",
+          "$[if::(eq::(index::(${dSc4},27),${dM4}),27,999)]",
+          "$[if::(eq::(index::(${dSc4},28),${dM4}),28,999)]",
+          "$[if::(eq::(index::(${dSc4},29),${dM4}),29,999)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dI4",
+        "value": "$[min::(${dI4s})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dCh",
+        "value": "$[connect::(${dCh},~,index::(${dCk},${dI4}),~)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dn4",
+        "value": "$[if::(ge::(${dM4},1),index::(${dLb},${dI4}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dc4",
+        "value": "$[if::(ge::(${dM4},1),round::(${dM4}),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dW4",
+        "value": [
+          "$[if::(contains::(index::(${dSg},0),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[0].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},1),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[1].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},2),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[2].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},3),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[3].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},4),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[4].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},5),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[5].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},6),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[6].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},7),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[7].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},8),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[8].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},9),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[9].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},10),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[10].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},11),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[11].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},12),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[12].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},13),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[13].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},14),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[14].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},15),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[15].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},16),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[16].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},17),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[17].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},18),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[18].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},19),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[19].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},20),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[20].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},21),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[21].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},22),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[22].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},23),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[23].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},24),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[24].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},25),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[25].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},26),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[26].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},27),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[27].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},28),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[28].points},0),0)]",
+          "$[if::(contains::(index::(${dSg},29),connect::(~,index::(${dCk},${dI4}),~)),findNotEmpty::(${resp.hits[29].points},0),0)]"
+        ]
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ds4",
+        "value": "$[if::(ge::(${dM4},1),round::(sum::(${dW4})),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dK",
+        "value": "$[calc::(if::(ge::(${dM0},1),1,0)+if::(ge::(${dM1},1),1,0)+if::(ge::(${dM2},1),1,0)+if::(ge::(${dM3},1),1,0)+if::(ge::(${dM4},1),1,0))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db0",
+        "value": "$[if::(ge::(${dM0},1),parseNumber::(max::(calc::(${dM0}/max::(${dM0},1)*120.0),6),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db1",
+        "value": "$[if::(ge::(${dM1},1),parseNumber::(max::(calc::(${dM1}/max::(${dM0},1)*120.0),6),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db2",
+        "value": "$[if::(ge::(${dM2},1),parseNumber::(max::(calc::(${dM2}/max::(${dM0},1)*120.0),6),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db3",
+        "value": "$[if::(ge::(${dM3},1),parseNumber::(max::(calc::(${dM3}/max::(${dM0},1)*120.0),6),0.0),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "db4",
+        "value": "$[if::(ge::(${dM4},1),parseNumber::(max::(calc::(${dM4}/max::(${dM0},1)*120.0),6),0.0),)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "dK",
+          "dn0",
+          "dc0",
+          "ds0",
+          "db0",
+          "dn1",
+          "dc1",
+          "ds1",
+          "db1",
+          "dn2",
+          "dc2",
+          "ds2",
+          "db2",
+          "dn3",
+          "dc3",
+          "ds3",
+          "db3",
+          "dn4",
+          "dc4",
+          "ds4",
+          "db4"
+        ]
+      }
+    }
+  ]
+}

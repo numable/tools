@@ -1,0 +1,525 @@
+{
+  "_note": "未就绪态引导屏的城市检索(G25 §7.1:先决条件没完成时给可执行的下一步,不是空页)。\n绑在 XPage `input` 节点的 `onChange` 上,`${@event.value}` 就是当前输入;`changeDebounce` 由节点属性给(300ms),这里不再自己防抖。\n\n⚠️ **为什么不直接调 `geo.df`** —— AF 里没有「跑另一条 .df」的 action(`runDataFlow` 是 JS 桥的东西,`/city` 那张 H5 页走的是那条路)。事件流只能自己发请求,故检索端点在本仓有两份:这里与 `geo.df`。**改端点要改两处**,两边的 URL 已逐字对齐。\n\n⚠️ 语言码取 `${@i18n.lang}` 而不是 `${@app.language}`:后者在 `.af` 里历史上解的是**系统** locale 而不是 App 语言(doc/xbundle-i18n.md §1.3),而这一屏的检索语言应当跟着用户看到的界面语言走。放进本文件自己的 A 表,与四端 `.af` 的 `@i18n` 注入同源、没有第二种语义。\n\n⚠️ 只有一次 `patchState`,且**排在请求之后**:请求失败会让整条流终止,于是 state 停在上一拍 —— 「没连上」不会被渲染成「没找到这个城市」(§7.2 同一条纪律)。代价是首次搜索失败时这一屏什么都不动,用户重敲一次即可。\n\n⚠️ 五个槽位写**字面下标**(`${resp.results[0].name}`):VParser 的下标寻址只认字面数字与 @last,方括号里的 `${}` 不会先求值。",
+  "version": 1,
+  "i18n": {
+    "zh-CN": {
+      "lang": "zh"
+    },
+    "en-US": {
+      "lang": "en"
+    }
+  },
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "kw",
+        "value": "${@event.value}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kwN",
+        "value": "$[length::(${kw})]"
+      }
+    },
+    {
+      "_note": "输入不足两字 —— 清空结果区。\n⚠️ 门槛从「非空」提到「≥2 字」:中文城市名至少两字,而「长」「京」这种单字必然搜出一屏无关小地方,\n   还会触发那条慢的补充检索(geo.df 第三路)——它一慢,就会晚于下一次搜索回来、把正确结果盖掉。\n   等第二个字再发,既准又省,也是把竞态窗口关小的一半(另一半是 input 的 500ms 防抖)。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(lt::(${kwN},2),1,0)]"
+      },
+      "items": [
+        {
+          "action": "xpage.patchState",
+          "params": {
+            "sQ": "0",
+            "sN": "0",
+            "s1n": "",
+            "s2n": "",
+            "s3n": "",
+            "s4n": "",
+            "s5n": ""
+          }
+        }
+      ]
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(ge::(${kwN},2),1,0)]"
+      },
+      "items": [
+        {
+          "_note": "「词+市」那一路只在中文检索时发(doc/overseas-first.md P4):英文 / 其它语言加「市」必然零结果(实测 `Tokyo市` 200 空数组),白打一次往返。非中文时只发裸词那一路,rB 不存在 → listC / cN 为空,下游原本就按「加市没命中」那一支走。",
+          "op": "set",
+          "props": {
+            "key": "_zh",
+            "value": "$[if::(startsWith::(${@i18n.lang},zh),1,0)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${_zh},1)]"
+          },
+          "items": [
+            {
+              "_note": "两路并搜:裸词 + 词加「市」——与 `geo.df` 同因同式(那条流的长注写了为什么)。\n⚠️ `concurrent` 在 **action 位**;两路的 URL 与 geo.df **逐字对齐**,改端点要改两处\n(AF 里没有「跑另一条 .df」的 action,故检索端点在本仓有两份 —— 这是既有分叉,不是这次引入的)。",
+              "action": "concurrent",
+              "items": [
+                {
+                  "id": "rA",
+                  "action": "request",
+                  "params": {
+                    "url": "https://geocoding-api.open-meteo.com/v1/search?name=${kw}&count=5&language=${@i18n.lang}",
+                    "method": "GET",
+                    "formatType": "json"
+                  }
+                },
+                {
+                  "id": "rB",
+                  "action": "request",
+                  "params": {
+                    "url": "https://geocoding-api.open-meteo.com/v1/search?name=${kw}市&count=3&language=${@i18n.lang}",
+                    "method": "GET",
+                    "formatType": "json"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${_zh},0)]"
+          },
+          "items": [
+            {
+              "id": "rA",
+              "action": "request",
+              "params": {
+                "url": "https://geocoding-api.open-meteo.com/v1/search?name=${kw}&count=5&language=${@i18n.lang}",
+                "method": "GET",
+                "formatType": "json"
+              }
+            }
+          ]
+        },
+        {
+          "_note": "⚠️ **屏障节点,勿删**:concurrent 的结果对紧邻的下一个节点还不可见 ——\n读到的是 null,流仍报 success,搜索框「什么都搜不到」且零报错。",
+          "op": "set",
+          "props": {
+            "key": "_b",
+            "value": "1"
+          }
+        },
+        {
+          "_note": "加「市」那一路有没有命中。命中时它几乎一定就是用户要的那座地级市(长沙市 pop=309万),\n而同一时刻裸搜的第一条是个同名村镇 —— 所以让它占第一格。\n⚠️ 这里**没法按人口排序**(VParser 没有 sort);H5 那两张页有 JS,做的是完整的合并+排序。\n   引导屏只求「第一条别是错的」,这是够用的近似。",
+          "op": "set",
+          "props": {
+            "key": "cN",
+            "value": "$[length::(${rB.results})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "aN",
+            "value": "$[length::(${rA.results})]"
+          }
+        },
+        {
+          "_note": "与 geo.df 里那段**逐字同源**的判据:两路里最大的人口数 < 50 万 = 这次搜索没搜出像样的城市。\n⚠️ `parseNumber` 外面必须再套 `findNotEmpty` —— population 是 JSON `null` 时\n   `parseNumber::(null,0)` **不给默认值、整体求空**,键从输出里消失,判据于是恒不成立。",
+          "op": "set",
+          "props": {
+            "key": "_p0",
+            "value": "$[parseNumber::(findNotEmpty::(${rA.results[0].population},0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_p1",
+            "value": "$[parseNumber::(findNotEmpty::(${rA.results[1].population},0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_p2",
+            "value": "$[parseNumber::(findNotEmpty::(${rA.results[2].population},0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_pc",
+            "value": "$[parseNumber::(findNotEmpty::(${rB.results[0].population},0),0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_m1",
+            "value": "$[if::(gt::(${_p0},${_p1}),${_p0},${_p1})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_m2",
+            "value": "$[if::(gt::(${_m1},${_p2}),${_m1},${_p2})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_best",
+            "value": "$[if::(gt::(${_m2},${_pc}),${_m2},${_pc})]"
+          }
+        },
+        {
+          "_note": "加「市」命中:让它占第一格,裸搜依次往后。",
+          "op": "if",
+          "props": {
+            "val": "$[gt::(${cN},0)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "w1",
+                "value": "$[findNotEmpty::(${rB.results[0].admin1},${rB.results[0].country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "w2",
+                "value": "$[findNotEmpty::(${rA.results[0].admin1},${rA.results[0].country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "w3",
+                "value": "$[findNotEmpty::(${rA.results[1].admin1},${rA.results[1].country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "w4",
+                "value": "$[findNotEmpty::(${rA.results[2].admin1},${rA.results[2].country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "w5",
+                "value": "$[findNotEmpty::(${rA.results[3].admin1},${rA.results[3].country})]"
+              }
+            },
+            {
+              "action": "xpage.patchState",
+              "params": {
+                "sQ": "1",
+                "sN": "$[calc::(${aN}+1)]",
+                "s1n": "${rB.results[0].name}",
+                "s1w": "${w1}",
+                "s1lat": "${rB.results[0].latitude}",
+                "s1lon": "${rB.results[0].longitude}",
+                "s2n": "${rA.results[0].name}",
+                "s2w": "${w2}",
+                "s2lat": "${rA.results[0].latitude}",
+                "s2lon": "${rA.results[0].longitude}",
+                "s3n": "${rA.results[1].name}",
+                "s3w": "${w3}",
+                "s3lat": "${rA.results[1].latitude}",
+                "s3lon": "${rA.results[1].longitude}",
+                "s4n": "${rA.results[2].name}",
+                "s4w": "${w4}",
+                "s4lat": "${rA.results[2].latitude}",
+                "s4lon": "${rA.results[2].longitude}",
+                "s5n": "${rA.results[3].name}",
+                "s5w": "${w5}",
+                "s5lat": "${rA.results[3].latitude}",
+                "s5lon": "${rA.results[3].longitude}"
+              }
+            }
+          ]
+        },
+        {
+          "_note": "加「市」没命中(「上海」「北京」这类本身不带市的名字就是这一支)——\n五格全给裸搜,与两路改造之前逐字相同。",
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${cN},0)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "w1",
+                "value": "$[findNotEmpty::(${rA.results[0].admin1},${rA.results[0].country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "w2",
+                "value": "$[findNotEmpty::(${rA.results[1].admin1},${rA.results[1].country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "w3",
+                "value": "$[findNotEmpty::(${rA.results[2].admin1},${rA.results[2].country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "w4",
+                "value": "$[findNotEmpty::(${rA.results[3].admin1},${rA.results[3].country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "w5",
+                "value": "$[findNotEmpty::(${rA.results[4].admin1},${rA.results[4].country})]"
+              }
+            },
+            {
+              "action": "xpage.patchState",
+              "params": {
+                "sQ": "1",
+                "sN": "${aN}",
+                "s1n": "${rA.results[0].name}",
+                "s1w": "${w1}",
+                "s1lat": "${rA.results[0].latitude}",
+                "s1lon": "${rA.results[0].longitude}",
+                "s2n": "${rA.results[1].name}",
+                "s2w": "${w2}",
+                "s2lat": "${rA.results[1].latitude}",
+                "s2lon": "${rA.results[1].longitude}",
+                "s3n": "${rA.results[2].name}",
+                "s3w": "${w3}",
+                "s3lat": "${rA.results[2].latitude}",
+                "s3lon": "${rA.results[2].longitude}",
+                "s4n": "${rA.results[3].name}",
+                "s4w": "${w4}",
+                "s4lat": "${rA.results[3].latitude}",
+                "s4lon": "${rA.results[3].longitude}",
+                "s5n": "${rA.results[4].name}",
+                "s5w": "${w5}",
+                "s5lat": "${rA.results[4].latitude}",
+                "s5lon": "${rA.results[4].longitude}"
+              }
+            }
+          ]
+        },
+        {
+          "_note": "「这一路能不能发」先落成键再给 op:if 用:⚠️ 把 if::(eq::…) 直接嵌进 if::(lt::…) 的参数里,整条流静默求空(success 但 data 全空,2026-09-28 CLI 实测)。大陆分发(@app.region=cn)时为 0:nominatim 在大陆被墙,被墙的连接不回拒绝而是一直挂着(大陆机实测 8 秒仍连不上),页面给检索流的上限是 12 秒,先到 → 整次搜索报失败、连 open-meteo 已有的结果都显示不出来(请求失败本身不会中断流,CLI 实测)(doc/region-distribution.md §5)。老宿主没有 @app.region → 不等于 cn → 照旧发。",
+          "op": "set",
+          "props": {
+            "key": "_nOK",
+            "value": "$[if::(eq::(${@app.region},cn),0,1)]"
+          }
+        },
+        {
+          "_note": "Nominatim 返回地名的语言跟界面走(doc/overseas-first.md P4):中文 zh-CN,其它 en。",
+          "op": "set",
+          "props": {
+            "key": "_al",
+            "value": "$[if::(eq::(${_zh},1),zh-CN,en)]"
+          }
+        },
+        {
+          "_note": "**第二源(OSM Nominatim),只在 open-meteo 交白卷时才发** —— 判据与 geo.df 逐字同源。\n⚠️ 条件发是**守 OSM 使用政策**(≤1 req/s、不得重度使用),不是省事:\n   中国城市与巴黎/新加坡/曼谷/悉尼/洛杉矶/迪拜/柏林/莫斯科这些走不到这里。\n⚠️ `User-Agent` 是政策硬要求。归属标注在引导屏页脚(p-setup-foot.rcn)。\n⚠️ 检索端点在本仓有**两份**(这里与 geo.df,因为 AF 里没有「跑另一条 .df」的 action)——\n   三路的 URL 都要逐字对齐,改一处必须改另一处。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(lt::(${_best},500000),${_nOK},0)]"
+          },
+          "items": [
+            {
+              "id": "rC",
+              "action": "request",
+              "params": {
+                "url": "https://nominatim.openstreetmap.org/search?q=${kw}&format=jsonv2&limit=5&accept-language=${_al}&addressdetails=1&featuretype=city",
+                "method": "GET",
+                "formatType": "json",
+                "header": {
+                  "User-Agent": "Numable/1.0 (+https://numable.app)",
+                  "Accept": "application/json"
+                }
+              }
+            },
+            {
+              "_note": "读取屏障(勿删):request 之后紧邻的节点读不到结果。",
+              "op": "set",
+              "props": {
+                "key": "_bn",
+                "value": "1"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "nN",
+                "value": "$[length::(${rC})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n1n",
+                "value": "$[index::(split::(index::(split::(${rC[0].name},;),0),/),0)]"
+              },
+              "_note": "Nominatim 的条目要在这里清洗成与 open-meteo 同形:\n① 名字带**简繁双写**(「纽约;紐約」「东京都/東京都」「韩国 / 南韓」),分隔符 `;` 与 `/` 都有 ——\n   `split` 两次各取第 0 段。⚠️ 伦敦那条是繁体在前(「大倫敦;大伦敦」),会显示成「大倫敦」,认得出。\n② 地名在 `address.state`/`address.country`,不是 open-meteo 的 admin1/country。\n③ 坐标是**字符串** `lat`/`lon` —— 下游 setup-pick.af 存进 data.cities 时本来就当串存,无需转。"
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_w1",
+                "value": "$[findNotEmpty::(${rC[0].address.state},${rC[0].address.country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n1w",
+                "value": "$[index::(split::(index::(split::(${_w1},;),0),/),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n2n",
+                "value": "$[index::(split::(index::(split::(${rC[1].name},;),0),/),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_w2",
+                "value": "$[findNotEmpty::(${rC[1].address.state},${rC[1].address.country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n2w",
+                "value": "$[index::(split::(index::(split::(${_w2},;),0),/),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n3n",
+                "value": "$[index::(split::(index::(split::(${rC[2].name},;),0),/),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_w3",
+                "value": "$[findNotEmpty::(${rC[2].address.state},${rC[2].address.country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n3w",
+                "value": "$[index::(split::(index::(split::(${_w3},;),0),/),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n4n",
+                "value": "$[index::(split::(index::(split::(${rC[3].name},;),0),/),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_w4",
+                "value": "$[findNotEmpty::(${rC[3].address.state},${rC[3].address.country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n4w",
+                "value": "$[index::(split::(index::(split::(${_w4},;),0),/),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n5n",
+                "value": "$[index::(split::(index::(split::(${rC[4].name},;),0),/),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_w5",
+                "value": "$[findNotEmpty::(${rC[4].address.state},${rC[4].address.country})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "n5w",
+                "value": "$[index::(split::(index::(split::(${_w5},;),0),/),0)]"
+              }
+            },
+            {
+              "_note": "真拿到了才覆盖五格 —— 第二源也可能空(生僻词),那时保留 open-meteo 的结果。",
+              "op": "if",
+              "props": {
+                "val": "$[gt::(${nN},0)]"
+              },
+              "items": [
+                {
+                  "_note": "第二源命中:五格全给它(它按 importance 排序,第一条就是那座城市)。",
+                  "action": "xpage.patchState",
+                  "params": {
+                    "sQ": "1",
+                    "sN": "$[length::(${rC})]",
+                    "s1n": "${n1n}",
+                    "s1w": "${n1w}",
+                    "s1lat": "${rC[0].lat}",
+                    "s1lon": "${rC[0].lon}",
+                    "s2n": "${n2n}",
+                    "s2w": "${n2w}",
+                    "s2lat": "${rC[1].lat}",
+                    "s2lon": "${rC[1].lon}",
+                    "s3n": "${n3n}",
+                    "s3w": "${n3w}",
+                    "s3lat": "${rC[2].lat}",
+                    "s3lon": "${rC[2].lon}",
+                    "s4n": "${n4n}",
+                    "s4w": "${n4w}",
+                    "s4lat": "${rC[3].lat}",
+                    "s4lon": "${rC[3].lon}",
+                    "s5n": "${n5n}",
+                    "s5w": "${n5w}",
+                    "s5lat": "${rC[4].lat}",
+                    "s5lon": "${rC[4].lon}"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
