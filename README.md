@@ -39,7 +39,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | Tool · 工具 | Folder | Version | Data · 数据 | Hosts |
 |---|---|---|---|---|
 | [Air Quality](tools/air) · 空气质量 | `air` | 20 | public API · 公开接口 | `air-quality-api.open-meteo.com` `geocoding-api.open-meteo.com` `nominatim.openstreetmap.org` |
-| [App Store Board](tools/appwatch) · App Store 看板 | `appwatch` | 78 | your own key · 用户自带凭证 | `itunes.apple.com` `api.appstoreconnect.apple.com` `api.frankfurter.dev` |
+| [App Store Board](tools/appwatch) · App Store 看板 | `appwatch` | 79 | your own key · 用户自带凭证 | `itunes.apple.com` `api.appstoreconnect.apple.com` `api.frankfurter.dev` |
 | [Chinese Calendar](tools/calendar) · 万年历 | `calendar` | 12 | offline · 不联网 | — |
 | [Claude Code Usage](tools/ccusage) · Claude Code 用量 | `ccusage` | 52 | Numable service · Numable 自家服务 | `usage.numable.app` |
 | [Check-in](tools/checkin) · 打卡 | `checkin` | 50 | offline · 不联网 | — |
