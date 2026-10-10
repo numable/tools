@@ -58,6 +58,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Release Watch](tools/releases) · 开源项目发布 | `releases` | 13 | public API · 公开接口 | `github.com` |
 | [SEC Filings](tools/secfilings) · 美股公告 | `secfilings` | 14 | public API · 公开接口 | `www.sec.gov` |
 | [Service Status](tools/status) · 服务状态 | `status` | 20 | public API · 公开接口 | `www.githubstatus.com` `status.claude.com` `status.openai.com` `www.vercel-status.com` `status.cursor.com` `status.npmjs.org` `www.dockerstatus.com` `bitbucket.status.atlassian.com` `status.circleci.com` `www.netlifystatus.com` `status.supabase.com` `status.render.com` `status.digitalocean.com` `status.mongodb.com` `status.sentry.io` `status.datadoghq.com` `linearstatus.com` `www.notion-status.com` `status.figma.com` `status.postman.com` `discordstatus.com` `www.redditstatus.com` |
+| [Stripe Revenue](tools/stripe) · Stripe 收入 | `stripe` | 1 | your own key · 用户自带凭证 | `api.stripe.com` |
 | [To-do](tools/todo) · 待办 | `todo` | 14 | offline · 不联网 | — |
 | [YouTube Stats](tools/tubewatch) · YouTube 频道数据 | `tubewatch` | 69 | your own key · 用户自带凭证 | `www.youtube.com` `www.googleapis.com` |
 | [V2EX](tools/v2ex) · V2EX | `v2ex` | 11 | public API · 公开接口 | `www.v2ex.com` |

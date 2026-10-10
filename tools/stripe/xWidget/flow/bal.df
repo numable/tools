@@ -1,0 +1,464 @@
+{
+  "_note": "Stripe 余额:可用 + 待入账(主币种 = 余额数组第一项),其余币种只报个数。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出(切语言 = 整盘重取,数据缓存含 locale)。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "id": "bal",
+      "action": "request",
+      "params": {
+        "url": "https://api.stripe.com/v1/balance",
+        "method": "GET",
+        "formatType": "json",
+        "timeout": "15000",
+        "credential": "stripe",
+        "header": {
+          "User-Agent": "Numable/1.0",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_f",
+        "value": "$[if::(eq::(findNotEmpty::(${bal.object},x),balance),0,1)]"
+      },
+      "_note": "响应不是 balance 对象(401 未授权 / 403 缺权限 / 网络失败)= 取数失败(G26):宿主贴上次成功的那帧。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${_f}"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "stripe unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lm",
+        "value": "$[if::(eq::(findNotEmpty::(${bal.livemode},true),false),0,1)]"
+      },
+      "_note": "测试密钥(rk_test_)拿到的是测试数据:livemode=false → 组件上标「测试数据」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_SYM",
+        "value": {
+          "usd": "$",
+          "eur": "€",
+          "gbp": "£",
+          "jpy": "¥",
+          "cny": "¥",
+          "krw": "₩",
+          "inr": "₹",
+          "hkd": "HK$",
+          "twd": "NT$",
+          "aud": "A$",
+          "cad": "CA$",
+          "nzd": "NZ$",
+          "sgd": "S$",
+          "mxn": "MX$",
+          "brl": "R$",
+          "ils": "₪",
+          "php": "₱",
+          "thb": "฿",
+          "vnd": "₫",
+          "try": "₺",
+          "pln": "zł ",
+          "uah": "₴"
+        }
+      },
+      "_note": "币种符号表(只收写成符号不歧义的;其余写 ISO 代码)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_DEC",
+        "value": {
+          "bif": "0",
+          "clp": "0",
+          "djf": "0",
+          "gnf": "0",
+          "jpy": "0",
+          "kmf": "0",
+          "krw": "0",
+          "mga": "0",
+          "pyg": "0",
+          "rwf": "0",
+          "ugx": "0",
+          "vnd": "0",
+          "vuv": "0",
+          "xaf": "0",
+          "xof": "0",
+          "xpf": "0",
+          "bhd": "3",
+          "jod": "3",
+          "kwd": "3",
+          "omr": "3",
+          "tnd": "3"
+        }
+      },
+      "_note": "Stripe 零小数位 / 三位小数币种(其余 2 位)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cur",
+        "value": "$[toLowerCase::(findNotEmpty::(${bal.available[0].currency},usd))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curU",
+        "value": "$[toUpperCase::(${cur})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curS",
+        "value": "${curU}"
+      },
+      "_note": "没有符号的币种写大写代码;代码与数字之间的不换行空格由 money() 在拼接**中间**加 —— set 会裁掉值两端的空白(JS trim 连 U+00A0 一起裁),放在 curS 末尾必丢(2026-10-10 真令牌验出「MYR0.00」)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curC",
+        "value": "1"
+      },
+      "_note": "1 = 没有符号、写的是代码(money() 据此在代码后加不换行空格)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curY",
+        "value": "$[findNotEmpty::(get::(${_SYM},${cur}),)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(findNotEmpty::(${curY},__none__),__none__),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "curS",
+            "value": "${curY}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "curC",
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curD",
+        "value": "$[findNotEmpty::(get::(${_DEC},${cur}),2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curV",
+        "value": "$[if::(eq::(1,1),if::(eq::(${curD},0),1,if::(eq::(${curD},3),1000,100)),1)]"
+      },
+      "_note": "最小单位 → 主单位:Stripe 金额是最小单位(美分),零小数位币种(日元)本身就是主单位。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "AV",
+        "value": "$[groupSum::(${bal.available},currency,amount)]"
+      },
+      "_note": "按币种汇总(同一币种可能按来源分几行)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "PD",
+        "value": "$[groupSum::(${bal.pending},currency,amount)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avA",
+        "value": "$[findNotEmpty::(get::(${AV},${cur}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pdA",
+        "value": "$[findNotEmpty::(get::(${PD},${cur}),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "nC",
+        "value": "$[parseNumber::(calc::(length::(${AV})-1),0)]"
+      },
+      "_note": "主币种之外还有几种币的余额。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avTN",
+        "value": "$[calc::(findNotEmpty::(${avA},0)/${curV})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avTA",
+        "value": "$[if::(ge::(${avTN},0),${avTN},calc::(0-${avTN}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avTs",
+        "value": "$[if::(lt::(${avTN},0),−,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avTb",
+        "value": "$[if::(lt::(${avTA},10000),if::(lt::(${avTA},1000),if::(eq::(${curD},0),parseNumber::(${avTA},#\\,##0),if::(eq::(${curD},3),parseNumber::(${avTA},#\\,##0.000),parseNumber::(${avTA},#\\,##0.00))),parseNumber::(${avTA},#\\,##0)),if::(eq::(${zh},1),if::(ge::(${avTA},100000000),connect::(parseNumber::(calc::(${avTA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${avTA}/10000),0.##), 万)),if::(ge::(${avTA},1000000000),connect::(parseNumber::(calc::(${avTA}/1000000000),0.##),B),if::(ge::(${avTA},1000000),connect::(parseNumber::(calc::(${avTA}/1000000),0.##),M),connect::(parseNumber::(calc::(${avTA}/1000),0.#),K)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avT",
+        "value": "${avTs}${curS}${avTb}"
+      },
+      "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${curC},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "avT",
+            "value": "${avTs}${curU} ${avTb}"
+          },
+          "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avTX",
+        "value": "${avTs}${avTb}"
+      },
+      "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avTZ",
+        "value": "$[if::(eq::(${avTA},0),1,0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "avTA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "avTs"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "avTb"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pdTN",
+        "value": "$[calc::(findNotEmpty::(${pdA},0)/${curV})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pdTA",
+        "value": "$[if::(ge::(${pdTN},0),${pdTN},calc::(0-${pdTN}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pdTs",
+        "value": "$[if::(lt::(${pdTN},0),−,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pdTb",
+        "value": "$[if::(lt::(${pdTA},10000),if::(eq::(${curD},0),parseNumber::(${pdTA},#\\,##0),if::(eq::(${curD},3),parseNumber::(${pdTA},#\\,##0.000),parseNumber::(${pdTA},#\\,##0.00))),if::(eq::(${zh},1),if::(ge::(${pdTA},100000000),connect::(parseNumber::(calc::(${pdTA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${pdTA}/10000),0.##), 万)),if::(ge::(${pdTA},1000000000),connect::(parseNumber::(calc::(${pdTA}/1000000000),0.##),B),if::(ge::(${pdTA},1000000),connect::(parseNumber::(calc::(${pdTA}/1000000),0.##),M),connect::(parseNumber::(calc::(${pdTA}/1000),0.#),K)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pdT",
+        "value": "${pdTs}${curS}${pdTb}"
+      },
+      "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${curC},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "pdT",
+            "value": "${pdTs}${curU} ${pdTb}"
+          },
+          "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pdTX",
+        "value": "${pdTs}${pdTb}"
+      },
+      "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "pdTZ",
+        "value": "$[if::(eq::(${pdTA},0),1,0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "pdTA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "pdTs"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "pdTb"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avL",
+        "value": "$[if::(eq::(${lm},1),if::(eq::(${zh},1),可用 · ${curU},Available · ${curU}),if::(eq::(${zh},1),测试数据 · ${curU},Test data · ${curU}))]"
+      },
+      "_note": "测试密钥(livemode=false)把「可用」换成「测试数据」,不另加一段(22 档放不下)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avL",
+        "value": "$[if::(gt::(${nC},0),${avL} +${nC},${avL})]"
+      },
+      "_note": "主币种之外还有几种币:「+1」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${nowMs},HH:mm)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "_SYM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "_DEC"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "lm",
+          "avT",
+          "pdT",
+          "avL",
+          "nC"
+        ]
+      }
+    }
+  ]
+}

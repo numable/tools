@@ -1,0 +1,103 @@
+{
+  "_note": "页面用:余额流水一页(since = 起点 UTC 秒,after = 上一页最后一条的 id,可空)。页面 JS 负责翻页与按天汇总。",
+  "_lintCache": "exempt",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "sinceIn",
+        "value": "$[findNotEmpty::(${since},0)]"
+      },
+      "_note": "入参落地(勿删)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "afterIn",
+        "value": "$[findNotEmpty::(${after},)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lim",
+        "value": "$[findNotEmpty::(${limit},100)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "q",
+        "value": "$[if::(eq::(${afterIn},),,connect::(&starting_after=,${afterIn}))]"
+      }
+    },
+    {
+      "id": "bt",
+      "action": "request",
+      "params": {
+        "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${sinceIn}&limit=${lim}${q}",
+        "method": "GET",
+        "formatType": "json",
+        "timeout": "15000",
+        "credential": "stripe",
+        "header": {
+          "User-Agent": "Numable/1.0",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_f",
+        "value": "$[if::(eq::(findNotEmpty::(${bt.object},x),list),0,1)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${_f}"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "stripe unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rows",
+        "value": "${bt.data}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "more",
+        "value": "${bt.has_more}"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "rows",
+          "more"
+        ]
+      }
+    }
+  ]
+}

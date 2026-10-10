@@ -1,0 +1,1368 @@
+{
+  "_note": "Stripe 最近 4 笔余额流水:分类、时间(设备时区)、金额(按各自币种)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出(切语言 = 整盘重取,数据缓存含 locale)。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "id": "rq",
+      "action": "request",
+      "params": {
+        "url": "https://api.stripe.com/v1/balance_transactions?limit=4",
+        "method": "GET",
+        "formatType": "json",
+        "timeout": "15000",
+        "credential": "stripe",
+        "header": {
+          "User-Agent": "Numable/1.0",
+          "Accept": "application/json"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_f",
+        "value": "$[if::(eq::(findNotEmpty::(${rq.object},x),list),0,1)]"
+      },
+      "_note": "响应不是 list(401 / 403 / 网络)= 失败(G26)。「一笔都没有」是成功(data 为空数组)。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${_f}"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "stripe unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CZ",
+        "value": {
+          "charge": "收款",
+          "refund": "退款",
+          "dispute": "争议",
+          "dispute_reversal": "争议撤回",
+          "payout": "提现",
+          "payout_reversal": "提现退回",
+          "fee": "Stripe 费用",
+          "transfer": "转账",
+          "topup": "充值",
+          "partial_capture_reversal": "部分扣款撤回",
+          "other_adjustment": "调整",
+          "risk_reserved_funds": "风控预留",
+          "risk_released_funds": "预留释放",
+          "connect_reserved_funds": "预留",
+          "platform_earning": "平台收入",
+          "charge_failure": "扣款失败",
+          "refund_failure": "退款失败",
+          "network_cost": "网络费用",
+          "tax": "税费",
+          "anticipation_repayment": "预支还款",
+          "climate_order_purchase": "碳移除",
+          "contribution": "捐赠",
+          "issuing_authorization_hold": "发卡预授权",
+          "issuing_authorization_release": "预授权释放",
+          "issuing_dispute": "发卡争议",
+          "issuing_transaction": "发卡交易"
+        }
+      },
+      "_note": "分类名(中)。表里没有的分类回落成 type 原文。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "CE",
+        "value": {
+          "charge": "Payment",
+          "refund": "Refund",
+          "dispute": "Dispute",
+          "dispute_reversal": "Dispute won",
+          "payout": "Payout",
+          "payout_reversal": "Payout returned",
+          "fee": "Stripe fee",
+          "transfer": "Transfer",
+          "topup": "Top-up",
+          "partial_capture_reversal": "Capture released",
+          "other_adjustment": "Adjustment",
+          "risk_reserved_funds": "Reserved funds",
+          "risk_released_funds": "Released funds",
+          "connect_reserved_funds": "Reserved",
+          "platform_earning": "Platform earning",
+          "charge_failure": "Failed payment",
+          "refund_failure": "Failed refund",
+          "network_cost": "Network cost",
+          "tax": "Tax",
+          "anticipation_repayment": "Repayment",
+          "climate_order_purchase": "Climate",
+          "contribution": "Contribution",
+          "issuing_authorization_hold": "Issuing hold",
+          "issuing_authorization_release": "Issuing release",
+          "issuing_dispute": "Issuing dispute",
+          "issuing_transaction": "Issuing"
+        }
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n",
+        "value": "$[parseNumber::(length::(findNotEmpty::(${rq.data},)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "e",
+        "value": "$[if::(eq::(${n},0),1,0)]"
+      },
+      "_note": "一笔都没有 = 1(组件画「还没有交易」)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_SYM",
+        "value": {
+          "usd": "$",
+          "eur": "€",
+          "gbp": "£",
+          "jpy": "¥",
+          "cny": "¥",
+          "krw": "₩",
+          "inr": "₹",
+          "hkd": "HK$",
+          "twd": "NT$",
+          "aud": "A$",
+          "cad": "CA$",
+          "nzd": "NZ$",
+          "sgd": "S$",
+          "mxn": "MX$",
+          "brl": "R$",
+          "ils": "₪",
+          "php": "₱",
+          "thb": "฿",
+          "vnd": "₫",
+          "try": "₺",
+          "pln": "zł ",
+          "uah": "₴"
+        }
+      },
+      "_note": "币种符号表(只收写成符号不歧义的;其余写 ISO 代码)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_DEC",
+        "value": {
+          "bif": "0",
+          "clp": "0",
+          "djf": "0",
+          "gnf": "0",
+          "jpy": "0",
+          "kmf": "0",
+          "krw": "0",
+          "mga": "0",
+          "pyg": "0",
+          "rwf": "0",
+          "ugx": "0",
+          "vnd": "0",
+          "vuv": "0",
+          "xaf": "0",
+          "xof": "0",
+          "xpf": "0",
+          "bhd": "3",
+          "jod": "3",
+          "kwd": "3",
+          "omr": "3",
+          "tnd": "3"
+        }
+      },
+      "_note": "Stripe 零小数位 / 三位小数币种(其余 2 位)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r0o",
+        "value": "$[if::(gt::(${n},0),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${r0o}"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "r0",
+            "value": "${rq.data[0]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0c",
+            "value": "$[toLowerCase::(findNotEmpty::(${r0.currency},usd))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0cU",
+            "value": "$[toUpperCase::(${r0c})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0cS",
+            "value": "${r0cU}"
+          },
+          "_note": "没有符号的币种写大写代码;代码与数字之间的不换行空格由 money() 在拼接**中间**加 —— set 会裁掉值两端的空白(JS trim 连 U+00A0 一起裁),放在 curS 末尾必丢(2026-10-10 真令牌验出「MYR0.00」)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0cC",
+            "value": "1"
+          },
+          "_note": "1 = 没有符号、写的是代码(money() 据此在代码后加不换行空格)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0cY",
+            "value": "$[findNotEmpty::(get::(${_SYM},${r0c}),)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(findNotEmpty::(${r0cY},__none__),__none__),0,1)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "r0cS",
+                "value": "${r0cY}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "r0cC",
+                "value": "0"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0cD",
+            "value": "$[findNotEmpty::(get::(${_DEC},${r0c}),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0cV",
+            "value": "$[if::(eq::(1,1),if::(eq::(${r0cD},0),1,if::(eq::(${r0cD},3),1000,100)),1)]"
+          },
+          "_note": "最小单位 → 主单位:Stripe 金额是最小单位(美分),零小数位币种(日元)本身就是主单位。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0AN",
+            "value": "$[calc::(findNotEmpty::(${r0.amount},0)/${r0cV})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0AA",
+            "value": "$[if::(ge::(${r0AN},0),${r0AN},calc::(0-${r0AN}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0As",
+            "value": "$[if::(lt::(${r0AN},0),−,if::(gt::(${r0AN},0),+,))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0Ab",
+            "value": "$[if::(lt::(${r0AA},10000),if::(eq::(${r0cD},0),parseNumber::(${r0AA},#\\,##0),if::(eq::(${r0cD},3),parseNumber::(${r0AA},#\\,##0.000),parseNumber::(${r0AA},#\\,##0.00))),if::(eq::(${zh},1),if::(ge::(${r0AA},100000000),connect::(parseNumber::(calc::(${r0AA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${r0AA}/10000),0.##), 万)),if::(ge::(${r0AA},1000000000),connect::(parseNumber::(calc::(${r0AA}/1000000000),0.##),B),if::(ge::(${r0AA},1000000),connect::(parseNumber::(calc::(${r0AA}/1000000),0.##),M),connect::(parseNumber::(calc::(${r0AA}/1000),0.#),K)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0A",
+            "value": "${r0As}${r0cS}${r0Ab}"
+          },
+          "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${r0cC},1)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "r0A",
+                "value": "${r0As}${r0cU} ${r0Ab}"
+              },
+              "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0AX",
+            "value": "${r0As}${r0Ab}"
+          },
+          "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0AZ",
+            "value": "$[if::(eq::(${r0AA},0),1,0)]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0AA"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0As"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0Ab"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0k",
+            "value": "$[findNotEmpty::(${r0.reporting_category},${r0.type},other)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0L",
+            "value": "$[findNotEmpty::(get::(if::(eq::(${zh},1),${CZ},${CE}),${r0k}),${r0k})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0ms",
+            "value": "$[calc::(findNotEmpty::(${r0.created},0)*1000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0T",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${r0ms},__none__),__none__),0,1),0),--,if::(eq::(formatDate::(${r0ms},yyyy-MM-dd),formatDate::(${nowMs},yyyy-MM-dd)),formatDate::(${r0ms},HH:mm),formatDate::(${r0ms},MM-dd HH:mm)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0w",
+            "value": "$[if::(eq::(${r0k},dispute),1,0)]"
+          },
+          "_note": "争议行用琥珀色。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r0g",
+            "value": "$[if::(lt::(${r0AN},0),1,0)]"
+          },
+          "_note": "支出 / 退款(负数)用次级灰。"
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0ms"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0AN"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0AZ"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0c"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0cS"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0cD"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r0cV"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r1o",
+        "value": "$[if::(gt::(${n},1),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${r1o}"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "r1",
+            "value": "${rq.data[1]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1c",
+            "value": "$[toLowerCase::(findNotEmpty::(${r1.currency},usd))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1cU",
+            "value": "$[toUpperCase::(${r1c})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1cS",
+            "value": "${r1cU}"
+          },
+          "_note": "没有符号的币种写大写代码;代码与数字之间的不换行空格由 money() 在拼接**中间**加 —— set 会裁掉值两端的空白(JS trim 连 U+00A0 一起裁),放在 curS 末尾必丢(2026-10-10 真令牌验出「MYR0.00」)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1cC",
+            "value": "1"
+          },
+          "_note": "1 = 没有符号、写的是代码(money() 据此在代码后加不换行空格)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1cY",
+            "value": "$[findNotEmpty::(get::(${_SYM},${r1c}),)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(findNotEmpty::(${r1cY},__none__),__none__),0,1)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "r1cS",
+                "value": "${r1cY}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "r1cC",
+                "value": "0"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1cD",
+            "value": "$[findNotEmpty::(get::(${_DEC},${r1c}),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1cV",
+            "value": "$[if::(eq::(1,1),if::(eq::(${r1cD},0),1,if::(eq::(${r1cD},3),1000,100)),1)]"
+          },
+          "_note": "最小单位 → 主单位:Stripe 金额是最小单位(美分),零小数位币种(日元)本身就是主单位。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1AN",
+            "value": "$[calc::(findNotEmpty::(${r1.amount},0)/${r1cV})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1AA",
+            "value": "$[if::(ge::(${r1AN},0),${r1AN},calc::(0-${r1AN}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1As",
+            "value": "$[if::(lt::(${r1AN},0),−,if::(gt::(${r1AN},0),+,))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1Ab",
+            "value": "$[if::(lt::(${r1AA},10000),if::(eq::(${r1cD},0),parseNumber::(${r1AA},#\\,##0),if::(eq::(${r1cD},3),parseNumber::(${r1AA},#\\,##0.000),parseNumber::(${r1AA},#\\,##0.00))),if::(eq::(${zh},1),if::(ge::(${r1AA},100000000),connect::(parseNumber::(calc::(${r1AA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${r1AA}/10000),0.##), 万)),if::(ge::(${r1AA},1000000000),connect::(parseNumber::(calc::(${r1AA}/1000000000),0.##),B),if::(ge::(${r1AA},1000000),connect::(parseNumber::(calc::(${r1AA}/1000000),0.##),M),connect::(parseNumber::(calc::(${r1AA}/1000),0.#),K)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1A",
+            "value": "${r1As}${r1cS}${r1Ab}"
+          },
+          "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${r1cC},1)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "r1A",
+                "value": "${r1As}${r1cU} ${r1Ab}"
+              },
+              "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1AX",
+            "value": "${r1As}${r1Ab}"
+          },
+          "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1AZ",
+            "value": "$[if::(eq::(${r1AA},0),1,0)]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1AA"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1As"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1Ab"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1k",
+            "value": "$[findNotEmpty::(${r1.reporting_category},${r1.type},other)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1L",
+            "value": "$[findNotEmpty::(get::(if::(eq::(${zh},1),${CZ},${CE}),${r1k}),${r1k})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1ms",
+            "value": "$[calc::(findNotEmpty::(${r1.created},0)*1000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1T",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${r1ms},__none__),__none__),0,1),0),--,if::(eq::(formatDate::(${r1ms},yyyy-MM-dd),formatDate::(${nowMs},yyyy-MM-dd)),formatDate::(${r1ms},HH:mm),formatDate::(${r1ms},MM-dd HH:mm)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1w",
+            "value": "$[if::(eq::(${r1k},dispute),1,0)]"
+          },
+          "_note": "争议行用琥珀色。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r1g",
+            "value": "$[if::(lt::(${r1AN},0),1,0)]"
+          },
+          "_note": "支出 / 退款(负数)用次级灰。"
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1ms"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1AN"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1AZ"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1c"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1cS"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1cD"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r1cV"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r2o",
+        "value": "$[if::(gt::(${n},2),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${r2o}"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "r2",
+            "value": "${rq.data[2]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2c",
+            "value": "$[toLowerCase::(findNotEmpty::(${r2.currency},usd))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2cU",
+            "value": "$[toUpperCase::(${r2c})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2cS",
+            "value": "${r2cU}"
+          },
+          "_note": "没有符号的币种写大写代码;代码与数字之间的不换行空格由 money() 在拼接**中间**加 —— set 会裁掉值两端的空白(JS trim 连 U+00A0 一起裁),放在 curS 末尾必丢(2026-10-10 真令牌验出「MYR0.00」)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2cC",
+            "value": "1"
+          },
+          "_note": "1 = 没有符号、写的是代码(money() 据此在代码后加不换行空格)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2cY",
+            "value": "$[findNotEmpty::(get::(${_SYM},${r2c}),)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(findNotEmpty::(${r2cY},__none__),__none__),0,1)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "r2cS",
+                "value": "${r2cY}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "r2cC",
+                "value": "0"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2cD",
+            "value": "$[findNotEmpty::(get::(${_DEC},${r2c}),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2cV",
+            "value": "$[if::(eq::(1,1),if::(eq::(${r2cD},0),1,if::(eq::(${r2cD},3),1000,100)),1)]"
+          },
+          "_note": "最小单位 → 主单位:Stripe 金额是最小单位(美分),零小数位币种(日元)本身就是主单位。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2AN",
+            "value": "$[calc::(findNotEmpty::(${r2.amount},0)/${r2cV})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2AA",
+            "value": "$[if::(ge::(${r2AN},0),${r2AN},calc::(0-${r2AN}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2As",
+            "value": "$[if::(lt::(${r2AN},0),−,if::(gt::(${r2AN},0),+,))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2Ab",
+            "value": "$[if::(lt::(${r2AA},10000),if::(eq::(${r2cD},0),parseNumber::(${r2AA},#\\,##0),if::(eq::(${r2cD},3),parseNumber::(${r2AA},#\\,##0.000),parseNumber::(${r2AA},#\\,##0.00))),if::(eq::(${zh},1),if::(ge::(${r2AA},100000000),connect::(parseNumber::(calc::(${r2AA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${r2AA}/10000),0.##), 万)),if::(ge::(${r2AA},1000000000),connect::(parseNumber::(calc::(${r2AA}/1000000000),0.##),B),if::(ge::(${r2AA},1000000),connect::(parseNumber::(calc::(${r2AA}/1000000),0.##),M),connect::(parseNumber::(calc::(${r2AA}/1000),0.#),K)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2A",
+            "value": "${r2As}${r2cS}${r2Ab}"
+          },
+          "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${r2cC},1)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "r2A",
+                "value": "${r2As}${r2cU} ${r2Ab}"
+              },
+              "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2AX",
+            "value": "${r2As}${r2Ab}"
+          },
+          "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2AZ",
+            "value": "$[if::(eq::(${r2AA},0),1,0)]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2AA"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2As"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2Ab"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2k",
+            "value": "$[findNotEmpty::(${r2.reporting_category},${r2.type},other)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2L",
+            "value": "$[findNotEmpty::(get::(if::(eq::(${zh},1),${CZ},${CE}),${r2k}),${r2k})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2ms",
+            "value": "$[calc::(findNotEmpty::(${r2.created},0)*1000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2T",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${r2ms},__none__),__none__),0,1),0),--,if::(eq::(formatDate::(${r2ms},yyyy-MM-dd),formatDate::(${nowMs},yyyy-MM-dd)),formatDate::(${r2ms},HH:mm),formatDate::(${r2ms},MM-dd HH:mm)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2w",
+            "value": "$[if::(eq::(${r2k},dispute),1,0)]"
+          },
+          "_note": "争议行用琥珀色。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r2g",
+            "value": "$[if::(lt::(${r2AN},0),1,0)]"
+          },
+          "_note": "支出 / 退款(负数)用次级灰。"
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2ms"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2AN"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2AZ"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2c"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2cS"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2cD"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r2cV"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "r3o",
+        "value": "$[if::(gt::(${n},3),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${r3o}"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "r3",
+            "value": "${rq.data[3]}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3c",
+            "value": "$[toLowerCase::(findNotEmpty::(${r3.currency},usd))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3cU",
+            "value": "$[toUpperCase::(${r3c})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3cS",
+            "value": "${r3cU}"
+          },
+          "_note": "没有符号的币种写大写代码;代码与数字之间的不换行空格由 money() 在拼接**中间**加 —— set 会裁掉值两端的空白(JS trim 连 U+00A0 一起裁),放在 curS 末尾必丢(2026-10-10 真令牌验出「MYR0.00」)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3cC",
+            "value": "1"
+          },
+          "_note": "1 = 没有符号、写的是代码(money() 据此在代码后加不换行空格)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3cY",
+            "value": "$[findNotEmpty::(get::(${_SYM},${r3c}),)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(findNotEmpty::(${r3cY},__none__),__none__),0,1)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "r3cS",
+                "value": "${r3cY}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "r3cC",
+                "value": "0"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3cD",
+            "value": "$[findNotEmpty::(get::(${_DEC},${r3c}),2)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3cV",
+            "value": "$[if::(eq::(1,1),if::(eq::(${r3cD},0),1,if::(eq::(${r3cD},3),1000,100)),1)]"
+          },
+          "_note": "最小单位 → 主单位:Stripe 金额是最小单位(美分),零小数位币种(日元)本身就是主单位。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3AN",
+            "value": "$[calc::(findNotEmpty::(${r3.amount},0)/${r3cV})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3AA",
+            "value": "$[if::(ge::(${r3AN},0),${r3AN},calc::(0-${r3AN}))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3As",
+            "value": "$[if::(lt::(${r3AN},0),−,if::(gt::(${r3AN},0),+,))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3Ab",
+            "value": "$[if::(lt::(${r3AA},10000),if::(eq::(${r3cD},0),parseNumber::(${r3AA},#\\,##0),if::(eq::(${r3cD},3),parseNumber::(${r3AA},#\\,##0.000),parseNumber::(${r3AA},#\\,##0.00))),if::(eq::(${zh},1),if::(ge::(${r3AA},100000000),connect::(parseNumber::(calc::(${r3AA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${r3AA}/10000),0.##), 万)),if::(ge::(${r3AA},1000000000),connect::(parseNumber::(calc::(${r3AA}/1000000000),0.##),B),if::(ge::(${r3AA},1000000),connect::(parseNumber::(calc::(${r3AA}/1000000),0.##),M),connect::(parseNumber::(calc::(${r3AA}/1000),0.#),K)))))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3A",
+            "value": "${r3As}${r3cS}${r3Ab}"
+          },
+          "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${r3cC},1)]"
+          },
+          "items": [
+            {
+              "op": "set",
+              "props": {
+                "key": "r3A",
+                "value": "${r3As}${r3cU} ${r3Ab}"
+              },
+              "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3AX",
+            "value": "${r3As}${r3Ab}"
+          },
+          "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3AZ",
+            "value": "$[if::(eq::(${r3AA},0),1,0)]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3AA"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3As"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3Ab"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3k",
+            "value": "$[findNotEmpty::(${r3.reporting_category},${r3.type},other)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3L",
+            "value": "$[findNotEmpty::(get::(if::(eq::(${zh},1),${CZ},${CE}),${r3k}),${r3k})]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3ms",
+            "value": "$[calc::(findNotEmpty::(${r3.created},0)*1000)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3T",
+            "value": "$[if::(eq::(if::(eq::(findNotEmpty::(${r3ms},__none__),__none__),0,1),0),--,if::(eq::(formatDate::(${r3ms},yyyy-MM-dd),formatDate::(${nowMs},yyyy-MM-dd)),formatDate::(${r3ms},HH:mm),formatDate::(${r3ms},MM-dd HH:mm)))]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3w",
+            "value": "$[if::(eq::(${r3k},dispute),1,0)]"
+          },
+          "_note": "争议行用琥珀色。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "r3g",
+            "value": "$[if::(lt::(${r3AN},0),1,0)]"
+          },
+          "_note": "支出 / 退款(负数)用次级灰。"
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3ms"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3AN"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3AZ"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3c"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3cS"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3cD"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "r3cV"
+          }
+        }
+      ]
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "_SYM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "_DEC"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "CZ"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "CE"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${nowMs},HH:mm)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "n",
+          "e",
+          "r0o",
+          "r0A",
+          "r0L",
+          "r0T",
+          "r0w",
+          "r0g",
+          "r1o",
+          "r1A",
+          "r1L",
+          "r1T",
+          "r1w",
+          "r1g",
+          "r2o",
+          "r2A",
+          "r2L",
+          "r2T",
+          "r2w",
+          "r2g",
+          "r3o",
+          "r3A",
+          "r3L",
+          "r3T",
+          "r3w",
+          "r3g"
+        ]
+      }
+    }
+  ]
+}

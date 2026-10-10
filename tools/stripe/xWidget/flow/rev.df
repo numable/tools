@@ -1,0 +1,2098 @@
+{
+  "_note": "Stripe 今日 / 本月 / 近 30 天(mode):余额流水按设备时区的起点取、按分类求和(groupSum,无循环)。金额是最小货币单位,按币种小数位换算;只统计主币种(余额数组第一项)。",
+  "version": 1,
+  "actions": [
+    {
+      "op": "set",
+      "props": {
+        "key": "nowMs",
+        "value": "${@time.nowMs}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "zh",
+        "value": "$[if::(startsWith::(${@app.language},zh),1,0)]"
+      },
+      "_note": "语言:文案在取数层按语言出(切语言 = 整盘重取,数据缓存含 locale)。没注入 @app 时按英文(overseas-first §2)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "modeIn",
+        "value": "$[findNotEmpty::(${mode},today)]"
+      },
+      "_note": "入参落地(勿删)。mode = today / month / d30。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "t0",
+        "value": "$[parseDate::(formatDate::(${nowMs},yyyy-MM-dd),yyyy-MM-dd)]"
+      },
+      "_note": "本地今天零点(毫秒;parseDate 按设备时区)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "m0",
+        "value": "$[parseDate::(connect::(formatDate::(${nowMs},yyyy-MM),-01),yyyy-MM-dd)]"
+      },
+      "_note": "本地本月 1 日零点。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d0",
+        "value": "$[parseDate::(formatDate::(calc::(${nowMs}-2505600000),yyyy-MM-dd),yyyy-MM-dd)]"
+      },
+      "_note": "近 30 天 = 今天 + 往前 29 个自然日(29 × 86400000 = 2505600000)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "since",
+        "value": "$[parseNumber::(calc::(if::(eq::(${modeIn},month),${m0},if::(eq::(${modeIn},d30),${d0},${t0}))/1000),0)]"
+      },
+      "_note": "起点(UTC 秒)。⚠️ 进 URL 的数字过 parseNumber(Android calc 返回 2026.0 这类 double)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "Pm",
+        "value": "$[if::(eq::(${modeIn},today),4,8)]"
+      },
+      "_note": "最多翻几页(每页 100 条)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tr",
+        "value": "0"
+      }
+    },
+    {
+      "action": "concurrent",
+      "items": [
+        {
+          "id": "bal",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "id": "p1",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${since}&limit=100",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        }
+      ],
+      "_note": "余额(取主币种与 livemode)与第 1 页流水并发。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_f",
+        "value": "$[if::(eq::(findNotEmpty::(${bal.object},x),balance),0,1)]"
+      },
+      "_note": "响应不是 balance 对象(401 未授权 / 403 缺权限 / 网络失败)= 取数失败(G26):宿主贴上次成功的那帧。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${_f}"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "stripe unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "lm",
+        "value": "$[if::(eq::(findNotEmpty::(${bal.livemode},true),false),0,1)]"
+      },
+      "_note": "测试密钥(rk_test_)拿到的是测试数据:livemode=false → 组件上标「测试数据」。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_SYM",
+        "value": {
+          "usd": "$",
+          "eur": "€",
+          "gbp": "£",
+          "jpy": "¥",
+          "cny": "¥",
+          "krw": "₩",
+          "inr": "₹",
+          "hkd": "HK$",
+          "twd": "NT$",
+          "aud": "A$",
+          "cad": "CA$",
+          "nzd": "NZ$",
+          "sgd": "S$",
+          "mxn": "MX$",
+          "brl": "R$",
+          "ils": "₪",
+          "php": "₱",
+          "thb": "฿",
+          "vnd": "₫",
+          "try": "₺",
+          "pln": "zł ",
+          "uah": "₴"
+        }
+      },
+      "_note": "币种符号表(只收写成符号不歧义的;其余写 ISO 代码)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_DEC",
+        "value": {
+          "bif": "0",
+          "clp": "0",
+          "djf": "0",
+          "gnf": "0",
+          "jpy": "0",
+          "kmf": "0",
+          "krw": "0",
+          "mga": "0",
+          "pyg": "0",
+          "rwf": "0",
+          "ugx": "0",
+          "vnd": "0",
+          "vuv": "0",
+          "xaf": "0",
+          "xof": "0",
+          "xpf": "0",
+          "bhd": "3",
+          "jod": "3",
+          "kwd": "3",
+          "omr": "3",
+          "tnd": "3"
+        }
+      },
+      "_note": "Stripe 零小数位 / 三位小数币种(其余 2 位)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cur",
+        "value": "$[toLowerCase::(findNotEmpty::(${bal.available[0].currency},usd))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curU",
+        "value": "$[toUpperCase::(${cur})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curS",
+        "value": "${curU}"
+      },
+      "_note": "没有符号的币种写大写代码;代码与数字之间的不换行空格由 money() 在拼接**中间**加 —— set 会裁掉值两端的空白(JS trim 连 U+00A0 一起裁),放在 curS 末尾必丢(2026-10-10 真令牌验出「MYR0.00」)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curC",
+        "value": "1"
+      },
+      "_note": "1 = 没有符号、写的是代码(money() 据此在代码后加不换行空格)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curY",
+        "value": "$[findNotEmpty::(get::(${_SYM},${cur}),)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(findNotEmpty::(${curY},__none__),__none__),0,1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "curS",
+            "value": "${curY}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "curC",
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curD",
+        "value": "$[findNotEmpty::(get::(${_DEC},${cur}),2)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curV",
+        "value": "$[if::(eq::(1,1),if::(eq::(${curD},0),1,if::(eq::(${curD},3),1000,100)),1)]"
+      },
+      "_note": "最小单位 → 主单位:Stripe 金额是最小单位(美分),零小数位币种(日元)本身就是主单位。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "_SYM"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "_DEC"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "KS",
+        "value": [
+          "currency",
+          "reporting_category"
+        ]
+      },
+      "_note": "groupSum 的键列:先按币种、再按分类 → {usd:{charge:…,refund:…}}。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ONE",
+        "value": {
+          "balance_transaction": "1"
+        }
+      },
+      "_note": "mapField 查表:每行补一列 one=1,groupSum 求它 = 笔数。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kCh",
+        "value": "$[connect::(${cur},.charge)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kRf",
+        "value": "$[connect::(${cur},.refund)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "kDp",
+        "value": "$[connect::(${cur},.dispute)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_f1",
+        "value": "$[if::(eq::(findNotEmpty::(${p1.object},x),list),0,1)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${_f1}"
+      },
+      "items": [
+        {
+          "action": "error",
+          "params": {
+            "errorMsg": "stripe balance_transactions unavailable"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hm1",
+        "value": "$[if::(eq::(findNotEmpty::(${p1.has_more},false),true),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "ls1",
+        "value": "$[findNotEmpty::(index::(pluck::(${p1.data},id),calc::(length::(${p1.data})-1)),)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "R1",
+        "value": "$[mapField::(${p1.data},object,${ONE},one,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "g1",
+        "value": "$[groupSum::(${R1},${KS},amount)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "n1",
+        "value": "$[groupSum::(${R1},${KS},net)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "c1",
+        "value": "$[groupSum::(${R1},${KS},one)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tr",
+        "value": "$[if::(and::(eq::(${Pm},1),eq::(${hm1},1)),1,${tr})]"
+      },
+      "_note": "翻到上限那一页还有下一页 = 只统计了最近 Pm × 100 笔(卡上如实说)。"
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "R1"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "p1"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "go2",
+        "value": "$[if::(and::(eq::(findNotEmpty::(${hm1},0),1),le::(2,${Pm})),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${go2}"
+      },
+      "items": [
+        {
+          "id": "p2",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${since}&limit=100&starting_after=${ls1}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b2",
+            "value": "1"
+          },
+          "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_f2",
+            "value": "$[if::(eq::(findNotEmpty::(${p2.object},x),list),0,1)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${_f2}"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "stripe page 2 unavailable"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hm2",
+            "value": "$[if::(eq::(findNotEmpty::(${p2.has_more},false),true),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ls2",
+            "value": "$[findNotEmpty::(index::(pluck::(${p2.data},id),calc::(length::(${p2.data})-1)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "R2",
+            "value": "$[mapField::(${p2.data},object,${ONE},one,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g2",
+            "value": "$[groupSum::(${R2},${KS},amount)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n2",
+            "value": "$[groupSum::(${R2},${KS},net)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c2",
+            "value": "$[groupSum::(${R2},${KS},one)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tr",
+            "value": "$[if::(and::(eq::(${Pm},2),eq::(${hm2},1)),1,${tr})]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "R2"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "p2"
+          }
+        }
+      ],
+      "_note": "上一页还有(has_more)且没到上限才翻;翻页拿不到 = 失败,不拿半截数冒充全量。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "go3",
+        "value": "$[if::(and::(eq::(findNotEmpty::(${hm2},0),1),le::(3,${Pm})),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${go3}"
+      },
+      "items": [
+        {
+          "id": "p3",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${since}&limit=100&starting_after=${ls2}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b3",
+            "value": "1"
+          },
+          "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_f3",
+            "value": "$[if::(eq::(findNotEmpty::(${p3.object},x),list),0,1)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${_f3}"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "stripe page 3 unavailable"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hm3",
+            "value": "$[if::(eq::(findNotEmpty::(${p3.has_more},false),true),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ls3",
+            "value": "$[findNotEmpty::(index::(pluck::(${p3.data},id),calc::(length::(${p3.data})-1)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "R3",
+            "value": "$[mapField::(${p3.data},object,${ONE},one,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g3",
+            "value": "$[groupSum::(${R3},${KS},amount)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n3",
+            "value": "$[groupSum::(${R3},${KS},net)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c3",
+            "value": "$[groupSum::(${R3},${KS},one)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tr",
+            "value": "$[if::(and::(eq::(${Pm},3),eq::(${hm3},1)),1,${tr})]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "R3"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "p3"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "go4",
+        "value": "$[if::(and::(eq::(findNotEmpty::(${hm3},0),1),le::(4,${Pm})),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${go4}"
+      },
+      "items": [
+        {
+          "id": "p4",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${since}&limit=100&starting_after=${ls3}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b4",
+            "value": "1"
+          },
+          "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_f4",
+            "value": "$[if::(eq::(findNotEmpty::(${p4.object},x),list),0,1)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${_f4}"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "stripe page 4 unavailable"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hm4",
+            "value": "$[if::(eq::(findNotEmpty::(${p4.has_more},false),true),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ls4",
+            "value": "$[findNotEmpty::(index::(pluck::(${p4.data},id),calc::(length::(${p4.data})-1)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "R4",
+            "value": "$[mapField::(${p4.data},object,${ONE},one,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g4",
+            "value": "$[groupSum::(${R4},${KS},amount)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n4",
+            "value": "$[groupSum::(${R4},${KS},net)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c4",
+            "value": "$[groupSum::(${R4},${KS},one)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tr",
+            "value": "$[if::(and::(eq::(${Pm},4),eq::(${hm4},1)),1,${tr})]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "R4"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "p4"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "go5",
+        "value": "$[if::(and::(eq::(findNotEmpty::(${hm4},0),1),le::(5,${Pm})),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${go5}"
+      },
+      "items": [
+        {
+          "id": "p5",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${since}&limit=100&starting_after=${ls4}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b5",
+            "value": "1"
+          },
+          "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_f5",
+            "value": "$[if::(eq::(findNotEmpty::(${p5.object},x),list),0,1)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${_f5}"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "stripe page 5 unavailable"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hm5",
+            "value": "$[if::(eq::(findNotEmpty::(${p5.has_more},false),true),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ls5",
+            "value": "$[findNotEmpty::(index::(pluck::(${p5.data},id),calc::(length::(${p5.data})-1)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "R5",
+            "value": "$[mapField::(${p5.data},object,${ONE},one,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g5",
+            "value": "$[groupSum::(${R5},${KS},amount)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n5",
+            "value": "$[groupSum::(${R5},${KS},net)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c5",
+            "value": "$[groupSum::(${R5},${KS},one)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tr",
+            "value": "$[if::(and::(eq::(${Pm},5),eq::(${hm5},1)),1,${tr})]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "R5"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "p5"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "go6",
+        "value": "$[if::(and::(eq::(findNotEmpty::(${hm5},0),1),le::(6,${Pm})),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${go6}"
+      },
+      "items": [
+        {
+          "id": "p6",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${since}&limit=100&starting_after=${ls5}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b6",
+            "value": "1"
+          },
+          "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_f6",
+            "value": "$[if::(eq::(findNotEmpty::(${p6.object},x),list),0,1)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${_f6}"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "stripe page 6 unavailable"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hm6",
+            "value": "$[if::(eq::(findNotEmpty::(${p6.has_more},false),true),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ls6",
+            "value": "$[findNotEmpty::(index::(pluck::(${p6.data},id),calc::(length::(${p6.data})-1)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "R6",
+            "value": "$[mapField::(${p6.data},object,${ONE},one,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g6",
+            "value": "$[groupSum::(${R6},${KS},amount)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n6",
+            "value": "$[groupSum::(${R6},${KS},net)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c6",
+            "value": "$[groupSum::(${R6},${KS},one)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tr",
+            "value": "$[if::(and::(eq::(${Pm},6),eq::(${hm6},1)),1,${tr})]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "R6"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "p6"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "go7",
+        "value": "$[if::(and::(eq::(findNotEmpty::(${hm6},0),1),le::(7,${Pm})),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${go7}"
+      },
+      "items": [
+        {
+          "id": "p7",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${since}&limit=100&starting_after=${ls6}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b7",
+            "value": "1"
+          },
+          "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_f7",
+            "value": "$[if::(eq::(findNotEmpty::(${p7.object},x),list),0,1)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${_f7}"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "stripe page 7 unavailable"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hm7",
+            "value": "$[if::(eq::(findNotEmpty::(${p7.has_more},false),true),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ls7",
+            "value": "$[findNotEmpty::(index::(pluck::(${p7.data},id),calc::(length::(${p7.data})-1)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "R7",
+            "value": "$[mapField::(${p7.data},object,${ONE},one,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g7",
+            "value": "$[groupSum::(${R7},${KS},amount)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n7",
+            "value": "$[groupSum::(${R7},${KS},net)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c7",
+            "value": "$[groupSum::(${R7},${KS},one)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tr",
+            "value": "$[if::(and::(eq::(${Pm},7),eq::(${hm7},1)),1,${tr})]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "R7"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "p7"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "go8",
+        "value": "$[if::(and::(eq::(findNotEmpty::(${hm7},0),1),le::(8,${Pm})),1,0)]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "${go8}"
+      },
+      "items": [
+        {
+          "id": "p8",
+          "action": "request",
+          "params": {
+            "url": "https://api.stripe.com/v1/balance_transactions?created%5Bgte%5D=${since}&limit=100&starting_after=${ls7}",
+            "method": "GET",
+            "formatType": "json",
+            "timeout": "15000",
+            "credential": "stripe",
+            "header": {
+              "User-Agent": "Numable/1.0",
+              "Accept": "application/json"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_b8",
+            "value": "1"
+          },
+          "_note": "屏障(勿删):request / concurrent / credential.state 之后紧邻的节点读不到结果(老宿主晚一拍合并)。"
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "_f8",
+            "value": "$[if::(eq::(findNotEmpty::(${p8.object},x),list),0,1)]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "${_f8}"
+          },
+          "items": [
+            {
+              "action": "error",
+              "params": {
+                "errorMsg": "stripe page 8 unavailable"
+              }
+            }
+          ]
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "hm8",
+            "value": "$[if::(eq::(findNotEmpty::(${p8.has_more},false),true),1,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "ls8",
+            "value": "$[findNotEmpty::(index::(pluck::(${p8.data},id),calc::(length::(${p8.data})-1)),)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "R8",
+            "value": "$[mapField::(${p8.data},object,${ONE},one,0)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "g8",
+            "value": "$[groupSum::(${R8},${KS},amount)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "n8",
+            "value": "$[groupSum::(${R8},${KS},net)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "c8",
+            "value": "$[groupSum::(${R8},${KS},one)]"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "tr",
+            "value": "$[if::(and::(eq::(${Pm},8),eq::(${hm8},1)),1,${tr})]"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "R8"
+          }
+        },
+        {
+          "op": "remove",
+          "props": {
+            "key": "p8"
+          }
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "gross",
+        "value": "$[calc::(findNotEmpty::(get::(${g1},${kCh}),0)+findNotEmpty::(get::(${g2},${kCh}),0)+findNotEmpty::(get::(${g3},${kCh}),0)+findNotEmpty::(get::(${g4},${kCh}),0)+findNotEmpty::(get::(${g5},${kCh}),0)+findNotEmpty::(get::(${g6},${kCh}),0)+findNotEmpty::(get::(${g7},${kCh}),0)+findNotEmpty::(get::(${g8},${kCh}),0))]"
+      },
+      "_note": "收款(reporting_category=charge 的 amount 之和,最小单位)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "refund",
+        "value": "$[calc::(findNotEmpty::(get::(${g1},${kRf}),0)+findNotEmpty::(get::(${g2},${kRf}),0)+findNotEmpty::(get::(${g3},${kRf}),0)+findNotEmpty::(get::(${g4},${kRf}),0)+findNotEmpty::(get::(${g5},${kRf}),0)+findNotEmpty::(get::(${g6},${kRf}),0)+findNotEmpty::(get::(${g7},${kRf}),0)+findNotEmpty::(get::(${g8},${kRf}),0))]"
+      },
+      "_note": "退款(负数)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "disp",
+        "value": "$[calc::(findNotEmpty::(get::(${g1},${kDp}),0)+findNotEmpty::(get::(${g2},${kDp}),0)+findNotEmpty::(get::(${g3},${kDp}),0)+findNotEmpty::(get::(${g4},${kDp}),0)+findNotEmpty::(get::(${g5},${kDp}),0)+findNotEmpty::(get::(${g6},${kDp}),0)+findNotEmpty::(get::(${g7},${kDp}),0)+findNotEmpty::(get::(${g8},${kDp}),0))]"
+      },
+      "_note": "争议扣款(负数)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "netA",
+        "value": "$[calc::(calc::(findNotEmpty::(get::(${n1},${kCh}),0)+findNotEmpty::(get::(${n2},${kCh}),0)+findNotEmpty::(get::(${n3},${kCh}),0)+findNotEmpty::(get::(${n4},${kCh}),0)+findNotEmpty::(get::(${n5},${kCh}),0)+findNotEmpty::(get::(${n6},${kCh}),0)+findNotEmpty::(get::(${n7},${kCh}),0)+findNotEmpty::(get::(${n8},${kCh}),0))+calc::(findNotEmpty::(get::(${n1},${kRf}),0)+findNotEmpty::(get::(${n2},${kRf}),0)+findNotEmpty::(get::(${n3},${kRf}),0)+findNotEmpty::(get::(${n4},${kRf}),0)+findNotEmpty::(get::(${n5},${kRf}),0)+findNotEmpty::(get::(${n6},${kRf}),0)+findNotEmpty::(get::(${n7},${kRf}),0)+findNotEmpty::(get::(${n8},${kRf}),0))+calc::(findNotEmpty::(get::(${n1},${kDp}),0)+findNotEmpty::(get::(${n2},${kDp}),0)+findNotEmpty::(get::(${n3},${kDp}),0)+findNotEmpty::(get::(${n4},${kDp}),0)+findNotEmpty::(get::(${n5},${kDp}),0)+findNotEmpty::(get::(${n6},${kDp}),0)+findNotEmpty::(get::(${n7},${kDp}),0)+findNotEmpty::(get::(${n8},${kDp}),0)))]"
+      },
+      "_note": "净入账 = 收款、退款、争议三类流水的 net 之和(已扣 Stripe 手续费与争议费;不含提现与其它调整)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feeA",
+        "value": "$[calc::(${gross}-calc::(findNotEmpty::(get::(${n1},${kCh}),0)+findNotEmpty::(get::(${n2},${kCh}),0)+findNotEmpty::(get::(${n3},${kCh}),0)+findNotEmpty::(get::(${n4},${kCh}),0)+findNotEmpty::(get::(${n5},${kCh}),0)+findNotEmpty::(get::(${n6},${kCh}),0)+findNotEmpty::(get::(${n7},${kCh}),0)+findNotEmpty::(get::(${n8},${kCh}),0)))]"
+      },
+      "_note": "收款手续费 = 收款 amount − net。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cnt",
+        "value": "$[parseNumber::(calc::(findNotEmpty::(get::(${c1},${kCh}),0)+findNotEmpty::(get::(${c2},${kCh}),0)+findNotEmpty::(get::(${c3},${kCh}),0)+findNotEmpty::(get::(${c4},${kCh}),0)+findNotEmpty::(get::(${c5},${kCh}),0)+findNotEmpty::(get::(${c6},${kCh}),0)+findNotEmpty::(get::(${c7},${kCh}),0)+findNotEmpty::(get::(${c8},${kCh}),0)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rcnt",
+        "value": "$[parseNumber::(calc::(findNotEmpty::(get::(${c1},${kRf}),0)+findNotEmpty::(get::(${c2},${kRf}),0)+findNotEmpty::(get::(${c3},${kRf}),0)+findNotEmpty::(get::(${c4},${kRf}),0)+findNotEmpty::(get::(${c5},${kRf}),0)+findNotEmpty::(get::(${c6},${kRf}),0)+findNotEmpty::(get::(${c7},${kRf}),0)+findNotEmpty::(get::(${c8},${kRf}),0)),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dcnt",
+        "value": "$[parseNumber::(calc::(findNotEmpty::(get::(${c1},${kDp}),0)+findNotEmpty::(get::(${c2},${kDp}),0)+findNotEmpty::(get::(${c3},${kDp}),0)+findNotEmpty::(get::(${c4},${kDp}),0)+findNotEmpty::(get::(${c5},${kDp}),0)+findNotEmpty::(get::(${c6},${kDp}),0)+findNotEmpty::(get::(${c7},${kDp}),0)+findNotEmpty::(get::(${c8},${kDp}),0)),0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "g1"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "g2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "g3"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "g4"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "g5"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "g6"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "g7"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "g8"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "n1"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "n2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "n3"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "n4"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "n5"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "n6"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "n7"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "n8"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "c1"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "c2"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "c3"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "c4"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "c5"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "c6"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "c7"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "c8"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grossTN",
+        "value": "$[calc::(findNotEmpty::(${gross},0)/${curV})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grossTA",
+        "value": "$[if::(ge::(${grossTN},0),${grossTN},calc::(0-${grossTN}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grossTs",
+        "value": "$[if::(lt::(${grossTN},0),−,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grossTb",
+        "value": "$[if::(lt::(${grossTA},10000),if::(lt::(${grossTA},1000),if::(eq::(${curD},0),parseNumber::(${grossTA},#\\,##0),if::(eq::(${curD},3),parseNumber::(${grossTA},#\\,##0.000),parseNumber::(${grossTA},#\\,##0.00))),parseNumber::(${grossTA},#\\,##0)),if::(eq::(${zh},1),if::(ge::(${grossTA},100000000),connect::(parseNumber::(calc::(${grossTA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${grossTA}/10000),0.##), 万)),if::(ge::(${grossTA},1000000000),connect::(parseNumber::(calc::(${grossTA}/1000000000),0.##),B),if::(ge::(${grossTA},1000000),connect::(parseNumber::(calc::(${grossTA}/1000000),0.##),M),connect::(parseNumber::(calc::(${grossTA}/1000),0.#),K)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grossT",
+        "value": "${grossTs}${curS}${grossTb}"
+      },
+      "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${curC},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "grossT",
+            "value": "${grossTs}${curU} ${grossTb}"
+          },
+          "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grossTX",
+        "value": "${grossTs}${grossTb}"
+      },
+      "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "grossTZ",
+        "value": "$[if::(eq::(${grossTA},0),1,0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "grossTA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "grossTs"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "grossTb"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "netTN",
+        "value": "$[calc::(findNotEmpty::(${netA},0)/${curV})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "netTA",
+        "value": "$[if::(ge::(${netTN},0),${netTN},calc::(0-${netTN}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "netTs",
+        "value": "$[if::(lt::(${netTN},0),−,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "netTb",
+        "value": "$[if::(lt::(${netTA},10000),if::(lt::(${netTA},1000),if::(eq::(${curD},0),parseNumber::(${netTA},#\\,##0),if::(eq::(${curD},3),parseNumber::(${netTA},#\\,##0.000),parseNumber::(${netTA},#\\,##0.00))),parseNumber::(${netTA},#\\,##0)),if::(eq::(${zh},1),if::(ge::(${netTA},100000000),connect::(parseNumber::(calc::(${netTA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${netTA}/10000),0.##), 万)),if::(ge::(${netTA},1000000000),connect::(parseNumber::(calc::(${netTA}/1000000000),0.##),B),if::(ge::(${netTA},1000000),connect::(parseNumber::(calc::(${netTA}/1000000),0.##),M),connect::(parseNumber::(calc::(${netTA}/1000),0.#),K)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "netT",
+        "value": "${netTs}${curS}${netTb}"
+      },
+      "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${curC},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "netT",
+            "value": "${netTs}${curU} ${netTb}"
+          },
+          "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "netTX",
+        "value": "${netTs}${netTb}"
+      },
+      "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "netTZ",
+        "value": "$[if::(eq::(${netTA},0),1,0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "netTA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "netTs"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "netTb"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "refTN",
+        "value": "$[calc::(findNotEmpty::(${refund},0)/${curV})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "refTA",
+        "value": "$[if::(ge::(${refTN},0),${refTN},calc::(0-${refTN}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "refTs",
+        "value": "$[if::(lt::(${refTN},0),−,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "refTb",
+        "value": "$[if::(lt::(${refTA},10000),if::(lt::(${refTA},1000),if::(eq::(${curD},0),parseNumber::(${refTA},#\\,##0),if::(eq::(${curD},3),parseNumber::(${refTA},#\\,##0.000),parseNumber::(${refTA},#\\,##0.00))),parseNumber::(${refTA},#\\,##0)),if::(eq::(${zh},1),if::(ge::(${refTA},100000000),connect::(parseNumber::(calc::(${refTA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${refTA}/10000),0.##), 万)),if::(ge::(${refTA},1000000000),connect::(parseNumber::(calc::(${refTA}/1000000000),0.##),B),if::(ge::(${refTA},1000000),connect::(parseNumber::(calc::(${refTA}/1000000),0.##),M),connect::(parseNumber::(calc::(${refTA}/1000),0.#),K)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "refT",
+        "value": "${refTs}${curS}${refTb}"
+      },
+      "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${curC},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "refT",
+            "value": "${refTs}${curU} ${refTb}"
+          },
+          "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "refTX",
+        "value": "${refTs}${refTb}"
+      },
+      "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "refTZ",
+        "value": "$[if::(eq::(${refTA},0),1,0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "refTA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "refTs"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "refTb"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dispTN",
+        "value": "$[calc::(findNotEmpty::(${disp},0)/${curV})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dispTA",
+        "value": "$[if::(ge::(${dispTN},0),${dispTN},calc::(0-${dispTN}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dispTs",
+        "value": "$[if::(lt::(${dispTN},0),−,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dispTb",
+        "value": "$[if::(lt::(${dispTA},10000),if::(lt::(${dispTA},1000),if::(eq::(${curD},0),parseNumber::(${dispTA},#\\,##0),if::(eq::(${curD},3),parseNumber::(${dispTA},#\\,##0.000),parseNumber::(${dispTA},#\\,##0.00))),parseNumber::(${dispTA},#\\,##0)),if::(eq::(${zh},1),if::(ge::(${dispTA},100000000),connect::(parseNumber::(calc::(${dispTA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${dispTA}/10000),0.##), 万)),if::(ge::(${dispTA},1000000000),connect::(parseNumber::(calc::(${dispTA}/1000000000),0.##),B),if::(ge::(${dispTA},1000000),connect::(parseNumber::(calc::(${dispTA}/1000000),0.##),M),connect::(parseNumber::(calc::(${dispTA}/1000),0.#),K)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dispT",
+        "value": "${dispTs}${curS}${dispTb}"
+      },
+      "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${curC},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "dispT",
+            "value": "${dispTs}${curU} ${dispTb}"
+          },
+          "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dispTX",
+        "value": "${dispTs}${dispTb}"
+      },
+      "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dispTZ",
+        "value": "$[if::(eq::(${dispTA},0),1,0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "dispTA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "dispTs"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "dispTb"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feeTN",
+        "value": "$[calc::(findNotEmpty::(${feeA},0)/${curV})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feeTA",
+        "value": "$[if::(ge::(${feeTN},0),${feeTN},calc::(0-${feeTN}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feeTs",
+        "value": "$[if::(lt::(${feeTN},0),−,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feeTb",
+        "value": "$[if::(lt::(${feeTA},10000),if::(lt::(${feeTA},1000),if::(eq::(${curD},0),parseNumber::(${feeTA},#\\,##0),if::(eq::(${curD},3),parseNumber::(${feeTA},#\\,##0.000),parseNumber::(${feeTA},#\\,##0.00))),parseNumber::(${feeTA},#\\,##0)),if::(eq::(${zh},1),if::(ge::(${feeTA},100000000),connect::(parseNumber::(calc::(${feeTA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${feeTA}/10000),0.##), 万)),if::(ge::(${feeTA},1000000000),connect::(parseNumber::(calc::(${feeTA}/1000000000),0.##),B),if::(ge::(${feeTA},1000000),connect::(parseNumber::(calc::(${feeTA}/1000000),0.##),M),connect::(parseNumber::(calc::(${feeTA}/1000),0.#),K)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feeT",
+        "value": "${feeTs}${curS}${feeTb}"
+      },
+      "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${curC},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "feeT",
+            "value": "${feeTs}${curU} ${feeTb}"
+          },
+          "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feeTX",
+        "value": "${feeTs}${feeTb}"
+      },
+      "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "feeTZ",
+        "value": "$[if::(eq::(${feeTA},0),1,0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "feeTA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "feeTs"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "feeTb"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avgTN",
+        "value": "$[calc::(findNotEmpty::(calc::(${gross}/30),0)/${curV})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avgTA",
+        "value": "$[if::(ge::(${avgTN},0),${avgTN},calc::(0-${avgTN}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avgTs",
+        "value": "$[if::(lt::(${avgTN},0),−,)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avgTb",
+        "value": "$[if::(lt::(${avgTA},10000),if::(eq::(${curD},0),parseNumber::(${avgTA},#\\,##0),if::(eq::(${curD},3),parseNumber::(${avgTA},#\\,##0.000),parseNumber::(${avgTA},#\\,##0.00))),if::(eq::(${zh},1),if::(ge::(${avgTA},100000000),connect::(parseNumber::(calc::(${avgTA}/100000000),0.##), 亿),connect::(parseNumber::(calc::(${avgTA}/10000),0.##), 万)),if::(ge::(${avgTA},1000000000),connect::(parseNumber::(calc::(${avgTA}/1000000000),0.##),B),if::(ge::(${avgTA},1000000),connect::(parseNumber::(calc::(${avgTA}/1000000),0.##),M),connect::(parseNumber::(calc::(${avgTA}/1000),0.#),K)))))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avgT",
+        "value": "${avgTs}${curS}${avgTb}"
+      },
+      "_note": "⚠️ 拼接用模板、不用 connect::——connect 会吃掉每段两端的空白(含不换行空格),「CHF 12.00」会变成「CHF12.00」。"
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${curC},1)]"
+      },
+      "items": [
+        {
+          "op": "set",
+          "props": {
+            "key": "avgT",
+            "value": "${avgTs}${curU} ${avgTb}"
+          },
+          "_note": "写代码的币种:不换行空格夹在模板中间(两端会被 set 裁掉)→「MYR 12.00」。"
+        }
+      ]
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avgTX",
+        "value": "${avgTs}${avgTb}"
+      },
+      "_note": "不带币种的同一个数(「−1,203」「53.42」):小格子用 —— 大字已写币种,币种是代码(MYR / CHF)时再写一遍会截断。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "avgTZ",
+        "value": "$[if::(eq::(${avgTA},0),1,0)]"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "avgTA"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "avgTs"
+      }
+    },
+    {
+      "op": "remove",
+      "props": {
+        "key": "avgTb"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cntN",
+        "value": "$[parseNumber::(${cnt},#\\,##0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "tdT",
+        "value": "$[if::(eq::(${zh},1),测试数据,test data)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cntT",
+        "value": "$[if::(eq::(${zh},1),${cntN} 笔,if::(eq::(${cnt},1),${cntN} payment,${cntN} payments))]"
+      },
+      "_note": "⚠️ 空格写在方法参数**中间**(参数两端的空白会被吃掉,connect 尤甚)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cntT",
+        "value": "$[if::(eq::(${lm},1),${cntT},${cntT} · ${tdT})]"
+      },
+      "_note": "测试密钥:笔数后面标「· 测试数据」(不另占一行)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rcntT",
+        "value": "$[if::(eq::(${zh},1),${rcnt} 笔,if::(eq::(${rcnt},1),${rcnt} refund,${rcnt} refunds))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dcntT",
+        "value": "$[if::(eq::(${zh},1),${dcnt} 笔,if::(eq::(${dcnt},1),${dcnt} dispute,${dcnt} disputes))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dw",
+        "value": "$[if::(gt::(${dcnt},0),1,0)]"
+      },
+      "_note": "有争议 = 1(组件上那一行用琥珀色)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "rlab",
+        "value": "$[if::(eq::(${zh},1),退款 · ${rcnt} 笔,Refunds · ${rcnt})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "dlab",
+        "value": "$[if::(eq::(${zh},1),争议 · ${dcnt} 笔,Disputes · ${dcnt})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "trN",
+        "value": "$[parseNumber::(calc::(${Pm}*100),0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "noteT",
+        "value": "$[if::(eq::(${tr},1),if::(eq::(${zh},1),只统计最近 ${trN} 笔,Latest ${trN} only),if::(eq::(${zh},1),含今天 · 按本机时区,Incl. today · local time))]"
+      },
+      "_note": "底注:翻到上限还有下一页时说只统计了最近 N 笔,否则说口径。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "at",
+        "value": "$[formatDate::(${nowMs},HH:mm)]"
+      },
+      "_note": "时效锚:取数时刻(流水是实时的)。"
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "at",
+          "lm",
+          "grossT",
+          "grossZ",
+          "netT",
+          "refT",
+          "refZ",
+          "dispT",
+          "feeT",
+          "avgT",
+          "netTX",
+          "refTX",
+          "feeTX",
+          "cnt",
+          "cntT",
+          "rcnt",
+          "rcntT",
+          "dcnt",
+          "dcntT",
+          "dw",
+          "tr",
+          "noteT",
+          "rlab",
+          "dlab"
+        ]
+      }
+    }
+  ]
+}

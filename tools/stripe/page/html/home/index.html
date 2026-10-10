@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Stripe Revenue</title>
+<style>
+:root{color-scheme:light dark;--xb-content-top:0px;--xb-content-bottom:0px;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;--tile:#E7E9EE;--chip:#EEF0F3;--bar:#C9CDD4;
+  --src:#635BFF;--srcSoft:rgba(99,91,255,.12);--warn:#B45309;--warnBg:#FEF3C7;--shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px rgba(15,20,30,.06)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;--line:#262A31;--tile:#20232A;--chip:#20232A;--bar:#4A505A;
+  --src:#9B95FF;--srcSoft:rgba(155,149,255,.16);--warn:#F5B454;--warnBg:#3A2A0E;--shadow:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,"PingFang SC",sans-serif;font-variant-numeric:tabular-nums;
+  padding:calc(var(--xb-content-top) + 12px) 14px calc(var(--xb-content-bottom) + 28px)}
+button{font:inherit;color:inherit}
+svg{display:block}
+.hide{display:none}
+.hd{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.hd h1{flex:1 1 auto;min-width:0;font-size:24px;font-weight:700;margin:0;letter-spacing:-.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lead{color:var(--sub);font-size:13px;margin:2px 0 0}
+.sec{font-size:13px;color:var(--sub);font-weight:700;margin:22px 0 8px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:20px}
+.sec em{font-style:normal;font-weight:500;font-size:12px}
+.grp{background:var(--card);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:14px}
+.state{color:var(--sub);font-size:13px;text-align:center;padding:22px 14px}
+.foot{color:var(--sub);font-size:11px;line-height:1.7;margin-top:18px;background:var(--tile);border-radius:14px;padding:12px 14px}
+.row{display:flex;align-items:center;gap:8px;padding:11px 14px;position:relative}
+.row+.row{border-top:1px solid var(--line)}
+.row[data-go]{cursor:pointer}
+.row .n{flex:1 1 auto;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .n small{display:block;font-size:11px;color:var(--sub);font-weight:400}
+.row .v{flex:0 0 auto;text-align:right;font-size:14px;font-weight:700}
+.row .v small{display:block;font-size:11px;color:var(--sub);font-weight:400}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px;min-width:0}
+.tile i{display:block;font-style:normal;font-size:12px;color:var(--sub)}
+.tile b{display:block;font-size:20px;font-weight:700;letter-spacing:-.3px;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile small{display:block;font-size:11px;color:var(--sub);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile.wide{grid-column:1 / -1}
+.chip{display:inline-block;font-size:11px;font-weight:700;background:var(--tile);border-radius:9px;padding:1px 8px;margin-left:6px;vertical-align:2px}
+.chip.warn{background:var(--warnBg);color:var(--warn)}
+.alert{display:flex;gap:10px;align-items:flex-start;background:var(--warnBg);color:var(--warn);border-radius:14px;padding:11px 14px;
+  font-size:13px;font-weight:600;margin-top:12px}
+.neg{color:var(--sub)}
+.ax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--sub);margin-top:6px}
+.step{display:flex;gap:12px;margin-bottom:16px}
+.step:last-child{margin-bottom:0}
+.num{flex:0 0 auto;width:22px;height:22px;border-radius:11px;background:var(--srcSoft);color:var(--src);
+  font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step .b{flex:1 1 auto;min-width:0}
+.step h3{margin:0 0 5px;font-size:14px;font-weight:600}
+.step p,.step .sd{margin:0;color:var(--sub);font-size:12.5px}
+.step .sd b{color:var(--fg);font-weight:600}
+.step ol{margin:6px 0 0;padding-left:18px;color:var(--sub);font-size:12.5px}
+.step ol b{color:var(--fg);font-weight:600}
+.btn{display:block;width:100%;background:var(--src);color:#fff;border:0;border-radius:12px;
+  padding:11px 14px;margin-top:10px;font-size:14px;font-weight:600;text-align:center;cursor:pointer}
+.btn.ghost{background:var(--chip);color:var(--fg)}
+.btn.hide{display:none}   /* 双类钉住:单类 .hide 写在 .btn 之前、同特异性,会被 display:block 盖掉(stripe「再加载」按钮恒显示,2026-10-10) */
+.note{color:var(--sub);font-size:11px;line-height:1.6;margin:14px 0 0}
+.note b{color:var(--fg);font-weight:600}
+
+/* xb:addbtn v1 — 由 tools/infosource/mk_addbtn.py 生成,别手改(§8.1a) */
+.pickb{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  min-height:56px;padding:0 16px;margin:22px 0 0;background:#128F661F;border:0;border-radius:14px;
+  text-align:left;font:inherit;color:#0E1116;cursor:pointer}
+.pickb .pk{flex:0 0 auto;font-size:19px;font-weight:700;line-height:1;color:#128F66}
+.pickb .pg{flex:1 1 auto;min-width:0}
+.pickb b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:#128F66;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb .d{display:block;font-size:10.5px;line-height:1.25;margin-top:2px;color:#6B7280;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickb:active{opacity:.7}
+html[data-theme="dark"] .pickb{background:#6FE8BE29;color:#F3F4F6}
+html[data-theme="dark"] .pickb .pk{color:#6FE8BE}
+html[data-theme="dark"] .pickb b{color:#6FE8BE}
+html[data-theme="dark"] .pickb .d{color:#8E939B}
+/* xb:addbtn end */
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.row[data-go],.xb-tap{position:relative}
+.row[data-go]::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.row[data-go]:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.pickb,.btn,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.pickb:active,.btn:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+</style>
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#tiles,#chart,#recent";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head>
+<body>
+<div class="hd"><h1 data-i="title"></h1><button class="xb-at" id="xbAt" type="button"></button></div>
+<p class="lead" id="lead" data-i="lead"></p>
+<div id="setup" class="hide">
+  <div class="card">
+    <div class="step"><div class="num">1</div><div class="b">
+      <h3 data-i="s1t"></h3>
+      <div class="sd" id="s1d"></div>
+      <button class="btn ghost" id="s1b" type="button" data-i="s1b"></button>
+    </div></div>
+    <div class="step"><div class="num">2</div><div class="b">
+      <h3 data-i="s2t"></h3>
+      <div class="sd" id="s2d"></div>
+      <button class="btn" id="s2b" type="button" data-i="s2b"></button>
+    </div></div>
+  </div>
+  <p class="note" id="note"></p>
+</div>
+<div id="skel" class="hide"><div class="card" style="margin-top:14px"><div class="state xb-sk" data-i="loading"></div></div></div>
+<div id="live" class="hide">
+  <div id="tiles" class="tiles" style="margin-top:14px"></div>
+  <div id="alert"></div>
+  <div class="sec"><span data-i="sec30"></span><em id="sum30"></em></div>
+  <div id="chart"></div>
+  <div class="sec"><span data-i="secRecent"></span><em><a id="more" data-i="all" style="color:var(--src);cursor:pointer"></a></em></div>
+  <div id="recent"></div>
+  <div style="margin-top:18px"><button class="pickb" id="pickw"><span class="pk">＋</span><span class="pg"><b data-i="pickT"></b><span class="d" data-i="pickS"></span></span></button></div>
+</div>
+<div class="foot" id="foot"></div>
+
+<script>
+var I18N = {
+ "zh": {
+  "loading": "正在读取…",
+  "pickT": "添加组件",
+  "fail": "暂时取不到数据，稍后点右上角重试。",
+  "failBound": "密钥已配置，但暂时取不到数据。可能是网络问题，或密钥被删除、缺少 Balance 读取权限。",
+  "test": "测试数据",
+  "title": "Stripe 收入",
+  "lead": "今日与本月收入、余额和退款争议",
+  "leadOff": "还没接入，两步就好",
+  "s1t": "在 Stripe 建一个只读的受限密钥",
+  "s1d": "打开 Stripe 后台的 API 密钥页，点「创建受限密钥」（Create restricted key）：<ol><li>名称填 <b>Numable</b></li><li>只把 <b>Balance</b> 一项设为 <b>Read</b>，其余全部保持 <b>None</b></li><li>创建后复制以 <b>rk_live_</b> 开头的密钥</li></ol>",
+  "s1b": "打开 Stripe API 密钥页",
+  "s2t": "把受限密钥填进凭证设置",
+  "s2d": "粘贴后回到这里，今天的收入就出来了。<b>不要填以 sk_ 开头的标准密钥</b>——它能退款、改账户，我们用不到这些权限。",
+  "s2b": "去填密钥",
+  "note": "<b>只读</b>：密钥只用来读余额和余额流水，不能收款、退款或提现。<b>只在这台设备</b>：密钥存在系统安全存储里，只发往 api.stripe.com，不经过 Numable 的服务器。用测试密钥（rk_test_）看到的是测试数据。",
+  "today": "今日收入",
+  "month": "本月收入",
+  "avail": "可用余额",
+  "pending": "待入账",
+  "sec30": "近 30 天收款",
+  "secRecent": "最近交易",
+  "all": "全部",
+  "disp": "近 30 天有 %d 笔争议，需要在 Stripe 后台回应（有截止时间）。",
+  "disp1": "近 30 天有 1 笔争议，需要在 Stripe 后台回应（有截止时间）。",
+  "refunds": "退款 %d 笔 %s",
+  "refunds1": "退款 1 笔 %s",
+  "partShort": "最近 %d 笔",
+  "pickS": "今日收入 · 本月收入 · 余额 · 最近交易 · 近 30 天",
+  "none": "这段时间还没有交易",
+  "net": "净入账",
+  "fees": "手续费",
+  "trunc": "交易较多，只统计了最近 %d 笔，更早的日子没有画。",
+  "foot": "数据来源：Stripe API（余额、余额流水），用你自己的受限密钥直连读取。「今日 / 本月」按本机时区；金额按入账币种，只统计主币种。收款 = 收款类流水的金额；净入账 = 扣除手续费、退款与争议之后。若你填的是 sk_ 开头的标准密钥，请到 Stripe 后台换成受限密钥。"
+ },
+ "en": {
+  "loading": "Loading…",
+  "pickT": "Add widgets",
+  "fail": "Couldn't load data. Tap the time at top right to retry.",
+  "failBound": "Your key is set up, but data couldn't be loaded. It may be a network issue, or the key was deleted or lacks Balance read access.",
+  "test": "Test data",
+  "title": "Stripe Revenue",
+  "lead": "Today, this month, balance & disputes",
+  "leadOff": "Not connected yet. Two steps.",
+  "s1t": "Create a read-only restricted key in Stripe",
+  "s1d": "Open API keys in the Stripe Dashboard and click Create restricted key:<ol><li>Name it <b>Numable</b></li><li>Set only <b>Balance</b> to <b>Read</b>; leave everything else at <b>None</b></li><li>Copy the key starting with <b>rk_live_</b></li></ol>",
+  "s1b": "Open Stripe API keys",
+  "s2t": "Paste the restricted key in credentials",
+  "s2d": "Come back here after pasting and today's revenue will show up. <b>Don't use a standard key starting with sk_</b>: it can refund and change your account, and we need none of that.",
+  "s2b": "Add key",
+  "note": "<b>Read-only</b>: the key only reads your balance and balance transactions. It can't charge, refund or pay out. <b>Stays on this device</b>: stored in the system keychain, sent only to api.stripe.com, never through Numable's servers. A test key (rk_test_) shows test data.",
+  "today": "Today",
+  "month": "This month",
+  "avail": "Available",
+  "pending": "Pending",
+  "sec30": "Payments, last 30 days",
+  "secRecent": "Recent activity",
+  "all": "All",
+  "disp": "%d disputes in the last 30 days. Respond in the Stripe Dashboard before the deadline.",
+  "disp1": "1 dispute in the last 30 days. Respond in the Stripe Dashboard before the deadline.",
+  "refunds": "%d refunds %s",
+  "refunds1": "1 refund %s",
+  "partShort": "latest %d",
+  "pickS": "Today · This month · Balance · Recent · Last 30 days",
+  "none": "No activity in this period",
+  "net": "Net",
+  "fees": "Fees",
+  "trunc": "High volume: only the latest %d transactions are counted; earlier days aren't drawn.",
+  "foot": "Source: the Stripe API (balance and balance transactions), read directly with your own restricted key. \"Today\" and \"This month\" use this device's time zone; amounts are in your settlement currency, primary currency only. Payments = charge transactions; Net = after fees, refunds and disputes. If you entered a standard sk_ key, replace it with a restricted key in the Stripe Dashboard."
+ }
+};
+var LANG = "en", SCHEMA = 1;
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+function t(k){ var m=I18N[LANG]; if (m && Object.prototype.hasOwnProperty.call(m,k)) return m[k]; return I18N.en[k]!==undefined?I18N.en[k]:k; }
+function zh(){ return LANG==="zh"; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+/* 桥返回值是信封 {code,msg,data}(G49):一律拆过再用。 */
+function un(r){ if (r && typeof r==="object" && "code" in r){ if (r.code!==0) throw new Error(r.msg||("code "+r.code)); return r.data; } return r; }
+async function ready(){
+  for (var i=0;i<24 && !window.xbridge;i++) await new Promise(function(r){ setTimeout(r,50); });
+  return !!(window.xbridge && xbridge.isXBundleEnv && xbridge.isXBundleEnv());
+}
+async function env(){
+  var hl = document.documentElement.getAttribute("data-lang") || "";
+  if (hl) LANG = nbLang(hl);
+  try { var a = (await xbridge.appInfo().then(un)) || {};
+    if (a.language || a.locale) LANG = nbLang(a.language || a.locale);
+    if (a.theme && !document.documentElement.dataset.theme) document.documentElement.setAttribute("data-theme", a.theme);
+  } catch(e){}
+  document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+  if (I18N[LANG] && I18N[LANG].title) document.title = t("title");
+}
+function nav(url){ try { if (xbridge.route) return xbridge.route(url); } catch(e){} location.href = url; }
+function paintI18n(){ document.querySelectorAll("[data-i]").forEach(function(el){ el.textContent = t(el.dataset.i); }); }
+/* 凭证绑定状态(纯本地查表,零网络;credential-state-query.md)。答不出(老宿主)= ""。 */
+async function credState(id){ try { var d = await xbridge.credentialState(id).then(un); return (d && d.state) || ""; } catch(e){ return ""; } }
+async function credFp(id){ try { var d = await xbridge.credentialState(id).then(un); return (d && d.fp) || ""; } catch(e){ return ""; } }
+/* ── 首屏缓存三态(G23):有缓存必先渲(过期也先渲),过期则后台校新,失败不覆盖 ──
+   ⚠️ 缓存键带凭证指纹 fp:换绑 / 删掉密钥后绝不能先渲出上一把密钥看到的数(credential-state-query §5.3)。 */
+async function cacheGet(key){
+  try { var v = (await xbridge.getData(key).then(un)); if (typeof v==="string") v = JSON.parse(v);
+    return (v && v.schema===SCHEMA && v.ts) ? v : null; } catch(e){ return null; }
+}
+async function cacheSet(key, m){ try { await xbridge.setData(key, JSON.stringify({schema:SCHEMA, ts:Date.now(), m:m})); } catch(e){} }
+async function flowCached(key, ttl, hard, fetcher, paint, force){
+  var c = force ? null : await cacheGet(key), age = c ? Date.now()-c.ts : 1e15;
+  if (c && age < hard){ paint(c.m, c.ts, false); if (age < ttl) return; }
+  var fresh = null;
+  try { fresh = await fetcher(); } catch(e){ fresh = null; }
+  if (fresh){ await cacheSet(key, fresh); paint(fresh, Date.now(), false); }
+  else if (!c || age >= hard) paint(null, 0, true);
+}
+async function flow(name, params, ms){ return xbridge.runDataFlow(name, params || {}, ms || 25000).then(un); }
+function paintAt(ts){ xbAt.set("xbAt", ts || null); }
+
+var CRED = "stripe";
+var ZD = ["bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf"], TD = ["bhd", "jod", "kwd", "omr", "tnd"], SYM = {"usd": "$", "eur": "€", "gbp": "£", "jpy": "¥", "cny": "¥", "krw": "₩", "inr": "₹", "hkd": "HK$", "twd": "NT$", "aud": "A$", "cad": "CA$", "nzd": "NZ$", "sgd": "S$", "mxn": "MX$", "brl": "R$", "ils": "₪", "php": "₱", "thb": "฿", "vnd": "₫", "try": "₺", "pln": "zł ", "uah": "₴"}, CATS = {"charge": ["收款", "Payment"], "refund": ["退款", "Refund"], "dispute": ["争议", "Dispute"], "dispute_reversal": ["争议撤回", "Dispute won"], "payout": ["提现", "Payout"], "payout_reversal": ["提现退回", "Payout returned"], "fee": ["Stripe 费用", "Stripe fee"], "transfer": ["转账", "Transfer"], "topup": ["充值", "Top-up"], "partial_capture_reversal": ["部分扣款撤回", "Capture released"], "other_adjustment": ["调整", "Adjustment"], "risk_reserved_funds": ["风控预留", "Reserved funds"], "risk_released_funds": ["预留释放", "Released funds"], "connect_reserved_funds": ["预留", "Reserved"], "platform_earning": ["平台收入", "Platform earning"], "charge_failure": ["扣款失败", "Failed payment"], "refund_failure": ["退款失败", "Failed refund"], "network_cost": ["网络费用", "Network cost"], "tax": ["税费", "Tax"], "anticipation_repayment": ["预支还款", "Repayment"], "climate_order_purchase": ["碳移除", "Climate"], "contribution": ["捐赠", "Contribution"], "issuing_authorization_hold": ["发卡预授权", "Issuing hold"], "issuing_authorization_release": ["预授权释放", "Issuing release"], "issuing_dispute": ["发卡争议", "Issuing dispute"], "issuing_transaction": ["发卡交易", "Issuing"]};
+var MONS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+function dec(c){ c = String(c||"").toLowerCase(); return ZD.indexOf(c) >= 0 ? 0 : (TD.indexOf(c) >= 0 ? 3 : 2); }
+function major(v, c){ var d = dec(c); return (Number(v)||0) / (d===0 ? 1 : (d===3 ? 1000 : 100)); }
+function money(v, c, signed){
+  c = String(c||"usd").toLowerCase(); var d = dec(c), m = major(v, c), a = Math.abs(m);
+  var s = a.toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
+  var sym = SYM[c] || (c.toUpperCase()+" ");
+  return (m < 0 ? "−" : (signed && m > 0 ? "+" : "")) + sym + s;
+}
+function catName(r){ var k = r.reporting_category || r.type || "other", x = CATS[k]; return x ? (zh() ? x[0] : x[1]) : k; }
+function dayKey(ms){ var d = new Date(ms); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function localMidnight(ms){ var d = new Date(ms); d.setHours(0,0,0,0); return d.getTime(); }
+function hm(ms){ var d = new Date(ms); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
+function dShort(key){ var p = key.split("-"); return zh() ? (+p[1])+" 月 "+(+p[2])+" 日" : MONS[+p[1]-1]+" "+(+p[2]); }
+function whenTxt(ms){ return dayKey(ms) === dayKey(Date.now()) ? hm(ms) : dShort(dayKey(ms)) + " " + hm(ms); }
+async function balFetch(){ var d = await flow("bal"); return (d && d.bal && d.bal.object === "balance") ? d.bal : null; }
+/* 余额流水:从 since(UTC 秒)往后翻页,最多 maxPages 页(每页 100);返回 {rows, more}。 */
+async function btFetch(since, maxPages){
+  var rows = [], after = "", more = false;
+  for (var p = 0; p < maxPages; p++){
+    var d = await flow("bt", { since: String(since), after: after, limit: "100" });
+    if (!d || !Array.isArray(d.rows)) { if (p === 0) return null; break; }
+    rows = rows.concat(d.rows); more = String(d.more) === "true";
+    if (!more || !d.rows.length) break;
+    after = d.rows[d.rows.length-1].id;
+  }
+  return { rows: rows, more: more };
+}
+
+var BAL = null, BT = null, seq = 0, STATE = "", FP = "";
+var MAXP = 10;
+function sinceSec(){ var m0 = new Date(); m0.setDate(1); m0.setHours(0,0,0,0);
+  var d0 = localMidnight(Date.now() - 29*86400000); return Math.floor(Math.min(m0.getTime(), d0)/1000); }
+function primary(){ var a = BAL && BAL.available && BAL.available[0]; return a ? String(a.currency).toLowerCase() : (BT && BT.rows[0] ? BT.rows[0].currency : "usd"); }
+function sumBal(arr, c){ var s = 0; (arr||[]).forEach(function(x){ if (String(x.currency).toLowerCase()===c) s += Number(x.amount)||0; }); return s; }
+function agg(fromMs, c){
+  var o = { gross: 0, net: 0, fee: 0, n: 0, refund: 0, rn: 0, disp: 0, dn: 0 };
+  ((BT && BT.rows) || []).forEach(function(r){
+    if (r.created*1000 < fromMs || String(r.currency).toLowerCase() !== c) return;
+    var k = r.reporting_category;
+    if (k === "charge"){ o.gross += r.amount; o.net += r.net; o.fee += r.amount - r.net; o.n++; }
+    else if (k === "refund"){ o.refund += r.amount; o.net += r.net; o.rn++; }
+    else if (k === "dispute"){ o.disp += r.amount; o.net += r.net; o.dn++; }
+  });
+  return o;
+}
+function plural(k, n){ var v = t(n === 1 ? k+"1" : k); return v.replace("%d", n); }
+function tile(label, val, sub, wide){ return '<div class="tile'+(wide?' wide':'')+'"><i>'+esc(label)+'</i><b>'+esc(val)+'</b>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>'; }
+function cntTxt(n){ return zh() ? n+" 笔" : n+(n===1?" payment":" payments"); }
+function paintLive(){
+  var c = primary(), now = Date.now(), t0 = localMidnight(now), m0 = new Date(); m0.setDate(1); m0.setHours(0,0,0,0);
+  var T = agg(t0, c), Mo = agg(m0.getTime(), c), d0 = localMidnight(now - 29*86400000), D = agg(d0, c);
+  var test = BAL && BAL.livemode === false;
+  /* 翻页到上限还有下一页:最后一条之前的流水没取到。覆盖不全的那一天及更早都不算数 —— 柱不画、合计标「最近 N 笔」。 */
+  var rows = (BT && BT.rows) || [], cut = (BT && BT.more && rows.length) ? localMidnight(rows[rows.length-1].created*1000) + 86400000 : 0;
+  var part = function(from){ return cut > from ? " · "+t("partShort").replace("%d", rows.length) : ""; };
+  document.getElementById("tiles").innerHTML =
+    tile(t("today"), money(T.gross, c), cntTxt(T.n)+(test ? " · "+t("test") : "")+part(t0)) +
+    tile(t("month"), money(Mo.gross, c), t("net")+" "+money(Mo.net, c)+part(m0.getTime())) +
+    (BAL ? tile(t("avail"), money(sumBal(BAL.available, c), c), c.toUpperCase()+((BAL.available||[]).length>1 ? " · +"+((BAL.available.length-1)) : "")) +
+           tile(t("pending"), money(sumBal(BAL.pending, c), c), "") : "");
+  document.getElementById("alert").innerHTML = D.dn > 0 ? '<div class="alert">'+esc(plural("disp", D.dn))+'</div>' : "";
+  /* 近 30 天柱:每天的收款(主币种);截断时只画覆盖完整的那几天 */
+  var days = [], i, byDay = {};
+  for (i = 29; i >= 0; i--){ var ms = localMidnight(now - i*86400000); if (cut && ms < cut) continue; var k = dayKey(ms); days.push(k); byDay[k] = 0; }
+  var ND = days.length;
+  ((BT && BT.rows) || []).forEach(function(r){ if (r.reporting_category!=="charge" || String(r.currency).toLowerCase()!==c) return;
+    var k = dayKey(r.created*1000); if (k in byDay) byDay[k] += r.amount; });
+  var mx = 0; days.forEach(function(k){ mx = Math.max(mx, byDay[k]); });
+  var W = 320, H = 110, bw = W/Math.max(ND, 1), svg = "", x0 = 0;
+  days.forEach(function(k, j){ var v = byDay[k], h = mx > 0 ? Math.max(v > 0 ? 2 : 0, v/mx*(H-4)) : 0;
+    svg += '<rect x="'+(x0+j*bw+1).toFixed(1)+'" y="'+(H-h).toFixed(1)+'" width="'+(bw-2).toFixed(1)+'" height="'+h.toFixed(1)+'" rx="2" fill="'+(j===ND-1?'var(--src)':'var(--bar)')+'"/>'; });
+  svg += '<line x1="0" x2="'+W+'" y1="'+H+'" y2="'+H+'" stroke="var(--line)" stroke-width="1"/>';
+  document.getElementById("sum30").textContent = money(D.gross, c) + (cut > d0 ? " · "+t("partShort").replace("%d", rows.length) : "");
+  document.getElementById("chart").innerHTML = '<div class="card"><svg viewBox="0 0 '+W+' '+(H+1)+'" width="100%" height="'+(H+1)+'" preserveAspectRatio="none">'+svg+'</svg>'+
+    '<div class="ax"><span>'+esc(dShort(days[0]))+'</span><span>'+esc(dShort(days[ND-1]))+'</span></div>'+
+    '<div class="ax" style="margin-top:8px"><span>'+esc(t("net")+" "+money(D.net, c))+'</span><span>'+esc(plural("refunds", D.rn).replace("%s", money(D.refund, c)))+'</span></div>'+
+    (cut ? '<div class="ax"><span>'+esc(t("trunc").replace("%d", rows.length))+'</span></div>' : '')+'</div>';
+  var rec = ((BT && BT.rows) || []).slice(0, 5);
+  document.getElementById("recent").innerHTML = '<div class="grp">'+(rec.length ? rec.map(function(r){
+    var neg = r.amount < 0, w = r.reporting_category === "dispute";
+    return '<div class="row" data-go="tx"><span class="n">'+esc(catName(r))+'<small>'+esc(whenTxt(r.created*1000))+'</small></span>'+
+      '<span class="v" style="'+(w?'color:var(--warn)':(neg?'color:var(--sub)':''))+'">'+esc(money(r.amount, r.currency, true))+'</span></div>'; }).join("")
+    : '<div class="state">'+esc(t("none"))+'</div>')+'</div>';
+}
+function show(id){ ["setup","skel","live"].forEach(function(x){ document.getElementById(x).classList.toggle("hide", x!==id); }); }
+async function refresh(force){
+  var my = ++seq;
+  STATE = await credState(CRED); FP = await credFp(CRED);
+  if (STATE === "unbound" || STATE === "expired"){
+    show("setup"); document.getElementById("lead").textContent = t("leadOff"); document.getElementById("xbAt").classList.add("hide"); return;
+  }
+  document.getElementById("xbAt").classList.remove("hide");
+  document.getElementById("lead").textContent = t("lead");
+  var shown = false;
+  await flowCached("c.st.home."+FP, 600000, 3*86400000, async function(){
+    var b = await balFetch(); if (!b) return null;
+    var r = await btFetch(sinceSec(), MAXP); if (!r) return null;
+    return { bal: b, bt: r };
+  }, function(m, ts, failed){
+    if (my !== seq) return;
+    if (failed){ if (shown) return; show("live"); document.getElementById("tiles").innerHTML = "";
+      document.getElementById("chart").innerHTML = '<div class="card"><div class="state">'+esc(t(STATE==="bound" ? "failBound" : "fail"))+'</div></div>';
+      document.getElementById("recent").innerHTML = ""; document.getElementById("alert").innerHTML = ""; return; }
+    BAL = m.bal; BT = m.bt; shown = true; show("live"); paintLive(); paintAt(ts);
+  }, force);
+}
+document.addEventListener("click", function(e){
+  var x = e.target.closest ? e.target : null; if (!x) return;
+  if (x.closest("#s1b")){ xbridge.haptic && xbridge.haptic(); nav("https://dashboard.stripe.com/apikeys"); return; }
+  if (x.closest("#s2b")){ xbridge.haptic && xbridge.haptic(); nav("numable://app/mine?section=credentials&bundle=01M4GK5V4J5DAGMTVKBEK4421H&bind="+CRED); return; }
+  if (x.closest("[data-go]") || x.closest("#more")){ xbridge.haptic && xbridge.haptic(); xbridge.route("/tx"); return; }
+  if (x.closest("#xbAt")){ xbridge.haptic && xbridge.haptic(); xbAt.busy("xbAt", true);
+    refresh(true).then(function(){ xbAt.busy("xbAt", false); }, function(){ xbAt.busy("xbAt", false); }); return; }
+  if (x.closest("#pickw")){ xbridge.pickWidgets([{id:"today"},{id:"today21"},{id:"month"},{id:"balance"},{id:"recent"},{id:"d30"}]); }
+});
+var BOOTED = false, LAST = null;
+/* 从凭证面板回来:绑定状态变了(任一方向)就重来一遍(credential-state-query §5.2)。 */
+document.addEventListener("visibilitychange", async function(){
+  if (document.visibilityState !== "visible" || !BOOTED) return;
+  var s = await credState(CRED) + "|" + await credFp(CRED); if (s !== LAST){ LAST = s; refresh(false); } });
+addEventListener("languagechange", async function(){ await env(); paintI18n(); fillSetup(); if (BAL || BT) paintLive(); });
+function fillSetup(){ ["s1d","s2d"].forEach(function(k){ document.getElementById(k).innerHTML = t(k); });
+  document.getElementById("note").innerHTML = t("note"); document.getElementById("foot").textContent = t("foot"); }
+(async function boot(){
+  if (!(await ready())){ paintI18n(); fillSetup(); show("setup"); return; }
+  await env(); paintI18n(); fillSetup(); show("skel");
+  await refresh(false); LAST = (await credState(CRED)) + "|" + (await credFp(CRED)); BOOTED = true;
+})();
+
+</script>
+</body></html>
