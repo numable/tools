@@ -48,6 +48,7 @@ code.cmd{display:block;background:var(--chip);border-radius:12px;padding:9px 11p
 /* 引导态(三种没数据分开说,§4B):一句现状 + 一句下一步 */
 .guide h3{margin:0 0 6px;font-size:15px;font-weight:700}
 .guide p{margin:0;color:var(--sub);font-size:12.5px}
+.guide p.alt{margin-top:10px;font-size:11.5px}
 /* 状态位 / 图标:图标 + 字 + 时长,不靠颜色也能读(§5.4 第 3 条) */
 .sb{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:6px;padding:1px 6px;
   white-space:nowrap;font-variant-numeric:tabular-nums;line-height:1.5}
@@ -367,6 +368,8 @@ html[lang="en"] .ln .ch{max-width:98px}
   <div id="alertWrap" class="hide">
     <div class="sect"><span id="secAlert">提醒</span></div>
     <div class="card">
+      <!-- 实时通知(服务器通知,P3):只在支持的端出现(第一期苹果三端);同意后几秒内送达 -->
+      <div class="arow hide" id="aLiveRow"><div class="atx"><b id="aLiveT">实时通知</b><span id="aLiveD">等你授权、长任务跑完、可能卡住时几秒内通知你，不用等手机定时检查</span></div><button class="btn abtn" id="aLiveB">开启</button></div>
       <div class="arow"><div class="atx"><b id="aWaitT">等你授权时提醒我</b><span id="aWaitD">有会话弹了授权、等了一会儿还没人点</span></div><button class="btn ghost abtn" id="aWaitB">设置</button></div>
       <div class="arow"><div class="atx"><b id="aDoneT">长任务跑完提醒我</b><span id="aDoneD">一轮跑了很久、跑完在等你接着说</span></div><button class="btn ghost abtn" id="aDoneB">设置</button></div>
       <div class="arow"><div class="atx"><b id="aStuckT">可能卡住时提醒我</b><span id="aStuckD">连续失败、长时间打转、反复压缩上下文时</span></div><button class="btn ghost abtn" id="aStuckB">设置</button></div>
@@ -649,8 +652,16 @@ function guideHTML(kind){
   } else if (kind==="fail"){
     h='<h3>'+P("gFailT","暂时取不到实时数据")+'</h3><p>'+P("gFailD","令牌已配置。页面开着时会每 15 秒自动再试一次。")+"</p>";
   } else if (kind==="nosync"){
-    h='<h3>'+P("gSyncT","还没打开同步")+'</h3><p>'+P("gSyncD","在 Claude Code 里运行 /numable-usage，说「打开实时会话并同步到手机」")+"</p>"+
-      '<code class="cmd">/numable-usage</code>';
+    /* 没开实时会话:手机上一键请求,电脑下一次采集时打开(插件 0.10.0+);请求过 7 天内显示「已请求」 */
+    var rq=Number(LV.req)||0;
+    if (rq && nowS()-rq < 7*864e5){
+      h='<h3>'+P("gReqT","已请求在电脑上打开")+'</h3><p>'+esc(t("gReqD","{t} 请求的。电脑下次用 Claude Code 时会自动打开，之后这里就有数据。如果一直没有，请先在 Claude Code 里把插件更新到 0.10.0 或更新的版本。").replace("{t}", hmDay(rq)))+"</p>"+
+        '<button class="btn ghost" id="gReq" type="button">'+P("gReqB2","再请求一次")+"</button>";
+    } else {
+      h='<h3>'+P("gSyncT","还没打开实时会话")+'</h3><p>'+P("gSyncD","打开后，各会话的状态、时长、token 和工具类别会同步到这里。只传匿名编号，不传项目名、标题和对话内容。")+"</p>"+
+        '<button class="btn" id="gReq" type="button">'+P("gReqB","在电脑上打开")+"</button>"+
+        '<p class="alt">'+P("gSyncAlt","也可以在 Claude Code 里运行 /numable-usage，说「打开实时会话」。")+"</p>";
+    }
   } else if (kind==="empty"){
     var last=(LV.devices||[]).reduce(function(a,d){ return Math.max(a, Number(d.at)||0); },0);
     h='<h3>'+P("gEmptyT","没有在跑的会话")+'</h3><p>'+esc(t("gEmptyD","实时会话已打开，最近一次同步在 {t}。在 Claude Code 里开始干活后，这里会自动出现。").replace("{t}", last?hmDay(last):"--"))+"</p>";
@@ -660,6 +671,20 @@ function guideHTML(kind){
 function bindGuide(){
   var b=$("gTok");
   if (b) b.onclick=function(){ try{ if (xbridge.route) return xbridge.route('numable://app/mine?section=credentials&bundle=01M0F1AVEJJ9700CB548NS6X2E&bind=nu'); }catch(e){} };
+  var q=$("gReq");
+  if (q) q.onclick=async function(){
+    if (q.disabled) return;
+    q.disabled=true; q.textContent=t("gReqIng","正在请求…");
+    var at=0;
+    try{
+      var r=await xbridge.runDataFlow('liveOn', { _cache: 0 });
+      r=(r && (r.data||r)) || {}; r=r.r;
+      if (typeof r==="string"){ try{ r=JSON.parse(r); }catch(e){ r=null; } }
+      at=(r && r.ok && Number(r.at)) || 0;
+    }catch(e){ at=0; }
+    if (at && LV){ LV.req=at; paint(); return; }
+    q.disabled=false; q.textContent=t("gReqFail","没请求成功，再试一次");
+  };
 }
 /* ── live:core end ── */
 
@@ -670,7 +695,7 @@ var L = { "zh-CN": {}, "en-US": {
   hint:"Tap any row to see that session turn by turn.",
   note:"By default only session status, timing, token counts and tool categories are uploaded — no conversation content, file paths or commands. While this page is open it updates every 15 seconds and stops when you leave.",
   leadPar:"{p} running in parallel", leadWait:" · {w} waiting on you", leadIdle:"Nothing running · last ended {t}", leadIdle0:"Nothing running right now",
-  leadNoT:"Not connected yet", leadFail:"Live data is temporarily unavailable", leadSync:"Sync is off", leadEmpty:"No active sessions",
+  leadNoT:"Not connected yet", leadFail:"Live data is temporarily unavailable", leadSync:"Live sessions are off", leadEmpty:"No active sessions",
   kProj:"Projects", kRun:"Running", kWait:"Waiting", kToday:"Run today", dTok:"{v} tokens", dTok0:"no tokens yet",
   vWait:"{n}", vAll:"{n}", vLanes:"{p} projects · {s} sessions", vLanes1:"1 project · {s} sessions", vLanes11:"1 project · 1 session",
   w1:"1h", w2:"2h", w6:"6h", wd:"Today", gS:"Sessions", gP:"Projects",
@@ -681,15 +706,19 @@ var L = { "zh-CN": {}, "en-US": {
   gNoT:"Claude Code usage isn't connected", gNoD:"Install the collector plugin in Claude Code, then add the read token. Once connected, running sessions show up here.",
   gNoB:"Add token", gNoB2:"See setup steps",
   gFailT:"Live data is temporarily unavailable", gFailD:"Your token is set. While this page is open it tries again every 15 seconds.",
-  gSyncT:"Sync is off", gSyncD:"In Claude Code, run /numable-usage and ask to turn on live sessions with sync",
+  gSyncT:"Live sessions are off", gSyncD:"Once on, each session's status, timing, tokens and tool types sync here. Only anonymous numbers are sent — no project names, titles or conversation content.",
+  gReqB:"Turn on for my computer", gSyncAlt:"Or run /numable-usage in Claude Code and ask to turn on live sessions.",
+  gReqT:"Requested for your computer", gReqD:"Requested at {t}. It turns on the next time you use Claude Code on that computer, and data shows up here after that. If nothing appears, update the plugin in Claude Code to 0.10.0 or later first.",
+  gReqB2:"Request again", gReqIng:"Requesting…", gReqFail:"Couldn't send the request, try again",
   gEmptyT:"No active sessions", gEmptyD:"Live sessions are on. Last sync at {t}. Sessions show up here as soon as you start working in Claude Code.",
-  secAlert:"Alerts", aWaitT:"Alert me when approval is waiting", aWaitD:"A session asked for approval and nobody has answered for a while",
+  secAlert:"Alerts", aLiveT:"Instant notifications", aLiveD:"Get notified within seconds when a session needs approval, finishes a long task or may be stuck — no waiting for your phone's scheduled check", aLiveOn:"Turn on", aLiveIsOn:"On · turn off", aLiveDenied:"Notifications are off in system settings", aLiveFail:"Couldn't turn it on, try again", aWaitT:"Alert me when approval is waiting", aWaitD:"A session asked for approval and nobody has answered for a while",
   aDoneT:"Alert me when a long task finishes", aDoneD:"A long turn finished and is waiting for you to continue",
   aStuckT:"Alert me when a session may be stuck", aStuckD:"Repeated failures, a long turn going in circles, or context compacted again and again",
   kStuck:"May be stuck: {n}",
   aNote:"Alerts are checked by your phone on a schedule, not pushed in real time: about every 30 minutes on the free plan, more often with Pro. Timing also depends on the system — keeping this tool's home-screen widget and letting Numable run in the background makes checks more timely.",
   aSet:"Set up", aDone:"Added", aQuota:"Alert limit reached"
 }};
+L["zh-CN"].aLiveOn="开启"; L["zh-CN"].aLiveIsOn="已开启 · 关闭"; L["zh-CN"].aLiveDenied="系统通知被关了，到系统设置里打开"; L["zh-CN"].aLiveFail="没开成，再试一次";
 L["zh-CN"].aSet="设置"; L["zh-CN"].aDone="已添加"; L["zh-CN"].aQuota="提醒数量已到上限";
 
 var WIN=2, GRAIN="s";
@@ -709,7 +738,7 @@ function paint(){
   var lead=$("lead");
   if (k){
     lead.textContent = {nocred:t("leadNoT","还没接入"), fail:t("leadFail","暂时取不到实时数据"),
-      nosync:t("leadSync","还没打开同步"), empty:t("leadEmpty","没有在跑的会话")}[k];
+      nosync:t("leadSync","还没打开实时会话"), empty:t("leadEmpty","没有在跑的会话")}[k];
     return;
   }
   var ss=LV.sessions, act=ss.filter(isActive), wt=ss.filter(isWait);
@@ -902,7 +931,43 @@ var POLL=null;
   EN = nbLang(lang) !== 'zh';
   T = EN ? L['en-US'] : L['zh-CN'];
   document.documentElement.lang = EN ? 'en' : 'zh-CN';
-  if (EN) ['h1','secWait','secLanes','secAll','hint','note','secAlert','aWaitT','aWaitD','aDoneT','aDoneD','aStuckT','aStuckD','aNote'].forEach(function(k){ var e=$(k); if (e && T[k]) e.textContent=T[k]; });
+  if (EN) ['h1','secWait','secLanes','secAll','hint','note','secAlert','aLiveT','aLiveD','aWaitT','aWaitD','aDoneT','aDoneD','aStuckT','aStuckD','aNote'].forEach(function(k){ var e=$(k); if (e && T[k]) e.textContent=T[k]; });
+  /* 实时通知(doc/push-relay.md §4):pushGrant 开原生同意面板 → 拿到中继凭据 → 经 notify 流交给 usage 服务。
+     没有这座桥 / 平台不支持(Android 国内版与旧版、鸿蒙、Win)→ 整行不出,用户仍用下面的定时检查提醒。
+     苹果端直接出;其它端先发不弹面板的探测 {probe:true},答 available 才出(iOS 现版本不认 probe,所以只对非苹果端发)。 */
+  if (ok && window.xbridge && typeof xbridge.pushGrant === "function"){
+    (async function(){
+      var plat=String((info && (info.platform||info.os)) || "").toLowerCase();
+      if (plat && !/ios|ipados|mac|darwin|catalyst/.test(plat)){       // 非苹果端:先探测,不支持就连行都不出,免得点了才说不支持
+        var pr=null; try{ pr=await Promise.resolve(xbridge.pushGrant({probe:true})); }catch(e){}
+        pr=(pr && pr.data && pr.data.status) ? pr.data : pr;
+        if (!pr || pr.status!=="available") return;
+      }
+      var pid=null;
+      try{ var g0=await Promise.resolve(xbridge.getData("cc.push.id")); pid=(g0 && typeof g0==="object" ? g0.data : g0) || null; }catch(e){}
+      if (!pid){ pid="p"+Math.random().toString(36).slice(2)+Date.now().toString(36); try{ xbridge.setData("cc.push.id", pid); }catch(e){} }
+      var b=$("aLiveB"), on=false, busy=false;
+      var paintB=function(){ b.textContent = on ? t("aLiveIsOn","已开启 · 关闭") : t("aLiveOn","开启"); b.classList.toggle("ghost", on); };
+      var flow=async function(name, p){ try{ var r=await xbridge.runDataFlow(name, Object.assign({_cache:0}, p)); r=(r && (r.data||r)) || {}; return r.r || null; }catch(e){ return null; } };
+      var st=await flow("notifyState", {id:pid});
+      on=!!(st && st.on); paintB(); $("aLiveRow").classList.remove("hide");
+      b.addEventListener("click", async function(){
+        if (busy) return; busy=true;
+        try{
+          if (on){ await flow("notify", {body: JSON.stringify({id:pid, on:false})}); on=false; paintB(); return; }
+          var g=null; try{ g=await Promise.resolve(xbridge.pushGrant({})); }catch(e){}
+          g=(g && g.data && g.data.status) ? g.data : g;              // 兼容信封 {code,msg,data}
+          var s=g && g.status;
+          if (s==="unsupported"){ $("aLiveRow").classList.add("hide"); return; }
+          if (s==="denied"){ b.textContent=t("aLiveDenied","系统通知被关了，到系统设置里打开"); return; }
+          if (s!=="ok" || !g.handle) return;                          // 用户点了「不用了」
+          var lang=document.documentElement.lang==="en" ? "en-US" : "zh-CN";
+          var r=await flow("notify", {body: JSON.stringify({id:pid, on:true, handle:g.handle, perm:3, long:10, wait:true, done:true, stuck:true, lang:lang})});
+          if (r && r.on){ on=true; paintB(); } else b.textContent=t("aLiveFail","没开成，再试一次");
+        } finally { busy=false; }
+      });
+    })();
+  }
   /* 提醒入口:alertAdd 只唤起原生同意面板(alert-design §6),返回 ok / cancel / quota */
   if (ok && window.xbridge && typeof xbridge.alertAdd === "function"){
     $("alertWrap").classList.remove("hide");

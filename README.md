@@ -41,7 +41,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Air Quality](tools/air) · 空气质量 | `air` | 20 | public API · 公开接口 | `air-quality-api.open-meteo.com` `geocoding-api.open-meteo.com` `nominatim.openstreetmap.org` |
 | [App Store Board](tools/appwatch) · App Store 看板 | `appwatch` | 79 | your own key · 用户自带凭证 | `itunes.apple.com` `api.appstoreconnect.apple.com` `api.frankfurter.dev` |
 | [Chinese Calendar](tools/calendar) · 万年历 | `calendar` | 12 | offline · 不联网 | — |
-| [Claude Code Usage](tools/ccusage) · Claude Code 用量 | `ccusage` | 55 | Numable service · Numable 自家服务 | `usage.numable.app` |
+| [Claude Code Usage](tools/ccusage) · Claude Code 用量 | `ccusage` | 59 | Numable service · Numable 自家服务 | `usage.numable.app` |
 | [Check-in](tools/checkin) · 打卡 | `checkin` | 50 | offline · 不联网 | — |
 | [Cloudflare Watch](tools/cloudflare) · Cloudflare 状态 | `cloudflare` | 57 | your own key · 用户自带凭证 | `www.cloudflarestatus.com` `www.cloudflare.com` `api.cloudflare.com` |
 | [Crypto](tools/crypto) · 加密货币 | `crypto` | 78 | public API · 公开接口 | `www.okx.com` `api.alternative.me` `api.coingecko.com` `api.exchange.coinbase.com` |

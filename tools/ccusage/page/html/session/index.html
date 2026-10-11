@@ -43,6 +43,7 @@ code.cmd{display:block;background:var(--chip);border-radius:12px;padding:9px 11p
 /* 引导态(三种没数据分开说,§4B):一句现状 + 一句下一步 */
 .guide h3{margin:0 0 6px;font-size:15px;font-weight:700}
 .guide p{margin:0;color:var(--sub);font-size:12.5px}
+.guide p.alt{margin-top:10px;font-size:11.5px}
 /* 状态位 / 图标:图标 + 字 + 时长,不靠颜色也能读(§5.4 第 3 条) */
 .sb{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:6px;padding:1px 6px;
   white-space:nowrap;font-variant-numeric:tabular-nums;line-height:1.5}
@@ -622,8 +623,16 @@ function guideHTML(kind){
   } else if (kind==="fail"){
     h='<h3>'+P("gFailT","暂时取不到实时数据")+'</h3><p>'+P("gFailD","令牌已配置。页面开着时会每 15 秒自动再试一次。")+"</p>";
   } else if (kind==="nosync"){
-    h='<h3>'+P("gSyncT","还没打开同步")+'</h3><p>'+P("gSyncD","在 Claude Code 里运行 /numable-usage，说「打开实时会话并同步到手机」")+"</p>"+
-      '<code class="cmd">/numable-usage</code>';
+    /* 没开实时会话:手机上一键请求,电脑下一次采集时打开(插件 0.10.0+);请求过 7 天内显示「已请求」 */
+    var rq=Number(LV.req)||0;
+    if (rq && nowS()-rq < 7*864e5){
+      h='<h3>'+P("gReqT","已请求在电脑上打开")+'</h3><p>'+esc(t("gReqD","{t} 请求的。电脑下次用 Claude Code 时会自动打开，之后这里就有数据。如果一直没有，请先在 Claude Code 里把插件更新到 0.10.0 或更新的版本。").replace("{t}", hmDay(rq)))+"</p>"+
+        '<button class="btn ghost" id="gReq" type="button">'+P("gReqB2","再请求一次")+"</button>";
+    } else {
+      h='<h3>'+P("gSyncT","还没打开实时会话")+'</h3><p>'+P("gSyncD","打开后，各会话的状态、时长、token 和工具类别会同步到这里。只传匿名编号，不传项目名、标题和对话内容。")+"</p>"+
+        '<button class="btn" id="gReq" type="button">'+P("gReqB","在电脑上打开")+"</button>"+
+        '<p class="alt">'+P("gSyncAlt","也可以在 Claude Code 里运行 /numable-usage，说「打开实时会话」。")+"</p>";
+    }
   } else if (kind==="empty"){
     var last=(LV.devices||[]).reduce(function(a,d){ return Math.max(a, Number(d.at)||0); },0);
     h='<h3>'+P("gEmptyT","没有在跑的会话")+'</h3><p>'+esc(t("gEmptyD","实时会话已打开，最近一次同步在 {t}。在 Claude Code 里开始干活后，这里会自动出现。").replace("{t}", last?hmDay(last):"--"))+"</p>";
@@ -633,6 +642,20 @@ function guideHTML(kind){
 function bindGuide(){
   var b=$("gTok");
   if (b) b.onclick=function(){ try{ if (xbridge.route) return xbridge.route('numable://app/mine?section=credentials&bundle=01M0F1AVEJJ9700CB548NS6X2E&bind=nu'); }catch(e){} };
+  var q=$("gReq");
+  if (q) q.onclick=async function(){
+    if (q.disabled) return;
+    q.disabled=true; q.textContent=t("gReqIng","正在请求…");
+    var at=0;
+    try{
+      var r=await xbridge.runDataFlow('liveOn', { _cache: 0 });
+      r=(r && (r.data||r)) || {}; r=r.r;
+      if (typeof r==="string"){ try{ r=JSON.parse(r); }catch(e){ r=null; } }
+      at=(r && r.ok && Number(r.at)) || 0;
+    }catch(e){ at=0; }
+    if (at && LV){ LV.req=at; paint(); return; }
+    q.disabled=false; q.textContent=t("gReqFail","没请求成功，再试一次");
+  };
 }
 /* ── live:core end ── */
 
@@ -659,7 +682,10 @@ var L = { "zh-CN": {}, "en-US": {
   gNoT:"Claude Code usage isn't connected", gNoD:"Install the collector plugin in Claude Code, then add the read token. Once connected, running sessions show up here.",
   gNoB:"Add token", gNoB2:"See setup steps",
   gFailT:"Live data is temporarily unavailable", gFailD:"Your token is set. While this page is open it tries again every 15 seconds.",
-  gSyncT:"Sync is off", gSyncD:"In Claude Code, run /numable-usage and ask to turn on live sessions with sync",
+  gSyncT:"Live sessions are off", gSyncD:"Once on, each session's status, timing, tokens and tool types sync here. Only anonymous numbers are sent — no project names, titles or conversation content.",
+  gReqB:"Turn on for my computer", gSyncAlt:"Or run /numable-usage in Claude Code and ask to turn on live sessions.",
+  gReqT:"Requested for your computer", gReqD:"Requested at {t}. It turns on the next time you use Claude Code on that computer, and data shows up here after that. If nothing appears, update the plugin in Claude Code to 0.10.0 or later first.",
+  gReqB2:"Request again", gReqIng:"Requesting…", gReqFail:"Couldn't send the request, try again",
   gEmptyT:"No active sessions", gEmptyD:"Live sessions are on. Last sync at {t}. Sessions show up here as soon as you start working in Claude Code."
 }};
 var SID="", DEV="";
@@ -810,7 +836,7 @@ function paint(){
   var lead=$("lead");
   if (k || gone){
     lead.textContent = gone ? t("goneT","这个会话已过保留期") :
-      {nocred:t("gNoT","还没接入 Claude Code 用量"), fail:t("gFailT","暂时取不到实时数据"), nosync:t("gSyncT","还没打开同步"), empty:t("gEmptyT","没有在跑的会话")}[k];
+      {nocred:t("gNoT","还没接入 Claude Code 用量"), fail:t("gFailT","暂时取不到实时数据"), nosync:t("gSyncT","还没打开实时会话"), empty:t("gEmptyT","没有在跑的会话")}[k];
     $("h1").textContent=t("h1","会话");
     return;
   }
