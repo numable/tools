@@ -226,6 +226,22 @@ tr[data-go]:active,.mrow[data-model]:active,.mrow[data-tool]:active,.mrow[data-d
 .mrow .nm.w{flex:0 0 86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mrow .dd{flex:0 0 auto;font-size:11px;color:var(--sub);width:26px}
 /* NAV_MARK */
+/* 这一天做了什么(每日回顾 · ccusage-live-timeline §6.3):合计一行 + 每个项目一行(条 = 占当天活跃的比例)+ 标题灰色小字 */
+.rvsum{font-size:12.5px;color:var(--sub);line-height:1.6;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.rvsum b{color:var(--fg);font-weight:700}
+.rvsum span{white-space:nowrap}
+.rv{padding:10px 0}
+.rv + .rv{border-top:1px solid var(--line)}
+.rv:last-child{padding-bottom:0}
+.rv .rh{display:flex;align-items:center;gap:10px}
+.rv .rh .nm{flex:0 0 96px;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv .rh .bar2{flex:1 1 auto;height:6px;border-radius:3px;background:var(--chip);overflow:hidden;min-width:30px}
+.rv .rh .bar2 i{display:block;height:100%;border-radius:3px;background:var(--src);opacity:.85}
+.rv .rh .v{flex:0 0 82px;text-align:right;font-size:13.5px;font-weight:700;letter-spacing:-.2px;white-space:nowrap}
+.rv .rs{font-size:11.5px;color:var(--sub);margin-top:3px}
+.rv .tl{margin-top:5px;padding-left:9px;border-left:2px solid var(--line)}
+.rv .tl div{font-size:11.5px;color:var(--sub);line-height:1.55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv .tl div.more{opacity:.75}
 </style>
 
 <!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
@@ -356,6 +372,13 @@ tr[data-go]:active,.mrow[data-model]:active,.mrow[data-tool]:active,.mrow[data-d
 <div class="hero2 hide" id="hero"></div>
 <div class="card" id="main"></div>
 
+<!-- 这一天做了什么(每日回顾):只有近 14 天、且插件够新才有;没有就整节不出,不画空态 -->
+<div id="revWrap" class="hide">
+  <div class="sect"><span id="secRev">这一天做了什么</span></div>
+  <div class="card" id="rev"></div>
+  <p class="note" id="revHint" style="margin:-4px 2px 0"></p>
+</div>
+
 <div id="mixWrap" class="hide">
   <div class="sect"><span id="secMix">按模型</span><em id="vMix"></em></div>
   <div class="card" id="mix"></div>
@@ -384,7 +407,14 @@ var L = { "zh-CN": {}, "en-US": {
   cost:"Est. cost", active:"Active", lines:"Lines changed", removed:"−{n} removed",
   rank:"Rank by output", ofDays:" of {n} days with records",
   share:"Share of the stretch", vsAvg:"vs daily average",
-  best:"Your busiest day so far", secTools:"Tools used", vTools:"{n} calls", prevDay:"‹ {d}", nextDay:"{d} ›", seePeriod:"See the last 30 days", noData:"No record for this day",
+  best:"Your busiest day so far",
+  secRev:"What you worked on",
+  rvProj:"{n} projects", rvProj1:"{n} project", rvSess:"{n} sessions", rvSess1:"{n} session", rvAct:"{d} across sessions", rvOut:"{v} output", rvLines:"changed {v}",
+  rvRow:"{n} sessions", rvRow1:"1 session", rvMore:"{n} more sessions", rvMore1:"1 more session", rvProjX:"Project {l}",
+  rvPar:"Time here is counted per session — sessions running side by side each count, so it is often longer than \u201cActive\u201d above.",
+  rvHintBoth:"Project names and session titles aren't uploaded by default, so projects show as \u201cProject A\u201d. To see them, run /numable-usage in Claude Code and ask to upload project names or session titles. Both are optional.",
+  rvHintName:"Project names aren't uploaded by default, so projects show as \u201cProject A\u201d. To see them, run /numable-usage in Claude Code and ask to upload project names. This is optional.",
+  rvHintTitle:"Session titles aren't uploaded by default. To see them under each project, run /numable-usage in Claude Code and ask to upload session titles. This is optional.", secTools:"Tools used", vTools:"{n} calls", prevDay:"‹ {d}", nextDay:"{d} ›", seePeriod:"See the last 30 days", noData:"No record for this day",
   note:"Numbers come from the collector plugin in Claude Code — aggregate only, no file paths or conversation content."
 }};
 /* 与首页共用同一发数据(`summary` 流 + 同一个缓存键 `c.cc.s`)—— 从首页点进来是命中缓存,
@@ -601,7 +631,7 @@ function paint(){
     (pd ? '<button data-day="'+esc(pd)+'">'+esc(t("prevDay","‹ {d}").replace("{d}", md(pd)))+"</button>" : "")+
     (nd ? '<button data-day="'+esc(nd)+'">'+esc(t("nextDay","{d} ›").replace("{d}", md(nd)))+"</button>" : "");
   document.getElementById("h1").textContent = md(DATE); xbTitle(md(DATE));
-  if (i<0){ show("hero", false); show("mixWrap", false); show("dailyWrap", false);
+  if (i<0){ show("hero", false); show("mixWrap", false); show("dailyWrap", false); show("revWrap", false);
     main.innerHTML='<div class="note" style="margin:0">'+esc(t("noData","这一天没有记录"))+"</div>";
     document.getElementById("ctx").innerHTML=""; return; }
   var d=days[i], prev=i>0?days[i-1]:null;
@@ -639,6 +669,8 @@ function paint(){
       '<div class="grid" style="margin-top:13px">'+
         cell(t("inTok","输入 token"), fmt(d["in"]))+cell(t("cache","缓存写入"), fmt(d.cacheCreate))+"</div>";
   }
+
+  paintReview();
 
   /* 按模型 + 近 30 天:都来自 daily30(连续 30 天,前 4 个模型单列、其余并成「其他」)。
      这一天不在近 30 天里 → 两段都不出(老日子没有按模型的逐日费用) */
@@ -714,6 +746,63 @@ function paint(){
       esc(t("seePeriod","看近 30 天逐日"))+'</span><span class="chev">›</span></div>';
 }
 
+/* 这一天做了什么(每日回顾 · §6.3):服务端 merged.review.days[日期] = 当天合计 + 每个项目一行。
+   只有近 14 天、且插件够新才有 —— 没有这一天、或这一天没有行,整节不出(不画空态:
+   有用量却说「没有记录」会被读成数据丢了)。项目名 / 会话标题是用户在 Claude Code 里另开的开关,
+   没开时项目用「项目 A」代号、不列标题,并在节尾说一句怎么打开。 */
+function paintReview(){
+  var R=M().review, d=R && R.days ? R.days[DATE] : null;
+  var rows=d && Array.isArray(d.rows) ? d.rows.filter(function(r){ return r && (Number(r.a)>0 || Number(r.n)>0 || Number(r.o)>0); }) : [];
+  if (!rows.length){ show("revWrap", false); return; }
+  rows.sort(function(a,b){ return (Number(b.a)||0)-(Number(a.a)||0) || (Number(b.o)||0)-(Number(a.o)||0); });
+  var sumA=Number(d.a)||rows.reduce(function(x,r){ return x+(Number(r.a)||0); },0);
+  var nS=d.n!=null ? Number(d.n)||0 : rows.reduce(function(x,r){ return x+(Number(r.n)||0); },0);
+  var la=d.la!=null ? d.la : rows.reduce(function(x,r){ return x+(Number(r.la)||0); },0);
+  var lr=d.lr!=null ? d.lr : rows.reduce(function(x,r){ return x+(Number(r.lr)||0); },0);
+  var o=d.o!=null ? d.o : rows.reduce(function(x,r){ return x+(Number(r.o)||0); },0);
+  /* 合计一行:数字加粗,其余是模板里的字(中英各自的语序) */
+  var F=function(k, zh, ph, v){ var x=t(k, zh), p=x.indexOf(ph);
+    return p<0 ? esc(x) : esc(x.slice(0,p))+"<b>"+esc(v)+"</b>"+esc(x.slice(p+ph.length)); };
+  var parts=[
+    rows.length===1 ? F("rvProj1","{n} 个项目","{n}",1) : F("rvProj","{n} 个项目","{n}",rows.length),
+    nS===1 ? F("rvSess1","{n} 个会话","{n}",1) : F("rvSess","{n} 个会话","{n}",nS),
+    F("rvAct","会话累计 {d}","{d}",dur(sumA)),
+    F("rvOut","输出 {v}","{v}",fmt(o))
+  ];
+  if (Number(la)>0 || Number(lr)>0) parts.push(F("rvLines","改动 {v}","{v}",lines(la, lr)));
+  var hasName=false, hasTitle=false;
+  var body=rows.map(function(r){
+    var nm=String(r.nm||"").trim(); if (nm) hasName=true;
+    var name=nm || t("rvProjX","项目 {l}").replace("{l}", String(r.l||"").trim() || "?");
+    var a=Number(r.a)||0, w=sumA>0 ? Math.max(2, Math.min(100, a/sumA*100)) : 0, n=Number(r.n)||0;
+    var sub=[n===1 ? t("rvRow1","1 个会话") : t("rvRow","{n} 个会话").replace("{n}", n),
+      t("rvOut","输出 {v}").replace("{v}", fmt(r.o))];
+    if (Number(r.la)>0 || Number(r.lr)>0) sub.push(lines(r.la, r.lr));
+    var ts=(Array.isArray(r.ts) ? r.ts : []).filter(function(x){ return String(x||"").trim(); }), tl="";
+    if (ts.length){
+      hasTitle=true;
+      var shown=ts.slice(0,3), rest=Math.max(ts.length, n)-shown.length;
+      tl='<div class="tl">'+shown.map(function(x){ return "<div>"+esc(x)+"</div>"; }).join("")+
+        (rest>0 ? '<div class="more">'+esc(rest===1 ? t("rvMore1","还有 1 个会话") : t("rvMore","还有 {n} 个会话").replace("{n}", rest))+"</div>" : "")+"</div>";
+    }
+    return '<div class="rv"><div class="rh"><span class="nm">'+esc(name)+'</span><span class="bar2"><i style="width:'+w.toFixed(1)+'%"></i></span>'+
+      '<span class="v">'+esc(dur(a))+'</span></div><div class="rs">'+esc(sub.join(" · "))+"</div>"+tl+"</div>";
+  }).join("");
+  $id("rev").innerHTML='<div class="rvsum"><span>'+parts.join(" ·</span> <span>")+"</span></div>"+body;
+  /* 节尾一句:哪个开关没开就说哪个;都开了不说 */
+  var hint = !hasName && !hasTitle ? t("rvHintBoth","项目名和会话标题默认不上传，所以这里用「项目 A」这样的代号。想看到它们，在 Claude Code 里运行 /numable-usage，说「上传项目名」或「上传会话标题」。两项都是可选的。")
+    : !hasName ? t("rvHintName","项目名默认不上传，所以这里用「项目 A」这样的代号。想看到项目名，在 Claude Code 里运行 /numable-usage，说「上传项目名」。这一项是可选的。")
+    : !hasTitle ? t("rvHintTitle","会话标题默认不上传。想在项目下面看到标题，在 Claude Code 里运行 /numable-usage，说「上传会话标题」。这一项是可选的。") : "";
+  /* 口径说明恒出:这里的时长按会话分别计,几路并行会各算一份,所以常比上面「活跃」(这一天有多少分钟在用)长 —— 不说清会被当成算错 */
+  var par=t("rvPar","这里的时长按会话分别计，几路会话同时跑会各算一份，所以常比上面的「活跃」长。");
+  hint = par + (hint ? " " + hint : "");
+  $id("revHint").textContent=hint;
+  $id("revHint").classList.toggle("hide", !hint);
+  show("revWrap", true);
+}
+function $id(x){ return document.getElementById(x); }
+function show(id, on){ $id(id).classList.toggle("hide", !on); }
+
 (async function boot(){
   var q=new URLSearchParams(location.search);
   DATE=String(q.get("date")||"");
@@ -726,7 +815,7 @@ function paint(){
   EN = nbLang(lang) !== 'zh';
   T = EN ? L['en-US'] : L['zh-CN'];
   document.documentElement.lang = (EN || T === L['en-US']) ? 'en' : 'zh-CN';
-  if (EN){ ['lead','secCtx','secMix','secDaily','secTools','note'].forEach(function(k){
+  if (EN){ ['lead','secCtx','secMix','secDaily','secTools','secRev','note'].forEach(function(k){
       var e=document.getElementById(k); if(e&&T[k]) e.textContent=T[k]; });
     document.documentElement.lang='en'; }
   else document.getElementById("note").textContent =

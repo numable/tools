@@ -1,0 +1,61 @@
+{
+ "_note": "实时会话提醒的判定段(alert-design §5.3,边沿型)。入参:key = 本轮事件键(空 = 没有符合的事)、slot = 状态键名(调用方已拼上全部实例参数,同一规则不同阈值的实例互不覆盖)。\n判据:本轮有事件键,且与上次记下的不同 → 响。同一件事(同一个会话同一次等授权 / 同一轮)只响一次;事件结束后键变空,不写基准 —— 下一件事键必然不同,照样会响。首次创建提醒时若已有符合的事,也响一次(那正是你要知道的)。",
+ "version": 1,
+ "actions": [
+  {
+   "id": "prevRaw",
+   "action": "data.get",
+   "params": {
+    "key": "cc.live.${slot}",
+    "default": ""
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "_b",
+    "value": "1"
+   },
+   "_note": "⚠️ data.get 之后的屏障(勿删,同 github ci.df)。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "has",
+    "value": "$[if::(eq::(connect::(k,${key}),k),0,1)]"
+   },
+   "_note": "判空用哨兵前缀,不用 length::(alert-design §5.11 列过的坑)。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "hit",
+    "value": "$[if::(and::(eq::(${has},1),if::(eq::(connect::(k,${key}),connect::(k,${prevRaw})),0,1)),1,0)]"
+   }
+  },
+  {
+   "op": "if",
+   "props": {
+    "val": "${has}"
+   },
+   "items": [
+    {
+     "action": "data.set",
+     "params": {
+      "key": "cc.live.${slot}",
+      "value": "${key}"
+     }
+    }
+   ],
+   "_note": "⚠️ 只在本轮有事件时写基准:没事的那一轮写空,下一轮同一件事又会被当成新的再响一次。"
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "hit"
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,50 @@
+{
+ "_note": "动态提醒 · 边沿(doc/ccusage-live-timeline.md §6.2)。有一路 Claude Code 可能卡住了:连续 ≥5 次工具失败 / 一轮跑了 >40 分钟且 >80 次工具调用 / 一轮里上下文压缩了 ≥2 次 / 等你授权 >15 分钟(判据在服务端 stuckOf)。\n事件键 = 设备:会话:原因:轮号 —— 同一轮同一种原因只响一次;换了原因(先连续失败、后来又打转)会再响一次。只是信号,文案写「可能卡住」。检查节律同 waiting,不承诺实时。",
+ "version": 1,
+ "id": "stuck",
+ "title": "可能卡住提醒",
+ "sub": "Claude Code 会话连续失败、长时间打转或反复压缩上下文时提醒",
+ "i18n": {
+  "en-US": {
+   "title": "Stuck session alert",
+   "sub": "Tells you when a Claude Code session keeps failing, spins for a long time or keeps compacting its context",
+   "message": {
+    "title": "${sProj} may be stuck",
+    "body": "${sWhy}"
+   }
+  }
+ },
+ "events": {
+  "onClick": "/live"
+ },
+ "task": {
+  "depends": [
+   {
+    "flow": "@[file://xJob/flow/alert.df]",
+    "params": {
+     "perm": "3",
+     "long": "10"
+    }
+   }
+  ],
+  "then": {
+   "flow": "@[file://xJob/flow/edge.df]",
+   "params": {
+    "key": "${stuckKey}",
+    "slot": "stuck"
+   }
+  },
+  "refresh": {
+   "interval": [
+    "300"
+   ]
+  }
+ },
+ "alert": {
+  "level": "normal",
+  "message": {
+   "title": "${sProj} 可能卡住了",
+   "body": "${sWhy}"
+  }
+ }
+}

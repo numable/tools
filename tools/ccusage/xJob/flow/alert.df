@@ -1,0 +1,114 @@
+{
+ "_note": "实时会话提醒的取数段(doc/ccusage-live-timeline.md §6.1)。取服务端提醒视图 ?view=a:有没有等你授权 ≥perm 分钟的会话、有没有一轮跑了 ≥long 分钟后停下等你的会话,各带一个事件键(同一件事键不变)。判定在 xJob/flow/edge.df。\n⚠️ 只认本轮真取回的数据:没响应抛错 → 宿主判「未知」,不响也不动基准(alert-design §5.2)。",
+ "version": 1,
+ "actions": [
+  {
+   "id": "resp",
+   "action": "request",
+   "params": {
+    "url": "https://usage.numable.app/live?view=a&perm=${perm}&long=${long}",
+    "method": "GET",
+    "header": {
+     "User-Agent": "Numable"
+    },
+    "formatType": "json",
+    "credential": "nu"
+   }
+  },
+  {
+   "op": "if",
+   "props": {
+    "val": "$[if::(eq::(${resp},),1,0)]"
+   },
+   "items": [
+    {
+     "action": "error",
+     "params": {
+      "errorMsg": "ccusage_live_unreachable"
+     }
+    }
+   ]
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "waitKey",
+    "value": "${resp.a.waitKey}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "wProj",
+    "value": "$[if::(startsWith::(findNotEmpty::(${@app.language},zh),en),${resp.a.wProjE},${resp.a.wProjZ})]"
+   },
+   "_note": "项目名按 App 语言挑好再给通知文案用(没上传项目名时服务端给「项目 A」/「Project A」两份)。G47 要求译文与基准引用同一组变量,所以在这里合成一个 wProj。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "wMins",
+    "value": "${resp.a.wMins}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "doneKey",
+    "value": "${resp.a.doneKey}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "dProj",
+    "value": "$[if::(startsWith::(findNotEmpty::(${@app.language},zh),en),${resp.a.dProjE},${resp.a.dProjZ})]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "dMins",
+    "value": "${resp.a.dMins}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "stuckKey",
+    "value": "${resp.a.stuckKey}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "sProj",
+    "value": "$[if::(startsWith::(findNotEmpty::(${@app.language},zh),en),${resp.a.sProjE},${resp.a.sProjZ})]"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "sWhy",
+    "value": "$[if::(startsWith::(findNotEmpty::(${@app.language},zh),en),${resp.a.sWhyE},${resp.a.sWhyZ})]"
+   },
+   "_note": "卡住的原因(连续失败 / 一轮打转 / 反复压缩 / 久等授权),服务端中英各给一份,这里按语言挑。"
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "waitKey",
+     "wProj",
+     "wMins",
+     "doneKey",
+     "dProj",
+     "dMins",
+     "stuckKey",
+     "sProj",
+     "sWhy"
+    ]
+   }
+  }
+ ]
+}

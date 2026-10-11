@@ -1,0 +1,66 @@
+{
+ "_note": "实时会话组件取数(2026-10-11,doc/ccusage-live-timeline.md §3 / §5)。与 summary.df 分开:用量一天才变几次,实时每次都要新的;两发流两个缓存键,混在一起要么用量被频繁穿透,要么实时被缓存挡住。服务端 ?view=w 把要画的东西都算好(位置 0~1 比例、颜色「浅|深」串、中英文字),RCN 只摆。",
+ "version": 1,
+ "actions": [
+  {
+   "op": "set",
+   "props": {
+    "key": "lt",
+    "value": "$[formatDate::(${@time.nowMs},HHmm)]"
+   },
+   "_note": "看的人这台设备此刻的「时分」,连同 ms 一起带给服务端反推时区 —— 组件上要写本地时刻(「15:36 起」),取数流里做不了可靠的时区算术。"
+  },
+  {
+   "id": "resp",
+   "action": "request",
+   "params": {
+    "url": "https://usage.numable.app/live?view=w&win=2&lt=${lt}&ms=${@time.nowMs}",
+    "method": "GET",
+    "header": {
+     "User-Agent": "Numable"
+    },
+    "formatType": "json",
+    "credential": "nu"
+   }
+  },
+  {
+   "op": "if",
+   "props": {
+    "val": "$[if::(eq::(${resp},),1,0)]"
+   },
+   "items": [
+    {
+     "action": "error",
+     "params": {
+      "errorMsg": "ccusage_live_unreachable"
+     }
+    }
+   ],
+   "_note": "完全没响应 → 抛错,平台回落上次成功数据(G26)。令牌被拒 / 老服务端没有 /live → resp 有值但没有 w,组件按「未接入」画。"
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "w",
+    "value": "${resp.w}"
+   }
+  },
+  {
+   "op": "set",
+   "props": {
+    "key": "at",
+    "value": "$[if::(eq::(findNotEmpty::(${resp.updatedAt},__none__),__none__),,if::(eq::(${resp.updatedAt},0),,formatDate::(${resp.updatedAt},HH:mm)))]"
+   },
+   "_note": "时效锚 = 服务端最后一次收到推送的时刻(不是组件渲染的时刻)。组件上写「截至 HH:mm」—— 组件一画就挂几分钟,写「现在」会说谎(§5.5)。"
+  },
+  {
+   "action": "resultFilter",
+   "params": {
+    "keys": [
+     "w",
+     "at"
+    ]
+   }
+  }
+ ]
+}

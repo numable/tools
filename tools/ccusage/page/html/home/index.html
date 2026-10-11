@@ -308,6 +308,25 @@ html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
 tr[data-go]:active,.mrow[data-model]:active,.mrow[data-tool]:active,.mrow[data-day]:active,.mrow[data-go]:active{opacity:.55;transition-duration:var(--xb-in,60ms)}
 .chev{flex:0 0 auto;color:var(--sub);opacity:.5;font-size:14px;line-height:1;margin-left:2px}
 /* NAV_MARK */
+/* ── 「现在」块(2026-10-11,doc/ccusage-live-timeline.md §4B):有活跃会话时置顶,没有时不占位;
+   没开同步时只有一行引导。数据走另一发 `live` 流(不进 summary 的缓存键)。颜色同 /live 页(live.js 的 C)。 */
+:root{--nwRun:#C15F3C;--nwWait:#C98A00;--nwWaitBg:#FBF1D6}
+html[data-theme="dark"]{--nwRun:#E8916B;--nwWait:#F5C242;--nwWaitBg:#3A3015}
+.nwr{display:flex;align-items:center;gap:9px;padding:9px 0;cursor:pointer}
+.nwr + .nwr{border-top:1px solid var(--line)}
+.nwr .bd{flex:1 1 auto;min-width:0}
+.nwr .p{font-size:11px;color:var(--sub);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nwr .tt{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nwr .w{flex:0 0 auto;font-size:12px;font-weight:600;color:var(--nwWait);white-space:nowrap;font-variant-numeric:tabular-nums}
+.nwi{display:inline-block;flex:0 0 auto;font-style:normal;line-height:1}
+.nwi.perm{color:var(--nwWait);font-size:12px;font-weight:700}
+.nwi.input{width:7px;height:9px;border-left:2.5px solid var(--nwWait);border-right:2.5px solid var(--nwWait)}
+.nwi.running{width:0;height:0;border-left:7px solid var(--nwRun);border-top:4.5px solid transparent;border-bottom:4.5px solid transparent}
+.nwm{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--sub);padding-top:9px;cursor:pointer}
+.nwm b{color:var(--fg)}
+.nwr + .nwm{border-top:1px solid var(--line)}
+.nwln{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin:0 0 12px 17px;cursor:pointer}
+.nwln .chev{margin-left:auto}
 </style>
 
 <!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
@@ -466,6 +485,8 @@ tr[data-go]:active,.mrow[data-model]:active,.mrow[data-tool]:active,.mrow[data-d
 
 <!-- 已接入:概况页(不是加卡页)——一屏读懂「今天干了多少活、这阵子怎么样、谁在干」 -->
 <div id="live" class="hide">
+  <!-- 现在:实时会话(有活跃会话才出现;没开同步时一行引导)。由文件末尾的 nowStart() 填 -->
+  <div id="nowWrap" class="hide"></div>
   <!-- 今天:品牌渐变主卡(费用 + 距日均的进度 + 四项) -->
   <div class="hero2" id="today"></div>
 
@@ -1226,6 +1247,7 @@ async function load(force){
   document.getElementById('setup').classList.add('hide');
   renderWidgets(EN);
   paintAll();
+  if (window.nowStart) nowStart();   /* 「现在」块:另一发 live 流,失败不影响上面任何板块 */
   /* 三态的中间那一行:刚才渲的是旧货 → 后台真取一次,回来原地替换。
      这一趟**不铺骨架、不弹任何东西** —— 用户已经在看内容了。 */
   if (!force && String(data._stale) === '1'){
@@ -1236,5 +1258,85 @@ async function load(force){
   }
 }
 boot();
+</script>
+<script>
+/* ── 「现在」块(§4B 表第一行)── 只加不改:用到本页的 EN / esc / go(data-go 分发器)。
+   ① 有活跃会话(运行 / 等授权 / 等输入)→ 置顶一块:并行 / 等你 汇总 + 等你处理的前 3 条;
+   ② 接上了但没开同步(devices 为空)→ 一行引导;③ 开了但没有活跃会话 / 取不到 → 整块不占位。
+   页面可见时每 15 秒一发,隐藏即停、回来补一发;「等了几分钟」每秒本地走字。 */
+(function(){
+  var LVN=null, OFFN=0, started=false, timer=null;
+  function nowS(){ return Date.now()+OFFN; }
+  function dW(ms){ var m=Math.floor(Math.max(0,ms)/60e3);
+    if (EN){ if (m<1) return "under a minute"; if (m<60) return m+" min"; return Math.floor(m/60)+" h "+(m%60)+" min"; }
+    if (m<1) return "不到 1 分钟"; if (m<60) return m+" 分钟"; return Math.floor(m/60)+" 小时"+(m%60?" "+(m%60)+" 分":""); }
+  function wtxt(since){ return (EN?"waiting ":"等了 ")+dW(nowS()-since); }
+  async function pullNow(){
+    if (!(window.xbridge && xbridge.runDataFlow)) return null;
+    try{ var r=await xbridge.runDataFlow('live', { _cache: 0 }); var d=(r && (r.data || r)) || null;
+      if (!d || String(d.live||"")!=="1") return null;
+      var m=JSON.parse(String(d.raw||"")); return (m && Array.isArray(m.sessions)) ? m : null; }catch(e){ return null; }
+  }
+  function label(m){
+    /* 项目名:有名字用名字,没有按首次出现顺序叫「项目 A / B」(与 /live 页、组件同一规则) */
+    var P={}, li=0;
+    m.sessions.slice().sort(function(a,b){ return a.startAt-b.startAt; }).forEach(function(s){
+      var k=s.proj||"none"; if (!P[k]){ var L="ABCDEFGHIJKLMNOPQRSTUVWXYZ"[li++%26]; P[k]=s.pname || ((EN?"Project ":"项目 ")+L); } });
+    return P;
+  }
+  function paintNow(){
+    var el=document.getElementById("nowWrap"); if (!el) return;
+    var m=LVN;
+    if (!m){ el.classList.add("hide"); el.innerHTML=""; return; }
+    if (!(m.devices||[]).length){
+      el.innerHTML='<div class="nwln" data-go="/live"><span>'+esc(EN
+        ? "Live sessions: in Claude Code, run /numable-usage and ask to turn on live sessions with sync"
+        : "实时会话：在 Claude Code 里运行 /numable-usage，说「打开实时会话并同步到手机」")+'</span><span class="chev">›</span></div>';
+      el.classList.remove("hide"); return;
+    }
+    var act=m.sessions.filter(function(s){ return s.state==="running"||s.state==="perm"||s.state==="input"; });
+    if (!act.length){ el.classList.add("hide"); el.innerHTML=""; return; }
+    var P=label(m), ws=act.filter(function(s){ return s.state!=="running"; })
+      .map(function(s){ return {s:s, since:s.state==="perm" && s.permSince ? s.permSince : s.changedAt}; })
+      .sort(function(a,b){ return a.since-b.since; });
+    var sum=(EN ? act.length+" running in parallel" : act.length+" 路并行")+(ws.length ? (EN ? " · "+ws.length+" waiting on you" : " · "+ws.length+" 路等你") : "");
+    var rows=ws.slice(0,3).map(function(x){
+      var s=x.s, tt=s.title || (s.state==="perm" ? (EN?"Needs approval":"等你授权") : (EN?"Your turn":"等你输入"));
+      return '<div class="nwr" data-go="/session?sid='+esc(encodeURIComponent(s.sid))+'&dev='+esc(encodeURIComponent(s.dev))+'">'+
+        (s.state==="perm" ? '<i class="nwi perm">⚠</i>' : '<i class="nwi input"></i>')+
+        '<div class="bd"><div class="p">'+esc(P[s.proj||"none"])+'</div><div class="tt">'+esc(tt)+'</div></div>'+
+        '<span class="w" data-nw="'+x.since+'">'+esc(wtxt(x.since))+'</span><span class="chev">›</span></div>';
+    }).join("");
+    var more = ws.length>3 ? (EN ? (ws.length-3)+" more waiting · " : "还有 "+(ws.length-3)+" 路在等你 · ") : "";
+    el.innerHTML='<div class="sect"><span>'+(EN?"Now":"现在")+'</span><em>'+esc(sum)+'</em></div>'+
+      '<div class="card">'+rows+'<div class="nwm" data-go="/live"><span>'+esc(more)+'<b>'+(EN?"All live sessions":"看全部实时会话")+'</b></span><span class="chev" style="margin-left:auto">›</span></div></div>';
+    el.classList.remove("hide");
+  }
+  async function tick(){
+    if (document.visibilityState==="hidden") return;
+    var m=await pullNow();
+    if (m){ LVN=m; OFFN=Number(m.now)>0 ? Number(m.now)-Date.now() : 0; }
+    paintNow();
+  }
+  function arm(){ if (timer) clearInterval(timer); timer=null;
+    /* 没开同步就不轮询(那一行引导不会自己变);开了才 15 秒一发 */
+    if (LVN && (LVN.devices||[]).length) timer=setInterval(tick, 15000); }
+  window.nowStart=async function(){
+    if (started) return; started=true;
+    await tick(); arm();
+    document.addEventListener("visibilitychange", function(){
+      if (document.visibilityState==="visible"){ tick().then(arm); } else if (timer){ clearInterval(timer); timer=null; } });
+    setInterval(function(){
+      if (document.visibilityState==="hidden") return;
+      var ns=document.querySelectorAll("[data-nw]");
+      for (var i=0;i<ns.length;i++){ var v=wtxt(Number(ns[i].getAttribute("data-nw"))); if (ns[i].textContent!==v) ns[i].textContent=v; }
+    }, 1000);
+  };
+  /* ⚠️ 两头都要能起:桥早就绪时 boot() 的 await 全在微任务里跑完,load() 走到 nowStart 那行时
+     本段脚本还没解析(实测预览里恒如此)→ 那次调用是空的;所以这里再看一眼「已接入那一屏已经出来了」就自己起。
+     started 闸保证只起一次。 */
+  var lv=document.getElementById("live");
+  if (lv && !lv.classList.contains("hide")) window.nowStart();
+})();
 </script>
 </body></html>

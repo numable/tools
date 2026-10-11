@@ -1,0 +1,86 @@
+{
+ "_note": "动态提醒 · 边沿(§6.1)。有一路 Claude Code 一轮跑了很久(实跑超过设定分钟,扣掉等授权),跑完停下等你、你还没接着说 → 提醒。同一轮只响一次;你接着说话后它自然不再算。\n检查节律与 waiting 同,文案不承诺实时。",
+ "version": 1,
+ "id": "finished",
+ "title": "长任务跑完提醒",
+ "sub": "Claude Code 一轮跑了很久、跑完在等你时提醒",
+ "i18n": {
+  "en-US": {
+   "title": "Long task finished",
+   "sub": "Tells you when a long Claude Code turn has finished and is waiting for you",
+   "message": {
+    "title": "${dProj} finished a long task",
+    "body": "Ran about ${dMins} min · your turn"
+   },
+   "form": {
+    "long": {
+     "title": "Counts as long after"
+    }
+   }
+  }
+ },
+ "params": {
+  "long": "10"
+ },
+ "form": {
+  "long": {
+   "title": "跑多久算长任务",
+   "component": {
+    "type": "radio",
+    "props": {
+     "items": [
+      {
+       "label": "5 分钟",
+       "value": "5"
+      },
+      {
+       "label": "10 分钟",
+       "value": "10"
+      },
+      {
+       "label": "20 分钟",
+       "value": "20"
+      },
+      {
+       "label": "30 分钟",
+       "value": "30"
+      }
+     ]
+    }
+   }
+  }
+ },
+ "events": {
+  "onClick": "/live"
+ },
+ "task": {
+  "depends": [
+   {
+    "flow": "@[file://xJob/flow/alert.df]",
+    "params": {
+     "perm": "3",
+     "long": "${long}"
+    }
+   }
+  ],
+  "then": {
+   "flow": "@[file://xJob/flow/edge.df]",
+   "params": {
+    "key": "${doneKey}",
+    "slot": "done.${long}"
+   }
+  },
+  "refresh": {
+   "interval": [
+    "300"
+   ]
+  }
+ },
+ "alert": {
+  "level": "normal",
+  "message": {
+   "title": "${dProj} 的长任务跑完了",
+   "body": "跑了约 ${dMins} 分钟，等你接着说"
+  }
+ }
+}

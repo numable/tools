@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>实时会话</title>
+<style>
+/* 源色 = Claude 暖橙两档,与本包 RCN 卡片同源;其余一律取 design-tokens 的 token(与同包详情页同一份)。 */
+:root{color-scheme:light dark;
+  --bg:#F5F6F8;--card:#FFFFFF;--fg:#0E1116;--sub:#6B7280;--line:#E4E7EC;
+  --src:#C15F3C;--srcSoft:rgba(194,65,12,.10);--chip:#E7E9EE;
+  --shadow:0 1px 2px rgba(15,20,30,.06),0 8px 22px -14px rgba(15,20,30,.18)}
+html[data-theme="dark"]{--bg:#0B0C0E;--card:#15171A;--fg:#F3F4F6;--sub:#8E939B;
+  --line:#262A31;--src:#E8916B;--srcSoft:rgba(251,146,60,.14);--chip:#20232A;--shadow:none}
+/* 实时会话的状态与类目色 —— 逐值抄自服务端组件视图 Numable-ccusage/service/src/live.js 的 C(组件那边的真源)。
+   三族(doc/ccusage-live-timeline.md §1.4):强调色 = 在跑 · 黄 = 等你 · 灰 = 停了。类目色避开这三族。 */
+:root{--run:#C15F3C;--wait:#C98A00;--waitBg:#FBF1D6;--stop:#A1A1AA;--track:#F1EEEC;
+  --k-r:#4F7BE0;--k-e:#2F9E5B;--k-s:#5B6B7F;--k-a:#8B6FD6;--k-w:#3D8BD9;--k-b:#1F9BB0;--k-d:#9C6B3F;--k-m:#8D96A3;--k-q:#C98A00;--k-o:#A1A1AA}
+html[data-theme="dark"]{--run:#E8916B;--wait:#F5C242;--waitBg:#3A3015;--stop:#5B5B63;--track:#2A2725;
+  --k-r:#7D9BEF;--k-e:#4CC27A;--k-s:#8E9BB0;--k-a:#A792EC;--k-w:#5FA5EC;--k-b:#3CB9CD;--k-d:#C7925F;--k-m:#6E7782;--k-q:#F5C242;--k-o:#6E6E76}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.55 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  padding:var(--xb-content-top,calc(env(safe-area-inset-top) + 56px)) 14px
+          var(--xb-content-bottom,calc(28px + env(safe-area-inset-bottom)))}
+.top{display:flex;align-items:center;gap:9px;margin-bottom:5px}
+.dot{width:8px;height:8px;border-radius:4px;background:var(--src);flex:0 0 auto}
+h1{font-size:24px;margin:0;font-weight:700;letter-spacing:-.6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top .grow{flex:1 1 auto;min-width:0}
+.lead{color:var(--sub);font-size:12.5px;margin:2px 0 18px 17px}
+.card{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow);margin-bottom:12px}
+button{border:0;font:inherit;cursor:pointer}
+.btn{display:block;width:100%;background:var(--src);color:#fff;border-radius:12px;
+  padding:12px;font-size:14px;font-weight:600;margin-top:10px}
+.btn.ghost{background:var(--chip);color:var(--fg)}
+.sect{font-size:13px;color:var(--sub);font-weight:700;margin:20px 0 8px;display:flex;align-items:baseline;gap:8px}
+.sect em{font-style:normal;font-weight:400;font-size:13px;margin-left:auto;text-align:right}
+.note{color:var(--sub);font-size:11px;line-height:1.6;margin:14px 0 0}
+.arow{display:flex;align-items:center;gap:12px;padding:6px 0}
+.arow+.arow{border-top:1px solid var(--line,rgba(127,127,127,.15));padding-top:12px;margin-top:6px}
+.atx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.atx b{font-size:14px}.atx span{font-size:12px;color:var(--sub);line-height:1.5}
+.abtn{width:auto;flex:none;padding:8px 14px;font-size:13px}
+.hide{display:none}
+.chev{flex:0 0 auto;color:var(--sub);opacity:.5;font-size:14px;line-height:1;margin-left:2px}
+.num0{font-variant-numeric:tabular-nums}
+code.cmd{display:block;background:var(--chip);border-radius:12px;padding:9px 11px;margin-top:8px;
+  font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+/* 引导态(三种没数据分开说,§4B):一句现状 + 一句下一步 */
+.guide h3{margin:0 0 6px;font-size:15px;font-weight:700}
+.guide p{margin:0;color:var(--sub);font-size:12.5px}
+/* 状态位 / 图标:图标 + 字 + 时长,不靠颜色也能读(§5.4 第 3 条) */
+.sb{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:6px;padding:1px 6px;
+  white-space:nowrap;font-variant-numeric:tabular-nums;line-height:1.5}
+.sb.running{color:var(--run)}
+.sb.perm{background:var(--wait);color:#1A1400}
+.sb.input{color:var(--wait);box-shadow:inset 0 0 0 1px var(--wait)}
+.sb.parked{color:var(--sub);box-shadow:inset 0 0 0 1px var(--stop)}
+.sb.lost{color:var(--sub)}
+.sb.ended{color:var(--sub);font-weight:400}
+/* 标签列圆点:运行实心强调色(呼吸)· 授权实心黄 · 输入空心黄 · 搁置空心灰 · 断开 / 结束实心灰 */
+.sd{display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--stop)}
+.sd.running{background:var(--run);animation:lv-breath 1.8s ease-in-out infinite}
+.sd.perm{background:var(--wait)}
+.sd.input{background:transparent;box-shadow:inset 0 0 0 1.5px var(--wait)}
+.sd.parked{background:transparent;box-shadow:inset 0 0 0 1.5px var(--stop)}
+@keyframes lv-breath{0%,100%{opacity:1}50%{opacity:.35}}
+/* 尾巴画法(§5.4,与组件同形):授权 = 实心黄块;输入 = 黄 1px 描边 + 淡黄底;搁置 = 灰描边 + 轨道底;断开 = 半透明灰 */
+.tl-perm{background:var(--wait)}
+.tl-input{background:var(--waitBg);box-shadow:inset 0 0 0 1px var(--wait)}
+.tl-parked{background:var(--track);box-shadow:inset 0 0 0 1px var(--stop)}
+.tl-lost{background:var(--stop);opacity:.55}
+/* 状态图标:CSS 画形状(字符图标在部分字体里没有字形) */
+.ic{display:inline-block;flex:0 0 auto;font-style:normal;line-height:1;vertical-align:middle}
+.ic.running{width:0;height:0;border-left:7px solid var(--run);border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;margin:0 1px}
+.ic.perm{color:var(--wait);font-size:11px;font-weight:700}
+.ic.input,.ic.parked{width:7px;height:9px;border-left:2.5px solid var(--wait);border-right:2.5px solid var(--wait)}
+.ic.parked{border-color:var(--stop)}
+.ic.lost{color:var(--sub);font-size:13px;font-weight:700;margin-top:-1px}
+.ic.ended{width:7px;height:7px;background:var(--stop);border-radius:1px}
+.sb.perm .ic.perm{color:#1A1400}
+/* 工具类目 → 块颜色 */
+.k-r{background:var(--k-r)}.k-e{background:var(--k-e)}.k-s{background:var(--k-s)}.k-a{background:var(--k-a)}.k-w{background:var(--k-w)}
+.k-b{background:var(--k-b)}.k-d{background:var(--k-d)}.k-m{background:var(--k-m)}.k-q{background:var(--k-q)}.k-o{background:var(--k-o)}
+/* 会话行(全部会话 / 等你处理 / 同工程的其它会话) */
+.srow{display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer}
+.srow + .srow{border-top:1px solid var(--line)}
+.srow .bd{flex:1 1 auto;min-width:0}
+.srow .p{font-size:11px;color:var(--sub);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .tt{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .rt{flex:0 0 auto;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.srow .rt .x{font-size:11px;color:var(--sub);white-space:nowrap;font-variant-numeric:tabular-nums}
+.srow.dim .bd{opacity:.55}
+.srow.alert{background:color-mix(in srgb,var(--wait) 12%,transparent);margin:0 -8px;padding:10px 8px;border-radius:12px}
+.srow.alert + .srow{border-top-color:transparent}
+.srow[data-go]{-webkit-user-select:none;user-select:none;transition:opacity var(--xb-out,140ms) ease}
+.srow[data-go]:active{opacity:.55;transition-duration:var(--xb-in,60ms)}
+/* 可能卡住(§6.2):黄字一行,只是信号不下结论 —— 不改状态圆点、不改状态位(状态词表 §1.4 不动) */
+.srow .sk{font-size:11.5px;color:var(--wait);font-weight:600;line-height:1.45;margin-top:2px}
+.srow .sk .ic.perm{font-size:10.5px;margin-right:3px}
+.stk{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--wait);line-height:1.45;
+  background:color-mix(in srgb,var(--wait) 12%,transparent);border-radius:10px;padding:7px 10px}
+.stk .ic.perm{font-size:12px}
+[data-go]{cursor:pointer}
+/* xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改(页面时效锚 §1.1) */
+:root{--xb-at-bg:rgba(14,17,22,.055);--xb-at-fg:#6B7280;--xb-at-live:#128F66;--xb-at-idle:#B8BDC6}
+html[data-theme="dark"]{--xb-at-bg:rgba(243,244,246,.08);--xb-at-fg:#8E939B;--xb-at-live:#6FE8BE;--xb-at-idle:#4A4F58}
+.xb-at{flex:0 0 auto;align-self:flex-start;display:inline-flex;align-items:center;gap:5px;box-sizing:border-box;height:26px;min-width:26px;padding:0 10px 0 8px;margin:0 0 0 auto;border:0;border-radius:13px;background:var(--xb-at-bg);color:var(--xb-at-fg);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:12px;font-weight:500;line-height:1;letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform var(--xb-out,140ms) ease,opacity var(--xb-out,140ms) ease}
+.xb-at:active{transform:scale(var(--xb-scale,.96));opacity:var(--xb-dim,.72);transition-duration:var(--xb-in,60ms)}
+.xb-at svg{flex:0 0 auto;display:block;width:13px;height:13px;fill:currentColor}
+.xb-at .lv{flex:0 0 auto;width:6px;height:6px;margin:0 1px 0 2px;border-radius:50%;background:var(--xb-at-live)}
+.xb-at .lv.off{background:var(--xb-at-idle)}
+/* 没有时间 = 只剩图标的圆钮 */
+.xb-at.ic{width:26px;padding:0;justify-content:center}
+/* 页面用 .hide / [hidden] 藏锚(未接入、空态)时,单类 .hide 写在本块之前、同特异性会被上面的
+   display:inline-flex 盖掉 —— 锚就藏不住了(ccusage 首页 2026-09-25 实测)。双类钉住。 */
+.xb-at.hide,.xb-at[hidden]{display:none}
+@keyframes xb-at-spin{to{transform:rotate(360deg)}}
+.xb-at.busy svg{animation:xb-at-spin .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.xb-at.busy svg{animation:none;opacity:.5}}
+/* xb:anchor end */
+/* xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改(页面交互基准) */
+:root{--xb-in:60ms;--xb-out:140ms;--xb-ease:cubic-bezier(.2,0,.2,1);--xb-wash:rgba(11,12,14,.055);--xb-dim:.72;--xb-scale:.96;--xb-enter:180ms;--xb-sheen:1.4s;--xb-sheet:260ms;--xb-mask:220ms;--xb-ease-sheet:cubic-bezier(.32,.72,0,1)}
+html[data-theme="dark"]{--xb-wash:rgba(255,255,255,.075)}
+
+/* ① 大面积可点区:按下变底色(不是变透明 —— 整块变透明会「闪」)。
+   洗色走 ::after,不动元素自己的 background:各行底色本来就不同,
+   写死一个 tile 会让「本来就在 tile 上的行」按下去毫无变化。 */
+.row,.xb-tap{position:relative}
+.row::after,.xb-tap::after{content:"";position:absolute;left:0;right:0;top:0;bottom:0;border-radius:inherit;background:var(--xb-wash);opacity:0;pointer-events:none;transition:opacity var(--xb-out) var(--xb-ease)}
+.row:active::after,.xb-tap:active::after{opacity:1;transition-duration:var(--xb-in)}
+
+/* ② 小控件:按下轻微缩放 + 变暗。按下 60ms 跟手,抬起 140ms 留余韵。 */
+.btn,.sect .at,.pickb,.xb-press{transition:transform var(--xb-out) var(--xb-ease),opacity var(--xb-out) var(--xb-ease)}
+.btn:active,.sect .at:active,.pickb:active,.xb-press:active{transform:scale(var(--xb-scale));opacity:var(--xb-dim);transition-duration:var(--xb-in)}
+
+/* ③ 数据换了才过渡的内容淡入。谁来判「换没换」见本页 <head> 里的 xbMotion:
+   首屏不过渡、命中缓存的毫秒级返回不过渡、边打字边筛不过渡。 */
+@keyframes xb-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.xb-in{animation:xb-in var(--xb-enter) var(--xb-ease) both}
+
+/* ④ 骨架:一套形状之外,更要紧的是**延迟 150ms 才铺** —— 命中缓存整条链路 3ms,
+   先铺一屏骨架再瞬间换掉比不铺更糟(doc/infosource-standard.md §5.5)。
+   靠 animation-delay 实现:延迟期间元素用自己的 opacity:0,一个字节 JS 都不用。 */
+@keyframes xb-sheen{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+.xb-sk{opacity:0;animation:xb-sheen var(--xb-sheen) linear 150ms infinite}
+
+/* ⑤ 无障碍底线:系统开了「减少动效」就全部降级为无动画。
+   注意状态本身要留下(按下仍然变色/变暗),降掉的只是过渡过程。 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .xb-sk{opacity:1!important;animation:none!important}
+  .xb-in{animation:none!important}
+}
+/* xb:motion end */
+/* ── /live ── */
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1.4fr;gap:7px}
+.g4 .st{background:var(--chip);border-radius:12px;padding:9px 9px 8px;min-width:0}
+.g4 .k{font-size:11px;color:var(--sub);white-space:nowrap}
+.g4 .v{font-size:19px;font-weight:700;letter-spacing:-.4px;margin-top:1px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.g4 .v.run{color:var(--run)}.g4 .v.wait{color:var(--wait)}
+.g4 .d{font-size:10.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum{padding:10px}
+/* 切换:时间窗 + 粒度,同包 /period 的 segs 样式 */
+.ctl{display:flex;gap:8px;margin:0 0 10px}
+.segs{display:flex;background:var(--chip);border-radius:10px;padding:3px;gap:2px}
+.segs.w{flex:1 1 auto}.segs.g{flex:0 0 auto}
+.segs button{flex:1 1 0;border:0;background:transparent;font:inherit;font-size:12px;color:var(--sub);padding:5px 7px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.segs button.on{background:var(--card);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgba(15,20,30,.08)}
+/* 多泳道:工程为池(池名一行 + 左侧竖条),会话为道;右侧一列状态位(§5.4) */
+.pool{padding:7px 0 5px}
+.pool + .pool{border-top:1.5px solid var(--line)}
+.pn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;margin:0 0 3px;min-width:0}
+.pn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pb{display:inline-block;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--wait);color:#1A1400;
+  font-size:10.5px;font-weight:700;text-align:center;line-height:16px}
+.pl{border-left:3px solid var(--line);padding-left:6px}
+.ln{display:grid;grid-template-columns:38px minmax(0,1fr) 80px;gap:6px;align-items:center;height:24px;cursor:pointer}
+.ln.sub{height:13px;cursor:default}
+.lb{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums}
+.ln.sub .lb{font-size:9.5px;padding-left:2px}
+.lt{position:relative;height:14px;background:var(--track);border-radius:3px}
+.ln.sub .lt{height:6px;background:transparent;border-top:1px dashed var(--line);border-radius:0}
+.lt i{position:absolute;top:0;bottom:0;border-right:1.5px solid var(--card);font-style:normal;font-size:9px;line-height:14px;
+  color:#fff;text-align:center;overflow:hidden;white-space:nowrap}
+.ln.sub .lt i{top:0;height:6px;border-right:0;border-radius:2px}
+.lt b.tl{position:absolute;top:0;bottom:0;border-radius:0 3px 3px 0}
+/* 运行中:最后一块顶到现在线,末端 ▶ + 扫光 */
+.lt i.cur{background-image:linear-gradient(90deg,transparent,rgba(255,255,255,.38),transparent);background-size:36px 100%;
+  background-repeat:no-repeat;animation:lv-sheen 1.8s linear infinite;border-right:0}
+.lt i.cur::after{content:"";position:absolute;right:1px;top:2px;border:5px solid transparent;border-left-color:#fff;border-right:0}
+@keyframes lv-sheen{from{background-position:-36px 0}to{background-position:calc(100% + 36px) 0}}
+.lt .cap{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--sub);border-radius:1px}
+.lt .now{position:absolute;right:-1px;top:-4px;bottom:-4px;width:1.5px;background:var(--fg);opacity:.5}
+.ln.done .lt,.ln.done .lb{opacity:.45}
+.ln .ch{justify-self:end;max-width:80px;overflow:hidden}
+.ln .sb{padding:1px 5px;font-size:10.5px;gap:3px}
+/* 英文状态位更长(Your turn 2m),右列放宽,宁可缩轨道也不截状态位(§5.4 第 3 条) */
+html[lang="en"] .ln,html[lang="en"] .ax{grid-template-columns:38px minmax(0,1fr) 98px}
+html[lang="en"] .ln .ch{max-width:98px}
+.ln:active .lt{opacity:.7}
+.ax{display:grid;grid-template-columns:38px minmax(0,1fr) 80px;gap:6px;font-size:10.5px;color:var(--sub);margin-top:6px;
+  padding-left:9px;font-variant-numeric:tabular-nums}
+.ax div{display:flex;justify-content:space-between}
+.lg{display:flex;flex-wrap:wrap;gap:4px 11px;font-size:11px;color:var(--sub);margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+.lg span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.lg i{display:inline-block;width:13px;height:8px;border-radius:2px}
+.lg i.ic{width:auto;height:auto;border-radius:0}.lg i.ic.running{width:0;height:0}
+.lg i.capi{width:2px;height:11px;background:var(--sub)}
+.empty1{font-size:12.5px;color:var(--sub);padding:6px 0}
+.skel{height:150px}
+</style>
+
+<!-- xb:motion v1 — 由 tools/infosource/mk_motion.py 生成,别手改 -->
+<script>
+/* 数据刷新不再硬切:内容换了才淡入一次。三条纪律直接写在判据里 ——
+   ① 首屏不过渡(首屏要立刻可读,不该等动画);
+   ② 命中缓存的瞬时返回不过渡(G23「有缓存必先渲」是毫秒级,加动画反而像卡)——
+      它就是首屏那一次,被 ① 一并盖住;
+   ③ 边打字边筛出来的重绘不是「数据刷新」(400ms 内有过输入就不过渡),
+      否则搜索结果每敲一个字母闪一下。
+   另加:内容签名没变就不过渡(重绘 ≠ 换了数据)。 */
+(function(){
+  var RM = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : {matches:false};
+  var lastKey = 0;
+  function mark(){ lastKey = Date.now(); }
+  document.addEventListener("input", mark, true);
+  document.addEventListener("keydown", mark, true);
+  function sig(el){ var t = el.textContent || ""; return el.childElementCount + "|" + t.length + "|" + t.slice(0, 256); }
+  function watch(el){
+    if (!el || el.__xbm || !window.MutationObserver) return;
+    el.__xbm = 1;
+    var last = sig(el), first = true;
+    new MutationObserver(function(){
+      var s = sig(el);
+      if (first){ first = false; last = s; return; }
+      if (s === last) return;
+      last = s;
+      if (RM.matches) return;
+      if (Date.now() - lastKey < 400) return;
+      el.classList.remove("xb-in");
+      void el.offsetWidth;                       /* 强制回流,让动画重新起跑 */
+      el.classList.add("xb-in");
+    }).observe(el, {childList:true, subtree:true});
+  }
+  function watchAll(sel){
+    if (!sel) return;
+    try { var ns = document.querySelectorAll(sel); for (var i=0;i<ns.length;i++) watch(ns[i]); } catch(e){}
+  }
+  window.xbMotion = {watch:watch, watchAll:watchAll};
+  var SEL = "#guide";
+  function boot(){ watchAll(SEL); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+<!-- xb:motion end -->
+<!-- xb:anchor v1 — 由 tools/infosource/mk_anchor.py 生成,别手改 -->
+<script>
+/* 页面时效锚。xbAt.set(el, t, opt):
+     t   = Date / 毫秒 / 秒 / 可解析的时间串 / null(= 还没有时间 → 只剩图标);
+     opt = {day:1}  只有日粒度的数据 → MM-DD
+           {live:1} 秒级实时页 → 绿点 + HH:mm:ss;{live:1,off:1} 轮询停了 → 灰点
+           {text:"…"} 已经算好的串原样用(只给没有时间戳可拿的老页面兜底,新代码别用)
+   xbAt.busy(el, on) 刷新中转圈。el 可以是元素或 id。 */
+(function(){
+  var ICON = "<svg viewBox=\"0 0 256 256\" aria-hidden=\"true\"><path d=\"M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z\"/></svg>";
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function toDate(t){
+    if (t == null || t === "") return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === "number" || /^\d+(\.\d+)?$/.test(String(t))){
+      var n = Number(t); if (!n) return null;
+      return new Date(n < 1e11 ? n * 1000 : n);            /* 秒 → 毫秒 */
+    }
+    var s = String(t).trim();
+    if (/^\d{4}-\d\d-\d\d$/.test(s)) s += "T00:00:00";       /* 纯日期按本地零点,不按 UTC */
+    var d = new Date(s.replace(/^(\d{4}-\d\d-\d\d) /, "$1T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function fmt(t, o){
+    o = o || {};
+    var d = toDate(t); if (!d) return "";
+    var md = p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+    if (o.day) return md;
+    var hm = p2(d.getHours()) + ":" + p2(d.getMinutes()) + (o.live ? ":" + p2(d.getSeconds()) : "");
+    return d.toDateString() === new Date().toDateString() ? hm : md + " " + hm;
+  }
+  function $(el){ return typeof el === "string" ? document.getElementById(el) : el; }
+  /* 胶囊中线对齐同一行 h1 首行的中线。各页标题字号 / 行高不一,手调 margin 调一页漂一页。 */
+  function align(el){
+    var row = el.parentElement; if (!row) return;
+    var h = row.querySelector("h1") || (row.parentElement && row.parentElement.querySelector("h1"));
+    if (!h || !h.getBoundingClientRect) return;
+    el.style.marginTop = "0px";
+    var hr = h.getBoundingClientRect(), er = el.getBoundingClientRect();
+    if (!hr.height || hr.bottom < er.top || hr.top > er.bottom + 40) return;   /* 不在同一行就不管 */
+    var cs = getComputedStyle(h), lh = parseFloat(cs.lineHeight);
+    if (!(lh > 0)) lh = parseFloat(cs.fontSize) * 1.2;
+    var mt = Math.round((hr.top + lh / 2) - (er.top + er.height / 2));
+    if (mt > 0 && mt < 24) el.style.marginTop = mt + "px";
+  }
+  function set(el, t, o){
+    el = $(el); if (!el) return;
+    o = o || {};
+    var s = o.text != null ? String(o.text) : fmt(t, o);
+    var head = o.live ? '<i class="lv' + (o.off ? " off" : "") + '"></i>' : ICON;
+    el.innerHTML = head + (s ? "<span>" + s.replace(/[&<>"]/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }) + "</span>" : "");
+    el.classList.add("xb-at");
+    el.classList.toggle("ic", !s && !o.live);
+    if (!el.__xbAtAl){ el.__xbAtAl = 1; requestAnimationFrame(function(){ align(el); });
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ align(el); });
+      window.addEventListener("resize", function(){ align(el); }); }
+  }
+  function busy(el, on){
+    el = $(el); if (!el) return;
+    el.classList.toggle("busy", !!on);
+    if (on) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  }
+  /* 首帧:页面里写好的 <button class="xb-at"> 先画上图标,别空着等第一次取数 */
+  function boot(){
+    var ns = document.querySelectorAll(".xb-at");
+    for (var i = 0; i < ns.length; i++) if (!ns[i].firstChild) set(ns[i], null);
+  }
+  window.xbAt = {set:set, busy:busy, fmt:fmt, align:align};
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>
+<!-- xb:anchor end -->
+</head><body>
+
+<div class="top"><span class="dot"></span><span class="grow"><h1 id="h1">实时会话</h1></span>
+  <button class="xb-at" id="at" type="button"></button></div>
+<p class="lead" id="lead">&nbsp;</p>
+
+<!-- 首屏骨架:延迟 150ms 才铺(xb-sk),取数快的时候根本不出现 -->
+<div id="skel" class="card skel xb-sk" aria-hidden="true"></div>
+
+<!-- 引导态:没接上 / 没开实时 / 现在没有会话 / 暂时取不到(§4B) -->
+<div id="guide" class="hide"></div>
+
+<div id="main" class="hide">
+  <!-- ① 汇总条 -->
+  <div class="card sum" id="sum"></div>
+
+  <!-- ② 等你处理:按等了多久倒序 -->
+  <div id="waitWrap" class="hide">
+    <div class="sect"><span id="secWait">等你处理</span><em id="vWait"></em></div>
+    <div class="card" id="wait"></div>
+  </div>
+
+  <!-- ③ 多泳道:工程为池、会话为道;尾巴 + 右侧状态位表达「现在什么状态」(§5.4) -->
+  <div class="sect"><span id="secLanes">多泳道</span><em id="vLanes"></em></div>
+  <div class="card">
+    <div class="ctl"><div class="segs w" id="segW"></div><div class="segs g" id="segG"></div></div>
+    <div id="lanes"></div>
+    <div class="lg" id="legend"></div>
+  </div>
+
+  <!-- ④ 全部会话(含已结束 / 断开) -->
+  <div class="sect"><span id="secAll">全部会话</span><em id="vAll"></em></div>
+  <div class="card" id="all"></div>
+  <p class="note" id="hint">点任意一行，看这个会话从头到尾的每一轮。</p>
+
+  <!-- ⑤ 提醒(P2 · §6.1):打开原生「添加提醒」面板,用户在面板里确认才建;老 App 没有 alertAdd 桥时整节不出 -->
+  <div id="alertWrap" class="hide">
+    <div class="sect"><span id="secAlert">提醒</span></div>
+    <div class="card">
+      <div class="arow"><div class="atx"><b id="aWaitT">等你授权时提醒我</b><span id="aWaitD">有会话弹了授权、等了一会儿还没人点</span></div><button class="btn ghost abtn" id="aWaitB">设置</button></div>
+      <div class="arow"><div class="atx"><b id="aDoneT">长任务跑完提醒我</b><span id="aDoneD">一轮跑了很久、跑完在等你接着说</span></div><button class="btn ghost abtn" id="aDoneB">设置</button></div>
+      <div class="arow"><div class="atx"><b id="aStuckT">可能卡住时提醒我</b><span id="aStuckD">连续失败、长时间打转、反复压缩上下文时</span></div><button class="btn ghost abtn" id="aStuckB">设置</button></div>
+      <p class="note" id="aNote">提醒是手机按设定频率去检查的，不是实时推送：免费版约每 30 分钟查一次，Pro 更勤；实际时机还受系统调度影响，放着本工具的桌面小组件、允许 Numable 后台运行时会更及时。</p>
+    </div>
+  </div>
+</div>
+
+<p class="note" id="note">默认只上传会话的状态、时长、token 数和用到的工具类别，不含对话内容、文件路径和命令。页面开着时每 15 秒更新一次，离开页面就停。</p>
+
+<script>
+/* ── live:core v1 ──────────────────────────────────────────────────────────────
+   /live 与 /session 两页逐字同一份(包是离线分发的,没有运行时共享件)。改一处,另一页同步改。
+   词表 / 颜色 / 标签规则与服务端组件视图(Numable-ccusage/service/src/live.js 的 ST / DOING / widgetView)一致,
+   设计 doc/ccusage-live-timeline.md §1.4 · §4A · §4B · §5.4。 */
+// numable-env v1 · doc/overseas-first.md §1–§2
+function nbLang(v){ v = String(v || "").toLowerCase(); return v.slice(0, 2) === "zh" ? "zh" : "en"; }
+var T = {}, EN = false;
+function t(k, fb){ return (T && Object.prototype.hasOwnProperty.call(T,k)) ? T[k] : fb; }  /* 空串是合法译文,不能当缺键回落 */
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+  return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+function $(id){ return document.getElementById(id); }
+function show(id, on){ var e=$(id); if (e) e.classList.toggle("hide", !on); }
+function applyTheme(th){
+  var dark = th==='dark' || (th!=='light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+}
+async function ready(){ for(var i=0;i<24 && !window.xbridge;i++){ await new Promise(function(r){setTimeout(r,50);}); }
+  return !!window.xbridge; }
+async function appInfo(){
+  try{ if(xbridge.appInfo) return await xbridge.appInfo(); }catch(e){}
+  return {};
+}
+/* 折叠栏标题(container-model §0.2d):DOMContentLoaded 之后改的 document.title 才被容器采用 */
+var xbTitle=(function(){ var ok=document.readyState!=="loading", v="";
+  if(!ok) document.addEventListener("DOMContentLoaded",function(){ setTimeout(function(){ ok=true; if(v) document.title=v; },0); });
+  return function(s){ s=String(s==null?"":s).trim(); if(!s||s==="--") return; v=s; if(ok) document.title=s; }; })();
+function fmt(n){
+  n = Number(n)||0;
+  if(n>=1e9) return (Math.round(n/1e8)/10)+'B';
+  if(n>=1e6) return (Math.round(n/1e5)/10)+'M';
+  if(n>=1e3) return Math.round(n/1e3)+'k';
+  return String(n);
+}
+function p2(n){ return (n<10?"0":"")+n; }
+function hm(ms){ var d=new Date(Number(ms)); return p2(d.getHours())+":"+p2(d.getMinutes()); }
+/* 跨天写「昨天 / Yesterday」—— 只留 24 小时,最多跨一天 */
+function hmDay(ms){
+  var d=new Date(Number(ms)), n=new Date(nowS());
+  if (d.toDateString()===n.toDateString()) return hm(ms);
+  return (EN?"Yesterday ":"昨天 ")+hm(ms);
+}
+function mlabel(n){
+  var m=/^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/.exec(String(n||""));
+  if (!m) return String(n||"").replace(/^claude-/,"");
+  return m[1][0].toUpperCase()+m[1].slice(1)+" "+m[2]+(m[3]?"."+m[3]:"");
+}
+
+/* ── 时长 ── 三种写法:
+   dS  紧凑(状态位 / 泳道):<1m · 4m · 1h05 —— 与组件同形;
+   dP  精确(每轮实跑,走字):12s · 4m12s · 1h02m;
+   dW  句子(「等了 6 分钟」):不到 1 分钟 · 6 分钟 · 1 小时 5 分 */
+function dS(ms){ var m=Math.floor(Math.max(0,ms)/60e3); return m<1?"<1m":m<60?m+"m":Math.floor(m/60)+"h"+p2(m%60); }
+function dP(ms){
+  var s=Math.floor(Math.max(0,ms)/1e3);
+  if (s<60) return s+"s";
+  var m=Math.floor(s/60); if (m<60) return m+"m"+p2(s%60)+"s";
+  return Math.floor(m/60)+"h"+p2(m%60)+"m";
+}
+function dW(ms){
+  var m=Math.floor(Math.max(0,ms)/60e3);
+  if (EN){ if (m<1) return "under a minute"; if (m<60) return m+(m===1?" minute":" minutes");
+    var h=Math.floor(m/60), r=m%60; return h+(h===1?" hour":" hours")+(r?" "+r+" min":""); }
+  if (m<1) return "不到 1 分钟"; if (m<60) return m+" 分钟";
+  return Math.floor(m/60)+" 小时"+(m%60?" "+(m%60)+" 分":"");
+}
+var DUR={S:dS,P:dP,W:dW};
+/* 走字:元素带 data-t(起点毫秒,服务端时钟)+ data-f(S/P/W)+ data-tp(含 {d} 的模板),每秒本地重算。
+   不等下一次轮询 —— 否则 15 秒跳一次,看着像卡住(§4B)。 */
+function live(t0, f, tpl, cls){
+  return '<span class="'+(cls||"")+'" data-t="'+Number(t0)+'" data-f="'+(f||"S")+'" data-tp="'+esc(tpl||"{d}")+'">'+
+    esc(String(tpl||"{d}").replace("{d}", DUR[f||"S"](nowS()-Number(t0))))+"</span>";
+}
+function tickLive(){
+  var n=nowS(), ns=document.querySelectorAll("[data-t]");
+  for (var i=0;i<ns.length;i++){ var e=ns[i], f=DUR[e.getAttribute("data-f")]||dS;
+    var s=String(e.getAttribute("data-tp")||"{d}").replace("{d}", f(n-Number(e.getAttribute("data-t"))));
+    if (e.textContent!==s) e.textContent=s; }
+}
+
+/* ── 数据 ── LV = 解析后的 /live 返回;OFF = 服务端时钟 − 本机时钟(时间戳都是服务端时钟,
+   用本机 Date.now() 直接减会把设备时钟偏差算进「等了多久」)。 */
+var LV=null, OFF=0, CS="", FAIL=0;
+function nowS(){ return Date.now()+OFF; }
+async function fetchLive(){
+  if (!(window.xbridge && xbridge.runDataFlow)) return null;
+  try{ var r = await xbridge.runDataFlow('live', { _cache: 0 });
+       return (r && (r.data || r)) || null; }catch(e){ return null; }
+}
+/* 取一次。成功 → 换数据;失败 → 保留上一次的数据(别把好数据抹成空),只记 FAIL 让锚变灰点。 */
+async function pull(){
+  var d=await fetchLive();
+  var cs=d ? String(d.credState||"") : "";
+  if (cs) CS=cs;
+  var m=null;
+  if (d && String(d.live||"")==="1"){ try{ m=JSON.parse(String(d.raw||"")); }catch(e){ m=null; } }
+  if (m && Array.isArray(m.sessions)){
+    LV=m; FAIL=0;
+    OFF=(Number(m.now)>0) ? Number(m.now)-Date.now() : 0;
+    if (Math.abs(OFF)<1500) OFF=0;
+    index();
+  } else FAIL=1;
+  return !!m;
+}
+
+var DOING_ZH={r:"读代码",e:"改代码",s:"跑命令",a:"派子代理",w:"查资料",b:"操作浏览器",d:"操作设备",m:"调外部工具",q:"问你",o:"干活"};
+var DOING_EN={r:"Reading code",e:"Editing",s:"Running commands",a:"Running agents",w:"Searching the web",b:"Using the browser",
+  d:"Driving a device",m:"Calling tools",q:"Asking you",o:"Working"};
+/* 类目名(工具序列芯片):中文与 DOING 同词;英文用短名词 */
+var CAT_ZH={r:"读代码",e:"改代码",s:"跑命令",a:"派子代理",w:"查资料",b:"操作浏览器",d:"操作设备",m:"调外部工具",q:"问你",o:"其它"};
+var CAT_EN={r:"Read",e:"Edit",s:"Run",a:"Agents",w:"Web",b:"Browser",d:"Device",m:"Tools",q:"Ask",o:"Other"};
+/* 泳道块上的一字简称(块宽够才写) */
+var CAT1_ZH={r:"读",e:"改",s:"跑",a:"派",w:"查",b:"浏",d:"机",m:"调",q:"问",o:"他"};
+var CAT1_EN={r:"Read",e:"Edit",s:"Run",a:"Agt",w:"Web",b:"Web",d:"Dev",m:"Tool",q:"Ask",o:"…"};
+function catName(k){ return (EN?CAT_EN:CAT_ZH)[k] || (EN?CAT_EN:CAT_ZH).o; }
+/* 状态词表(§1.4,与 live.js ST 同字)。sb = 状态位里的短字。
+   ⚠️ 图标除 ⚠ 外一律用 CSS 画形状(icHTML):⏸ / ✕ / ▶ / ■ 这几个字符在部分系统字体里没有字形,
+   实测画成空白(组件那边同一条结论)。运行 = 暖橙实心三角 · 授权 = 黄 ⚠ · 输入 = 两道黄竖条 ·
+   搁置 = 两道灰竖条 · 断开 = 灰「×」(U+00D7) · 已结束 = 灰小方块。 */
+var ST={
+  running:{zh:"运行中", en:"Running", sbz:"", sbe:""},
+  perm:{zh:"等你授权", en:"Needs approval", sbz:"授权", sbe:"Approve"},
+  input:{zh:"等你输入", en:"Your turn", sbz:"等你", sbe:"Your turn"},
+  parked:{zh:"搁置", en:"Idle", sbz:"搁置", sbe:"Idle"},
+  lost:{zh:"可能已断开", en:"Disconnected?", sbz:"断开", sbe:"Lost"},
+  ended:{zh:"已结束", en:"Ended", sbz:"已结束", sbe:"Ended"}
+};
+function icHTML(st){
+  if (st==="perm") return '<i class="ic perm">\u26A0</i>';
+  if (st==="lost") return '<i class="ic lost">\u00D7</i>';
+  return '<i class="ic '+esc(st)+'"></i>';
+}
+var ORDER={perm:0, input:1, running:2, parked:3, lost:4, ended:5};
+function stOf(s){ return ST[s.state] || ST.input; }
+function stName(s){ var x=stOf(s); return EN?x.en:x.zh; }
+function isActive(s){ return s.state==="running" || s.state==="perm" || s.state==="input"; }
+function isWait(s){ return s.state==="perm" || s.state==="input"; }
+function lastTurn(s){ return (s.turns||[]).length ? s.turns[s.turns.length-1] : null; }
+function lastCat(s){ var tt=lastTurn(s), m=tt && String(tt.seq||"").match(/([a-z])\d+$/); return m ? m[1] : "o"; }
+/* 「这个状态从什么时候起」:运行中 = 本轮开始;授权 = permSince;其余 = 状态切换时刻;断开 = 最后一次听到它 */
+function sinceOf(s){
+  var tt=lastTurn(s);
+  if (s.state==="running" && tt && !tt.e) return tt.s;
+  if (s.state==="perm" && s.permSince) return s.permSince;
+  if (s.state==="lost") return Math.max(Number(s.beatAt)||0, Number(s.lastAt)||0) || s.changedAt;
+  return s.changedAt;
+}
+function totTok(s){ return (s.turns||[]).reduce(function(a,x){ return a+(Number(x.out)||0)+(Number(x.in)||0)+(Number(x.cw)||0); },0); }
+function turnRun(x, n){ return Math.max(0, (x.e||n)-x.s-(Number(x.perm)||0)); }
+function runMs(s, n){
+  var v=(s.turns||[]).reduce(function(a,x){ return a+turnRun(x, n); },0);
+  if (s.state==="perm" && s.permSince) v-=Math.max(0, n-s.permSince);   /* 正在等授权的那段不算实跑 */
+  return Math.max(0, v);
+}
+/* 工具序列 r4e6s9 → [[r,4],[e,6],[s,9]] */
+function seqOf(str){ var r=[], re=/([a-z])(\d+)/g, m; while((m=re.exec(String(str||"")))) r.push([m[1], Number(m[2])]); return r; }
+
+/* 标签:项目有名字用名字,没有按首次出现顺序叫「项目 A / B」;同项目会话按开始先后编 #1 #2,
+   两台以上设备时带设备尾标 /a /b —— 与组件视图同一套规则,页面和组件上对得上。 */
+var PROJ={}, LAB={}, MULTI=false;
+function key(s){ return s.dev+":"+s.sid; }
+function index(){
+  PROJ={}; LAB={};
+  var ss=(LV.sessions||[]).slice().sort(function(a,b){ return a.startAt-b.startAt; }), li=0, seq={}, tag={};
+  MULTI=(LV.devices||[]).length>1;
+  (LV.devices||[]).forEach(function(d,i){ tag[d.dev]=String.fromCharCode(97+i); });
+  ss.forEach(function(s){
+    var k=s.proj||"none";
+    if (!PROJ[k]){ var L="ABCDEFGHIJKLMNOPQRSTUVWXYZ"[li++%26]; PROJ[k]=s.pname ? {z:s.pname, e:s.pname} : {z:"项目 "+L, e:"Project "+L}; }
+    seq[k]=(seq[k]||0)+1;
+    LAB[key(s)]="#"+seq[k]+(MULTI && tag[s.dev] ? "/"+tag[s.dev] : "");
+  });
+}
+function projName(s){ var p=PROJ[s.proj||"none"]; return p ? (EN?p.e:p.z) : ""; }
+function sesLabel(s){ return LAB[key(s)]||""; }
+/* 没有标题时按状态写:运行中写「正在 + 当前类目」(§4B 数据约定) */
+function titleOf(s){
+  if (s.title) return s.title;
+  if (s.state==="running") return EN ? DOING_EN[lastCat(s)]||DOING_EN.o : "正在"+(DOING_ZH[lastCat(s)]||DOING_ZH.o);
+  return stName(s);
+}
+/* 状态位:[▶] 4m / [⚠] 授权 6m / [‖] 等你 2m / [‖] 搁置 1h / [×] 断开 14m / [■] 已结束(已结束不写时长,§5.4 第 4 条) */
+function sbHTML(s){
+  var x=stOf(s), w=EN?x.sbe:x.sbz;
+  if (s.state==="ended") return '<span class="sb ended">'+icHTML("ended")+esc(w)+"</span>";
+  return '<span class="sb '+s.state+'">'+icHTML(s.state)+live(sinceOf(s), "S", (w?w+" ":"")+"{d}")+"</span>";
+}
+/* 会话行(/live 的等你处理 / 全部会话、/session 的同工程其它会话共用) */
+function rowHTML(s, mode){
+  var lt=lastTurn(s), dim=s.state==="ended"||s.state==="parked"||s.state==="lost";
+  var x = mode==="wait"
+    ? t("xTurn","第 {n} 轮 · {k}").replace("{n}", lt?lt.n:0).replace("{k}", fmt(totTok(s)))
+    : t("xRun","实跑 {r} · {k}").replace("{r}", dS(runMs(s, nowS()))).replace("{k}", fmt(totTok(s)));
+  return '<div class="srow'+(dim?" dim":"")+(mode==="wait"&&s.state==="perm"?" alert":"")+'" data-go="'+esc(goSession(s))+'">'+
+    '<span class="sd '+s.state+'"></span><div class="bd"><div class="p">'+esc(projName(s))+" · "+esc(sesLabel(s))+'</div><div class="tt">'+esc(titleOf(s))+"</div>"+
+    (s.stuck ? '<div class="sk">'+icHTML("perm")+esc(stuckText(s))+"</div>" : "")+"</div>"+
+    '<div class="rt">'+sbHTML(s)+'<span class="x">'+esc(x)+'</span></div><span class="chev">›</span></div>';
+}
+/* 可能卡住(§6.2):服务端按规则判(连续失败 / 一轮打转 / 反复压缩 / 授权等太久),页面只翻译原因。
+   只是信号不下结论 —— 字一律「可能卡住」,原因与组件视图 live.js stuckWhy 同字。 */
+function stuckWhy(k){
+  if (!k) return "";
+  var n=Number(k.n)||0, m=Number(k.m)||0;
+  if (k.k==="fail") return EN ? n+" tool failures in a row" : "连续 "+n+" 次工具失败";
+  if (k.k==="wait") return EN ? "waiting "+m+" min for approval" : "等你授权 "+m+" 分钟";
+  if (k.k==="ctx") return EN ? "context compacted "+n+"× this turn" : "这一轮压缩了 "+n+" 次上下文";
+  if (k.k==="spin") return EN ? m+" min · "+n+" calls" : "这一轮 "+m+" 分钟、"+n+" 次调用";
+  return "";
+}
+function stuckText(s){
+  if (!s || !s.stuck) return "";
+  var w=stuckWhy(s.stuck);
+  return (EN?"May be stuck":"可能卡住")+(w?" · "+w:"");
+}
+function goSession(s){ return "/session?sid="+encodeURIComponent(s.sid)+"&dev="+encodeURIComponent(s.dev); }
+
+/* ── 跳转:一个分发器管全部(同包详情页同一写法)。容器内走 xbridge.route;没有桥回落相对路径。 ── */
+function go(path, q){
+  q=q||"";
+  if (window.POLL && POLL.leave) POLL.leave();
+  try{ if (window.xbridge && xbridge.route) return xbridge.route(path+q); }catch(e){}
+  location.href = "../"+(path.replace(/^\//,"")||"home")+"/index.html"+q;
+}
+document.addEventListener("click", function(e){
+  var el=e.target.closest?e.target.closest("[data-go]"):null;
+  if (!el) return;
+  var g=el.getAttribute("data-go"), i=g.indexOf("?");
+  go(i<0?g:g.slice(0,i), i<0?"":g.slice(i));
+});
+
+/* ── 轮询:页面可见时每 15 秒一发,隐藏即停、回来立刻补一发(照 crypto 首页 Poller)。
+   离开本页(压栈进详情)后降到 60 秒:有的宿主在栈底页上不派发可见性事件,那就退到「慢慢刷」,
+   而不是一直全速或永远停住;回来时靠 visibilitychange / focus / pageshow / 任何一次触摸恢复原速。 */
+function Poller(fn, ms){
+  var timer=null, busy=false, away=false;
+  async function tick(){ if (busy || document.visibilityState==="hidden") return;
+    busy=true; try{ await fn(); }catch(e){} busy=false; }
+  function arm(){ if (timer) clearInterval(timer); timer=setInterval(tick, away?Math.max(60000,ms):ms); }
+  function back(){ if (away){ away=false; arm(); tick(); } }
+  document.addEventListener("visibilitychange", function(){
+    if (document.visibilityState==="visible"){ away=false; arm(); tick(); }
+    else if (timer){ clearInterval(timer); timer=null; }
+  });
+  addEventListener("focus", back); addEventListener("pageshow", back);
+  document.addEventListener("pointerdown", back, true);
+  return {start:arm, tick:tick, leave:function(){ away=true; arm(); }};
+}
+/* 时效锚 = 采集端最后一次推上来的时刻(不是本页什么时候取的);实时页用 live 档:绿点 + HH:mm:ss,
+   取不到 / 轮询停了 = 灰点。 */
+function stamp(){
+  if (!$("at")) return;
+  $("at").classList.toggle("hide", stateKind()==="nocred");   /* 没接上时锚没有意义(同首页) */
+  xbAt.set("at", LV && LV.updatedAt ? Number(LV.updatedAt) : null, {live:1, off: FAIL || document.visibilityState==="hidden" ? 1 : 0});
+}
+/* ── 引导态(两页共用,§4B):三种没数据分开说 + 一种「暂时取不到」。
+   判据:LV 为空 → 看 credState(bound = 接上了但这次没取到;其余 = 没接上);
+   LV.devices 为空 = 接上了、没开实时会话;LV.sessions 为空 = 开了、现在没有会话。 */
+function stateKind(){
+  if (!LV) return CS==="bound" ? "fail" : "nocred";
+  if (!(LV.devices||[]).length) return "nosync";
+  if (!(LV.sessions||[]).length) return "empty";
+  return "";
+}
+function guideHTML(kind){
+  var h="", P=function(k, zh){ return esc(t(k, zh)); };
+  if (kind==="nocred"){
+    h='<h3>'+P("gNoT","还没接入 Claude Code 用量")+'</h3><p>'+P("gNoD","先在 Claude Code 里装好采集插件，再把读取令牌填进来。接好后，正在跑的会话会出现在这里。")+"</p>"+
+      '<button class="btn" id="gTok" type="button">'+P("gNoB","去填令牌")+"</button>"+
+      '<button class="btn ghost" data-go="/" type="button">'+P("gNoB2","查看接入步骤")+"</button>";
+  } else if (kind==="fail"){
+    h='<h3>'+P("gFailT","暂时取不到实时数据")+'</h3><p>'+P("gFailD","令牌已配置。页面开着时会每 15 秒自动再试一次。")+"</p>";
+  } else if (kind==="nosync"){
+    h='<h3>'+P("gSyncT","还没打开同步")+'</h3><p>'+P("gSyncD","在 Claude Code 里运行 /numable-usage，说「打开实时会话并同步到手机」")+"</p>"+
+      '<code class="cmd">/numable-usage</code>';
+  } else if (kind==="empty"){
+    var last=(LV.devices||[]).reduce(function(a,d){ return Math.max(a, Number(d.at)||0); },0);
+    h='<h3>'+P("gEmptyT","没有在跑的会话")+'</h3><p>'+esc(t("gEmptyD","实时会话已打开，最近一次同步在 {t}。在 Claude Code 里开始干活后，这里会自动出现。").replace("{t}", last?hmDay(last):"--"))+"</p>";
+  }
+  return '<div class="card guide">'+h+"</div>";
+}
+function bindGuide(){
+  var b=$("gTok");
+  if (b) b.onclick=function(){ try{ if (xbridge.route) return xbridge.route('numable://app/mine?section=credentials&bundle=01M0F1AVEJJ9700CB548NS6X2E&bind=nu'); }catch(e){} };
+}
+/* ── live:core end ── */
+
+
+/* ── /live 本页 ──────────────────────────────────────────────────────────────── */
+var L = { "zh-CN": {}, "en-US": {
+  h1:"Live sessions", secWait:"Waiting on you", secLanes:"Swimlanes", secAll:"All sessions",
+  hint:"Tap any row to see that session turn by turn.",
+  note:"By default only session status, timing, token counts and tool categories are uploaded — no conversation content, file paths or commands. While this page is open it updates every 15 seconds and stops when you leave.",
+  leadPar:"{p} running in parallel", leadWait:" · {w} waiting on you", leadIdle:"Nothing running · last ended {t}", leadIdle0:"Nothing running right now",
+  leadNoT:"Not connected yet", leadFail:"Live data is temporarily unavailable", leadSync:"Sync is off", leadEmpty:"No active sessions",
+  kProj:"Projects", kRun:"Running", kWait:"Waiting", kToday:"Run today", dTok:"{v} tokens", dTok0:"no tokens yet",
+  vWait:"{n}", vAll:"{n}", vLanes:"{p} projects · {s} sessions", vLanes1:"1 project · {s} sessions", vLanes11:"1 project · 1 session",
+  w1:"1h", w2:"2h", w6:"6h", wd:"Today", gS:"Sessions", gP:"Projects",
+  now:"Now", noneWin:"No sessions in this time range", sub:"agents",
+  xRun:"{r} run · {k}", xTurn:"Turn {n} · {k}",
+  lgRun:"Running", lgPerm:"Needs approval", lgInput:"Your turn", lgPark:"Idle", lgLost:"Disconnected?", lgEnd:"Ended",
+  more:"+{n} more projects",
+  gNoT:"Claude Code usage isn't connected", gNoD:"Install the collector plugin in Claude Code, then add the read token. Once connected, running sessions show up here.",
+  gNoB:"Add token", gNoB2:"See setup steps",
+  gFailT:"Live data is temporarily unavailable", gFailD:"Your token is set. While this page is open it tries again every 15 seconds.",
+  gSyncT:"Sync is off", gSyncD:"In Claude Code, run /numable-usage and ask to turn on live sessions with sync",
+  gEmptyT:"No active sessions", gEmptyD:"Live sessions are on. Last sync at {t}. Sessions show up here as soon as you start working in Claude Code.",
+  secAlert:"Alerts", aWaitT:"Alert me when approval is waiting", aWaitD:"A session asked for approval and nobody has answered for a while",
+  aDoneT:"Alert me when a long task finishes", aDoneD:"A long turn finished and is waiting for you to continue",
+  aStuckT:"Alert me when a session may be stuck", aStuckD:"Repeated failures, a long turn going in circles, or context compacted again and again",
+  kStuck:"May be stuck: {n}",
+  aNote:"Alerts are checked by your phone on a schedule, not pushed in real time: about every 30 minutes on the free plan, more often with Pro. Timing also depends on the system — keeping this tool's home-screen widget and letting Numable run in the background makes checks more timely.",
+  aSet:"Set up", aDone:"Added", aQuota:"Alert limit reached"
+}};
+L["zh-CN"].aSet="设置"; L["zh-CN"].aDone="已添加"; L["zh-CN"].aQuota="提醒数量已到上限";
+
+var WIN=2, GRAIN="s";
+function pref(k, v){
+  try{ if (v===undefined) return localStorage.getItem("ccl."+k); localStorage.setItem("ccl."+k, String(v)); }catch(e){}
+  return null;
+}
+function startOfToday(n){ var d=new Date(n); d.setHours(0,0,0,0); return d.getTime(); }
+
+function paint(){
+  stamp();
+  var k=stateKind();
+  $("skel").classList.add("hide");
+  $("guide").innerHTML = k ? guideHTML(k) : "";
+  show("guide", !!k); bindGuide();
+  show("main", !k);
+  var lead=$("lead");
+  if (k){
+    lead.textContent = {nocred:t("leadNoT","还没接入"), fail:t("leadFail","暂时取不到实时数据"),
+      nosync:t("leadSync","还没打开同步"), empty:t("leadEmpty","没有在跑的会话")}[k];
+    return;
+  }
+  var ss=LV.sessions, act=ss.filter(isActive), wt=ss.filter(isWait);
+  if (act.length){
+    lead.textContent = t("leadPar","{p} 路并行").replace("{p}", act.length)+(wt.length ? t("leadWait"," · {w} 路等你").replace("{w}", wt.length) : "");
+  } else {
+    var last=ss.reduce(function(a,s){ return Math.max(a, Number(s.endAt||s.changedAt)||0); },0);
+    lead.textContent = last ? t("leadIdle","没有在跑的会话 · 最近一次在 {t} 结束").replace("{t}", hmDay(last)) : t("leadIdle0","现在没有在跑的会话");
+  }
+  paintSum(); paintWait(); paintLanes(); paintAll();
+}
+
+/* ① 汇总条:工程数 · 在跑 · 等你 · 今日实跑(+ token) */
+function todayRun(){
+  var n=nowS(), d0=startOfToday(n), ms=0, tok=0;
+  LV.sessions.forEach(function(s){
+    (s.turns||[]).forEach(function(x){
+      if ((x.e||n) < d0) return;
+      ms+=Math.max(0, (x.e||n)-Math.max(x.s, d0)-(Number(x.perm)||0));
+      if (x.s>=d0) tok+=(Number(x.out)||0)+(Number(x.in)||0)+(Number(x.cw)||0);
+    });
+    if (s.state==="perm" && s.permSince) ms-=Math.max(0, n-Math.max(s.permSince, d0));
+  });
+  return {ms:Math.max(0,ms), tok:tok};
+}
+function paintSum(){
+  var ss=LV.sessions, act=ss.filter(isActive);
+  var proj={}; act.forEach(function(s){ proj[s.proj||"none"]=1; });
+  var run=ss.filter(function(s){ return s.state==="running"; }).length, wt=ss.filter(isWait).length, td=todayRun();
+  var nst=LV.count && LV.count.stuck!=null ? Number(LV.count.stuck)||0 : ss.filter(function(s){ return s.stuck; }).length;
+  var cell=function(k, v, cls, d){ return '<div class="st"><div class="k">'+esc(k)+'</div><div class="v'+(cls?" "+cls:"")+'"'+(d==="run"?' id="vRun"':"")+">"+esc(v)+"</div>"+
+    (d && d!=="run" ? '<div class="d">'+esc(d)+"</div>" : (d==="run" ? '<div class="d" id="vTok"></div>' : "")) + "</div>"; };
+  $("sum").innerHTML='<div class="g4">'+
+    cell(t("kProj","工程"), String(Object.keys(proj).length))+
+    cell(t("kRun","在跑"), String(run), run?"run":"")+
+    cell(t("kWait","等你"), String(wt), wt?"wait":"")+
+    cell(t("kToday","今日实跑"), dS(td.ms), "", "run")+"</div>"+
+    /* 可能卡住(§6.2):有才出,黄色一项;数以服务端 count.stuck 为准,老服务端没有这个键就按行数 */
+    (nst ? '<div class="stk" style="margin-top:8px">'+icHTML("perm")+esc(t("kStuck","可能卡住 {n} 路").replace("{n}", nst))+"</div>" : "");
+  tickSum();
+}
+function tickSum(){
+  var e=$("vRun"); if (!e || !LV) return;
+  var td=todayRun(), s=dS(td.ms);
+  if (e.textContent!==s) e.textContent=s;
+  var k=$("vTok"); if (k) k.textContent = td.tok ? t("dTok","{v} token").replace("{v}", fmt(td.tok)) : t("dTok0","还没有 token");
+}
+
+/* ② 等你处理:等得最久的在最上面;可能卡住(还在跑、没在等你)的排在等你的之后,开始得早的在前 */
+function paintWait(){
+  var ws=LV.sessions.filter(isWait).sort(function(a,b){ return sinceOf(a)-sinceOf(b); })
+    .concat(LV.sessions.filter(function(s){ return s.stuck && !isWait(s); }).sort(function(a,b){ return a.startAt-b.startAt; }));
+  show("waitWrap", ws.length>0);
+  if (!ws.length) return;
+  $("vWait").textContent = t("vWait","{n} 个").replace("{n}", ws.length);
+  $("wait").innerHTML = ws.map(function(s){ return rowHTML(s, "wait"); }).join("");
+}
+/* ④ 全部会话:等你授权 > 等你输入 > 运行中 > 搁置 > 断开 > 已结束,同档按最新变化 */
+function paintAll(){
+  var ss=LV.sessions.slice().sort(function(a,b){ return (ORDER[a.state]-ORDER[b.state]) || (b.changedAt-a.changedAt); });
+  $("vAll").textContent = t("vAll","{n} 个").replace("{n}", ss.length);
+  $("all").innerHTML = ss.map(function(s){ return rowHTML(s, "all"); }).join("");
+}
+
+/* ③ 多泳道 */
+function winRange(){ var n=nowS(); return [WIN==="d" ? Math.min(startOfToday(n), n-3600e3) : n-Number(WIN)*3600e3, n]; }
+/* 一个会话在时间窗里的块:每 2 分钟一格的主要类目连成段(同 live.js widgetView);
+   没有格子的轮整轮按最后一个类目画。 */
+function segsOf(s, w0, w1){
+  var X=function(v){ return Math.max(0, Math.min(1, (v-w0)/(w1-w0))); }, out=[];
+  (s.turns||[]).forEach(function(x){
+    var te=x.e||w1; if (te<w0 || !(x.s>0)) return;
+    if (!x.cells){ var lc=(String(x.seq||"").match(/[a-z]/g)||["o"]).pop(); if (te>x.s) out.push({a:X(x.s), b:X(te), k:lc}); return; }
+    var c=String(x.cells), i=0, slot=120e3;
+    while (i<c.length){
+      var j=i; while (j+1<c.length && c[j+1]===c[i]) j++;
+      var a=x.s+i*slot, b=Math.min(x.s+(j+1)*slot, te);
+      if (c[i]!=="." && b>w0 && b>a) out.push({a:X(a), b:X(b), k:c[i]});
+      i=j+1;
+    }
+  });
+  /* 运行中:最后一块一直顶到现在线(那一格里还没换工具,但它确实在跑) */
+  if (s.state==="running" && out.length){ var L0=out[out.length-1]; L0.b=1; L0.cur=1; }
+  return out;
+}
+/* 尾巴 = 最后一个事件到现在线,只按状态画(§5.4 表) */
+function tailOf(s, w0, w1){
+  var X=function(v){ return Math.max(0, Math.min(1, (v-w0)/(w1-w0))); };
+  if (s.state==="perm") return {a:X(s.permSince||s.changedAt), k:"perm"};
+  if (s.state==="input" || s.state==="parked") return {a:X(s.changedAt), k:s.state};
+  if (s.state==="lost") return {a:X(Math.max(Number(s.beatAt)||0, Number(s.lastAt)||0)||s.changedAt), k:"lost"};
+  return null;
+}
+var TW=200, USED={};
+function trackHTML(segs, tail, cap){
+  var h="";
+  segs.forEach(function(g){
+    var w=(g.b-g.a)*100; if (!(w>0)) return;
+    USED[g.k]=1;
+    var px=w/100*TW, lab=(EN?CAT1_EN:CAT1_ZH)[g.k]||"", fit=px >= (EN?30:22);
+    h+='<i class="k-'+g.k+(g.cur?" cur":"")+'" style="left:'+(g.a*100).toFixed(2)+"%;width:"+Math.max(w, .7).toFixed(2)+'%">'+(fit&&!g.cur?esc(lab):"")+"</i>";
+  });
+  if (tail && tail.a<1){ USED["t-"+tail.k]=1;
+    h+='<b class="tl tl-'+tail.k+'" style="left:'+(tail.a*100).toFixed(2)+"%;width:"+Math.max(.8,(1-tail.a)*100).toFixed(2)+'%"></b>'; }
+  if (cap!=null && cap>=0){ USED.cap=1; h+='<span class="cap" style="left:'+(cap*100).toFixed(2)+'%"></span>'; }
+  return h+'<span class="now"></span>';
+}
+function paintLanes(){
+  var r=winRange(), w0=r[0], w1=r[1], n=w1;
+  TW=Math.max(120, ($("lanes").clientWidth||300)-38-(EN?98:80)-12-9);
+  USED={};
+  var inWin=LV.sessions.filter(function(s){
+    var end = s.state==="ended" ? (s.endAt||s.changedAt) : n;
+    return end>=w0 && s.startAt<=w1;
+  });
+  var pools={};
+  inWin.forEach(function(s){ var k=s.proj||"none"; (pools[k]||(pools[k]=[])).push(s); });
+  var list=Object.keys(pools).map(function(k){
+    var l=pools[k].sort(function(a,b){ return a.startAt-b.startAt; });   /* 池内按开始时刻,位置不随状态变 */
+    return {k:k, list:l, changed:Math.max.apply(null, l.map(function(x){ return x.changedAt; })), wait:l.filter(isWait).length};
+  }).sort(function(a,b){ return b.changed-a.changed; });                 /* 池按池内最新变化 */
+  var np=list.length, ns=inWin.length;
+  $("vLanes").textContent = !ns ? "" : np===1 ? (ns===1 ? t("vLanes11","1 个工程 · 1 路") : t("vLanes1","1 个工程 · {s} 路").replace("{s}", ns))
+    : t("vLanes","{p} 个工程 · {s} 路").replace("{p}", np).replace("{s}", ns);
+  if (!ns){ $("lanes").innerHTML='<div class="empty1">'+esc(t("noneWin","这段时间没有会话"))+"</div>"; $("legend").innerHTML=""; return; }
+  var X=function(v){ return Math.max(0, Math.min(1, (v-w0)/(w1-w0))); };
+  var h=list.map(function(p){
+    var head='<div class="pn"><span class="nm">'+esc(projName(p.list[0]))+"</span>"+(p.wait?'<span class="pb">'+p.wait+"</span>":"")+"</div>", body="";
+    if (GRAIN==="p"){
+      /* 粒度 = 工程:同工程会话叠成一条道(原 timeline);尾巴与状态位取池里最该看的那一路 */
+      var segs=[]; p.list.forEach(function(s){ segs=segs.concat(segsOf(s, w0, w1)); });
+      var rep=p.list.slice().sort(function(a,b){ return (ORDER[a.state]-ORDER[b.state]) || (b.changedAt-a.changedAt); })[0];
+      segs.forEach(function(g){ g.cur=0; });
+      if (rep.state==="running"){ var mine=segsOf(rep, w0, w1); if (mine.length){ var lg=mine[mine.length-1]; lg.cur=1; segs.push(lg); } }
+      var allEnd=p.list.every(function(s){ return s.state==="ended"; });
+      var cap=allEnd ? X(Math.max.apply(null, p.list.map(function(s){ return s.endAt||s.changedAt; }))) : null;
+      body='<div class="ln'+(allEnd?" done":"")+'" data-go="'+esc(goSession(rep))+'"><span class="lb"><span class="sd '+rep.state+'"></span>×'+p.list.length+"</span>"+
+        '<div class="lt">'+trackHTML(segs, tailOf(rep, w0, w1), cap)+'</div><span class="ch">'+sbHTML(rep)+"</span></div>";
+    } else {
+      p.list.forEach(function(s){
+        var cap=s.state==="ended" ? X(s.endAt||s.changedAt) : null;
+        body+='<div class="ln'+(s.state==="ended"?" done":"")+'" data-go="'+esc(goSession(s))+'"><span class="lb"><span class="sd '+s.state+'"></span>'+esc(sesLabel(s))+"</span>"+
+          '<div class="lt">'+trackHTML(segsOf(s, w0, w1), tailOf(s, w0, w1), cap)+'</div><span class="ch">'+sbHTML(s)+"</span></div>";
+        /* 子代理细分道:画各自的运行区间 */
+        var subs=(s.subs||[]).filter(function(x){ return (x[1]||n)>=w0; });
+        if (subs.length){
+          USED.a=1;
+          body+='<div class="ln sub"><span class="lb">'+esc(t("sub","子代理"))+'</span><div class="lt">'+subs.map(function(x){
+            var a=X(x[0]), b=X(x[1] || (isActive(s)?n:x[0]));
+            return '<i class="k-a" style="left:'+(a*100).toFixed(2)+"%;width:"+Math.max(.7,(b-a)*100).toFixed(2)+'%"></i>';
+          }).join("")+"</div><span></span></div>";
+        }
+      });
+    }
+    return '<div class="pool">'+head+'<div class="pl">'+body+"</div></div>";
+  }).join("");
+  h+='<div class="ax"><span></span><div><span>'+esc(hm(w0))+"</span><span>"+esc(hm((w0+w1)/2))+"</span><span>"+esc(t("now","现在"))+"</span></div><span></span></div>";
+  $("lanes").innerHTML=h;
+  /* 图例紧贴图形(page-design-system §3):只列这次画出来的 */
+  var lg=[];
+  "reswabdmqo".split("").forEach(function(k){ if (USED[k]) lg.push('<span><i class="k-'+k+'"></i>'+esc(catName(k))+"</span>"); });
+  if (inWin.some(function(s){ return s.state==="running"; })) lg.push("<span>"+icHTML("running")+esc(t("lgRun","运行中"))+"</span>");
+  [["perm","lgPerm","等你授权"],["input","lgInput","等你输入"],["parked","lgPark","搁置"],["lost","lgLost","可能已断开"]].forEach(function(x){
+    if (USED["t-"+x[0]]) lg.push('<span><i class="tl-'+x[0]+'"></i>'+esc(t(x[1], x[2]))+"</span>"); });
+  if (USED.cap) lg.push('<span><i class="capi"></i>'+esc(t("lgEnd","已结束"))+"</span>");
+  $("legend").innerHTML=lg.join("");
+}
+function paintSegs(){
+  var W=[["1","w1","1 小时"],["2","w2","2 小时"],["6","w6","6 小时"],["d","wd","今天"]], G=[["s","gS","会话"],["p","gP","工程"]];
+  $("segW").innerHTML=W.map(function(x){ return '<button type="button" data-w="'+x[0]+'" class="'+(String(WIN)===x[0]?"on":"")+'">'+esc(t(x[1], x[2]))+"</button>"; }).join("");
+  $("segG").innerHTML=G.map(function(x){ return '<button type="button" data-g="'+x[0]+'" class="'+(GRAIN===x[0]?"on":"")+'">'+esc(t(x[1], x[2]))+"</button>"; }).join("");
+}
+document.addEventListener("click", function(e){
+  var b=e.target.closest ? e.target.closest("[data-w],[data-g]") : null;
+  if (!b) return;
+  if (b.hasAttribute("data-w")){ WIN=b.getAttribute("data-w"); pref("win", WIN); }
+  else { GRAIN=b.getAttribute("data-g"); pref("grain", GRAIN); }
+  paintSegs(); if (LV && !stateKind()) paintLanes();
+});
+
+var POLL=null;
+(async function boot(){
+  var sk=setTimeout(function(){ $("skel").classList.remove("hide"); }, 0);
+  $("skel").classList.remove("hide");
+  var ok=await ready();
+  var raw=ok?await appInfo():{};
+  var info=(raw && raw.data) || raw || {};
+  applyTheme(info && info.theme);
+  var lang=(info && (info.language||info.lang||info.locale)) || document.documentElement.getAttribute('data-lang') || '';
+  EN = nbLang(lang) !== 'zh';
+  T = EN ? L['en-US'] : L['zh-CN'];
+  document.documentElement.lang = EN ? 'en' : 'zh-CN';
+  if (EN) ['h1','secWait','secLanes','secAll','hint','note','secAlert','aWaitT','aWaitD','aDoneT','aDoneD','aStuckT','aStuckD','aNote'].forEach(function(k){ var e=$(k); if (e && T[k]) e.textContent=T[k]; });
+  /* 提醒入口:alertAdd 只唤起原生同意面板(alert-design §6),返回 ok / cancel / quota */
+  if (ok && window.xbridge && typeof xbridge.alertAdd === "function"){
+    $("alertWrap").classList.remove("hide");
+    [["aWaitB","waiting"],["aDoneB","finished"],["aStuckB","stuck"]].forEach(function(x){
+      var b=$(x[0]); b.textContent=t("aSet","设置");
+      b.addEventListener("click", async function(){
+        var r=null; try{ r=await Promise.resolve(xbridge.alertAdd({id:x[1]})); }catch(e){}
+        r = (r && (r.data||r.result)) || r;
+        if (r==="ok"){ b.textContent=t("aDone","已添加"); }
+        else if (r==="quota"){ b.textContent=t("aQuota","提醒数量已到上限"); }
+      });
+    });
+  }
+  xbTitle(t("h1","实时会话"));
+  var w=pref("win"), g=pref("grain");
+  if (w==="1"||w==="2"||w==="6"||w==="d") WIN=w;
+  if (g==="s"||g==="p") GRAIN=g;
+  paintSegs();
+  clearTimeout(sk);
+  if (!ok){ $("skel").classList.add("hide"); return; }
+  /* 点锚 = 立刻真取一次;在途转圈、连点只算一次 */
+  var busy=false;
+  $("at").addEventListener("click", async function(){
+    if (busy) return; busy=true; xbAt.busy("at", true);
+    try{ await pull(); paint(); } finally { busy=false; xbAt.busy("at", false); }
+  });
+  await pull(); paint();
+  POLL=Poller(async function(){ await pull(); paint(); }, 15000);
+  POLL.start();
+  document.addEventListener("visibilitychange", stamp);
+  setInterval(function(){ if (document.visibilityState!=="hidden"){ tickLive(); tickSum(); } }, 1000);
+  addEventListener("resize", function(){ if (LV && !stateKind()) paintLanes(); });
+})();
+</script>
+</body></html>

@@ -1,0 +1,69 @@
+{
+  "_note": "实时会话页(/live、/session、首页「现在」块)的取数流。设计 doc/ccusage-live-timeline.md §4B。\n⚠️ 刻意与 `summary` 分成两发、两套键:summary 一天才变几次、走 G23 三态缓存;live 是页面可见时每 15 秒一发,混在一起要么用量被 15 秒一刷,要么实时被缓存挡住。\n⚠️ 本流**不做缓存、不做计算**:原样把 `/live` 的 JSON 文本透给页面,排序 / 分组 / 时长全在页面里算(那几个数每秒都要本地重算,放流里也没用)。入参 `_cache` 收下不用 —— 页面统一传 0。\n取不到(没绑令牌 → required 凭证让请求根本不发;网络 / 服务出错)→ raw 为空或不含 sessions → live=0,页面保留上一次的数据、按 credState 分诊。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "cred",
+      "action": "credential.state",
+      "params": {
+        "id": "nu"
+      },
+      "_note": "凭证绑定状态(纯本地查表,零网络),页面据此把「没接上」与「暂时取不到」分开说(同 summary.df)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "credState",
+        "value": "$[connect::(${cred.state},)]"
+      },
+      "_note": "包一层 connect:: —— 裸写时 action 没执行该键根本不会被 set,「没执行」与「没绑」会长得一样(同 summary.df)。"
+    },
+    {
+      "id": "resp",
+      "action": "request",
+      "params": {
+        "url": "https://usage.numable.app/live",
+        "method": "GET",
+        "header": {
+          "User-Agent": "Numable"
+        },
+        "formatType": "string",
+        "credential": "nu"
+      },
+      "_note": "formatType:string 原文透传、页面里 JSON.parse(同 summary.df 的理由:对象过桥的字符串化各端无保证)。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "_b",
+        "value": "1"
+      },
+      "_note": "⚠️ 请求屏障(勿删):request 之后紧邻的节点读不到响应。"
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "raw",
+        "value": "${resp}"
+      }
+    },
+    {
+      "_note": "判据钉在「响应里有没有 sessions 字段」:错误体({\"error\":…})与空响应都不含它。",
+      "op": "set",
+      "props": {
+        "key": "live",
+        "value": "$[if::(contains::(${raw},sessions),1,0)]"
+      }
+    },
+    {
+      "action": "resultFilter",
+      "params": {
+        "keys": [
+          "raw",
+          "live",
+          "credState"
+        ]
+      }
+    }
+  ]
+}

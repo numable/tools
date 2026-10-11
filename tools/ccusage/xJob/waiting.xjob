@@ -1,0 +1,86 @@
+{
+ "_note": "动态提醒 · 边沿(doc/ccusage-live-timeline.md §6.1)。有一路 Claude Code 弹了授权、等你超过设定分钟还没人点 → 提醒,点名项目与等了多久。同一次等待只响一次;多路同时在等时点名等得最久的那路,它被处理后下一路照样会响。\n⚠️ 这是手机端检查:免费档 30 分钟一次、Pro 按 5 分钟申请但仍受系统调度(Android 约 15 分钟,iOS / 鸿蒙尽力而为,Mac / Win 开着 App 时准时)—— 对外文案只说「检查时发现」,不承诺几分钟内。",
+ "version": 1,
+ "id": "waiting",
+ "title": "等你授权提醒",
+ "sub": "有 Claude Code 会话在等你点授权、等了一会儿还没人管时提醒",
+ "i18n": {
+  "en-US": {
+   "title": "Approval wait alert",
+   "sub": "Tells you when a Claude Code session has been waiting for your approval",
+   "message": {
+    "title": "${wProj} needs your approval",
+    "body": "Waiting about ${wMins} min"
+   },
+   "form": {
+    "perm": {
+     "title": "Alert after waiting"
+    }
+   }
+  }
+ },
+ "params": {
+  "perm": "3"
+ },
+ "form": {
+  "perm": {
+   "title": "等了多久才提醒",
+   "component": {
+    "type": "radio",
+    "props": {
+     "items": [
+      {
+       "label": "1 分钟",
+       "value": "1"
+      },
+      {
+       "label": "3 分钟",
+       "value": "3"
+      },
+      {
+       "label": "10 分钟",
+       "value": "10"
+      },
+      {
+       "label": "30 分钟",
+       "value": "30"
+      }
+     ]
+    }
+   }
+  }
+ },
+ "events": {
+  "onClick": "/live"
+ },
+ "task": {
+  "depends": [
+   {
+    "flow": "@[file://xJob/flow/alert.df]",
+    "params": {
+     "perm": "${perm}",
+     "long": "10"
+    }
+   }
+  ],
+  "then": {
+   "flow": "@[file://xJob/flow/edge.df]",
+   "params": {
+    "key": "${waitKey}",
+    "slot": "wait.${perm}"
+   }
+  },
+  "refresh": {
+   "interval": [
+    "300"
+   ]
+  }
+ },
+ "alert": {
+  "level": "urgent",
+  "message": {
+   "title": "${wProj} 在等你授权",
+   "body": "已经等了约 ${wMins} 分钟"
+  }
+ }
+}
