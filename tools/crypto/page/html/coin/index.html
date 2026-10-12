@@ -1081,4 +1081,61 @@ addEventListener("resize",function(){ draw(); if(S.bmode==="depth") paintBook();
 })();
 })();
 </script>
+<!--@addhold v2-->
+<script>
+/* 「加入我的持仓」入口 —— 由 Numable-bundles/tools/portfolio/addhold_patch.py 注入,别手改(改脚本再跑)。 */
+(function(){
+  var PF = "01M4QDQ1QG7KS34WR4EZ7PDDHS", KIND = "crypto", ANCHOR = "pickw";
+  var T0 = document.title;   /* 页面的初始(通用)标题;股票页取到快照后才把标题换成股票名 */
+  function q(n){ var m = new RegExp("[?&]" + n + "=([^&]*)").exec(location.search || ""); return m ? decodeURIComponent(m[1]) : ""; }
+  /* 当前这一页对应的预填参数;认不出就不画入口 */
+  function link(){
+    var p = "";
+    if (KIND === "stock") { var s = q("secid"); if (/^(0|1|105|106|107|116|128)\.[A-Za-z0-9_]+$/.test(s)) {
+      p = "k=s&secid=" + encodeURIComponent(s);
+      var nm = (document.title || "").trim();   /* 详情页取到快照后把标题设成股票名;还是初始标题 = 没取到,不传,持仓面板会再用行情补 */
+      if (nm && nm !== T0 && nm.length <= 40 && nm !== s) p += "&name=" + encodeURIComponent(nm); } }
+    else if (KIND === "fund") { var c = q("code"); if (/^\d{6}$/.test(c)) p = "k=f&code=" + c; }
+    else if (KIND === "crypto") { var b = (q("pair") || "").split("-")[0].toUpperCase(); if (/^[A-Z0-9]{2,12}$/.test(b)) p = "k=c&coin=" + b; }
+    else if (KIND === "gold") { var g = { "JO_52683": "au", "JO_78651": "au", "JO_92233": "xau" }[q("code")]; if (g) p = "k=g&g=" + g; }
+    return p ? "numable://" + PF + "/page/add?" + p : "";
+  }
+  function zh(){ var h = document.documentElement, l = h.getAttribute("data-lang") || h.lang || ""; return /^zh/i.test(l); }
+  /* 「我的持仓」只在海外分发(包里有加密类型与 OKX 域名,过不了大陆审核 CN-4,2026-10-12 用户拍板):
+     大陆分发下不画入口 —— 否则点进去只会得到「这个工具不存在」。地区未知(老宿主)时按界面语言保守判:中文当大陆。 */
+  var CN = null;
+  function region(){
+    if (CN !== null || !(window.xbridge && xbridge.appInfo)) return;
+    CN = true;   /* 先当大陆(不画),取到地区再定 */
+    Promise.resolve(xbridge.appInfo()).then(function (r) {
+      var a = (r && r.data) || r || {}, rg = String(a.region || "");
+      CN = rg === "cn" || (rg !== "overseas" && /^zh/i.test(String(a.language || a.locale || "")));
+      render();
+    }, function () { CN = true; render(); });
+  }
+  function render(){
+    region();
+    var u = link(), b = document.getElementById("addhold");
+    if (CN !== false || !u || !(window.xbridge && xbridge.route)) { if (b) b.hidden = true; return; }
+    if (!b) {
+      var a = document.getElementById(ANCHOR);
+      if (!a || !a.parentNode) return;
+      b = document.createElement("button");
+      b.id = "addhold"; b.type = "button"; b.className = "pickb"; b.style.marginTop = "10px";
+      b.innerHTML = '<span class="pk">\uFF0B</span><span class="pg"><b></b><span class="d"></span></span>';
+      a.parentNode.insertBefore(b, a.nextSibling);
+      b.addEventListener("click", function(){ var v = link(); if (v) { try { xbridge.haptic && xbridge.haptic("tap"); } catch (e) {} xbridge.route(v); } });
+    }
+    b.hidden = false;
+    b.querySelector("b").textContent = zh() ? "加入我的持仓" : "Add to Portfolio";
+    b.querySelector(".d").textContent = zh() ? "在「我的持仓」里记下它，和别的持仓一起算总额与盈亏" : "Track it with the rest of your holdings";
+  }
+  /* 页面的按钮与语言都是异步定下来的:载入后补两拍,语言 / 主题切换时重画 */
+  function boot(){ render(); setTimeout(render, 600); setTimeout(render, 2000); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+  addEventListener("languagechange", render);
+  try { new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["lang", "data-lang"] }); } catch (e) {}
+})();
+</script>
+<!--/@addhold-->
 </body></html>
