@@ -325,6 +325,8 @@ html[data-theme="dark"]{--nwRun:#E8916B;--nwWait:#F5C242;--nwWaitBg:#3A3015}
 .nwm{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--sub);padding-top:9px;cursor:pointer}
 .nwm b{color:var(--fg)}
 .nwr + .nwm{border-top:1px solid var(--line)}
+.nwm + .nwm{border-top:1px solid var(--line);margin-top:9px}
+.card > .nwm:first-child{padding-top:0}
 .nwln{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin:0 0 12px 17px;cursor:pointer}
 .nwln .chev{margin-left:auto}
 </style>
@@ -1290,12 +1292,18 @@ boot();
     if (!m){ el.classList.add("hide"); el.innerHTML=""; return; }
     if (!(m.devices||[]).length){
       el.innerHTML='<div class="nwln" data-go="/live"><span>'+esc(EN
-        ? "Live sessions: in Claude Code, run /numable-usage and ask to turn on live sessions with sync"
-        : "实时会话：在 Claude Code 里运行 /numable-usage，说「打开实时会话并同步到手机」")+'</span><span class="chev">›</span></div>';
+        ? "Live sessions are off · tap to turn them on for your computer"
+        : "实时会话还没打开 · 点这里，从手机上为电脑打开")+'</span><span class="chev">›</span></div>';
       el.classList.remove("hide"); return;
     }
     var act=m.sessions.filter(function(s){ return s.state==="running"||s.state==="perm"||s.state==="input"; });
-    if (!act.length){ el.classList.add("hide"); el.innerHTML=""; return; }
+    /* 没有在跑的也留一行入口:泳道还能看最近结束的会话 */
+    var lanesRow='<div class="nwm" data-go="/live?sec=lanes"><span><b>'+(EN?"Swimlanes":"多泳道")+'</b> · '+esc(EN?"every session on one timeline":"每个会话一条时间线")+'</span><span class="chev" style="margin-left:auto">›</span></div>';
+    if (!act.length){
+      el.innerHTML='<div class="sect"><span>'+(EN?"Now":"现在")+'</span><em>'+esc(EN?"Nothing running":"没有在跑的会话")+'</em></div>'+
+        '<div class="card">'+lanesRow+'<div class="nwm" data-go="/live"><span><b>'+(EN?"All live sessions":"看全部实时会话")+'</b></span><span class="chev" style="margin-left:auto">›</span></div></div>';
+      el.classList.remove("hide"); return;
+    }
     var P=label(m), ws=act.filter(function(s){ return s.state!=="running"; })
       .map(function(s){ return {s:s, since:s.state==="perm" && s.permSince ? s.permSince : s.changedAt}; })
       .sort(function(a,b){ return a.since-b.since; });
@@ -1309,7 +1317,7 @@ boot();
     }).join("");
     var more = ws.length>3 ? (EN ? (ws.length-3)+" more waiting · " : "还有 "+(ws.length-3)+" 路在等你 · ") : "";
     el.innerHTML='<div class="sect"><span>'+(EN?"Now":"现在")+'</span><em>'+esc(sum)+'</em></div>'+
-      '<div class="card">'+rows+'<div class="nwm" data-go="/live"><span>'+esc(more)+'<b>'+(EN?"All live sessions":"看全部实时会话")+'</b></span><span class="chev" style="margin-left:auto">›</span></div></div>';
+      '<div class="card">'+rows+lanesRow+'<div class="nwm" data-go="/live"><span>'+esc(more)+'<b>'+(EN?"All live sessions":"看全部实时会话")+'</b></span><span class="chev" style="margin-left:auto">›</span></div></div>';
     el.classList.remove("hide");
   }
   async function tick(){
