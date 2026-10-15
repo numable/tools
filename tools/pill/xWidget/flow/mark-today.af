@@ -156,6 +156,106 @@
       }
     },
     {
+      "_note": "停药期不响提醒(2026-10-15):算「下一盒第一天零点」的带时区 ISO 时刻,交给 `alert.skip` 的 `until`。\n⚠️ `until` 四端只认带偏移的 ISO(iOS ISO8601DateFormatter / Android OffsetDateTime 都要偏移;iOS 解析不出会让整条流报错),\n   而 formatDate 只出本地时间、没有时区占位符,所以偏移要自己算:\n   本地零点 bkNsMs 与同一天的 UTC 零点之差就是偏移。UTC 零点 = 2026-01-01 的 UTC 毫秒(常数 1767225600000)+ 整天数,\n   整天数 = (bkNsMs − 本地 2026-01-01 零点)/ 一天 再四舍五入 —— 两端只差夏令时,四舍五入不会错一天。\n   ⚠️ 别把基准换成 1970-01-01:基里巴斯 / 萨摩亚 1970 年后跨过日期变更线,偏移差超过 12 小时,会算错整整一天\n   (= 新一盒第一天的提醒被吞掉)。2026-10-15 用 numable run 在上海 / 纽约 / 加德满都 / 基里巴斯 / 萨摩亚 / 奥克兰 / 纽芬兰 / 伦敦 × 四个日期实测全对。\n⚠️ 显示用的整数都套 `round::`(Android calc 出 double,否则拼成 `+8.0:0.0`)。\n⚠️ bkNoon 取正午锚点(同 w.df 的 baseMs),按天累加时给夏令时留余量。",
+      "op": "set",
+      "props": {
+        "key": "bkNoon",
+        "value": "$[calc::(${startMs}+(${curPack}+1)*${cycle}*86400000+43200000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkNs",
+        "value": "$[formatDate::(${bkNoon},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkNsMs",
+        "value": "$[parseDate::(${bkNs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkRef",
+        "value": "$[parseDate::(2026-01-01,yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkU",
+        "value": "$[calc::(1767225600000+round::(calc::((${bkNsMs}-${bkRef})/86400000))*86400000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOff",
+        "value": "$[round::(calc::((${bkU}-${bkNsMs})/60000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkSg",
+        "value": "$[if::(lt::(${bkOff},0),-,+)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkAbs",
+        "value": "$[round::(if::(lt::(${bkOff},0),calc::(0-${bkOff}),${bkOff}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOh",
+        "value": "$[round::(floor::(calc::(${bkAbs}/60)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOm",
+        "value": "$[round::(calc::(${bkAbs}-${bkOh}*60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOhS",
+        "value": "$[if::(lt::(${bkOh},10),connect::(0,${bkOh}),${bkOh})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOmS",
+        "value": "$[if::(lt::(${bkOm},10),connect::(0,${bkOm}),${bkOm})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkIso",
+        "value": "${bkNs}T00:00:00${bkSg}${bkOhS}:${bkOmS}"
+      }
+    },
+    {
+      "_note": "要不要一直撤到下一盒第一天:有停药期(rest>0)且今天是服药期最后一天(idx = active−1)或已在停药期(idx ≥ active)。\n只在 mode 1 / 2 时用(两者都已保证计划已开始、今天还没记)。bkNs 算不出(长度不是 10)就退回只撤今天。",
+      "op": "set",
+      "props": {
+        "key": "bkLong",
+        "value": "$[if::(eq::(length::(${bkNs}),10),if::(gt::(${rest},0),if::(ge::(${idx},calc::(${active}-1)),1,0),0),0)]"
+      }
+    },
+    {
       "_note": "① 记一笔。**只追加进 `taken`,绝不碰 `skipped`** —— 卡片这条路只表达「吃了」这一个意思。",
       "op": "if",
       "props": {
@@ -178,12 +278,37 @@
           }
         },
         {
-          "_note": "撤掉今天剩下的那几发服药提醒(doc/alert-design.md §4.4)。\n提醒是**静态**的(布防时就交给系统定时),它看不到「今天已经记过了」这件本地状态 ——\n所以由记录这个动作的流顺手把当天那一发销掉,而不是让提醒到点再回头评估一遍:\n后者在 iOS 上不可靠,而漏提醒正是这类场景最糟的失败方向。\n\n⚠️ 三条记录路各挂一次,漏一条 = 从那条路记的「已服」不销当天提醒(施工单 §4.7 #5):\n   本文件(整卡点击)· page/flow/toggle.af(页内三态转「已服」)· page/flow/log-save.af(补录今天)。\n⚠️ `params` 省略 = **本规则的全部实例**:这条流不知道用户把提醒设在几点、叫什么名字,\n   也不该知道(实例参数是用户在同意面板填的,§3)。\n⚠️ 幂等且只撤到今天零点(`until:\"today\"` 按该规则 refresh.tz,省略 = 设备本地),\n   明天照常响 —— 它不是关闭提醒。\n⚠️ 这是 **App 注入的 action**,只在新引擎轴的宿主上存在;老宿主当未知 action 会让整条流报错,\n   所以 manifest.minEngine 必须跟着抬(lint G45.min-engine 管这条)。",
-          "action": "alert.skip",
-          "params": {
-            "id": "dose",
-            "until": "today"
-          }
+          "_note": "撤到今天零点(普通的一天)。原注释见下面那条 `_noteSkip`。",
+          "op": "if",
+          "props": {
+            "val": "$[if::(eq::(${bkLong},1),0,1)]"
+          },
+          "items": [
+            {
+              "action": "alert.skip",
+              "params": {
+                "id": "dose",
+                "until": "today"
+              }
+            }
+          ],
+          "_noteSkip": "撤掉今天剩下的那几发服药提醒(doc/alert-design.md §4.4)。\n提醒是**静态**的(布防时就交给系统定时),它看不到「今天已经记过了」这件本地状态 ——\n所以由记录这个动作的流顺手把当天那一发销掉,而不是让提醒到点再回头评估一遍:\n后者在 iOS 上不可靠,而漏提醒正是这类场景最糟的失败方向。\n\n⚠️ 三条记录路各挂一次,漏一条 = 从那条路记的「已服」不销当天提醒(施工单 §4.7 #5):\n   本文件(整卡点击)· page/flow/toggle.af(页内三态转「已服」)· page/flow/log-save.af(补录今天)。\n⚠️ `params` 省略 = **本规则的全部实例**:这条流不知道用户把提醒设在几点、叫什么名字,\n   也不该知道(实例参数是用户在同意面板填的,§3)。\n⚠️ 幂等且只撤到今天零点(`until:\"today\"` 按该规则 refresh.tz,省略 = 设备本地),\n   明天照常响 —— 它不是关闭提醒。\n⚠️ 这是 **App 注入的 action**,只在新引擎轴的宿主上存在;老宿主当未知 action 会让整条流报错,\n   所以 manifest.minEngine 必须跟着抬(lint G45.min-engine 管这条)。"
+        },
+        {
+          "_note": "服药期最后一天记了「已服」:接下来整个停药期都不用吃,一直撤到下一盒第一天零点(用户 2026-10-15:停药期不该响)。",
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${bkLong},1)]"
+          },
+          "items": [
+            {
+              "action": "alert.skip",
+              "params": {
+                "id": "dose",
+                "until": "${bkIso}"
+              }
+            }
+          ]
         },
         {
           "action": "ui.toast",
@@ -206,6 +331,22 @@
         "val": "$[eq::(${mode},2)]"
       },
       "items": [
+        {
+          "_note": "停药期点卡:不写记录,但顺手把提醒撤到下一盒第一天零点 —— 停药期的提醒本就不该响。\n首页 onLoad(page/flow/quiet-break.af)是同一条规则的另一个入口。",
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${bkLong},1)]"
+          },
+          "items": [
+            {
+              "action": "alert.skip",
+              "params": {
+                "id": "dose",
+                "until": "${bkIso}"
+              }
+            }
+          ]
+        },
         {
           "action": "ui.toast",
           "params": {

@@ -1,0 +1,230 @@
+{
+  "_note": "停药期不响服药提醒(2026-10-15,用户提出:「不用服药时应该也不提醒」)。首页 onLoad 跑一次。\n\n【为什么要这条】服药提醒是**静态**的(xJob/dose.xjob):布防时就交给系统定时,每天几点照响,它看不到周期。\n静态提醒能看本地状态的唯一办法是 `alert.skip`(doc/alert-design.md §4.4)—— 只能「从现在撤到某一刻」,不能挑日子撤。\n所以规则是:**今天已经不需要再响的时候**,把撤销一直延到下一盒第一天零点,整段停药期就静音了。\n「今天已经不需要再响」= 下面两种之一:\n  ① 今天就在停药期;\n  ② 今天是服药期最后一天,且已记「已服」。\n服药期最后一天还没记的时候不能延 —— 那会把当天还没响的那几发一起吞掉。\n\n【同一条规则的四个入口】本文件(打开首页)· xWidget/flow/mark-today.af(点桌面卡,含停药期点卡)·\npage/flow/toggle.af(页内点今天那一格)· page/flow/log-save.af(补录今天)。改判据四处同改。\n\n【剩下的缺口(已知,接受)】服药期最后一天没在 App 里记「已服」、停药期第一天也没打开过 App 或点过桌面卡 →\n停药期第一天到点还会响一次;点开那条通知就进首页,本流把剩下的停药日撤掉。\n⚠️ `alert.skip` 只能往后延、不能缩回(两次取 max)。停药期里改了计划(起始日 / 天数)让今天变回服药期,\n   已撤的那段要到原定的下一盒第一天才恢复。改计划是低频操作,不为它加机制。\n⚠️ 没建过提醒时 `alert.skip` 回 `{skipped:0}`,不报错,所以不用先判有没有提醒。",
+  "version": 1,
+  "actions": [
+    {
+      "id": "start",
+      "action": "data.get",
+      "params": {
+        "key": "start",
+        "default": ""
+      }
+    },
+    {
+      "id": "active",
+      "action": "data.get",
+      "params": {
+        "key": "active",
+        "default": 21
+      }
+    },
+    {
+      "id": "rest",
+      "action": "data.get",
+      "params": {
+        "key": "rest",
+        "default": 7
+      }
+    },
+    {
+      "id": "taken",
+      "action": "data.get",
+      "params": {
+        "key": "taken",
+        "default": "_"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "s0",
+        "value": "${start}"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "hasPlan",
+        "value": "$[if::(gt::(length::(${s0}),0),1,0)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "sd",
+        "value": "$[findNotEmpty::(${s0},2026-01-01)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "cycle",
+        "value": "$[calc::(${active}+${rest})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "startMs",
+        "value": "$[parseDate::(${sd},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "d",
+        "value": "$[formatDate::(${@time.nowMs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "todayMs",
+        "value": "$[parseDate::(${d},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "offset",
+        "value": "$[round::(calc::((${todayMs}-${startMs})/86400000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "curPack",
+        "value": "$[if::(lt::(${offset},0),0,floor::(calc::(${offset}/${cycle})))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "idx",
+        "value": "$[calc::(${offset}-${curPack}*${cycle})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "isT",
+        "value": "$[if::(contains::(${taken},connect::(_,${d},_)),1,0)]"
+      }
+    },
+    {
+      "_note": "停药期不响提醒(2026-10-15):算「下一盒第一天零点」的带时区 ISO 时刻,交给 `alert.skip` 的 `until`。\n⚠️ `until` 四端只认带偏移的 ISO(iOS ISO8601DateFormatter / Android OffsetDateTime 都要偏移;iOS 解析不出会让整条流报错),\n   而 formatDate 只出本地时间、没有时区占位符,所以偏移要自己算:\n   本地零点 bkNsMs 与同一天的 UTC 零点之差就是偏移。UTC 零点 = 2026-01-01 的 UTC 毫秒(常数 1767225600000)+ 整天数,\n   整天数 = (bkNsMs − 本地 2026-01-01 零点)/ 一天 再四舍五入 —— 两端只差夏令时,四舍五入不会错一天。\n   ⚠️ 别把基准换成 1970-01-01:基里巴斯 / 萨摩亚 1970 年后跨过日期变更线,偏移差超过 12 小时,会算错整整一天\n   (= 新一盒第一天的提醒被吞掉)。2026-10-15 用 numable run 在上海 / 纽约 / 加德满都 / 基里巴斯 / 萨摩亚 / 奥克兰 / 纽芬兰 / 伦敦 × 四个日期实测全对。\n⚠️ 显示用的整数都套 `round::`(Android calc 出 double,否则拼成 `+8.0:0.0`)。\n⚠️ bkNoon 取正午锚点(同 w.df 的 baseMs),按天累加时给夏令时留余量。",
+      "op": "set",
+      "props": {
+        "key": "bkNoon",
+        "value": "$[calc::(${startMs}+(${curPack}+1)*${cycle}*86400000+43200000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkNs",
+        "value": "$[formatDate::(${bkNoon},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkNsMs",
+        "value": "$[parseDate::(${bkNs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkRef",
+        "value": "$[parseDate::(2026-01-01,yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkU",
+        "value": "$[calc::(1767225600000+round::(calc::((${bkNsMs}-${bkRef})/86400000))*86400000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOff",
+        "value": "$[round::(calc::((${bkU}-${bkNsMs})/60000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkSg",
+        "value": "$[if::(lt::(${bkOff},0),-,+)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkAbs",
+        "value": "$[round::(if::(lt::(${bkOff},0),calc::(0-${bkOff}),${bkOff}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOh",
+        "value": "$[round::(floor::(calc::(${bkAbs}/60)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOm",
+        "value": "$[round::(calc::(${bkAbs}-${bkOh}*60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOhS",
+        "value": "$[if::(lt::(${bkOh},10),connect::(0,${bkOh}),${bkOh})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOmS",
+        "value": "$[if::(lt::(${bkOm},10),connect::(0,${bkOm}),${bkOm})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkIso",
+        "value": "${bkNs}T00:00:00${bkSg}${bkOhS}:${bkOmS}"
+      }
+    },
+    {
+      "_note": "go = 1 才撤:有计划 · 已开始 · 有停药期 · 日期算得出 · (今天在停药期 ∨ 服药期最后一天已记「已服」)。\n⚠️ 纯表达式嵌套 if,不用 op:if 算值(分支里 set 的键出不来,同 toggle.af)。",
+      "op": "set",
+      "props": {
+        "key": "go",
+        "value": "$[if::(eq::(${hasPlan},0),0,if::(lt::(${offset},0),0,if::(eq::(${rest},0),0,if::(ne::(length::(${bkNs}),10),0,if::(ge::(${idx},${active}),1,if::(eq::(${idx},calc::(${active}-1)),${isT},0))))))]"
+      }
+    },
+    {
+      "op": "if",
+      "props": {
+        "val": "$[eq::(${go},1)]"
+      },
+      "items": [
+        {
+          "action": "alert.skip",
+          "params": {
+            "id": "dose",
+            "until": "${bkIso}"
+          }
+        }
+      ]
+    }
+  ]
+}

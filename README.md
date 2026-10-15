@@ -52,7 +52,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Ledger](tools/ledger) · 记账 | `ledger` | 3 | offline · 不联网 | — |
 | [Lobsters](tools/lobsters) · Lobsters | `lobsters` | 10 | public API · 公开接口 | `lobste.rs` |
 | [Time Progress](tools/moment) · 时间进度 | `moment` | 55 | offline · 不联网 | — |
-| [Dose Log](tools/pill) · 服药记录 | `pill` | 47 | offline · 不联网 | — |
+| [Dose Log](tools/pill) · 服药记录 | `pill` | 48 | offline · 不联网 | — |
 | [Package Stats](tools/pkgstats) · 开源包下载量 | `pkgstats` | 19 | public API · 公开接口 | `api.npmjs.org` `registry.npmjs.org` `pypistats.org` `pypi.org` `crates.io` `hub.docker.com` `formulae.brew.sh` |
 | [Rates](tools/rates) · 利率 | `rates` | 7 | public API · 公开接口 | `home.treasury.gov` `www.mof.go.jp` `api.statistiken.bundesbank.de` `yield.chinabond.com.cn` `stats.bis.org` |
 | [Release Watch](tools/releases) · 开源项目发布 | `releases` | 14 | public API · 公开接口 | `github.com` |

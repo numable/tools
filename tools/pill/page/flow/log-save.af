@@ -13,6 +13,11 @@
       "params": { "key": "skipped", "default": "_" }
     },
     {
+      "_note": "下面三项只给「停药期不响提醒」用(2026-10-15):补录的是服药期最后一天时,要知道下一盒哪天开始。",
+      "id": "start", "action": "data.get", "params": { "key": "start", "default": "" } },
+    { "id": "active", "action": "data.get", "params": { "key": "active", "default": 21 } },
+    { "id": "rest", "action": "data.get", "params": { "key": "rest", "default": 7 } },
+    {
       "op": "set",
       "props": { "key": "d", "value": "${@event.value.date}" }
     },
@@ -72,11 +77,30 @@
       "op": "set",
       "props": { "key": "dMs", "value": "$[parseDate::(${d},yyyy-MM-dd)]" }
     },
+    {"_note": "与 toggle.af 同一套日历算术:这一天在本盒的第几格。", "op": "set", "props": {"key": "sd0", "value": "$[findNotEmpty::(${start},2026-01-01)]"}},
+    {"op": "set", "props": {"key": "sMs0", "value": "$[parseDate::(${sd0},yyyy-MM-dd)]"}},
+    {"op": "set", "props": {"key": "cyc", "value": "$[calc::(${active}+${rest})]"}},
+    {"op": "set", "props": {"key": "dIdx", "value": "$[round::(calc::((${dMs}-${sMs0})/86400000))]"}},
+    {"op": "set", "props": {"key": "inPack", "value": "$[calc::(${dIdx}%${cyc})]"}},
+    {"_note": "停药期不响提醒(2026-10-15):算「下一盒第一天零点」的带时区 ISO 时刻,交给 `alert.skip` 的 `until`。\n⚠️ `until` 四端只认带偏移的 ISO(iOS ISO8601DateFormatter / Android OffsetDateTime 都要偏移;iOS 解析不出会让整条流报错),\n   而 formatDate 只出本地时间、没有时区占位符,所以偏移要自己算:\n   本地零点 bkNsMs 与同一天的 UTC 零点之差就是偏移。UTC 零点 = 2026-01-01 的 UTC 毫秒(常数 1767225600000)+ 整天数,\n   整天数 = (bkNsMs − 本地 2026-01-01 零点)/ 一天 再四舍五入 —— 两端只差夏令时,四舍五入不会错一天。\n   ⚠️ 别把基准换成 1970-01-01:基里巴斯 / 萨摩亚 1970 年后跨过日期变更线,偏移差超过 12 小时,会算错整整一天\n   (= 新一盒第一天的提醒被吞掉)。2026-10-15 用 numable run 在上海 / 纽约 / 加德满都 / 基里巴斯 / 萨摩亚 / 奥克兰 / 纽芬兰 / 伦敦 × 四个日期实测全对。\n⚠️ 显示用的整数都套 `round::`(Android calc 出 double,否则拼成 `+8.0:0.0`)。\n⚠️ bkNoon 取正午锚点(同 w.df 的 baseMs),按天累加时给夏令时留余量。", "op": "set", "props": {"key": "bkNoon", "value": "$[calc::(${sMs0}+(floor::(calc::(${dIdx}/${cyc}))+1)*${cyc}*86400000+43200000)]"}},
+    {"op": "set", "props": {"key": "bkNs", "value": "$[formatDate::(${bkNoon},yyyy-MM-dd)]"}},
+    {"op": "set", "props": {"key": "bkNsMs", "value": "$[parseDate::(${bkNs},yyyy-MM-dd)]"}},
+    {"op": "set", "props": {"key": "bkRef", "value": "$[parseDate::(2026-01-01,yyyy-MM-dd)]"}},
+    {"op": "set", "props": {"key": "bkU", "value": "$[calc::(1767225600000+round::(calc::((${bkNsMs}-${bkRef})/86400000))*86400000)]"}},
+    {"op": "set", "props": {"key": "bkOff", "value": "$[round::(calc::((${bkU}-${bkNsMs})/60000))]"}},
+    {"op": "set", "props": {"key": "bkSg", "value": "$[if::(lt::(${bkOff},0),-,+)]"}},
+    {"op": "set", "props": {"key": "bkAbs", "value": "$[round::(if::(lt::(${bkOff},0),calc::(0-${bkOff}),${bkOff}))]"}},
+    {"op": "set", "props": {"key": "bkOh", "value": "$[round::(floor::(calc::(${bkAbs}/60)))]"}},
+    {"op": "set", "props": {"key": "bkOm", "value": "$[round::(calc::(${bkAbs}-${bkOh}*60))]"}},
+    {"op": "set", "props": {"key": "bkOhS", "value": "$[if::(lt::(${bkOh},10),connect::(0,${bkOh}),${bkOh})]"}},
+    {"op": "set", "props": {"key": "bkOmS", "value": "$[if::(lt::(${bkOm},10),connect::(0,${bkOm}),${bkOm})]"}},
+    {"op": "set", "props": {"key": "bkIso", "value": "${bkNs}T00:00:00${bkSg}${bkOhS}:${bkOmS}"}},
+    {"_note": "补录的是服药期最后一天(且确有计划、有停药期):记「已服」后一直撤到下一盒第一天零点。只在下面「补录今天 · 已服」那道闸里用。", "op": "set", "props": {"key": "bkLong", "value": "$[if::(eq::(length::(${bkNs}),10),if::(eq::(length::(${start}),10),if::(gt::(${rest},0),if::(ge::(${dIdx},0),if::(eq::(${inPack},calc::(${active}-1)),1,0),0),0),0),0)]"}},
     {
       "_note": "三条一起成立才撤:合法(`ok==1`)· 是今天(`dMs==tMs`)· 选的是「已服」(`st==taken`)。\n⚠️ `params` 省略 = 本规则全部实例;幂等;只撤到今天零点,明天照常响 —— 不是关闭提醒。",
       "op": "if",
       "props": {
-        "val": "$[if::(eq::(${ok},1),if::(eq::(${dMs},${tMs}),if::(eq::(${st},taken),1,0),0),0)]"
+        "val": "$[if::(eq::(${bkLong},1),0,if::(eq::(${ok},1),if::(eq::(${dMs},${tMs}),if::(eq::(${st},taken),1,0),0),0))]"
       },
       "items": [
         {
@@ -88,6 +112,7 @@
         }
       ]
     },
+    {"_note": "同上一道闸,但补录的今天是服药期最后一天:整个停药期都不用吃,一直撤到下一盒第一天零点(用户 2026-10-15)。", "op": "if", "props": {"val": "$[if::(eq::(${bkLong},1),if::(eq::(${ok},1),if::(eq::(${dMs},${tMs}),if::(eq::(${st},taken),1,0),0),0),0)]"}, "items": [{"action": "alert.skip", "params": {"id": "dose", "until": "${bkIso}"}}]},
     {
       "_note": "不在这里 reloadPage —— 表单提交后自己关页,由 open-log.af 的 openForResult 回来后整页重载。\n但仪表盘那张卡与桌面小组件不在那条链上,得自己踢一下(同 toggle.af 结尾)。",
       "action": "widget.refresh"

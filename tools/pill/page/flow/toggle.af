@@ -120,6 +120,106 @@
       }
     },
     {
+      "_note": "停药期不响提醒(2026-10-15):算「下一盒第一天零点」的带时区 ISO 时刻,交给 `alert.skip` 的 `until`。\n⚠️ `until` 四端只认带偏移的 ISO(iOS ISO8601DateFormatter / Android OffsetDateTime 都要偏移;iOS 解析不出会让整条流报错),\n   而 formatDate 只出本地时间、没有时区占位符,所以偏移要自己算:\n   本地零点 bkNsMs 与同一天的 UTC 零点之差就是偏移。UTC 零点 = 2026-01-01 的 UTC 毫秒(常数 1767225600000)+ 整天数,\n   整天数 = (bkNsMs − 本地 2026-01-01 零点)/ 一天 再四舍五入 —— 两端只差夏令时,四舍五入不会错一天。\n   ⚠️ 别把基准换成 1970-01-01:基里巴斯 / 萨摩亚 1970 年后跨过日期变更线,偏移差超过 12 小时,会算错整整一天\n   (= 新一盒第一天的提醒被吞掉)。2026-10-15 用 numable run 在上海 / 纽约 / 加德满都 / 基里巴斯 / 萨摩亚 / 奥克兰 / 纽芬兰 / 伦敦 × 四个日期实测全对。\n⚠️ 显示用的整数都套 `round::`(Android calc 出 double,否则拼成 `+8.0:0.0`)。\n⚠️ bkNoon 取正午锚点(同 w.df 的 baseMs),按天累加时给夏令时留余量。",
+      "op": "set",
+      "props": {
+        "key": "bkNoon",
+        "value": "$[calc::(${sMs0}+(floor::(calc::(${dIdx}/${cyc}))+1)*${cyc}*86400000+43200000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkNs",
+        "value": "$[formatDate::(${bkNoon},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkNsMs",
+        "value": "$[parseDate::(${bkNs},yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkRef",
+        "value": "$[parseDate::(2026-01-01,yyyy-MM-dd)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkU",
+        "value": "$[calc::(1767225600000+round::(calc::((${bkNsMs}-${bkRef})/86400000))*86400000)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOff",
+        "value": "$[round::(calc::((${bkU}-${bkNsMs})/60000))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkSg",
+        "value": "$[if::(lt::(${bkOff},0),-,+)]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkAbs",
+        "value": "$[round::(if::(lt::(${bkOff},0),calc::(0-${bkOff}),${bkOff}))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOh",
+        "value": "$[round::(floor::(calc::(${bkAbs}/60)))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOm",
+        "value": "$[round::(calc::(${bkAbs}-${bkOh}*60))]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOhS",
+        "value": "$[if::(lt::(${bkOh},10),connect::(0,${bkOh}),${bkOh})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkOmS",
+        "value": "$[if::(lt::(${bkOm},10),connect::(0,${bkOm}),${bkOm})]"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "bkIso",
+        "value": "${bkNs}T00:00:00${bkSg}${bkOhS}:${bkOmS}"
+      }
+    },
+    {
+      "_note": "改的这一格是服药期最后一天(inPack = active−1)且有停药期:记「已服」后一直撤到下一盒第一天零点。\n只在下面那条「改的是今天 · 未标记 → 已服」的闸里用,所以 d 就是今天。",
+      "op": "set",
+      "props": {
+        "key": "bkLong",
+        "value": "$[if::(eq::(length::(${bkNs}),10),if::(gt::(${rest},0),if::(ge::(${dIdx},0),if::(eq::(${inPack},calc::(${active}-1)),1,0),0),0),0)]"
+      }
+    },
+    {
       "_note": "合法性闸,两条:\n  ① 算得出日期(长度恰好 10)—— 参数没传到 / base 为空时,`d` 会是空串或半截。\n  ② **不是未来的日子**(v2 新增)。点阵搬回首页后,盒子里「还没到的格子」就在屏幕上,\n     一伸手就能点到;往未来写「已服用」会让盒子从明天起开始撒谎,而且撤销入口只管今天。\n     ⚠️ 翻盒的 `canNext` 已经挡住了「翻到未来的盒」,但**当前盒里今天之后的格子**挡不住 ——\n     那正是这道闸存在的理由。\n⚠️ `ok=0` 时下面所有分支都原样返回旧串,一个字节都不写(不是「写空」)。",
       "op": "set",
       "props": {
@@ -197,7 +297,7 @@
       "_note": "转到「已服」这一支才撤当天的服药提醒(doc/alert-design.md §4.4,三条记录路之一,\n另两条在 xWidget/flow/mark-today.af 与 page/flow/log-save.af —— 漏一条 = 从那条路记的\n「已服」不销当天提醒,施工单 §4.7 #5)。\n\n判据四条,缺一不可:\n  · `ok==1`     —— 合法性闸没拦下(真写了盘);\n  · `dMs==tMs`  —— **改的是今天**。三态循环也能补录旧格子,补三天前的一笔跟今天那一发无关,\n                   撤了就是把今天的提醒白白吞掉。⚠️ 比**毫秒**不比日期串:VParser 的 eq 会先\n                   数字化,`2026-09-15` 这种串去比是未定义行为(同本文件 tMs 那条注释)。\n  · `isT+isS==0` —— 这一下是**未标记 → 已服**。从「未服」转过去的那一支在本文件里不存在\n                   (已服 → 未服 → 未标记),而已标过的格子再点是**清除**,清除当然不该销提醒。\n  · `restDay==0` —— 停药日一个字节都没写(见下一条 toast),没写就没有「已服」可言。\n\n⚠️ `params` 省略 = 本规则全部实例;幂等;只撤到今天零点,明天照常响。",
       "op": "if",
       "props": {
-        "val": "$[if::(eq::(${ok},1),if::(eq::(${dMs},${tMs}),if::(eq::(calc::(${isT}+${isS}),0),if::(eq::(${restDay},0),1,0),0),0),0)]"
+        "val": "$[if::(eq::(${bkLong},1),0,if::(eq::(${ok},1),if::(eq::(${dMs},${tMs}),if::(eq::(calc::(${isT}+${isS}),0),if::(eq::(${restDay},0),1,0),0),0),0))]"
       },
       "items": [
         {
@@ -205,6 +305,22 @@
           "params": {
             "id": "dose",
             "until": "today"
+          }
+        }
+      ]
+    },
+    {
+      "_note": "同上一条闸,但这一格是服药期最后一天:整个停药期都不用吃,一直撤到下一盒第一天零点(用户 2026-10-15)。",
+      "op": "if",
+      "props": {
+        "val": "$[if::(eq::(${bkLong},1),if::(eq::(${ok},1),if::(eq::(${dMs},${tMs}),if::(eq::(calc::(${isT}+${isS}),0),if::(eq::(${restDay},0),1,0),0),0),0),0)]"
+      },
+      "items": [
+        {
+          "action": "alert.skip",
+          "params": {
+            "id": "dose",
+            "until": "${bkIso}"
           }
         }
       ]
