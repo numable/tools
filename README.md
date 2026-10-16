@@ -40,7 +40,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 |---|---|---|---|---|
 | [Air Quality](tools/air) · 空气质量 | `air` | 21 | public API · 公开接口 | `air-quality-api.open-meteo.com` `geocoding-api.open-meteo.com` `nominatim.openstreetmap.org` |
 | [App Store Board](tools/appwatch) · App Store 看板 | `appwatch` | 79 | your own key · 用户自带凭证 | `itunes.apple.com` `api.appstoreconnect.apple.com` `api.frankfurter.dev` |
-| [Chinese Calendar](tools/calendar) · 万年历 | `calendar` | 12 | offline · 不联网 | — |
+| [Chinese Calendar](tools/calendar) · 万年历 | `calendar` | 13 | offline · 不联网 | — |
 | [Claude Code Usage](tools/ccusage) · Claude Code 用量 | `ccusage` | 61 | Numable service · Numable 自家服务 | `usage.numable.app` |
 | [Check-in](tools/checkin) · 打卡 | `checkin` | 50 | offline · 不联网 | — |
 | [Cloudflare Watch](tools/cloudflare) · Cloudflare 状态 | `cloudflare` | 58 | your own key · 用户自带凭证 | `www.cloudflarestatus.com` `www.cloudflare.com` `api.cloudflare.com` |
@@ -51,7 +51,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Hugging Face Papers](tools/hfpapers) · HF 每日论文 | `hfpapers` | 11 | public API · 公开接口 | `huggingface.co` |
 | [Ledger](tools/ledger) · 记账 | `ledger` | 4 | offline · 不联网 | — |
 | [Lobsters](tools/lobsters) · Lobsters | `lobsters` | 10 | public API · 公开接口 | `lobste.rs` |
-| [Time Progress](tools/moment) · 时间进度 | `moment` | 55 | offline · 不联网 | — |
+| [Time Progress](tools/moment) · 时间进度 | `moment` | 56 | offline · 不联网 | — |
 | [Dose Log](tools/pill) · 服药记录 | `pill` | 48 | offline · 不联网 | — |
 | [Package Stats](tools/pkgstats) · 开源包下载量 | `pkgstats` | 19 | public API · 公开接口 | `api.npmjs.org` `registry.npmjs.org` `pypistats.org` `pypi.org` `crates.io` `hub.docker.com` `formulae.brew.sh` |
 | [Rates](tools/rates) · 利率 | `rates` | 7 | public API · 公开接口 | `home.treasury.gov` `www.mof.go.jp` `api.statistiken.bundesbank.de` `yield.chinabond.com.cn` `stats.bis.org` |
