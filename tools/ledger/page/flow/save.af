@@ -1,7 +1,7 @@
 {
   "_note": "页面写盘的唯一落点:原始数据(recs / cfg)+ 给组件的派生视图 w,整份写回(派生量全在页面 JS 里算完)。\n⚠️ 不发触觉:触觉由页面按动作语义自己发(记下 = success)。",
   "_lintRefresh": "exempt",
-  "_noteRefresh": "刻意**不在流里** widget.refresh:原语有 5 秒节流(同一包 5 秒内只兑现第一次)。连着记三笔,第二、三次的刷新被吞,组件停在第一笔的样子。页面 JS 自己排刷新(tools/ledger/src/ui.js 的 scheduleRefresh):先立即刷一次,5 秒窗口里的后续改动合成一次补刷(同 todo)。",
+  "_noteRefresh": "刻意**不在流里** widget.refresh:原语有 5 秒节流(同一包 5 秒内只兑现第一次)。连着记三笔,第二、三次的刷新被吞,组件停在第一笔的样子。页面 JS 自己排刷新(tools/ledger/src/ui.js 的 scheduleRefresh):先立即刷一次,5 秒窗口里的后续改动合成一次补刷(同 todo);关页 / 页面藏起来时没到点的补刷改走 refw.af(逐组件)。",
   "version": 1,
   "actions": [
     {
@@ -24,6 +24,14 @@
       "params": {
         "key": "w",
         "value": "${w}"
+      }
+    },
+    {
+      "_note": "「数据改过了」的记号,别的页靠它判断要不要重读。必须写在流里、放最后:页面 JS 在 runFlow 回来后再 setData,一关页就被打断 —— 数据落了盘、rev 没变,上一页不重读,下次存盘拿旧内存整份写回 = 刚记的被覆盖。",
+      "action": "data.set",
+      "params": {
+        "key": "rev",
+        "value": "${rev}"
       }
     }
   ]

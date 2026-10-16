@@ -980,9 +980,8 @@ var U = (function () {
     var job = saving.then(async function () {
       if (!inApp) return;
       var w = M.buildW(S, now), rq = M.buildRQ(S, now);
-      await call(xbridge.runFlow("save", { todos: S.todos, lists: S.lists, tags: S.tags, hist: S.hist, cfg: S.cfg, w: w, rq: rq }));
+      await call(xbridge.runFlow("save", { todos: S.todos, lists: S.lists, tags: S.tags, hist: S.hist, cfg: S.cfg, w: w, rq: rq, rev: String(now) }));
       rev = String(now);
-      try { await call(xbridge.setData("rev", rev)); } catch (e) {}
       scheduleRefresh();
     });
     saving = job.catch(function (e) { toast(lang() === "zh" ? "保存失败，请重试" : "Couldn't save. Try again", "error"); });
@@ -993,15 +992,43 @@ var U = (function () {
   function saveSoon() { clearTimeout(saveT); saveT = setTimeout(save, 400); }
   function flush() { if (saveT) { clearTimeout(saveT); saveT = null; return save(); } return saving; }
 
-  // 组件刷新:原语同一包 5 秒只兑现第一次 —— 先立即刷,窗口里的后续改动合成一次补刷
-  var lastRefresh = 0, refreshT = null;
+  // ── 组件刷新 ──
+  // 原语节流:同一(包, 作用域, 组件)5 秒内只兑现第一次,节流表全进程共享 —— 别的页刚刷过也算。
+  // · 先立即刷,5 秒窗口里的后续改动合成一次补刷(计时器到点时按共享时刻重算,别的页刚刷过就再等);
+  // · 「上一次整包 / 逐组件刷新」的时刻经 localStorage 在本包各页间共享(虚拟源按包隔离 origin):
+  //   只看本页记账时,上一页刚刷过、这一页马上又改 → 以为自己是第一次,被吞且不排补刷。读不到就退回只看本页;
+  // · 页面要关 / 被藏起来而补刷没到点:计时器会随页面一起没 → 立刻兑现,整包键没放开就走逐组件(refw.af,键不同)。
+  //   见 Numable/doc/journal-infosource.md §12.6 第 3 条(2026-10-16 三星实测)。
+  var KB = "nb.rk.bundle", KW = "nb.rk.widget", lastRefresh = 0, refreshT = null;
+  function kickAt(k) { var v = 0; try { v = +localStorage.getItem(k) || 0; } catch (e) {} return k === KB ? Math.max(v, lastRefresh) : v; }
+  function markKick(k, at) { try { localStorage.setItem(k, String(at)); } catch (e) {} }
   function scheduleRefresh() {
     if (!inApp) return;
-    var wait = lastRefresh + 5300 - Date.now();
+    var wait = kickAt(KB) + 5300 - Date.now();
     if (wait <= 0) { doRefresh(); return; }
-    if (!refreshT) refreshT = setTimeout(function () { refreshT = null; doRefresh(); }, wait);
+    if (!refreshT) refreshT = setTimeout(function () { refreshT = null; scheduleRefresh(); }, wait);
   }
-  function doRefresh() { lastRefresh = Date.now(); try { xbridge.refreshWidget(); } catch (e) {} }
+  function doRefresh() { lastRefresh = Date.now(); markKick(KB, lastRefresh); try { xbridge.refreshWidget(); } catch (e) {} }
+  function flushRefresh() {
+    if (!inApp || !refreshT) return Promise.resolve();
+    clearTimeout(refreshT); refreshT = null;
+    var now = Date.now();
+    if (kickAt(KB) + 5300 <= now || kickAt(KW) + 5300 > now) { doRefresh(); return Promise.resolve(); }
+    markKick(KW, now);
+    return call(xbridge.runFlow("refw", {})).catch(function () {});
+  }
+  /** 关页:先等进行中的保存写完,再兑现没到点的补刷,最后关。直接 closePage = 打断保存收尾、补刷随页面丢掉。
+   *  4 秒保底:桥卡住也别把用户关在页里。 */
+  async function close() {
+    if (!inApp) { history.back(); return; }
+    var guard = new Promise(function (r) { setTimeout(r, 4000); });
+    try { await Promise.race([flush().then(flushRefresh), guard]); } catch (e) {}
+    try { xbridge.closePage(); } catch (e) { history.back(); }
+  }
+  // 用户下滑 / 点 ✕ / 返回键关页没有回调:只能在页面藏起来那一刻尽力补(等进行中的保存写完再刷)
+  function onHide() { if (inApp) flush().then(flushRefresh); }
+  addEventListener("pagehide", onHide);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") onHide(); });
 
   /** 别的页改过数据(详情页、添加面板)回到这一页时重读:rev 变了才重读,轮询只读一个小键。 */
   function watch(onChange) {
@@ -1102,7 +1129,7 @@ var U = (function () {
     todoColor: todoColor, todoWash: todoWash, svg: svg, ic: ic, ui: ui, relDay: relDay, fmtStamp: fmtStamp,
     haptic: haptic, toast: toast, confirm: confirm, snack: snack, alertRemove: alertRemove, syncOnce: syncOnce,
     get S() { return S; }, set S(v) { S = v; }, load: load, save: save, saveSoon: saveSoon, flush: flush,
-    scheduleRefresh: scheduleRefresh, watch: watch, maybeSkipDaily: maybeSkipDaily, alertAdd: alertAdd,
+    scheduleRefresh: scheduleRefresh, close: close, watch: watch, maybeSkipDaily: maybeSkipDaily, alertAdd: alertAdd,
     route: route, q: q, onEnv: onEnv, bootEnv: bootEnv, sheet: sheet
   };
 })();

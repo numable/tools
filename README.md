@@ -49,7 +49,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Search Console](tools/gsc) · Google 搜索表现 | `gsc` | 53 | your own key · 用户自带凭证 | `searchconsole.googleapis.com` |
 | [Hacker News](tools/hacker) · Hacker News | `hacker` | 51 | public API · 公开接口 | `hn.algolia.com` |
 | [Hugging Face Papers](tools/hfpapers) · HF 每日论文 | `hfpapers` | 11 | public API · 公开接口 | `huggingface.co` |
-| [Ledger](tools/ledger) · 记账 | `ledger` | 3 | offline · 不联网 | — |
+| [Ledger](tools/ledger) · 记账 | `ledger` | 4 | offline · 不联网 | — |
 | [Lobsters](tools/lobsters) · Lobsters | `lobsters` | 10 | public API · 公开接口 | `lobste.rs` |
 | [Time Progress](tools/moment) · 时间进度 | `moment` | 55 | offline · 不联网 | — |
 | [Dose Log](tools/pill) · 服药记录 | `pill` | 48 | offline · 不联网 | — |
@@ -59,7 +59,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [SEC Filings](tools/secfilings) · 美股公告 | `secfilings` | 15 | public API · 公开接口 | `www.sec.gov` |
 | [Service Status](tools/status) · 服务状态 | `status` | 21 | public API · 公开接口 | `www.githubstatus.com` `status.claude.com` `status.openai.com` `www.vercel-status.com` `status.cursor.com` `status.npmjs.org` `www.dockerstatus.com` `bitbucket.status.atlassian.com` `status.circleci.com` `www.netlifystatus.com` `status.supabase.com` `status.render.com` `status.digitalocean.com` `status.mongodb.com` `status.sentry.io` `status.datadoghq.com` `linearstatus.com` `www.notion-status.com` `status.figma.com` `status.postman.com` `discordstatus.com` `www.redditstatus.com` |
 | [Stripe Revenue](tools/stripe) · Stripe 收入 | `stripe` | 3 | your own key · 用户自带凭证 | `api.stripe.com` |
-| [To-do](tools/todo) · 待办 | `todo` | 14 | offline · 不联网 | — |
+| [To-do](tools/todo) · 待办 | `todo` | 15 | offline · 不联网 | — |
 | [YouTube Stats](tools/tubewatch) · YouTube 频道数据 | `tubewatch` | 70 | your own key · 用户自带凭证 | `www.youtube.com` `www.googleapis.com` |
 | [V2EX](tools/v2ex) · V2EX | `v2ex` | 12 | public API · 公开接口 | `www.v2ex.com` |
 | [Weather](tools/weather) · 天气 | `weather` | 80 | public API · 公开接口 | `api.open-meteo.com` `air-quality-api.open-meteo.com` `geocoding-api.open-meteo.com` `nominatim.openstreetmap.org` |
