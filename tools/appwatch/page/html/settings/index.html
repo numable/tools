@@ -38,6 +38,58 @@ input,select{font:inherit;font-size:16px;color:var(--ink);background:var(--tile)
 .msg.bad{color:var(--bad)} .msg.ok{color:var(--ok)}
 .foot{font-size:12px;color:var(--sub);margin:16px 2px 0}
 </style>
+<script>
+/* nb:write-refresh v1 —— 构建时内嵌，包之间无运行时依赖。 */
+var nbWrites = (function () {
+  var chain = Promise.resolve(), timer = null, last = 0;
+  var KB = "nb.rk.bundle", KW = "nb.rk.widget";
+  function at(k) { var n = 0; try { n = +localStorage.getItem(k) || 0; } catch (_) {} return k === KB ? Math.max(n, last) : n; }
+  function mark(k) { var n = Date.now(); if (k === KB) last = n; try { localStorage.setItem(k, String(n)); } catch (_) {} }
+  async function run(name) {
+    if (!window.xbridge) return;
+    var r = await xbridge.runFlow(name, {});
+    if (r && r.code != null && r.code !== 0) throw new Error(r.msg || "刷新失败");
+  }
+  function kick() { mark(KB); return run("refb"); }
+  function schedule() {
+    if (!window.xbridge) return;
+    var wait = at(KB) + 5300 - Date.now();
+    if (wait <= 0) { kick().catch(function () {}); return; }
+    if (!timer) timer = setTimeout(function () { timer = null; schedule(); }, wait);
+  }
+  async function flushReady() {
+    var now = Date.now(), bundleAt = at(KB) + 5300, widgetAt = at(KW) + 5300;
+    if (bundleAt <= now) return kick();
+    if (widgetAt <= now) { mark(KW); return run("refw"); }
+    // 两种键都占用时不能再发一个必被吞掉的请求；等最早释放的键，再重读跨页时刻。
+    await new Promise(function (r) { setTimeout(r, Math.min(bundleAt, widgetAt) - now); });
+    return flushReady();
+  }
+  function flush() {
+    if (!timer || !window.xbridge) return Promise.resolve();
+    clearTimeout(timer); timer = null;
+    return flushReady();
+  }
+  function save(fn) {
+    var job = chain.then(fn).then(function (v) {
+      if (v && v.code != null && v.code !== 0) throw new Error(v.msg || "保存失败");
+      schedule(); return v;
+    });
+    chain = job.catch(function () {}); // 失败返回调用者；下一笔仍可继续保存。
+    return job;
+  }
+  function hidden() { chain.then(flush).catch(function () {}); }
+  addEventListener("pagehide", hidden);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") hidden(); });
+  async function close() {
+    await Promise.race([chain.then(flush).catch(function () {}), new Promise(function (r) { setTimeout(r, 6000); })]);
+    if (window.xbridge && xbridge.closePage) xbridge.closePage();
+  }
+  return { save: save, schedule: schedule, flush: flush, close: close };
+})();
+/* nb:write-refresh end */
+
+</script>
 </head>
 <body>
 <div class="foot" style="margin-top:4px" data-i="intro"></div>
@@ -161,10 +213,6 @@ async function verifyVendor(v){
   else { msg.className="msg"; msg.textContent=t("vUnk"); }
   return code;
 }
-async function afterWrite(){
-  // 经营组件会读 vendor / ccy:写回之后整包组件真取数一次(不是 reload —— 那会命中渲染图缓存)。
-  try{ await call(xbridge.refreshWidget()); }catch(e){}
-}
 // 中文键盘会打出全角数字(「８８０１」)—— 读取与输入时都先归一成半角(G50)
 function norm(s){return String(s||"").replace(/[\uFF10-\uFF19]/g,function(c){
   return String.fromCharCode(c.charCodeAt(0)-0xFEE0);}).replace(/[\s\u3000]+/g,"");}
@@ -174,18 +222,17 @@ async function saveVendor(){
   if(v && !/^\d+$/.test(v)){ msg.className="msg bad"; msg.textContent=t("bad"); return; }
   if(!inApp) return;
   try{
-    await call(xbridge.setData("vendor", v));
+    await nbWrites.save(function(){ return call(xbridge.setData("vendor", v)); });
     xbridge.haptic("success");
     msg.className="msg ok"; msg.textContent=t("saved");
     await verifyVendor(v);   // 覆盖「已保存」为核对结论
-    await afterWrite();
     loadKeys();              // 经营那一行的体检结论依赖编号,编号变了重探一次
   }catch(e){ msg.className="msg bad"; msg.textContent=String(e.message||e); }
 }
 async function saveCcy(){
   ccyCur=document.getElementById("ccy").value;
   if(!inApp) return;
-  try{ await call(xbridge.setData("ccy", ccyCur)); xbridge.haptic("selection"); await afterWrite(); }catch(e){}
+  try{ await nbWrites.save(function(){ return call(xbridge.setData("ccy", ccyCur)); }); xbridge.haptic("selection"); }catch(e){}
 }
 document.getElementById("bSave").addEventListener("click", saveVendor);
 document.getElementById("vendor").addEventListener("input", function(){
