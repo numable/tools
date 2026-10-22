@@ -162,6 +162,9 @@
       {
         "type": "Canvas",
         "id": "hours",
+        "params": {
+          "pageSky": "${sky}"
+        },
         "h": "182pt",
         "canvas": {
           "source": "@[file://page/rc/p-hours24.rcn]",
@@ -177,7 +180,8 @@
             }
           ]
         },
-        "_note": "未来 24 小时块(v62,v63 收回详情页统一版式):气温曲线 + 降水概率柱,与 hours 卡同源(gen_weather_more.py),自带 sky24.df。"
+        "_note": "未来 24 小时块(v62,v63 收回详情页统一版式):气温曲线 + 降水概率柱,与 hours 卡同源(gen_weather_more.py),自带 sky24.df。",
+        "backgroundColor": "$[if::(eq::(findNotEmpty::(${pageSky},${sky},overcast),clear),#4C5F6A|#2E4149,if::(eq::(findNotEmpty::(${pageSky},${sky},overcast),rain),#3D4951|#2C383F,if::(eq::(findNotEmpty::(${pageSky},${sky},overcast),snow),#61666A|#47505A,if::(eq::(findNotEmpty::(${pageSky},${sky},overcast),night),#17202B|#101720,#535A5F|#3D4348))))]"
       },
       {
         "type": "Canvas",
@@ -191,6 +195,9 @@
         "_note": "空气 + 日照块(v62,v63 收回详情页统一版式:两块并排玻璃卡,同 p-detail),gen_weather_more.py 生成。",
         "type": "Canvas",
         "id": "airsun",
+        "params": {
+          "pageSky": "${sky}"
+        },
         "h": "178pt",
         "canvas": {
           "source": "@[file://page/rc/p-airsun.rcn]",
@@ -214,7 +221,8 @@
               }
             }
           ]
-        }
+        },
+        "backgroundColor": "$[if::(eq::(findNotEmpty::(${pageSky},${sky},overcast),clear),#4C5F6A|#2E4149,if::(eq::(findNotEmpty::(${pageSky},${sky},overcast),rain),#3D4951|#2C383F,if::(eq::(findNotEmpty::(${pageSky},${sky},overcast),snow),#61666A|#47505A,if::(eq::(findNotEmpty::(${pageSky},${sky},overcast),night),#17202B|#101720,#535A5F|#3D4348))))]"
       },
       {
         "type": "Canvas",
@@ -235,7 +243,7 @@
       }
     ],
     "events": {
-      "_note": "`onLoad`:G23 三态的中间那一行 —— 首屏若渲的是旧货(`_stale=1`)就后台校新一次。gate 挂节点持久态、全生命周期恰好一次(xpage-design.md §10.1),所以「删键 → reloadPage → 再跑 depends」不会自激。⚠️ 绝不能改挂 onVisible(每次可见都触发 = 死循环)。\n`onRefresh`:声明后容器不再自动 reloadPage,下拉整个由 refresh-detail.af 负责(先删本城市缓存键,保证穿透)。\nv64:depends 传 `swr:1`(有缓存先渲,不在前台联网),「24 小时」「空气 + 日照」两块的取数传 `cache:1`(读同一套页面缓存)——加载期间宿主画的是不透明浅灰骨架,压在天空底上与整页不符;有缓存时根本不让它出现。只有从没打开过的城市第一次进来才会见到。",
+      "_note": "`onLoad`:G23 三态的中间那一行 —— 首屏若渲的是旧货(`_stale=1`)就后台校新一次。gate 挂节点持久态、全生命周期恰好一次(xpage-design.md §10.1),所以「删键 → reloadPage → 再跑 depends」不会自激。⚠️ 绝不能改挂 onVisible(每次可见都触发 = 死循环)。\n`onRefresh`:声明后容器不再自动 reloadPage,下拉整个由 refresh-detail.af 负责(先删本城市缓存键,保证穿透)。\nv64:depends 传 `swr:1`(有缓存先渲,不在前台联网),「24 小时」「空气 + 日照」两块的取数传 `cache:1`(读同一套页面缓存)——有缓存先用缓存，避免重复等待。2026-10-22：首次取数和分块等待也声明 backgroundColor，宿主保留天空底色，不再覆盖不透明浅灰骨架。",
       "onLoad": [
         {
           "flow": "@[file://page/flow/revalidate.af]",
@@ -254,7 +262,9 @@
           "lon": "${lon}"
         }
       }
-    }
+    },
+    "backgroundColor": "$[if::(eq::(findNotEmpty::(${sky},overcast),clear),#4C5F6A|#2E4149,if::(eq::(findNotEmpty::(${sky},overcast),rain),#3D4951|#2C383F,if::(eq::(findNotEmpty::(${sky},overcast),snow),#61666A|#47505A,if::(eq::(findNotEmpty::(${sky},overcast),night),#17202B|#101720,#535A5F|#3D4348))))]",
+    "_noteBackground": "背景独立于异步内容：首次未知天况用阴天天空底；父级天况到达后全页同色。hours / airsun 先把父页 sky 留为 pageSky，背景不被各自取数缓存的 sky 覆盖。backgroundColor 由宿主在取数前绘制，加载只出小指示器、不盖灰色骨架；重进时宿主沿用本页已解析的天空色。"
   },
   "_note_i18n": "⚠️ 这张表是**从本页各 Canvas 资产的 `rc.i18n` 汇总**来的,不是页面自己要用的 ——\niOS 的 XPage Canvas 宿主不合并资产 A 表,只注入页级表,不复制就整块文字空白\n(而同一张卡在添加面板里正常)。平台已修(2026-08-21),这份复制是过渡期顶包,\n删除跟进 TODO §203。**别手改** —— 由 tools/infosource/gen_weather_i18n.py 生成,\n手抄的两份表必然漂移,而漂移的表现是「某个词在某一端空着」,零报错。\n本页资产: p-airsun.rcn p-detail.rcn p-foot-detail.rcn p-hours24.rcn p-sky.rcn p-week.rcn"
 }

@@ -40,7 +40,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 |---|---|---|---|---|
 | [Air Quality](tools/air) · 空气质量 | `air` | 22 | public API · 公开接口 | `air-quality-api.open-meteo.com` `geocoding-api.open-meteo.com` `nominatim.openstreetmap.org` |
 | [App Store Board](tools/appwatch) · App Store 看板 | `appwatch` | 81 | your own key · 用户自带凭证 | `itunes.apple.com` `api.appstoreconnect.apple.com` `api.frankfurter.dev` |
-| [Chinese Calendar](tools/calendar) · 万年历 | `calendar` | 14 | offline · 不联网 | — |
+| [Chinese Calendar](tools/calendar) · 万年历 | `calendar` | 15 | offline · 不联网 | — |
 | [Claude Code Usage](tools/ccusage) · Claude Code 用量 | `ccusage` | 61 | Numable service · Numable 自家服务 | `usage.numable.app` |
 | [Check-in](tools/checkin) · 打卡 | `checkin` | 50 | offline · 不联网 | — |
 | [Cloudflare Watch](tools/cloudflare) · Cloudflare 状态 | `cloudflare` | 58 | your own key · 用户自带凭证 | `www.cloudflarestatus.com` `www.cloudflare.com` `api.cloudflare.com` |
@@ -51,10 +51,10 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Hugging Face Papers](tools/hfpapers) · HF 每日论文 | `hfpapers` | 11 | public API · 公开接口 | `huggingface.co` |
 | [Ledger](tools/ledger) · 记账 | `ledger` | 5 | offline · 不联网 | — |
 | [Lobsters](tools/lobsters) · Lobsters | `lobsters` | 10 | public API · 公开接口 | `lobste.rs` |
-| [Time Progress](tools/moment) · 时间进度 | `moment` | 57 | offline · 不联网 | — |
+| [Time Progress](tools/moment) · 时间进度 | `moment` | 58 | offline · 不联网 | — |
 | [Dose Log](tools/pill) · 服药记录 | `pill` | 48 | offline · 不联网 | — |
 | [Package Stats](tools/pkgstats) · 开源包下载量 | `pkgstats` | 19 | public API · 公开接口 | `api.npmjs.org` `registry.npmjs.org` `pypistats.org` `pypi.org` `crates.io` `hub.docker.com` `formulae.brew.sh` |
-| [Rates](tools/rates) · 利率 | `rates` | 7 | public API · 公开接口 | `home.treasury.gov` `www.mof.go.jp` `api.statistiken.bundesbank.de` `yield.chinabond.com.cn` `stats.bis.org` |
+| [Rates](tools/rates) · 利率 | `rates` | 8 | public API · 公开接口 | `home.treasury.gov` `www.mof.go.jp` `api.statistiken.bundesbank.de` `yield.chinabond.com.cn` `stats.bis.org` |
 | [Release Watch](tools/releases) · 开源项目发布 | `releases` | 14 | public API · 公开接口 | `github.com` |
 | [SEC Filings](tools/secfilings) · 美股公告 | `secfilings` | 15 | public API · 公开接口 | `www.sec.gov` |
 | [Service Status](tools/status) · 服务状态 | `status` | 21 | public API · 公开接口 | `www.githubstatus.com` `status.claude.com` `status.openai.com` `www.vercel-status.com` `status.cursor.com` `status.npmjs.org` `www.dockerstatus.com` `bitbucket.status.atlassian.com` `status.circleci.com` `www.netlifystatus.com` `status.supabase.com` `status.render.com` `status.digitalocean.com` `status.mongodb.com` `status.sentry.io` `status.datadoghq.com` `linearstatus.com` `www.notion-status.com` `status.figma.com` `status.postman.com` `discordstatus.com` `www.redditstatus.com` |
@@ -62,7 +62,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [To-do](tools/todo) · 待办 | `todo` | 16 | offline · 不联网 | — |
 | [YouTube Stats](tools/tubewatch) · YouTube 频道数据 | `tubewatch` | 70 | your own key · 用户自带凭证 | `www.youtube.com` `www.googleapis.com` |
 | [V2EX](tools/v2ex) · V2EX | `v2ex` | 12 | public API · 公开接口 | `www.v2ex.com` |
-| [Weather](tools/weather) · 天气 | `weather` | 81 | public API · 公开接口 | `api.open-meteo.com` `air-quality-api.open-meteo.com` `geocoding-api.open-meteo.com` `nominatim.openstreetmap.org` |
+| [Weather](tools/weather) · 天气 | `weather` | 83 | public API · 公开接口 | `api.open-meteo.com` `air-quality-api.open-meteo.com` `geocoding-api.open-meteo.com` `nominatim.openstreetmap.org` |
 <!-- tools:end -->
 
 ## 从这里起步写自己的工具
