@@ -44,7 +44,7 @@ tools that read public APIs, the user's own credentials, or nothing at all are m
 | [Claude Code Usage](tools/ccusage) · Claude Code 用量 | `ccusage` | 61 | Numable service · Numable 自家服务 | `usage.numable.app` |
 | [Check-in](tools/checkin) · 打卡 | `checkin` | 50 | offline · 不联网 | — |
 | [Cloudflare Watch](tools/cloudflare) · Cloudflare 状态 | `cloudflare` | 58 | your own key · 用户自带凭证 | `www.cloudflarestatus.com` `www.cloudflare.com` `api.cloudflare.com` |
-| [Crypto](tools/crypto) · 加密货币 | `crypto` | 81 | public API · 公开接口 | `www.okx.com` `api.alternative.me` `api.coingecko.com` `api.exchange.coinbase.com` |
+| [Crypto](tools/crypto) · 加密货币 | `crypto` | 82 | public API · 公开接口 | `www.okx.com` `api.alternative.me` `api.coingecko.com` `api.exchange.coinbase.com` |
 | [GitHub Inbox](tools/github) · GitHub 待办 | `github` | 61 | your own key · 用户自带凭证 | `api.github.com` |
 | [Search Console](tools/gsc) · Google 搜索表现 | `gsc` | 53 | your own key · 用户自带凭证 | `searchconsole.googleapis.com` |
 | [Hacker News](tools/hacker) · Hacker News | `hacker` | 51 | public API · 公开接口 | `hn.algolia.com` |
