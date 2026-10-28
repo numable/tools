@@ -103,11 +103,26 @@
       }
     },
     {
-      "_note": "缓存结构版本号:pack 字段集变了就 +1。从 1 起,绝不能用 0(eq::(空,0) 恒真)。\n包 v3 起 = 3:键里加了标准,pack 加了 lk / wS / bestS / bwFlat / ym*(施工中本地用过 2)。\n包 v4 = 4:trendKey 判据改了(档位变 或 数值变 ≥ 20),旧缓存里的走势作废。",
+      "_note": "缓存结构版本号:pack 字段集变了就 +1。从 1 起,绝不能用 0(eq::(空,0) 恒真)。\n包 v3 起 = 3:键里加了标准,pack 加了 lk / wS / bestS / bwFlat / ym*(施工中本地用过 2)。\n包 v4 = 4:trendKey 判据改了(档位变 或 数值变 ≥ 20),旧缓存里的走势作废。\n包 v23 = 5:pack 加了世卫倍数 who / whoHi、未来几天 dm* / dc* / di* / dw* 与 ds。",
       "op": "set",
       "props": {
         "key": "SCHEMA",
-        "value": "4"
+        "value": "5"
+      }
+    },
+    {
+      "op": "set",
+      "props": {
+        "key": "daysIn",
+        "value": "${_days}"
+      }
+    },
+    {
+      "_note": "`_days: 1` = 顺带取未来几天(第二趟请求);只有详情页与出门参考 44 传。没传时入参是原样的字面串 → 0。",
+      "op": "set",
+      "props": {
+        "key": "daysOn",
+        "value": "$[if::(eq::(${daysIn},1),1,0)]"
       }
     },
     {
@@ -203,6 +218,14 @@
       }
     },
     {
+      "_note": "首页城市行与组件不取未来几天,也写同一个键。详情页读到这种缓存:照样先渲(首屏不等),但算「不新鲜」→ 后台校新补上未来几天。",
+      "op": "set",
+      "props": {
+        "key": "hitDs",
+        "value": "$[if::(eq::(${daysOn},1),if::(eq::(${hit.ds},1),1,0),1)]"
+      }
+    },
+    {
       "_note": "有货 = 结构对得上 且 没超 hardTTL(12 小时)。",
       "op": "set",
       "props": {
@@ -211,11 +234,11 @@
       }
     },
     {
-      "_note": "ttl = 10 分钟(数据每小时一版)。",
+      "_note": "ttl = 10 分钟(数据每小时一版);要未来几天而缓存里没有 = 不新鲜。",
       "op": "set",
       "props": {
         "key": "fresh",
-        "value": "$[if::(gt::(${hitTs},0),if::(lt::(${age},600000),1,0),0)]"
+        "value": "$[if::(eq::(${hitDs},1),if::(gt::(${hitTs},0),if::(lt::(${age},600000),1,0),0),0)]"
       }
     },
     {
@@ -2699,6 +2722,517 @@
           }
         },
         {
+          "op": "set",
+          "props": {
+            "key": "_pm",
+            "value": "$[findNotEmpty::(${resp.current.pm2_5},-1)]"
+          }
+        },
+        {
+          "_note": "PM2.5 ÷ 世卫 24 小时指引值 15,保留一位小数。缺值留空(整行不画)。",
+          "op": "set",
+          "props": {
+            "key": "who",
+            "value": "$[if::(lt::(${_pm},0),,parseNumber::(calc::(round::(calc::(${_pm}/15*10))/10),0.#))]"
+          }
+        },
+        {
+          "_note": "1 = 达到或超过指引(写「是几倍」),0 = 低于指引(写「低于」)。",
+          "op": "set",
+          "props": {
+            "key": "whoHi",
+            "value": "$[if::(lt::(${_pm},0),,if::(ge::(${_pm},15),1,0))]"
+          }
+        },
+        {
+          "op": "if",
+          "props": {
+            "val": "$[eq::(${daysOn},1)]"
+          },
+          "items": [
+            {
+              "_note": "未来几天(v23):第二趟请求,只有传了 `_days: 1` 的调用方(详情页、出门参考 44)才走。\n`forecast_days=5` 让逐时序列从**当天 00:00** 起,一天正好 24 个下标 —— 每天的范围是写死的,不用按「现在几点」去切(主请求是 forecast_hours=48、从当前整点起,切天要算偏移)。\n只取 us_aqi 与六项浓度,不要 current。",
+              "id": "r2",
+              "action": "request",
+              "params": {
+                "url": "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&hourly=us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,sulphur_dioxide,carbon_monoxide&forecast_days=5&timezone=auto",
+                "method": "GET",
+                "formatType": "json",
+                "timeout": "10000"
+              }
+            },
+            {
+              "_note": "屏障(勿删):request / data.get 之后紧邻的节点读不到结果(晚一拍),隔一个空 set 再用。",
+              "op": "set",
+              "props": {
+                "key": "_b2",
+                "value": "1"
+              }
+            },
+            {
+              "op": "if",
+              "props": {
+                "val": "$[eq::(${std},us)]"
+              },
+              "items": [
+                {
+                  "_note": "这一天的最高 AQI(美国标准:逐时 US AQI 取最大)。缺值 -1。",
+                  "op": "set",
+                  "props": {
+                    "key": "dv0",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.us_aqi[0]},-1),findNotEmpty::(${r2.hourly.us_aqi[1]},-1),findNotEmpty::(${r2.hourly.us_aqi[2]},-1),findNotEmpty::(${r2.hourly.us_aqi[3]},-1),findNotEmpty::(${r2.hourly.us_aqi[4]},-1),findNotEmpty::(${r2.hourly.us_aqi[5]},-1),findNotEmpty::(${r2.hourly.us_aqi[6]},-1),findNotEmpty::(${r2.hourly.us_aqi[7]},-1),findNotEmpty::(${r2.hourly.us_aqi[8]},-1),findNotEmpty::(${r2.hourly.us_aqi[9]},-1),findNotEmpty::(${r2.hourly.us_aqi[10]},-1),findNotEmpty::(${r2.hourly.us_aqi[11]},-1),findNotEmpty::(${r2.hourly.us_aqi[12]},-1),findNotEmpty::(${r2.hourly.us_aqi[13]},-1),findNotEmpty::(${r2.hourly.us_aqi[14]},-1),findNotEmpty::(${r2.hourly.us_aqi[15]},-1),findNotEmpty::(${r2.hourly.us_aqi[16]},-1),findNotEmpty::(${r2.hourly.us_aqi[17]},-1),findNotEmpty::(${r2.hourly.us_aqi[18]},-1),findNotEmpty::(${r2.hourly.us_aqi[19]},-1),findNotEmpty::(${r2.hourly.us_aqi[20]},-1),findNotEmpty::(${r2.hourly.us_aqi[21]},-1),findNotEmpty::(${r2.hourly.us_aqi[22]},-1),findNotEmpty::(${r2.hourly.us_aqi[23]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv1",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.us_aqi[24]},-1),findNotEmpty::(${r2.hourly.us_aqi[25]},-1),findNotEmpty::(${r2.hourly.us_aqi[26]},-1),findNotEmpty::(${r2.hourly.us_aqi[27]},-1),findNotEmpty::(${r2.hourly.us_aqi[28]},-1),findNotEmpty::(${r2.hourly.us_aqi[29]},-1),findNotEmpty::(${r2.hourly.us_aqi[30]},-1),findNotEmpty::(${r2.hourly.us_aqi[31]},-1),findNotEmpty::(${r2.hourly.us_aqi[32]},-1),findNotEmpty::(${r2.hourly.us_aqi[33]},-1),findNotEmpty::(${r2.hourly.us_aqi[34]},-1),findNotEmpty::(${r2.hourly.us_aqi[35]},-1),findNotEmpty::(${r2.hourly.us_aqi[36]},-1),findNotEmpty::(${r2.hourly.us_aqi[37]},-1),findNotEmpty::(${r2.hourly.us_aqi[38]},-1),findNotEmpty::(${r2.hourly.us_aqi[39]},-1),findNotEmpty::(${r2.hourly.us_aqi[40]},-1),findNotEmpty::(${r2.hourly.us_aqi[41]},-1),findNotEmpty::(${r2.hourly.us_aqi[42]},-1),findNotEmpty::(${r2.hourly.us_aqi[43]},-1),findNotEmpty::(${r2.hourly.us_aqi[44]},-1),findNotEmpty::(${r2.hourly.us_aqi[45]},-1),findNotEmpty::(${r2.hourly.us_aqi[46]},-1),findNotEmpty::(${r2.hourly.us_aqi[47]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv2",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.us_aqi[48]},-1),findNotEmpty::(${r2.hourly.us_aqi[49]},-1),findNotEmpty::(${r2.hourly.us_aqi[50]},-1),findNotEmpty::(${r2.hourly.us_aqi[51]},-1),findNotEmpty::(${r2.hourly.us_aqi[52]},-1),findNotEmpty::(${r2.hourly.us_aqi[53]},-1),findNotEmpty::(${r2.hourly.us_aqi[54]},-1),findNotEmpty::(${r2.hourly.us_aqi[55]},-1),findNotEmpty::(${r2.hourly.us_aqi[56]},-1),findNotEmpty::(${r2.hourly.us_aqi[57]},-1),findNotEmpty::(${r2.hourly.us_aqi[58]},-1),findNotEmpty::(${r2.hourly.us_aqi[59]},-1),findNotEmpty::(${r2.hourly.us_aqi[60]},-1),findNotEmpty::(${r2.hourly.us_aqi[61]},-1),findNotEmpty::(${r2.hourly.us_aqi[62]},-1),findNotEmpty::(${r2.hourly.us_aqi[63]},-1),findNotEmpty::(${r2.hourly.us_aqi[64]},-1),findNotEmpty::(${r2.hourly.us_aqi[65]},-1),findNotEmpty::(${r2.hourly.us_aqi[66]},-1),findNotEmpty::(${r2.hourly.us_aqi[67]},-1),findNotEmpty::(${r2.hourly.us_aqi[68]},-1),findNotEmpty::(${r2.hourly.us_aqi[69]},-1),findNotEmpty::(${r2.hourly.us_aqi[70]},-1),findNotEmpty::(${r2.hourly.us_aqi[71]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv3",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.us_aqi[72]},-1),findNotEmpty::(${r2.hourly.us_aqi[73]},-1),findNotEmpty::(${r2.hourly.us_aqi[74]},-1),findNotEmpty::(${r2.hourly.us_aqi[75]},-1),findNotEmpty::(${r2.hourly.us_aqi[76]},-1),findNotEmpty::(${r2.hourly.us_aqi[77]},-1),findNotEmpty::(${r2.hourly.us_aqi[78]},-1),findNotEmpty::(${r2.hourly.us_aqi[79]},-1),findNotEmpty::(${r2.hourly.us_aqi[80]},-1),findNotEmpty::(${r2.hourly.us_aqi[81]},-1),findNotEmpty::(${r2.hourly.us_aqi[82]},-1),findNotEmpty::(${r2.hourly.us_aqi[83]},-1),findNotEmpty::(${r2.hourly.us_aqi[84]},-1),findNotEmpty::(${r2.hourly.us_aqi[85]},-1),findNotEmpty::(${r2.hourly.us_aqi[86]},-1),findNotEmpty::(${r2.hourly.us_aqi[87]},-1),findNotEmpty::(${r2.hourly.us_aqi[88]},-1),findNotEmpty::(${r2.hourly.us_aqi[89]},-1),findNotEmpty::(${r2.hourly.us_aqi[90]},-1),findNotEmpty::(${r2.hourly.us_aqi[91]},-1),findNotEmpty::(${r2.hourly.us_aqi[92]},-1),findNotEmpty::(${r2.hourly.us_aqi[93]},-1),findNotEmpty::(${r2.hourly.us_aqi[94]},-1),findNotEmpty::(${r2.hourly.us_aqi[95]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv4",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.us_aqi[96]},-1),findNotEmpty::(${r2.hourly.us_aqi[97]},-1),findNotEmpty::(${r2.hourly.us_aqi[98]},-1),findNotEmpty::(${r2.hourly.us_aqi[99]},-1),findNotEmpty::(${r2.hourly.us_aqi[100]},-1),findNotEmpty::(${r2.hourly.us_aqi[101]},-1),findNotEmpty::(${r2.hourly.us_aqi[102]},-1),findNotEmpty::(${r2.hourly.us_aqi[103]},-1),findNotEmpty::(${r2.hourly.us_aqi[104]},-1),findNotEmpty::(${r2.hourly.us_aqi[105]},-1),findNotEmpty::(${r2.hourly.us_aqi[106]},-1),findNotEmpty::(${r2.hourly.us_aqi[107]},-1),findNotEmpty::(${r2.hourly.us_aqi[108]},-1),findNotEmpty::(${r2.hourly.us_aqi[109]},-1),findNotEmpty::(${r2.hourly.us_aqi[110]},-1),findNotEmpty::(${r2.hourly.us_aqi[111]},-1),findNotEmpty::(${r2.hourly.us_aqi[112]},-1),findNotEmpty::(${r2.hourly.us_aqi[113]},-1),findNotEmpty::(${r2.hourly.us_aqi[114]},-1),findNotEmpty::(${r2.hourly.us_aqi[115]},-1),findNotEmpty::(${r2.hourly.us_aqi[116]},-1),findNotEmpty::(${r2.hourly.us_aqi[117]},-1),findNotEmpty::(${r2.hourly.us_aqi[118]},-1),findNotEmpty::(${r2.hourly.us_aqi[119]},-1))]"
+                  }
+                }
+              ]
+            },
+            {
+              "op": "if",
+              "props": {
+                "val": "$[eq::(${std},cn)]"
+              },
+              "items": [
+                {
+                  "_note": "中国标准:分指数对浓度单调,一天的最高 AQI = 各项「当天最高浓度」的分指数取最大(与「我的城市」流同一个换序),\n每天只算 6 个分指数,不必逐时算 24 × 6 个。",
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm250",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm2_5[0]},-1),findNotEmpty::(${r2.hourly.pm2_5[1]},-1),findNotEmpty::(${r2.hourly.pm2_5[2]},-1),findNotEmpty::(${r2.hourly.pm2_5[3]},-1),findNotEmpty::(${r2.hourly.pm2_5[4]},-1),findNotEmpty::(${r2.hourly.pm2_5[5]},-1),findNotEmpty::(${r2.hourly.pm2_5[6]},-1),findNotEmpty::(${r2.hourly.pm2_5[7]},-1),findNotEmpty::(${r2.hourly.pm2_5[8]},-1),findNotEmpty::(${r2.hourly.pm2_5[9]},-1),findNotEmpty::(${r2.hourly.pm2_5[10]},-1),findNotEmpty::(${r2.hourly.pm2_5[11]},-1),findNotEmpty::(${r2.hourly.pm2_5[12]},-1),findNotEmpty::(${r2.hourly.pm2_5[13]},-1),findNotEmpty::(${r2.hourly.pm2_5[14]},-1),findNotEmpty::(${r2.hourly.pm2_5[15]},-1),findNotEmpty::(${r2.hourly.pm2_5[16]},-1),findNotEmpty::(${r2.hourly.pm2_5[17]},-1),findNotEmpty::(${r2.hourly.pm2_5[18]},-1),findNotEmpty::(${r2.hourly.pm2_5[19]},-1),findNotEmpty::(${r2.hourly.pm2_5[20]},-1),findNotEmpty::(${r2.hourly.pm2_5[21]},-1),findNotEmpty::(${r2.hourly.pm2_5[22]},-1),findNotEmpty::(${r2.hourly.pm2_5[23]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm100",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm10[0]},-1),findNotEmpty::(${r2.hourly.pm10[1]},-1),findNotEmpty::(${r2.hourly.pm10[2]},-1),findNotEmpty::(${r2.hourly.pm10[3]},-1),findNotEmpty::(${r2.hourly.pm10[4]},-1),findNotEmpty::(${r2.hourly.pm10[5]},-1),findNotEmpty::(${r2.hourly.pm10[6]},-1),findNotEmpty::(${r2.hourly.pm10[7]},-1),findNotEmpty::(${r2.hourly.pm10[8]},-1),findNotEmpty::(${r2.hourly.pm10[9]},-1),findNotEmpty::(${r2.hourly.pm10[10]},-1),findNotEmpty::(${r2.hourly.pm10[11]},-1),findNotEmpty::(${r2.hourly.pm10[12]},-1),findNotEmpty::(${r2.hourly.pm10[13]},-1),findNotEmpty::(${r2.hourly.pm10[14]},-1),findNotEmpty::(${r2.hourly.pm10[15]},-1),findNotEmpty::(${r2.hourly.pm10[16]},-1),findNotEmpty::(${r2.hourly.pm10[17]},-1),findNotEmpty::(${r2.hourly.pm10[18]},-1),findNotEmpty::(${r2.hourly.pm10[19]},-1),findNotEmpty::(${r2.hourly.pm10[20]},-1),findNotEmpty::(${r2.hourly.pm10[21]},-1),findNotEmpty::(${r2.hourly.pm10[22]},-1),findNotEmpty::(${r2.hourly.pm10[23]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_o30",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.ozone[0]},-1),findNotEmpty::(${r2.hourly.ozone[1]},-1),findNotEmpty::(${r2.hourly.ozone[2]},-1),findNotEmpty::(${r2.hourly.ozone[3]},-1),findNotEmpty::(${r2.hourly.ozone[4]},-1),findNotEmpty::(${r2.hourly.ozone[5]},-1),findNotEmpty::(${r2.hourly.ozone[6]},-1),findNotEmpty::(${r2.hourly.ozone[7]},-1),findNotEmpty::(${r2.hourly.ozone[8]},-1),findNotEmpty::(${r2.hourly.ozone[9]},-1),findNotEmpty::(${r2.hourly.ozone[10]},-1),findNotEmpty::(${r2.hourly.ozone[11]},-1),findNotEmpty::(${r2.hourly.ozone[12]},-1),findNotEmpty::(${r2.hourly.ozone[13]},-1),findNotEmpty::(${r2.hourly.ozone[14]},-1),findNotEmpty::(${r2.hourly.ozone[15]},-1),findNotEmpty::(${r2.hourly.ozone[16]},-1),findNotEmpty::(${r2.hourly.ozone[17]},-1),findNotEmpty::(${r2.hourly.ozone[18]},-1),findNotEmpty::(${r2.hourly.ozone[19]},-1),findNotEmpty::(${r2.hourly.ozone[20]},-1),findNotEmpty::(${r2.hourly.ozone[21]},-1),findNotEmpty::(${r2.hourly.ozone[22]},-1),findNotEmpty::(${r2.hourly.ozone[23]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_no20",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.nitrogen_dioxide[0]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[1]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[2]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[3]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[4]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[5]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[6]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[7]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[8]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[9]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[10]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[11]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[12]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[13]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[14]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[15]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[16]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[17]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[18]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[19]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[20]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[21]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[22]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[23]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_so20",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.sulphur_dioxide[0]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[1]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[2]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[3]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[4]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[5]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[6]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[7]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[8]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[9]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[10]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[11]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[12]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[13]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[14]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[15]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[16]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[17]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[18]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[19]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[20]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[21]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[22]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[23]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_co0",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.carbon_monoxide[0]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[1]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[2]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[3]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[4]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[5]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[6]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[7]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[8]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[9]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[10]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[11]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[12]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[13]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[14]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[15]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[16]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[17]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[18]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[19]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[20]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[21]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[22]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[23]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv0",
+                    "value": "$[parseNumber::(calc::((max::(floor::(calc::(10/7*min::(max::(${x_pm250},0),35)+5/4*(min::(max::(${x_pm250},35),75)-35)+5/4*(min::(max::(${x_pm250},75),115)-75)+10/7*(min::(max::(${x_pm250},115),150)-115)+(min::(max::(${x_pm250},150),250)-150)+(min::(max::(${x_pm250},250),350)-250)+2/3*(min::(max::(${x_pm250},350),500)-350)+0.999999)),floor::(calc::(min::(max::(${x_pm100},0),50)+1/2*(min::(max::(${x_pm100},50),150)-50)+1/2*(min::(max::(${x_pm100},150),250)-150)+1/2*(min::(max::(${x_pm100},250),350)-250)+10/7*(min::(max::(${x_pm100},350),420)-350)+5/4*(min::(max::(${x_pm100},420),500)-420)+(min::(max::(${x_pm100},500),600)-500)+0.999999)),floor::(calc::(5/16*min::(max::(${x_o30},0),160)+5/4*(min::(max::(${x_o30},160),200)-160)+1/2*(min::(max::(${x_o30},200),300)-200)+1/2*(min::(max::(${x_o30},300),400)-300)+1/4*(min::(max::(${x_o30},400),800)-400)+1/2*(min::(max::(${x_o30},800),1000)-800)+1/2*(min::(max::(${x_o30},1000),1200)-1000)+0.999999)),floor::(calc::(1/2*min::(max::(${x_no20},0),100)+1/2*(min::(max::(${x_no20},100),200)-100)+1/10*(min::(max::(${x_no20},200),700)-200)+1/10*(min::(max::(${x_no20},700),1200)-700)+5/57*(min::(max::(${x_no20},1200),2340)-1200)+2/15*(min::(max::(${x_no20},2340),3090)-2340)+2/15*(min::(max::(${x_no20},3090),3840)-3090)+0.999999)),floor::(calc::(1/3*min::(max::(${x_so20},0),150)+1/7*(min::(max::(${x_so20},150),500)-150)+1/3*(min::(max::(${x_so20},500),650)-500)+1/3*(min::(max::(${x_so20},650),800)-650)+1/8*(min::(max::(${x_so20},800),1600)-800)+1/5*(min::(max::(${x_so20},1600),2100)-1600)+5/26*(min::(max::(${x_so20},2100),2620)-2100)+0.999999)),floor::(calc::(1/100*min::(max::(${x_co0},0),5000)+1/100*(min::(max::(${x_co0},5000),10000)-5000)+1/500*(min::(max::(${x_co0},10000),35000)-10000)+1/500*(min::(max::(${x_co0},35000),60000)-35000)+1/300*(min::(max::(${x_co0},60000),90000)-60000)+1/300*(min::(max::(${x_co0},90000),120000)-90000)+1/300*(min::(max::(${x_co0},120000),150000)-120000)+0.999999)))+1)*min::(1,calc::(${x_pm250}+1))-1),0)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm251",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm2_5[24]},-1),findNotEmpty::(${r2.hourly.pm2_5[25]},-1),findNotEmpty::(${r2.hourly.pm2_5[26]},-1),findNotEmpty::(${r2.hourly.pm2_5[27]},-1),findNotEmpty::(${r2.hourly.pm2_5[28]},-1),findNotEmpty::(${r2.hourly.pm2_5[29]},-1),findNotEmpty::(${r2.hourly.pm2_5[30]},-1),findNotEmpty::(${r2.hourly.pm2_5[31]},-1),findNotEmpty::(${r2.hourly.pm2_5[32]},-1),findNotEmpty::(${r2.hourly.pm2_5[33]},-1),findNotEmpty::(${r2.hourly.pm2_5[34]},-1),findNotEmpty::(${r2.hourly.pm2_5[35]},-1),findNotEmpty::(${r2.hourly.pm2_5[36]},-1),findNotEmpty::(${r2.hourly.pm2_5[37]},-1),findNotEmpty::(${r2.hourly.pm2_5[38]},-1),findNotEmpty::(${r2.hourly.pm2_5[39]},-1),findNotEmpty::(${r2.hourly.pm2_5[40]},-1),findNotEmpty::(${r2.hourly.pm2_5[41]},-1),findNotEmpty::(${r2.hourly.pm2_5[42]},-1),findNotEmpty::(${r2.hourly.pm2_5[43]},-1),findNotEmpty::(${r2.hourly.pm2_5[44]},-1),findNotEmpty::(${r2.hourly.pm2_5[45]},-1),findNotEmpty::(${r2.hourly.pm2_5[46]},-1),findNotEmpty::(${r2.hourly.pm2_5[47]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm101",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm10[24]},-1),findNotEmpty::(${r2.hourly.pm10[25]},-1),findNotEmpty::(${r2.hourly.pm10[26]},-1),findNotEmpty::(${r2.hourly.pm10[27]},-1),findNotEmpty::(${r2.hourly.pm10[28]},-1),findNotEmpty::(${r2.hourly.pm10[29]},-1),findNotEmpty::(${r2.hourly.pm10[30]},-1),findNotEmpty::(${r2.hourly.pm10[31]},-1),findNotEmpty::(${r2.hourly.pm10[32]},-1),findNotEmpty::(${r2.hourly.pm10[33]},-1),findNotEmpty::(${r2.hourly.pm10[34]},-1),findNotEmpty::(${r2.hourly.pm10[35]},-1),findNotEmpty::(${r2.hourly.pm10[36]},-1),findNotEmpty::(${r2.hourly.pm10[37]},-1),findNotEmpty::(${r2.hourly.pm10[38]},-1),findNotEmpty::(${r2.hourly.pm10[39]},-1),findNotEmpty::(${r2.hourly.pm10[40]},-1),findNotEmpty::(${r2.hourly.pm10[41]},-1),findNotEmpty::(${r2.hourly.pm10[42]},-1),findNotEmpty::(${r2.hourly.pm10[43]},-1),findNotEmpty::(${r2.hourly.pm10[44]},-1),findNotEmpty::(${r2.hourly.pm10[45]},-1),findNotEmpty::(${r2.hourly.pm10[46]},-1),findNotEmpty::(${r2.hourly.pm10[47]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_o31",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.ozone[24]},-1),findNotEmpty::(${r2.hourly.ozone[25]},-1),findNotEmpty::(${r2.hourly.ozone[26]},-1),findNotEmpty::(${r2.hourly.ozone[27]},-1),findNotEmpty::(${r2.hourly.ozone[28]},-1),findNotEmpty::(${r2.hourly.ozone[29]},-1),findNotEmpty::(${r2.hourly.ozone[30]},-1),findNotEmpty::(${r2.hourly.ozone[31]},-1),findNotEmpty::(${r2.hourly.ozone[32]},-1),findNotEmpty::(${r2.hourly.ozone[33]},-1),findNotEmpty::(${r2.hourly.ozone[34]},-1),findNotEmpty::(${r2.hourly.ozone[35]},-1),findNotEmpty::(${r2.hourly.ozone[36]},-1),findNotEmpty::(${r2.hourly.ozone[37]},-1),findNotEmpty::(${r2.hourly.ozone[38]},-1),findNotEmpty::(${r2.hourly.ozone[39]},-1),findNotEmpty::(${r2.hourly.ozone[40]},-1),findNotEmpty::(${r2.hourly.ozone[41]},-1),findNotEmpty::(${r2.hourly.ozone[42]},-1),findNotEmpty::(${r2.hourly.ozone[43]},-1),findNotEmpty::(${r2.hourly.ozone[44]},-1),findNotEmpty::(${r2.hourly.ozone[45]},-1),findNotEmpty::(${r2.hourly.ozone[46]},-1),findNotEmpty::(${r2.hourly.ozone[47]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_no21",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.nitrogen_dioxide[24]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[25]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[26]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[27]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[28]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[29]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[30]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[31]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[32]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[33]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[34]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[35]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[36]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[37]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[38]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[39]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[40]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[41]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[42]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[43]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[44]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[45]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[46]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[47]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_so21",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.sulphur_dioxide[24]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[25]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[26]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[27]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[28]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[29]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[30]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[31]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[32]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[33]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[34]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[35]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[36]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[37]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[38]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[39]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[40]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[41]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[42]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[43]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[44]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[45]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[46]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[47]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_co1",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.carbon_monoxide[24]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[25]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[26]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[27]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[28]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[29]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[30]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[31]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[32]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[33]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[34]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[35]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[36]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[37]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[38]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[39]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[40]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[41]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[42]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[43]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[44]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[45]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[46]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[47]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv1",
+                    "value": "$[parseNumber::(calc::((max::(floor::(calc::(10/7*min::(max::(${x_pm251},0),35)+5/4*(min::(max::(${x_pm251},35),75)-35)+5/4*(min::(max::(${x_pm251},75),115)-75)+10/7*(min::(max::(${x_pm251},115),150)-115)+(min::(max::(${x_pm251},150),250)-150)+(min::(max::(${x_pm251},250),350)-250)+2/3*(min::(max::(${x_pm251},350),500)-350)+0.999999)),floor::(calc::(min::(max::(${x_pm101},0),50)+1/2*(min::(max::(${x_pm101},50),150)-50)+1/2*(min::(max::(${x_pm101},150),250)-150)+1/2*(min::(max::(${x_pm101},250),350)-250)+10/7*(min::(max::(${x_pm101},350),420)-350)+5/4*(min::(max::(${x_pm101},420),500)-420)+(min::(max::(${x_pm101},500),600)-500)+0.999999)),floor::(calc::(5/16*min::(max::(${x_o31},0),160)+5/4*(min::(max::(${x_o31},160),200)-160)+1/2*(min::(max::(${x_o31},200),300)-200)+1/2*(min::(max::(${x_o31},300),400)-300)+1/4*(min::(max::(${x_o31},400),800)-400)+1/2*(min::(max::(${x_o31},800),1000)-800)+1/2*(min::(max::(${x_o31},1000),1200)-1000)+0.999999)),floor::(calc::(1/2*min::(max::(${x_no21},0),100)+1/2*(min::(max::(${x_no21},100),200)-100)+1/10*(min::(max::(${x_no21},200),700)-200)+1/10*(min::(max::(${x_no21},700),1200)-700)+5/57*(min::(max::(${x_no21},1200),2340)-1200)+2/15*(min::(max::(${x_no21},2340),3090)-2340)+2/15*(min::(max::(${x_no21},3090),3840)-3090)+0.999999)),floor::(calc::(1/3*min::(max::(${x_so21},0),150)+1/7*(min::(max::(${x_so21},150),500)-150)+1/3*(min::(max::(${x_so21},500),650)-500)+1/3*(min::(max::(${x_so21},650),800)-650)+1/8*(min::(max::(${x_so21},800),1600)-800)+1/5*(min::(max::(${x_so21},1600),2100)-1600)+5/26*(min::(max::(${x_so21},2100),2620)-2100)+0.999999)),floor::(calc::(1/100*min::(max::(${x_co1},0),5000)+1/100*(min::(max::(${x_co1},5000),10000)-5000)+1/500*(min::(max::(${x_co1},10000),35000)-10000)+1/500*(min::(max::(${x_co1},35000),60000)-35000)+1/300*(min::(max::(${x_co1},60000),90000)-60000)+1/300*(min::(max::(${x_co1},90000),120000)-90000)+1/300*(min::(max::(${x_co1},120000),150000)-120000)+0.999999)))+1)*min::(1,calc::(${x_pm251}+1))-1),0)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm252",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm2_5[48]},-1),findNotEmpty::(${r2.hourly.pm2_5[49]},-1),findNotEmpty::(${r2.hourly.pm2_5[50]},-1),findNotEmpty::(${r2.hourly.pm2_5[51]},-1),findNotEmpty::(${r2.hourly.pm2_5[52]},-1),findNotEmpty::(${r2.hourly.pm2_5[53]},-1),findNotEmpty::(${r2.hourly.pm2_5[54]},-1),findNotEmpty::(${r2.hourly.pm2_5[55]},-1),findNotEmpty::(${r2.hourly.pm2_5[56]},-1),findNotEmpty::(${r2.hourly.pm2_5[57]},-1),findNotEmpty::(${r2.hourly.pm2_5[58]},-1),findNotEmpty::(${r2.hourly.pm2_5[59]},-1),findNotEmpty::(${r2.hourly.pm2_5[60]},-1),findNotEmpty::(${r2.hourly.pm2_5[61]},-1),findNotEmpty::(${r2.hourly.pm2_5[62]},-1),findNotEmpty::(${r2.hourly.pm2_5[63]},-1),findNotEmpty::(${r2.hourly.pm2_5[64]},-1),findNotEmpty::(${r2.hourly.pm2_5[65]},-1),findNotEmpty::(${r2.hourly.pm2_5[66]},-1),findNotEmpty::(${r2.hourly.pm2_5[67]},-1),findNotEmpty::(${r2.hourly.pm2_5[68]},-1),findNotEmpty::(${r2.hourly.pm2_5[69]},-1),findNotEmpty::(${r2.hourly.pm2_5[70]},-1),findNotEmpty::(${r2.hourly.pm2_5[71]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm102",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm10[48]},-1),findNotEmpty::(${r2.hourly.pm10[49]},-1),findNotEmpty::(${r2.hourly.pm10[50]},-1),findNotEmpty::(${r2.hourly.pm10[51]},-1),findNotEmpty::(${r2.hourly.pm10[52]},-1),findNotEmpty::(${r2.hourly.pm10[53]},-1),findNotEmpty::(${r2.hourly.pm10[54]},-1),findNotEmpty::(${r2.hourly.pm10[55]},-1),findNotEmpty::(${r2.hourly.pm10[56]},-1),findNotEmpty::(${r2.hourly.pm10[57]},-1),findNotEmpty::(${r2.hourly.pm10[58]},-1),findNotEmpty::(${r2.hourly.pm10[59]},-1),findNotEmpty::(${r2.hourly.pm10[60]},-1),findNotEmpty::(${r2.hourly.pm10[61]},-1),findNotEmpty::(${r2.hourly.pm10[62]},-1),findNotEmpty::(${r2.hourly.pm10[63]},-1),findNotEmpty::(${r2.hourly.pm10[64]},-1),findNotEmpty::(${r2.hourly.pm10[65]},-1),findNotEmpty::(${r2.hourly.pm10[66]},-1),findNotEmpty::(${r2.hourly.pm10[67]},-1),findNotEmpty::(${r2.hourly.pm10[68]},-1),findNotEmpty::(${r2.hourly.pm10[69]},-1),findNotEmpty::(${r2.hourly.pm10[70]},-1),findNotEmpty::(${r2.hourly.pm10[71]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_o32",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.ozone[48]},-1),findNotEmpty::(${r2.hourly.ozone[49]},-1),findNotEmpty::(${r2.hourly.ozone[50]},-1),findNotEmpty::(${r2.hourly.ozone[51]},-1),findNotEmpty::(${r2.hourly.ozone[52]},-1),findNotEmpty::(${r2.hourly.ozone[53]},-1),findNotEmpty::(${r2.hourly.ozone[54]},-1),findNotEmpty::(${r2.hourly.ozone[55]},-1),findNotEmpty::(${r2.hourly.ozone[56]},-1),findNotEmpty::(${r2.hourly.ozone[57]},-1),findNotEmpty::(${r2.hourly.ozone[58]},-1),findNotEmpty::(${r2.hourly.ozone[59]},-1),findNotEmpty::(${r2.hourly.ozone[60]},-1),findNotEmpty::(${r2.hourly.ozone[61]},-1),findNotEmpty::(${r2.hourly.ozone[62]},-1),findNotEmpty::(${r2.hourly.ozone[63]},-1),findNotEmpty::(${r2.hourly.ozone[64]},-1),findNotEmpty::(${r2.hourly.ozone[65]},-1),findNotEmpty::(${r2.hourly.ozone[66]},-1),findNotEmpty::(${r2.hourly.ozone[67]},-1),findNotEmpty::(${r2.hourly.ozone[68]},-1),findNotEmpty::(${r2.hourly.ozone[69]},-1),findNotEmpty::(${r2.hourly.ozone[70]},-1),findNotEmpty::(${r2.hourly.ozone[71]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_no22",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.nitrogen_dioxide[48]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[49]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[50]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[51]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[52]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[53]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[54]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[55]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[56]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[57]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[58]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[59]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[60]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[61]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[62]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[63]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[64]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[65]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[66]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[67]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[68]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[69]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[70]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[71]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_so22",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.sulphur_dioxide[48]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[49]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[50]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[51]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[52]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[53]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[54]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[55]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[56]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[57]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[58]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[59]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[60]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[61]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[62]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[63]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[64]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[65]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[66]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[67]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[68]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[69]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[70]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[71]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_co2",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.carbon_monoxide[48]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[49]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[50]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[51]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[52]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[53]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[54]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[55]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[56]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[57]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[58]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[59]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[60]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[61]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[62]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[63]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[64]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[65]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[66]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[67]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[68]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[69]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[70]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[71]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv2",
+                    "value": "$[parseNumber::(calc::((max::(floor::(calc::(10/7*min::(max::(${x_pm252},0),35)+5/4*(min::(max::(${x_pm252},35),75)-35)+5/4*(min::(max::(${x_pm252},75),115)-75)+10/7*(min::(max::(${x_pm252},115),150)-115)+(min::(max::(${x_pm252},150),250)-150)+(min::(max::(${x_pm252},250),350)-250)+2/3*(min::(max::(${x_pm252},350),500)-350)+0.999999)),floor::(calc::(min::(max::(${x_pm102},0),50)+1/2*(min::(max::(${x_pm102},50),150)-50)+1/2*(min::(max::(${x_pm102},150),250)-150)+1/2*(min::(max::(${x_pm102},250),350)-250)+10/7*(min::(max::(${x_pm102},350),420)-350)+5/4*(min::(max::(${x_pm102},420),500)-420)+(min::(max::(${x_pm102},500),600)-500)+0.999999)),floor::(calc::(5/16*min::(max::(${x_o32},0),160)+5/4*(min::(max::(${x_o32},160),200)-160)+1/2*(min::(max::(${x_o32},200),300)-200)+1/2*(min::(max::(${x_o32},300),400)-300)+1/4*(min::(max::(${x_o32},400),800)-400)+1/2*(min::(max::(${x_o32},800),1000)-800)+1/2*(min::(max::(${x_o32},1000),1200)-1000)+0.999999)),floor::(calc::(1/2*min::(max::(${x_no22},0),100)+1/2*(min::(max::(${x_no22},100),200)-100)+1/10*(min::(max::(${x_no22},200),700)-200)+1/10*(min::(max::(${x_no22},700),1200)-700)+5/57*(min::(max::(${x_no22},1200),2340)-1200)+2/15*(min::(max::(${x_no22},2340),3090)-2340)+2/15*(min::(max::(${x_no22},3090),3840)-3090)+0.999999)),floor::(calc::(1/3*min::(max::(${x_so22},0),150)+1/7*(min::(max::(${x_so22},150),500)-150)+1/3*(min::(max::(${x_so22},500),650)-500)+1/3*(min::(max::(${x_so22},650),800)-650)+1/8*(min::(max::(${x_so22},800),1600)-800)+1/5*(min::(max::(${x_so22},1600),2100)-1600)+5/26*(min::(max::(${x_so22},2100),2620)-2100)+0.999999)),floor::(calc::(1/100*min::(max::(${x_co2},0),5000)+1/100*(min::(max::(${x_co2},5000),10000)-5000)+1/500*(min::(max::(${x_co2},10000),35000)-10000)+1/500*(min::(max::(${x_co2},35000),60000)-35000)+1/300*(min::(max::(${x_co2},60000),90000)-60000)+1/300*(min::(max::(${x_co2},90000),120000)-90000)+1/300*(min::(max::(${x_co2},120000),150000)-120000)+0.999999)))+1)*min::(1,calc::(${x_pm252}+1))-1),0)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm253",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm2_5[72]},-1),findNotEmpty::(${r2.hourly.pm2_5[73]},-1),findNotEmpty::(${r2.hourly.pm2_5[74]},-1),findNotEmpty::(${r2.hourly.pm2_5[75]},-1),findNotEmpty::(${r2.hourly.pm2_5[76]},-1),findNotEmpty::(${r2.hourly.pm2_5[77]},-1),findNotEmpty::(${r2.hourly.pm2_5[78]},-1),findNotEmpty::(${r2.hourly.pm2_5[79]},-1),findNotEmpty::(${r2.hourly.pm2_5[80]},-1),findNotEmpty::(${r2.hourly.pm2_5[81]},-1),findNotEmpty::(${r2.hourly.pm2_5[82]},-1),findNotEmpty::(${r2.hourly.pm2_5[83]},-1),findNotEmpty::(${r2.hourly.pm2_5[84]},-1),findNotEmpty::(${r2.hourly.pm2_5[85]},-1),findNotEmpty::(${r2.hourly.pm2_5[86]},-1),findNotEmpty::(${r2.hourly.pm2_5[87]},-1),findNotEmpty::(${r2.hourly.pm2_5[88]},-1),findNotEmpty::(${r2.hourly.pm2_5[89]},-1),findNotEmpty::(${r2.hourly.pm2_5[90]},-1),findNotEmpty::(${r2.hourly.pm2_5[91]},-1),findNotEmpty::(${r2.hourly.pm2_5[92]},-1),findNotEmpty::(${r2.hourly.pm2_5[93]},-1),findNotEmpty::(${r2.hourly.pm2_5[94]},-1),findNotEmpty::(${r2.hourly.pm2_5[95]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm103",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm10[72]},-1),findNotEmpty::(${r2.hourly.pm10[73]},-1),findNotEmpty::(${r2.hourly.pm10[74]},-1),findNotEmpty::(${r2.hourly.pm10[75]},-1),findNotEmpty::(${r2.hourly.pm10[76]},-1),findNotEmpty::(${r2.hourly.pm10[77]},-1),findNotEmpty::(${r2.hourly.pm10[78]},-1),findNotEmpty::(${r2.hourly.pm10[79]},-1),findNotEmpty::(${r2.hourly.pm10[80]},-1),findNotEmpty::(${r2.hourly.pm10[81]},-1),findNotEmpty::(${r2.hourly.pm10[82]},-1),findNotEmpty::(${r2.hourly.pm10[83]},-1),findNotEmpty::(${r2.hourly.pm10[84]},-1),findNotEmpty::(${r2.hourly.pm10[85]},-1),findNotEmpty::(${r2.hourly.pm10[86]},-1),findNotEmpty::(${r2.hourly.pm10[87]},-1),findNotEmpty::(${r2.hourly.pm10[88]},-1),findNotEmpty::(${r2.hourly.pm10[89]},-1),findNotEmpty::(${r2.hourly.pm10[90]},-1),findNotEmpty::(${r2.hourly.pm10[91]},-1),findNotEmpty::(${r2.hourly.pm10[92]},-1),findNotEmpty::(${r2.hourly.pm10[93]},-1),findNotEmpty::(${r2.hourly.pm10[94]},-1),findNotEmpty::(${r2.hourly.pm10[95]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_o33",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.ozone[72]},-1),findNotEmpty::(${r2.hourly.ozone[73]},-1),findNotEmpty::(${r2.hourly.ozone[74]},-1),findNotEmpty::(${r2.hourly.ozone[75]},-1),findNotEmpty::(${r2.hourly.ozone[76]},-1),findNotEmpty::(${r2.hourly.ozone[77]},-1),findNotEmpty::(${r2.hourly.ozone[78]},-1),findNotEmpty::(${r2.hourly.ozone[79]},-1),findNotEmpty::(${r2.hourly.ozone[80]},-1),findNotEmpty::(${r2.hourly.ozone[81]},-1),findNotEmpty::(${r2.hourly.ozone[82]},-1),findNotEmpty::(${r2.hourly.ozone[83]},-1),findNotEmpty::(${r2.hourly.ozone[84]},-1),findNotEmpty::(${r2.hourly.ozone[85]},-1),findNotEmpty::(${r2.hourly.ozone[86]},-1),findNotEmpty::(${r2.hourly.ozone[87]},-1),findNotEmpty::(${r2.hourly.ozone[88]},-1),findNotEmpty::(${r2.hourly.ozone[89]},-1),findNotEmpty::(${r2.hourly.ozone[90]},-1),findNotEmpty::(${r2.hourly.ozone[91]},-1),findNotEmpty::(${r2.hourly.ozone[92]},-1),findNotEmpty::(${r2.hourly.ozone[93]},-1),findNotEmpty::(${r2.hourly.ozone[94]},-1),findNotEmpty::(${r2.hourly.ozone[95]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_no23",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.nitrogen_dioxide[72]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[73]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[74]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[75]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[76]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[77]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[78]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[79]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[80]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[81]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[82]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[83]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[84]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[85]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[86]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[87]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[88]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[89]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[90]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[91]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[92]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[93]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[94]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[95]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_so23",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.sulphur_dioxide[72]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[73]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[74]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[75]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[76]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[77]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[78]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[79]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[80]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[81]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[82]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[83]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[84]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[85]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[86]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[87]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[88]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[89]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[90]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[91]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[92]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[93]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[94]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[95]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_co3",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.carbon_monoxide[72]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[73]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[74]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[75]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[76]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[77]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[78]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[79]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[80]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[81]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[82]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[83]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[84]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[85]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[86]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[87]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[88]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[89]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[90]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[91]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[92]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[93]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[94]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[95]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv3",
+                    "value": "$[parseNumber::(calc::((max::(floor::(calc::(10/7*min::(max::(${x_pm253},0),35)+5/4*(min::(max::(${x_pm253},35),75)-35)+5/4*(min::(max::(${x_pm253},75),115)-75)+10/7*(min::(max::(${x_pm253},115),150)-115)+(min::(max::(${x_pm253},150),250)-150)+(min::(max::(${x_pm253},250),350)-250)+2/3*(min::(max::(${x_pm253},350),500)-350)+0.999999)),floor::(calc::(min::(max::(${x_pm103},0),50)+1/2*(min::(max::(${x_pm103},50),150)-50)+1/2*(min::(max::(${x_pm103},150),250)-150)+1/2*(min::(max::(${x_pm103},250),350)-250)+10/7*(min::(max::(${x_pm103},350),420)-350)+5/4*(min::(max::(${x_pm103},420),500)-420)+(min::(max::(${x_pm103},500),600)-500)+0.999999)),floor::(calc::(5/16*min::(max::(${x_o33},0),160)+5/4*(min::(max::(${x_o33},160),200)-160)+1/2*(min::(max::(${x_o33},200),300)-200)+1/2*(min::(max::(${x_o33},300),400)-300)+1/4*(min::(max::(${x_o33},400),800)-400)+1/2*(min::(max::(${x_o33},800),1000)-800)+1/2*(min::(max::(${x_o33},1000),1200)-1000)+0.999999)),floor::(calc::(1/2*min::(max::(${x_no23},0),100)+1/2*(min::(max::(${x_no23},100),200)-100)+1/10*(min::(max::(${x_no23},200),700)-200)+1/10*(min::(max::(${x_no23},700),1200)-700)+5/57*(min::(max::(${x_no23},1200),2340)-1200)+2/15*(min::(max::(${x_no23},2340),3090)-2340)+2/15*(min::(max::(${x_no23},3090),3840)-3090)+0.999999)),floor::(calc::(1/3*min::(max::(${x_so23},0),150)+1/7*(min::(max::(${x_so23},150),500)-150)+1/3*(min::(max::(${x_so23},500),650)-500)+1/3*(min::(max::(${x_so23},650),800)-650)+1/8*(min::(max::(${x_so23},800),1600)-800)+1/5*(min::(max::(${x_so23},1600),2100)-1600)+5/26*(min::(max::(${x_so23},2100),2620)-2100)+0.999999)),floor::(calc::(1/100*min::(max::(${x_co3},0),5000)+1/100*(min::(max::(${x_co3},5000),10000)-5000)+1/500*(min::(max::(${x_co3},10000),35000)-10000)+1/500*(min::(max::(${x_co3},35000),60000)-35000)+1/300*(min::(max::(${x_co3},60000),90000)-60000)+1/300*(min::(max::(${x_co3},90000),120000)-90000)+1/300*(min::(max::(${x_co3},120000),150000)-120000)+0.999999)))+1)*min::(1,calc::(${x_pm253}+1))-1),0)]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm254",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm2_5[96]},-1),findNotEmpty::(${r2.hourly.pm2_5[97]},-1),findNotEmpty::(${r2.hourly.pm2_5[98]},-1),findNotEmpty::(${r2.hourly.pm2_5[99]},-1),findNotEmpty::(${r2.hourly.pm2_5[100]},-1),findNotEmpty::(${r2.hourly.pm2_5[101]},-1),findNotEmpty::(${r2.hourly.pm2_5[102]},-1),findNotEmpty::(${r2.hourly.pm2_5[103]},-1),findNotEmpty::(${r2.hourly.pm2_5[104]},-1),findNotEmpty::(${r2.hourly.pm2_5[105]},-1),findNotEmpty::(${r2.hourly.pm2_5[106]},-1),findNotEmpty::(${r2.hourly.pm2_5[107]},-1),findNotEmpty::(${r2.hourly.pm2_5[108]},-1),findNotEmpty::(${r2.hourly.pm2_5[109]},-1),findNotEmpty::(${r2.hourly.pm2_5[110]},-1),findNotEmpty::(${r2.hourly.pm2_5[111]},-1),findNotEmpty::(${r2.hourly.pm2_5[112]},-1),findNotEmpty::(${r2.hourly.pm2_5[113]},-1),findNotEmpty::(${r2.hourly.pm2_5[114]},-1),findNotEmpty::(${r2.hourly.pm2_5[115]},-1),findNotEmpty::(${r2.hourly.pm2_5[116]},-1),findNotEmpty::(${r2.hourly.pm2_5[117]},-1),findNotEmpty::(${r2.hourly.pm2_5[118]},-1),findNotEmpty::(${r2.hourly.pm2_5[119]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_pm104",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.pm10[96]},-1),findNotEmpty::(${r2.hourly.pm10[97]},-1),findNotEmpty::(${r2.hourly.pm10[98]},-1),findNotEmpty::(${r2.hourly.pm10[99]},-1),findNotEmpty::(${r2.hourly.pm10[100]},-1),findNotEmpty::(${r2.hourly.pm10[101]},-1),findNotEmpty::(${r2.hourly.pm10[102]},-1),findNotEmpty::(${r2.hourly.pm10[103]},-1),findNotEmpty::(${r2.hourly.pm10[104]},-1),findNotEmpty::(${r2.hourly.pm10[105]},-1),findNotEmpty::(${r2.hourly.pm10[106]},-1),findNotEmpty::(${r2.hourly.pm10[107]},-1),findNotEmpty::(${r2.hourly.pm10[108]},-1),findNotEmpty::(${r2.hourly.pm10[109]},-1),findNotEmpty::(${r2.hourly.pm10[110]},-1),findNotEmpty::(${r2.hourly.pm10[111]},-1),findNotEmpty::(${r2.hourly.pm10[112]},-1),findNotEmpty::(${r2.hourly.pm10[113]},-1),findNotEmpty::(${r2.hourly.pm10[114]},-1),findNotEmpty::(${r2.hourly.pm10[115]},-1),findNotEmpty::(${r2.hourly.pm10[116]},-1),findNotEmpty::(${r2.hourly.pm10[117]},-1),findNotEmpty::(${r2.hourly.pm10[118]},-1),findNotEmpty::(${r2.hourly.pm10[119]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_o34",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.ozone[96]},-1),findNotEmpty::(${r2.hourly.ozone[97]},-1),findNotEmpty::(${r2.hourly.ozone[98]},-1),findNotEmpty::(${r2.hourly.ozone[99]},-1),findNotEmpty::(${r2.hourly.ozone[100]},-1),findNotEmpty::(${r2.hourly.ozone[101]},-1),findNotEmpty::(${r2.hourly.ozone[102]},-1),findNotEmpty::(${r2.hourly.ozone[103]},-1),findNotEmpty::(${r2.hourly.ozone[104]},-1),findNotEmpty::(${r2.hourly.ozone[105]},-1),findNotEmpty::(${r2.hourly.ozone[106]},-1),findNotEmpty::(${r2.hourly.ozone[107]},-1),findNotEmpty::(${r2.hourly.ozone[108]},-1),findNotEmpty::(${r2.hourly.ozone[109]},-1),findNotEmpty::(${r2.hourly.ozone[110]},-1),findNotEmpty::(${r2.hourly.ozone[111]},-1),findNotEmpty::(${r2.hourly.ozone[112]},-1),findNotEmpty::(${r2.hourly.ozone[113]},-1),findNotEmpty::(${r2.hourly.ozone[114]},-1),findNotEmpty::(${r2.hourly.ozone[115]},-1),findNotEmpty::(${r2.hourly.ozone[116]},-1),findNotEmpty::(${r2.hourly.ozone[117]},-1),findNotEmpty::(${r2.hourly.ozone[118]},-1),findNotEmpty::(${r2.hourly.ozone[119]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_no24",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.nitrogen_dioxide[96]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[97]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[98]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[99]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[100]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[101]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[102]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[103]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[104]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[105]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[106]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[107]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[108]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[109]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[110]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[111]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[112]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[113]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[114]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[115]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[116]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[117]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[118]},-1),findNotEmpty::(${r2.hourly.nitrogen_dioxide[119]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_so24",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.sulphur_dioxide[96]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[97]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[98]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[99]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[100]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[101]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[102]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[103]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[104]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[105]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[106]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[107]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[108]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[109]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[110]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[111]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[112]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[113]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[114]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[115]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[116]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[117]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[118]},-1),findNotEmpty::(${r2.hourly.sulphur_dioxide[119]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "x_co4",
+                    "value": "$[max::(findNotEmpty::(${r2.hourly.carbon_monoxide[96]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[97]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[98]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[99]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[100]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[101]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[102]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[103]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[104]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[105]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[106]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[107]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[108]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[109]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[110]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[111]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[112]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[113]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[114]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[115]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[116]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[117]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[118]},-1),findNotEmpty::(${r2.hourly.carbon_monoxide[119]},-1))]"
+                  }
+                },
+                {
+                  "op": "set",
+                  "props": {
+                    "key": "dv4",
+                    "value": "$[parseNumber::(calc::((max::(floor::(calc::(10/7*min::(max::(${x_pm254},0),35)+5/4*(min::(max::(${x_pm254},35),75)-35)+5/4*(min::(max::(${x_pm254},75),115)-75)+10/7*(min::(max::(${x_pm254},115),150)-115)+(min::(max::(${x_pm254},150),250)-150)+(min::(max::(${x_pm254},250),350)-250)+2/3*(min::(max::(${x_pm254},350),500)-350)+0.999999)),floor::(calc::(min::(max::(${x_pm104},0),50)+1/2*(min::(max::(${x_pm104},50),150)-50)+1/2*(min::(max::(${x_pm104},150),250)-150)+1/2*(min::(max::(${x_pm104},250),350)-250)+10/7*(min::(max::(${x_pm104},350),420)-350)+5/4*(min::(max::(${x_pm104},420),500)-420)+(min::(max::(${x_pm104},500),600)-500)+0.999999)),floor::(calc::(5/16*min::(max::(${x_o34},0),160)+5/4*(min::(max::(${x_o34},160),200)-160)+1/2*(min::(max::(${x_o34},200),300)-200)+1/2*(min::(max::(${x_o34},300),400)-300)+1/4*(min::(max::(${x_o34},400),800)-400)+1/2*(min::(max::(${x_o34},800),1000)-800)+1/2*(min::(max::(${x_o34},1000),1200)-1000)+0.999999)),floor::(calc::(1/2*min::(max::(${x_no24},0),100)+1/2*(min::(max::(${x_no24},100),200)-100)+1/10*(min::(max::(${x_no24},200),700)-200)+1/10*(min::(max::(${x_no24},700),1200)-700)+5/57*(min::(max::(${x_no24},1200),2340)-1200)+2/15*(min::(max::(${x_no24},2340),3090)-2340)+2/15*(min::(max::(${x_no24},3090),3840)-3090)+0.999999)),floor::(calc::(1/3*min::(max::(${x_so24},0),150)+1/7*(min::(max::(${x_so24},150),500)-150)+1/3*(min::(max::(${x_so24},500),650)-500)+1/3*(min::(max::(${x_so24},650),800)-650)+1/8*(min::(max::(${x_so24},800),1600)-800)+1/5*(min::(max::(${x_so24},1600),2100)-1600)+5/26*(min::(max::(${x_so24},2100),2620)-2100)+0.999999)),floor::(calc::(1/100*min::(max::(${x_co4},0),5000)+1/100*(min::(max::(${x_co4},5000),10000)-5000)+1/500*(min::(max::(${x_co4},10000),35000)-10000)+1/500*(min::(max::(${x_co4},35000),60000)-35000)+1/300*(min::(max::(${x_co4},60000),90000)-60000)+1/300*(min::(max::(${x_co4},90000),120000)-90000)+1/300*(min::(max::(${x_co4},120000),150000)-120000)+0.999999)))+1)*min::(1,calc::(${x_pm254}+1))-1),0)]"
+                  }
+                }
+              ]
+            },
+            {
+              "_note": "每天最高 AQI;缺值留空(格子画「--」)。",
+              "op": "set",
+              "props": {
+                "key": "dm0",
+                "value": "$[if::(lt::(${dv0},0),,${dv0})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dc0",
+                "value": "$[if::(lt::(${dv0},0),#D6DAE1|#2C313A,if::(le::(${dv0},50),#1E9E55|#3DD68C,if::(le::(${dv0},100),#D9A300|#F5C84C,if::(le::(${dv0},150),#F07A12|#FF9F4A,if::(le::(${dv0},200),#E5392F|#FF6259,if::(le::(${dv0},300),if::(eq::(${std},cn),#A0165C|#E0609E,#8E44AD|#B77FDB),#7E1F2E|#C4566A))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "di0",
+                "value": "$[if::(lt::(${dv0},0),#6B7280|#8E939B,if::(le::(${dv0},50),#12713A|#5BE39A,if::(le::(${dv0},100),#8A6500|#F5C84C,if::(le::(${dv0},150),#B34F00|#FFA95C,if::(le::(${dv0},200),#C0271F|#FF8078,if::(le::(${dv0},300),if::(eq::(${std},cn),#8E0F52|#F28DBF,#7B3499|#CFA3EE),#7E1F2E|#E88A9B))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dm1",
+                "value": "$[if::(lt::(${dv1},0),,${dv1})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dc1",
+                "value": "$[if::(lt::(${dv1},0),#D6DAE1|#2C313A,if::(le::(${dv1},50),#1E9E55|#3DD68C,if::(le::(${dv1},100),#D9A300|#F5C84C,if::(le::(${dv1},150),#F07A12|#FF9F4A,if::(le::(${dv1},200),#E5392F|#FF6259,if::(le::(${dv1},300),if::(eq::(${std},cn),#A0165C|#E0609E,#8E44AD|#B77FDB),#7E1F2E|#C4566A))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "di1",
+                "value": "$[if::(lt::(${dv1},0),#6B7280|#8E939B,if::(le::(${dv1},50),#12713A|#5BE39A,if::(le::(${dv1},100),#8A6500|#F5C84C,if::(le::(${dv1},150),#B34F00|#FFA95C,if::(le::(${dv1},200),#C0271F|#FF8078,if::(le::(${dv1},300),if::(eq::(${std},cn),#8E0F52|#F28DBF,#7B3499|#CFA3EE),#7E1F2E|#E88A9B))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dm2",
+                "value": "$[if::(lt::(${dv2},0),,${dv2})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dc2",
+                "value": "$[if::(lt::(${dv2},0),#D6DAE1|#2C313A,if::(le::(${dv2},50),#1E9E55|#3DD68C,if::(le::(${dv2},100),#D9A300|#F5C84C,if::(le::(${dv2},150),#F07A12|#FF9F4A,if::(le::(${dv2},200),#E5392F|#FF6259,if::(le::(${dv2},300),if::(eq::(${std},cn),#A0165C|#E0609E,#8E44AD|#B77FDB),#7E1F2E|#C4566A))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "di2",
+                "value": "$[if::(lt::(${dv2},0),#6B7280|#8E939B,if::(le::(${dv2},50),#12713A|#5BE39A,if::(le::(${dv2},100),#8A6500|#F5C84C,if::(le::(${dv2},150),#B34F00|#FFA95C,if::(le::(${dv2},200),#C0271F|#FF8078,if::(le::(${dv2},300),if::(eq::(${std},cn),#8E0F52|#F28DBF,#7B3499|#CFA3EE),#7E1F2E|#E88A9B))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dm3",
+                "value": "$[if::(lt::(${dv3},0),,${dv3})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dc3",
+                "value": "$[if::(lt::(${dv3},0),#D6DAE1|#2C313A,if::(le::(${dv3},50),#1E9E55|#3DD68C,if::(le::(${dv3},100),#D9A300|#F5C84C,if::(le::(${dv3},150),#F07A12|#FF9F4A,if::(le::(${dv3},200),#E5392F|#FF6259,if::(le::(${dv3},300),if::(eq::(${std},cn),#A0165C|#E0609E,#8E44AD|#B77FDB),#7E1F2E|#C4566A))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "di3",
+                "value": "$[if::(lt::(${dv3},0),#6B7280|#8E939B,if::(le::(${dv3},50),#12713A|#5BE39A,if::(le::(${dv3},100),#8A6500|#F5C84C,if::(le::(${dv3},150),#B34F00|#FFA95C,if::(le::(${dv3},200),#C0271F|#FF8078,if::(le::(${dv3},300),if::(eq::(${std},cn),#8E0F52|#F28DBF,#7B3499|#CFA3EE),#7E1F2E|#E88A9B))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dm4",
+                "value": "$[if::(lt::(${dv4},0),,${dv4})]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dc4",
+                "value": "$[if::(lt::(${dv4},0),#D6DAE1|#2C313A,if::(le::(${dv4},50),#1E9E55|#3DD68C,if::(le::(${dv4},100),#D9A300|#F5C84C,if::(le::(${dv4},150),#F07A12|#FF9F4A,if::(le::(${dv4},200),#E5392F|#FF6259,if::(le::(${dv4},300),if::(eq::(${std},cn),#A0165C|#E0609E,#8E44AD|#B77FDB),#7E1F2E|#C4566A))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "di4",
+                "value": "$[if::(lt::(${dv4},0),#6B7280|#8E939B,if::(le::(${dv4},50),#12713A|#5BE39A,if::(le::(${dv4},100),#8A6500|#F5C84C,if::(le::(${dv4},150),#B34F00|#FFA95C,if::(le::(${dv4},200),#C0271F|#FF8078,if::(le::(${dv4},300),if::(eq::(${std},cn),#8E0F52|#F28DBF,#7B3499|#CFA3EE),#7E1F2E|#E88A9B))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_wt",
+                "value": "${r2.hourly.time[0]}"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_wm",
+                "value": "$[parseNumber::(subString::(${_wt},5,7),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_wy",
+                "value": "$[calc::(parseNumber::(subString::(${_wt},0,4),0)-if::(lt::(${_wm},3),1,0))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_wo",
+                "value": "$[if::(eq::(${_wm},1),0,if::(eq::(${_wm},2),3,if::(eq::(${_wm},3),2,if::(eq::(${_wm},4),5,if::(eq::(${_wm},5),0,if::(eq::(${_wm},6),3,if::(eq::(${_wm},7),5,if::(eq::(${_wm},8),1,if::(eq::(${_wm},9),4,if::(eq::(${_wm},10),6,if::(eq::(${_wm},11),2,if::(eq::(${_wm},12),4,0))))))))))))]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "_ws",
+                "value": "$[calc::(${_wy}+floor::(calc::(${_wy}/4))-floor::(calc::(${_wy}/100))+floor::(calc::(${_wy}/400))+${_wo}+parseNumber::(subString::(${_wt},8,10),0))]"
+              }
+            },
+            {
+              "_note": "第 d 天是星期几(0 = 周日);今天 / 明天写字,不用这个。",
+              "op": "set",
+              "props": {
+                "key": "dw2",
+                "value": "$[parseNumber::(calc::(${_ws}+2-7*floor::(calc::((${_ws}+2)/7))),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dw3",
+                "value": "$[parseNumber::(calc::(${_ws}+3-7*floor::(calc::((${_ws}+3)/7))),0)]"
+              }
+            },
+            {
+              "op": "set",
+              "props": {
+                "key": "dw4",
+                "value": "$[parseNumber::(calc::(${_ws}+4-7*floor::(calc::((${_ws}+4)/7))),0)]"
+              }
+            }
+          ]
+        },
+        {
           "_note": "整份渲染输入落盘。键集与 resultFilter 完全一致。",
           "op": "set",
           "props": {
@@ -2881,8 +3415,29 @@
               "y100B": "${y100B}",
               "wDx": "${wDx}",
               "wDy": "${wDy}",
+              "who": "${who}",
+              "whoHi": "${whoHi}",
+              "dm0": "${dm0}",
+              "dc0": "${dc0}",
+              "di0": "${di0}",
+              "dm1": "${dm1}",
+              "dc1": "${dc1}",
+              "di1": "${di1}",
+              "dm2": "${dm2}",
+              "dc2": "${dc2}",
+              "di2": "${di2}",
+              "dm3": "${dm3}",
+              "dc3": "${dc3}",
+              "di3": "${di3}",
+              "dm4": "${dm4}",
+              "dc4": "${dc4}",
+              "di4": "${di4}",
+              "dw2": "${dw2}",
+              "dw3": "${dw3}",
+              "dw4": "${dw4}",
               "ts": "${nowMs}",
-              "schema": "${SCHEMA}"
+              "schema": "${SCHEMA}",
+              "ds": "${daysOn}"
             }
           }
         },
@@ -4172,6 +4727,146 @@
             "key": "wDy",
             "value": "${box.wDy}"
           }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "who",
+            "value": "${box.who}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "whoHi",
+            "value": "${box.whoHi}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dm0",
+            "value": "${box.dm0}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dc0",
+            "value": "${box.dc0}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "di0",
+            "value": "${box.di0}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dm1",
+            "value": "${box.dm1}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dc1",
+            "value": "${box.dc1}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "di1",
+            "value": "${box.di1}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dm2",
+            "value": "${box.dm2}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dc2",
+            "value": "${box.dc2}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "di2",
+            "value": "${box.di2}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dm3",
+            "value": "${box.dm3}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dc3",
+            "value": "${box.dc3}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "di3",
+            "value": "${box.di3}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dm4",
+            "value": "${box.dm4}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dc4",
+            "value": "${box.dc4}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "di4",
+            "value": "${box.di4}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dw2",
+            "value": "${box.dw2}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dw3",
+            "value": "${box.dw3}"
+          }
+        },
+        {
+          "op": "set",
+          "props": {
+            "key": "dw4",
+            "value": "${box.dw4}"
+          }
         }
       ]
     },
@@ -4396,7 +5091,27 @@
           "on100B",
           "y100B",
           "wDx",
-          "wDy"
+          "wDy",
+          "who",
+          "whoHi",
+          "dm0",
+          "dc0",
+          "di0",
+          "dm1",
+          "dc1",
+          "di1",
+          "dm2",
+          "dc2",
+          "di2",
+          "dm3",
+          "dc3",
+          "di3",
+          "dm4",
+          "dc4",
+          "di4",
+          "dw2",
+          "dw3",
+          "dw4"
         ]
       }
     }
