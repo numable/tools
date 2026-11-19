@@ -1,0 +1,207 @@
+/* numable-kit 1.1.0 —— Numable 工具页面样式套件 · 选择框与弹层子集
+ *
+ * 由 scripts/gen-kit-pick.mjs 从 numable.css 生成,别直接改。给老页面单独换掉系统下拉 / 日期 / 时间弹窗:
+ *   <link rel="stylesheet" href="../../assets/numable-pick.css" />
+ *   <script src="../../assets/numable-kit.js" defer></script>
+ * 再给 select / input[type=date|time](以及要统一样式的普通输入框)加 class="nb-input"。变量只定义在这些控件与弹层上,不改页面其余部分。
+ * 已经引了 numable.css 的页面不需要本文件。
+ */
+
+.nb-input.nb-input, .nb-pop {
+  --nb-bg:          var(--xb-bg, #F5F6F8);
+  --nb-card:        var(--xb-card, #FFFFFF);
+  --nb-elevated:    var(--xb-elevated, #FFFFFF);
+  --nb-ink:         var(--xb-ink, #0E1116);
+  --nb-sub:         var(--xb-sub, #6B7280);
+  --nb-line:        var(--xb-line, #E4E7EC);
+  --nb-tile:        var(--xb-tile, #E7E9EE);
+  --nb-well:        var(--xb-well, rgba(15,20,30,.05));
+  --nb-accent:      var(--xb-accent, #128F66);
+  --nb-accent-soft: var(--xb-accent-soft, rgba(18,143,102,.12));
+  --nb-on-accent:   var(--xb-on-accent, #FFFFFF);
+  --nb-danger:      var(--xb-danger, #FF3B30);
+  --nb-danger-soft: rgba(255,59,48,.10);
+  --nb-warn:        var(--xb-warn, #B45309);
+  --nb-scrim:       rgba(0,0,0,.32);
+  --nb-shadow:      0 1px 2px rgba(15,20,30,.06), 0 4px 16px rgba(15,20,30,.05);
+  --nb-hair:        rgba(15,20,30,.08);
+  --nb-src:         var(--nb-accent);
+
+  --nb-inset: 14px;       /* 页面左右内边距(页面规范 §5;旧起步包变量名,覆盖它即可) */
+  --nb-radius: 14px;      /* 卡片圆角(旧起步包变量名,覆盖它即可) */
+  --nb-page-x: var(--nb-inset);
+  --nb-r-card: var(--nb-radius);
+  --nb-r-ctl: 12px;       /* 输入框 / 按钮 / 列表块 */
+  --nb-r-chip: 8px;       /* 芯片 / 小标记 */
+  --nb-h-ctl: 44px;       /* 控件高(可点区域下限) */
+  --nb-h-sm: 34px;
+  color-scheme: light;
+}
+:root[data-theme="dark"] .nb-input.nb-input, :root[data-theme="dark"] .nb-pop {
+  --nb-bg:          var(--xb-bg, #0B0C0E);
+  --nb-card:        var(--xb-card, #15171A);
+  --nb-elevated:    var(--xb-elevated, #20232A);
+  --nb-ink:         var(--xb-ink, #F3F4F6);
+  --nb-sub:         var(--xb-sub, #8E939B);
+  --nb-line:        var(--xb-line, #262A31);
+  --nb-tile:        var(--xb-tile, #20232A);
+  --nb-well:        var(--xb-well, rgba(0,0,0,.22));
+  --nb-accent:      var(--xb-accent, #6FE8BE);
+  --nb-accent-soft: var(--xb-accent-soft, rgba(111,232,190,.16));
+  --nb-on-accent:   var(--xb-on-accent, #0B0C0E);
+  --nb-danger:      var(--xb-danger, #FF453A);
+  --nb-danger-soft: rgba(255,69,58,.14);
+  --nb-warn:        var(--xb-warn, #F2B655);
+  --nb-scrim:       rgba(0,0,0,.44);
+  --nb-shadow:      none;
+  --nb-hair:        rgba(255,255,255,.09);
+  color-scheme: dark;
+}
+.nb-pop, .nb-pop *, .nb-pop *::before, .nb-pop *::after, .nb-trigger.nb-trigger { box-sizing: border-box; }
+.nb-pop { color: var(--nb-ink); font: 15px/22px -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", system-ui, sans-serif; }
+.nb-pop h3, .nb-pop p { margin: 0; }
+.nb-pop :focus-visible, .nb-trigger.nb-trigger:focus-visible { outline: 2px solid var(--nb-accent); outline-offset: 2px; }
+/* 原控件由脚本藏起来存值;页面自己写的 select { display: … } 不能把它顶回来 */
+select.nb-input.nb-input[hidden], input.nb-input.nb-input[hidden] { display: none !important; }
+
+/* 输入框:填充式,无描边;在卡里用 tile 底,在页面底上用卡底 */
+.nb-input.nb-input {
+  display: block; width: 100%; min-height: var(--nb-h-ctl); margin: 0;
+  padding: 0 14px; border: 0; border-radius: var(--nb-r-ctl);
+  background: var(--nb-card); color: var(--nb-ink);
+  font-family: inherit; font-weight: 400; font-size: 16px; line-height: 22px;           /* 16px:iOS 低于 16 会在聚焦时放大页面 */
+  -webkit-appearance: none; appearance: none;
+}
+.nb-card .nb-input.nb-input, .nb-card .nb-seg, .nb-card .nb-stepper { background: var(--nb-tile); }
+.nb-input.nb-input::placeholder { color: var(--nb-sub); opacity: .8; }
+.nb-input.nb-input:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--nb-accent); }
+.nb-input.nb-input:disabled { opacity: .5; }
+textarea.nb-input.nb-input { min-height: 96px; padding: 11px 14px; resize: none; }
+/* 小号:嵌在段标题 / 工具栏里的下拉(排序、范围),宽度随内容 */
+.nb-input.nb-input.nb-input--sm { display: inline-flex; width: auto; min-height: var(--nb-h-sm); padding: 0 10px 0 12px; border-radius: 10px; font-size: 14px; line-height: 20px; }
+input[type="date"].nb-input.nb-input, input[type="time"].nb-input.nb-input, input[type="datetime-local"].nb-input.nb-input { text-align: left; }
+input[type="date"].nb-input.nb-input::-webkit-date-and-time-value { text-align: left; }
+
+/* ---------- 按钮 ---------- */
+.nb-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--nb-h-ctl); padding: 0 18px; border: 0; border-radius: var(--nb-r-ctl);
+  background: var(--nb-accent); color: var(--nb-on-accent);
+  font-family: inherit; font-weight: 600; font-size: 16px; line-height: 20px; text-decoration: none; cursor: pointer; white-space: nowrap;
+  transition: transform 60ms, opacity 60ms;
+}
+.nb-btn:active { transform: scale(.97); opacity: .85; }
+.nb-btn--secondary { background: var(--nb-accent-soft); color: var(--nb-accent); }
+.nb-btn--plain { background: transparent; color: var(--nb-accent); padding: 0 8px; }
+.nb-btn--danger { background: var(--nb-danger-soft); color: var(--nb-danger); }
+.nb-btn--sm { min-height: var(--nb-h-sm); padding: 0 14px; font-size: 14px; border-radius: 10px; }
+.nb-btn--block { display: flex; width: 100%; }
+.nb-btn:disabled, .nb-btn[aria-disabled="true"] { background: var(--nb-tile); color: var(--nb-sub); opacity: .7; pointer-events: none; }
+.nb-btn.is-busy { pointer-events: none; }
+.nb-btn.is-busy::before {
+  content: ""; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid currentColor; border-right-color: transparent; animation: nb-spin .8s linear infinite;
+}
+.nb-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.nb-btns > .nb-btn, .nb-btns > .nb-input.nb-input { flex: 1 1 0; min-width: 0; }
+
+/* ---------- 选择弹层(下拉 / 日期 / 时间)· 由 numable-kit.js 驱动 ----------
+ * 原生 <select> / <input type=date|time> 加 class="nb-input" 即自动接管:原控件留在页面里存值并派发 change,
+ * 页面上显示一个同样式的触发块;点开后在页面内(= 容器内)弹出底部弹层。
+ * 弹层形态与容器浮层一致:遮罩独立淡入,卡片贴底滑上,左上 30 圆 ✕,标题居中。 */
+.nb-trigger.nb-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; }
+.nb-trigger.nb-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-trigger.nb-trigger.is-empty > span { color: var(--nb-sub); opacity: .8; }
+.nb-trigger.nb-trigger::after {
+  content: ""; flex: 0 0 auto; width: 7px; height: 7px; margin: -4px 2px 0 0;
+  border-right: 1.75px solid var(--nb-sub); border-bottom: 1.75px solid var(--nb-sub); transform: rotate(45deg);
+}
+.nb-trigger.nb-trigger[data-kind="date"]::after, .nb-trigger.nb-trigger[data-kind="time"]::after { display: none; }
+.nb-trigger.nb-trigger svg { width: 18px; height: 18px; flex: 0 0 auto; fill: var(--nb-sub); }
+.nb-trigger.nb-trigger.is-open { box-shadow: inset 0 0 0 1.5px var(--nb-accent); }
+
+.nb-pop { position: fixed; inset: 0; z-index: 50; }
+.nb-pop-scrim { position: absolute; inset: 0; background: var(--nb-scrim); opacity: 0; transition: opacity 220ms ease; }
+.nb-pop-card {
+  position: absolute; left: 0; right: 0; bottom: 0; max-height: 80%;
+  display: flex; flex-direction: column;
+  background: var(--nb-elevated); border-radius: 14px 14px 0 0;
+  padding-bottom: var(--xb-safe-bottom, env(safe-area-inset-bottom, 0px));
+  transform: translateY(100%); transition: transform 280ms cubic-bezier(.2,.8,.2,1);
+  box-shadow: 0 -8px 32px rgba(0,0,0,.12);
+}
+:root[data-theme="dark"] .nb-pop-card { box-shadow: inset 0 .5px 0 var(--nb-hair); }
+.nb-pop.is-in .nb-pop-scrim { opacity: 1; }
+.nb-pop.is-in .nb-pop-card { transform: none; }
+.nb-pop-head { position: relative; flex: 0 0 auto; height: 48px; display: flex; align-items: center; justify-content: center; padding: 0 64px; }
+.nb-pop-head h3 { font-size: 16px; line-height: 22px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-pop-x {
+  position: absolute; left: 12px; top: 10px; width: 30px; height: 30px; border: 0; border-radius: 50%;
+  background: var(--nb-well); color: var(--nb-sub); display: grid; place-items: center; cursor: pointer;
+}
+.nb-pop-x svg { width: 14px; height: 14px; fill: currentColor; }
+.nb-pop-ok { position: absolute; right: 12px; top: 7px; }
+.nb-pop-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 4px 0 12px; }
+.nb-pop-search { padding: 0 16px 8px; }
+
+/* 下拉的选项行 */
+.nb-opt {
+  position: relative; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 10px 20px;
+  border: 0; background: transparent; color: var(--nb-ink); font-family: inherit; font-size: 16px; line-height: 22px; text-align: left; cursor: pointer;
+}
+.nb-opt + .nb-opt::before { content: ""; position: absolute; top: 0; left: 20px; right: 0; height: .5px; background: var(--nb-line); }
+.nb-opt:active { background: var(--nb-well); }
+.nb-opt > span { flex: 1; min-width: 0; }
+.nb-opt small { display: block; font-size: 13px; line-height: 18px; color: var(--nb-sub); }
+.nb-opt[aria-selected="true"] { color: var(--nb-accent); font-weight: 600; }
+.nb-opt[aria-selected="true"]::after {
+  content: ""; flex: 0 0 auto; width: 6px; height: 12px; margin: -3px 4px 0 0;
+  border-right: 2px solid var(--nb-accent); border-bottom: 2px solid var(--nb-accent); transform: rotate(45deg);
+}
+.nb-opt:disabled { opacity: .4; pointer-events: none; }
+.nb-pop-empty { padding: 28px 20px; text-align: center; color: var(--nb-sub); font-size: 14px; }
+
+/* 日历 */
+.nb-cal { padding: 0 12px; }
+.nb-cal-nav { display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 4px 0 8px; }
+.nb-cal-nav strong { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.nb-cal-nav div { display: flex; gap: 4px; }
+.nb-cal-nav button { width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--nb-accent); cursor: pointer; display: grid; place-items: center; }
+.nb-cal-nav button:disabled { color: var(--nb-sub); opacity: .4; }
+.nb-cal-nav svg { width: 18px; height: 18px; fill: currentColor; }
+.nb-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; }
+.nb-cal-wd { height: 28px; display: grid; place-items: center; font-size: 12px; color: var(--nb-sub); }
+.nb-cal-d {
+  justify-self: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent;
+  color: var(--nb-ink); font-family: inherit; font-size: 16px; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.nb-cal-d.is-out { visibility: hidden; }
+.nb-cal-d.is-today { color: var(--nb-accent); font-weight: 600; }
+.nb-cal-d[aria-selected="true"] { background: var(--nb-accent); color: var(--nb-on-accent); font-weight: 600; }
+.nb-cal-d:disabled { color: var(--nb-sub); opacity: .35; cursor: default; }
+.nb-cal-foot { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 0; }
+
+/* 时间滚轮 */
+.nb-wheel { position: relative; display: flex; justify-content: center; gap: 8px; height: 200px; margin: 4px 16px 0; }
+.nb-wheel::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 80px; height: 40px; border-radius: 10px;
+  background: var(--nb-well); pointer-events: none;
+}
+.nb-wheel-col {
+  position: relative; width: 72px; height: 200px; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent);
+          mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent);
+}
+.nb-wheel-col::-webkit-scrollbar { display: none; }
+.nb-wheel-col div { height: 40px; display: grid; place-items: center; scroll-snap-align: center; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--nb-ink); }
+.nb-wheel-col div:first-child { margin-top: 80px; }
+.nb-wheel-col div:last-child { margin-bottom: 80px; }
+.nb-wheel-sep { position: relative; align-self: center; font-size: 20px; font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-pop-scrim, .nb-pop-card { transition-duration: 1ms; }
+}
+.nb-select:has(.nb-trigger.nb-trigger)::after { display: none; }
+
+/* 老页面里没有 .nb-card 语境:输入框与选择框一律用小块底,放在白卡上也看得见 */
+.nb-input.nb-input { background: var(--nb-tile); }
